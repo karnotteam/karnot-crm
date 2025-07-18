@@ -264,7 +264,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
                         </div>
                         <Textarea label="Payment Terms" rows="4" value={docControl.paymentTerms} onChange={handleInputChange(setDocControl, 'paymentTerms')} />
                     </div>
-                </section>
+                </Section>
             </div>
             
             <Section title="3a. International Costing & Taxes">
