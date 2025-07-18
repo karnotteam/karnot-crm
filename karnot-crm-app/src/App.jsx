@@ -117,7 +117,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
     };
 
     // #############################################################
-    // ### START OF UPDATED PDF GENERATION FUNCTION
+    // ### START OF CORRECTED PDF GENERATION FUNCTION
     // #############################################################
     const generatePDF = () => {
         if (!customerDetails.name || lineItems.length === 0) {
@@ -153,23 +153,38 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
             return;
         }
 
-        // This logic wraps each document in a div with a specific class for page breaking.
-        const contentHtml = docs.map((doc) => `<div class="html2pdf__page-break"></div>` + doc).join('');
+        const contentHtml = docs.map(doc => `<div class="page-container">${doc}</div>`).join('');
+
+        const fullHtml = `
+            <html>
+                <head>
+                    <style>
+                        body { margin: 0; font-family: 'Helvetica', Arial, sans-serif; }
+                        .page-container {
+                            page-break-before: always; /* Force a page break before this element */
+                            padding: 20mm; /* Simulate page margins */
+                            box-sizing: border-box;
+                        }
+                        /* Prevent the very first document from having a page break before it */
+                        body > .page-container:first-child {
+                            page-break-before: auto;
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${contentHtml}
+                </body>
+            </html>`;
         
         const element = document.createElement('div');
-        element.innerHTML = contentHtml;
-        // Remove the first page-break element to avoid a blank first page.
-        if (element.firstChild) {
-            element.removeChild(element.firstChild);
-        }
+        element.innerHTML = fullHtml;
 
         const opt = {
-          margin:       20, // Margin in mm
+          margin:       0, // We use padding in our CSS instead of margin here
           filename:     `Karnot-Documents-${quoteIdString.replace(/\s/g, '')}.pdf`,
           image:        { type: 'jpeg', quality: 0.98 },
-          html2canvas:  { scale: 2, useCORS: true },
-          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak:    { mode: ['css', 'legacy'] } // Use CSS rules for page breaks
+          html2canvas:  { scale: 2 },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
         html2pdf().from(element).set(opt).save();
