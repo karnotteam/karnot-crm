@@ -140,7 +140,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
         const termsAndConditionsHTML = `<div style="margin-top: 30px; font-size: 10px; color: #555; border-top: 1px solid #eaeaea; padding-top: 15px;"><h3 style="font-size: 13px; color: #333; margin-bottom: 5px;">Terms and Conditions</h3><pre style="white-space: pre-wrap; font-family: inherit; font-size: 10px;">${termsAndConditions}</pre></div>`;
         const bankDetailsHTML = `<div style="margin-top: 30px; font-size: 10px; color: #555; border-top: 1px solid #eaeaea; padding-top: 15px;"><h3 style="font-size: 13px; color: #333; margin-bottom: 5px;">Bank Account Details (For USD Payments)</h3><pre style="white-space: pre-wrap; font-family: inherit; font-size: 10px;">${bankDetails}</pre></div>`;
         
-        // --- Assemble Final HTML with Robust Page Breaks ---
+        // --- Assemble Final HTML with Robust Page Breaks (Copilot Recommendation) ---
+        const pageBreakCSS = `<style>.html2pdf__page-break { page-break-before: always; break-before: page; } </style>`;
+
         let docs = [];
         if (docGen.quote) {
             docs.push(`${companyHeaderHTML('Sales Quotation', { label: 'Quote ID', value: quoteIdString })}${customerInfoHTML('Quote For')}${lineItemsTableHTML}${totalsHTML(false)}${docGen.landedCost ? landedCostHTML : ''}${termsAndConditionsHTML}`);
@@ -154,8 +156,8 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
             return;
         }
         
-        // This is the new, more reliable method. It joins the documents with a div that forces a page break.
-        const contentHtml = docs.join('<div class="html2pdf__page-break"></div>');
+        // Join documents with the library's official page-break class
+        const contentHtml = pageBreakCSS + docs.join('<div class="html2pdf__page-break"></div>');
         
         const element = document.createElement('div');
         element.innerHTML = contentHtml;
@@ -166,7 +168,8 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
           image:        { type: 'jpeg', quality: 0.98 },
           html2canvas:  { scale: 2 },
           jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak:    { mode: ['css', 'avoid-all'] } // Use the library's built-in pagebreak modes
+          // Use the library's built-in pagebreak modes to respect our class
+          pagebreak:    { mode: ['css', 'avoid-all'] } 
         };
 
         html2pdf().from(element).set(opt).save();
