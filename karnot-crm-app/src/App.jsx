@@ -116,23 +116,20 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
         onSaveQuote(newQuote);
     };
 
-  // #############################################################
-// ### START OF DEFINITIVE PDF GENERATION FUNCTION (MANUAL ASYNC)
+// #############################################################
+// ### THE DEFINITIVE PDF GENERATION FUNCTION
 // #############################################################
 const generatePDF = async () => {
-    // Make function async to await PDF generation steps
+    // 1. --- SETUP (No changes here) ---
     if (!customerDetails.name || lineItems.length === 0) {
         alert("Customer Name and at least one Line Item are required.");
         return;
     }
-
     const { subtotal, totalDiscount, finalSalesPrice } = quoteTotals;
     const todayFormatted = new Date().toLocaleDateString('en-CA');
     const quoteIdString = `${initialData ? initialData.id.split('/')[0] : `QN${docControl.quoteNumber}`}/${new Date().getFullYear()}${docControl.revision ? ` - Rev ${docControl.revision}` : ''}`;
-    
     const formatCurrency = (num) => `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    // --- Reusable HTML Blocks (No changes needed) ---
     const companyHeaderHTML = (title, reference) => `<div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid #F56600;"><div style="font-size: 11px; line-height: 1.5; color: #333;"><img src="${KARNOT_LOGO_BASE64}" style="width: 150px; margin-bottom: 10px;" alt="Karnot Logo" /><strong>Karnot Energy Solutions INC.</strong><br>VAT REG. TIN: 678-799-105-00000<br>Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>2429 Mapandan, Pangasinan, Philippines<br>Tel: +63 75 510 8922</div><div style="text-align: right; font-size: 12px; color: #333;"><h1 style="font-size: 28px; color: #F56600; margin: 0 0 10px 0;">${title}</h1><p style="margin: 2px 0;"><strong>Date:</strong> ${todayFormatted}</p><p style="margin: 2px 0;"><strong>${reference.label}:</strong> ${reference.value}</p>${reference.dueDate ? `<p style="margin: 2px 0;"><strong>Due Date:</strong> ${reference.dueDate}</p>` : ''}</div></div>`;
     const customerInfoHTML = (type) => `<div style="margin-top: 30px; padding: 15px; border: 1px solid #eaeaea; border-radius: 8px; font-size: 12px; color: #333;"><strong>${type}:</strong><br>Customer No.: ${customerDetails.number || 'N/A'}<br>${customerDetails.name}<br>${customerDetails.address.replace(/\n/g, '<br>')}<br>TIN: ${customerDetails.tin || 'N/A'}</div>`;
     const lineItemsTableHTML = `<h2 style="font-size: 16px; color: #333; border-bottom: 1px solid #eaeaea; padding-bottom: 8px; margin-top: 30px;">Products & Services</h2><table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px;"><thead><tr style="background-color: #f9f9f9; font-weight: bold;"><th style="padding: 10px; text-align: left;">Description</th><th style="padding: 10px; text-align: center;">Qty</th><th style="padding: 10px; text-align: right;">Unit Price (USD)</th><th style="padding: 10px; text-align: right;">Amount (USD)</th></tr></thead><tbody>${lineItems.map(item => `<tr><td style="padding: 10px; border-bottom: 1px solid #eaeaea;">${item.name}</td><td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: center;">${item.quantity}</td><td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice)}</td><td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice * item.quantity)}</td></tr>`).join('')}</tbody></table>`;
@@ -140,57 +137,40 @@ const generatePDF = async () => {
     const landedCostHTML = `<div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #eaeaea;"><h3 style="font-size: 13px; color: #333;">Estimated Landed Cost Breakdown (USD)</h3><table style="width: 350px; font-size: 11px; border: 1px solid #ccc;"><thead></thead><tbody><tr style="background-color: #f9f9f9;"><td style="padding: 5px; border-bottom: 1px solid #ccc;">Equipment Price (Ex-Works, after discount)</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(finalSalesPrice)}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">Freight Cost</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(costing.transport)}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">Duties (${costing.duties}%)</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(finalSalesPrice * (costing.duties / 100))}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">VAT / IVA (${costing.vat}%)</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(finalSalesPrice * (costing.vat / 100))}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">Broker & Handling Fees</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(costing.broker)}</td></tr><tr style="font-weight: bold; background-color: #f0f0f0;"><td style="padding: 5px;">Total Estimated Landed Cost</td><td style="padding: 5px; text-align: right;">${formatCurrency(finalSalesPrice + costing.transport + (finalSalesPrice * (costing.duties / 100)) + (finalSalesPrice * (costing.vat / 100)) + costing.broker)}</td></tr></tbody></table></div>`;
     const termsAndConditionsHTML = `<div style="margin-top: 30px; font-size: 10px; color: #555; border-top: 1px solid #eaeaea; padding-top: 15px;"><h3 style="font-size: 13px; color: #333; margin-bottom: 5px;">Terms and Conditions</h3><pre style="white-space: pre-wrap; font-family: inherit; font-size: 10px;">${termsAndConditions}</pre></div>`;
     const bankDetailsHTML = `<div style="margin-top: 30px; font-size: 10px; color: #555; border-top: 1px solid #eaeaea; padding-top: 15px;"><h3 style="font-size: 13px; color: #333; margin-bottom: 5px;">Bank Account Details (For USD Payments)</h3><pre style="white-space: pre-wrap; font-family: inherit; font-size: 10px;">${bankDetails}</pre></div>`;
-    
-    // --- Assemble Document HTML strings into an array ---
+
+    // 2. --- Select documents to generate ---
     const docs = [];
-    if (docGen.quote) {
-        docs.push(`${companyHeaderHTML('Sales Quotation', { label: 'Quote ID', value: quoteIdString })}${customerInfoHTML('Quote For')}${lineItemsTableHTML}${totalsHTML(false)}${docGen.landedCost ? landedCostHTML : ''}${termsAndConditionsHTML}`);
-    }
-    if (docGen.proForma) {
-        docs.push(`${companyHeaderHTML('Pro Forma Invoice', { label: 'Reference', value: `PF-${quoteIdString}`, dueDate: commercialTerms.dueDate })}${customerInfoHTML('Bill To')}${lineItemsTableHTML}${totalsHTML(true)}${docGen.landedCost ? landedCostHTML : ''}${bankDetailsHTML}`);
-    }
-    
-    if (docs.length === 0) {
-        alert("Please select at least one document type to generate.");
-        return;
-    }
-    
-    // --- Define PDF Options (No pagebreak option needed) ---
+    if (docGen.quote) docs.push({ html: `${companyHeaderHTML('Sales Quotation', { label: 'Quote ID', value: quoteIdString })}${customerInfoHTML('Quote For')}${lineItemsTableHTML}${totalsHTML(false)}${docGen.landedCost ? landedCostHTML : ''}${termsAndConditionsHTML}`});
+    if (docGen.proForma) docs.push({ html: `${companyHeaderHTML('Pro Forma Invoice', { label: 'Reference', value: `PF-${quoteIdString}`, dueDate: commercialTerms.dueDate })}${customerInfoHTML('Bill To')}${lineItemsTableHTML}${totalsHTML(true)}${docGen.landedCost ? landedCostHTML : ''}${bankDetailsHTML}` });
+    if (docs.length === 0) return;
+
+    // 3. --- Set PDF options ---
     const opt = {
-      margin:       20,
-      filename:     `Karnot-Documents-${quoteIdString.replace(/\s/g, '')}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true, allowTaint: true },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        margin: 20,
+        filename: `Karnot-Documents-${quoteIdString.replace(/\s/g, '')}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    // 1. Create the worker instance with the options.
-    const worker = html2pdf().set(opt);
+    // 4. --- Generate the PDF manually ---
+    const worker = html2pdf().set(opt).from(document.createElement('div')); // Start with an empty element
 
-    // 2. Loop through each document and add it to the PDF worker.
-    for (let i = 0; i < docs.length; i++) {
+    for (const doc of docs) {
+        // For each document, create a new element and add the HTML
         const element = document.createElement('div');
-        element.innerHTML = docs[i];
+        element.innerHTML = doc.html;
         
-        // Add the current element to the PDF. This will handle internal page breaks
-        // for a single document that is longer than one page.
-        await worker.from(element).toContainer().toCanvas().toPdf();
-
-        // **THE FIX**: After adding a document, if it's NOT the last one,
-        // get the underlying jsPDF object and manually add a new page.
-        if (i < docs.length - 1) {
-            worker.get('pdf').then(pdf => {
-                pdf.addPage();
-            });
-        }
+        // Tell the worker to add the new element's content.
+        // The `get('pdf').then(pdf => pdf.addPage())` is the crucial part that adds the page break.
+        worker = worker.then(() => {
+            return html2pdf().set(opt).from(element).toContainer().toCanvas().toPdf();
+        }).get('pdf').then(pdf => pdf.addPage());
     }
 
-    // 3. Save the fully assembled PDF.
+    // 5. --- Save the final file ---
     await worker.save();
 };
-// #############################################################
-// ### END OF DEFINITIVE PDF GENERATION FUNCTION (MANUAL ASYNC)
-// #############################################################
     return (
         <Card>
             <h2 className="text-3xl font-bold text-center text-orange-600 mb-8">{initialData ? `Editing Quote ${initialData.id}` : 'New Quote'}</h2>
