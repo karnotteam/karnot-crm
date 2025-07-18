@@ -106,66 +106,149 @@ const QuoteCalculator = ({ onSaveQuote }) => {
     };
 
     const generatePDF = () => {
-        if (!customerDetails.name) { alert("Please enter a customer name."); return; }
-        
+        if (!customerDetails.name) {
+            alert("Please enter a customer name.");
+            return;
+        }
+        if (lineItems.length === 0) {
+            alert("Please add at least one product to the quote.");
+            return;
+        }
+
         const { subtotal, totalDiscount, finalSalesPrice } = quoteTotals;
         const todayFormatted = new Date().toLocaleDateString('en-CA');
         const quoteId = `QN${String(docControl.quoteStart).padStart(4, '0')}/${new Date().getFullYear()}${docControl.revision ? ` - Rev ${docControl.revision}` : ''}`;
 
         const formatCurrency = (num, inPhp = docGen.inPhp) => {
             const options = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
-            if (inPhp) {
-                return `₱${(num * costing.forex).toLocaleString('en-US', options)}`;
-            }
-            return `$${num.toLocaleString('en-US', options)}`;
+            const currencySymbol = inPhp ? '₱' : '$';
+            const value = inPhp ? num * costing.forex : num;
+            return `${currencySymbol}${value.toLocaleString('en-US', options)}`;
         };
 
-        const lineItemsHtml = lineItems.map(item => `
-            <tr>
-                <td style="padding: 10px; border-bottom: 1px solid #eaeaea;">${item.name}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: center;">${item.quantity}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice)}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice * item.quantity)}</td>
-            </tr>`).join('');
+        const companyHeaderHTML = (title, reference) => `
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid #F56600;">
+                <div style="font-size: 11px; line-height: 1.5; color: #333;">
+                    <strong>Karnot Energy Solutions INC.</strong><br>
+                    VAT REG. TIN: 678-799-105-00000<br>
+                    Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>
+                    2429 Mapandan, Pangasinan, Philippines<br>
+                    Tel: +63 75 510 8922
+                </div>
+                <div style="text-align: right; font-size: 12px; color: #333;">
+                    <h1 style="font-size: 28px; color: #F56600; margin: 0 0 10px 0;">${title}</h1>
+                    <p style="margin: 2px 0;"><strong>Date:</strong> ${todayFormatted}</p>
+                    <p style="margin: 2px 0;"><strong>${reference.label}:</strong> ${reference.value}</p>
+                    ${reference.dueDate ? `<p style="margin: 2px 0;"><strong>Due Date:</strong> ${reference.dueDate}</p>` : ''}
+                </div>
+            </div>`;
+
+        const customerInfoHTML = (type = "Quote For") => `
+            <div style="margin-top: 30px; padding: 15px; border: 1px solid #eaeaea; border-radius: 8px; font-size: 12px; color: #333;">
+                <strong>${type}:</strong><br>
+                Customer No.: ${customerDetails.number}<br>
+                ${customerDetails.name}<br>
+                ${customerDetails.address.replace(/\n/g, '<br>')}<br>
+                TIN: ${customerDetails.tin}
+            </div>`;
+
+        const lineItemsTableHTML = `
+            <h2 style="font-size: 16px; color: #333; border-bottom: 1px solid #eaeaea; padding-bottom: 8px; margin-top: 30px;">Products & Services</h2>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px;">
+                <thead>
+                    <tr style="background-color: #f9f9f9; font-weight: bold;">
+                        <th style="padding: 10px; text-align: left;">Description</th>
+                        <th style="padding: 10px; text-align: center;">Qty</th>
+                        <th style="padding: 10px; text-align: right;">Unit Price</th>
+                        <th style="padding: 10px; text-align: right;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${lineItems.map(item => `
+                        <tr>
+                            <td style="padding: 10px; border-bottom: 1px solid #eaeaea;">${item.name}</td>
+                            <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: center;">${item.quantity}</td>
+                            <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice)}</td>
+                            <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice * item.quantity)}</td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>`;
+            
+        const totalsHTML = (totalLabel = "Total Amount") => `
+            <div style="margin-top: 20px; page-break-inside: avoid;">
+                <table style="margin-left: auto; width: 300px; font-size: 12px;">
+                    <tr><td style="padding: 8px;">Subtotal:</td><td style="padding: 8px; text-align: right;">${formatCurrency(subtotal)}</td></tr>
+                    ${commercialTerms.discount > 0 ? `<tr><td style="padding: 8px;">Discount (${commercialTerms.discount}%):</td><td style="padding: 8px; text-align: right;">-${formatCurrency(totalDiscount)}</td></tr>` : ''}
+                    <tr style="font-weight: bold; font-size: 14px; border-top: 2px solid #333;">
+                        <td style="padding: 8px;">${totalLabel}:</td>
+                        <td style="padding: 8px; text-align: right;">${formatCurrency(finalSalesPrice)}</td>
+                    </tr>
+                </table>
+            </div>`;
         
-        const companyHeaderHTML = (title, reference) => `<div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid #F56600;">
-            <div style="font-size: 11px; line-height: 1.5;">
-                <strong>Karnot Energy Solutions INC.</strong><br>
-                VAT REG. TIN: 678-799-105-00000<br>
-                Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>
-                2429 Mapandan, Pangasinan, Philippines<br>
-                Tel: +63 75 510 8922
-            </div>
-            <div style="text-align: right;">
-                <h1 style="font-size: 28px; color: #F56600; margin: 0;">${title}</h1>
-                <p><strong>Date:</strong> ${todayFormatted}</p>
-                <p><strong>${reference.label}:</strong> ${reference.value}</p>
-                ${reference.dueDate ? `<p><strong>Due Date:</strong> ${reference.dueDate}</p>` : ''}
-            </div>
-        </div>`;
+        const termsHTML = `<div style="margin-top: 40px; font-size: 10px; color: #555; border-top: 1px solid #eaeaea; padding-top: 15px; page-break-inside: avoid;"> ... Terms and Conditions ... </div>`;
         
         let generatedDocumentsHTML = '';
 
-        // Sales Quotation
         if (docGen.quote) {
              generatedDocumentsHTML += `<div class="page">
                 ${companyHeaderHTML('Sales Quotation', { label: 'Quote ID', value: quoteId })}
-                ... Sales Quotation Content ...
+                ${customerInfoHTML('Quote For')}
+                ${lineItemsTableHTML}
+                ${totalsHTML('Total Amount')}
+                ${termsHTML}
             </div>`;
         }
-        // Pro Forma Invoice
         if (docGen.proForma) {
              generatedDocumentsHTML += `<div class="page">
                 ${companyHeaderHTML('Pro Forma Invoice', { label: 'Reference', value: `PF-${quoteId}`, dueDate: commercialTerms.dueDate })}
-                ... Pro Forma Content ...
+                ${customerInfoHTML('Bill To')}
+                ${lineItemsTableHTML}
+                ${totalsHTML('Total Amount Due')}
             </div>`;
         }
-        // BIR Invoice
         if (docGen.bir) {
-             generatedDocumentsHTML += `<div class="page">
+            // BIR calculations
+            const totalPHP = finalSalesPrice * costing.forex;
+            const vatableSales = totalPHP / 1.12;
+            const vatAmount = vatableSales * 0.12;
+            const whtAmount = vatableSales * (commercialTerms.wht / 100);
+            const totalDue = totalPHP - whtAmount;
+            
+            generatedDocumentsHTML += `<div class="page">
                 ${companyHeaderHTML('SALES INVOICE', { label: 'No', value: String(docControl.quoteStart).padStart(4, '0'), dueDate: commercialTerms.dueDate })}
-                ... BIR Invoice Content ...
+                ${customerInfoHTML('SOLD TO')}
+                ${lineItemsTableHTML}
+                <div style="margin-top: 20px; font-size: 12px;">
+                    <table style="width: 100%;">
+                        <tr>
+                            <td>VATable Sales: ${formatCurrency(vatableSales, true)}</td>
+                            <td style="text-align:right;">Total Sales (VAT-Inclusive): ${formatCurrency(totalPHP, true)}</td>
+                        </tr>
+                        <tr>
+                            <td>VAT-Exempt Sales: ${formatCurrency(0, true)}</td>
+                            <td style="text-align:right;">Less: 12% VAT: ${formatCurrency(vatAmount, true)}</td>
+                        </tr>
+                        <tr>
+                            <td>Zero-Rated Sales: ${formatCurrency(0, true)}</td>
+                            <td style="text-align:right;">Net of VAT: ${formatCurrency(vatableSales, true)}</td>
+                        </tr>
+                         <tr>
+                            <td><strong>Total Sales:</strong> ${formatCurrency(vatableSales, true)}</td>
+                            <td style="text-align:right;">Less: Withholding Tax (${commercialTerms.wht}%): ${formatCurrency(whtAmount, true)}</td>
+                        </tr>
+                        <tr style="font-weight:bold; font-size: 14px; border-top: 2px solid #333;">
+                           <td></td>
+                           <td style="text-align:right; padding-top: 8px;">TOTAL AMOUNT DUE: ${formatCurrency(totalDue, true)}</td>
+                        </tr>
+                    </table>
+                </div>
             </div>`;
+        }
+
+        if (!generatedDocumentsHTML) {
+            alert("Please select at least one document type to generate.");
+            return;
         }
 
         const fullHtml = `<html><head><style>.page{width:210mm;min-height:297mm;padding:20mm;margin:auto;box-sizing:border-box;page-break-after:always;}.page:last-child{page-break-after:auto;}</style></head><body>${generatedDocumentsHTML}</body></html>`;
