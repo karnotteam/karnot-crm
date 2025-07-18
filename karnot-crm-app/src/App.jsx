@@ -22,6 +22,7 @@ const ALL_PRODUCTS = [
 const SALESPEOPLE = ["Stuart Cox", "Jane Smith", "Robert Johnson"];
 const REGIONS = ["NCR", "CAR", "Region I", "Region II", "Region III", "Region IV-A", "Region IV-B", "Region V", "Region VI", "Region VII", "Region VIII", "Region IX", "Region X", "Region XI", "Region XII", "Region XIII", "BARMM"];
 const QUOTE_STATUSES = { DRAFT: { text: "Draft", color: "bg-gray-500" }, SENT: { text: "Sent", color: "bg-blue-500" }, APPROVED: { text: "Approved", color: "bg-green-500" }, DECLINED: { text: "Declined", color: "bg-red-500" } };
+const BOI_TARGETS = { 2026: 1073035, 2027: 2175323, 2028: 3380671 };
 
 // --- Helper Components ---
 const Card = ({ children, className = '' }) => <div className={`bg-white rounded-2xl shadow-lg p-6 md:p-8 ${className}`}>{children}</div>;
@@ -51,7 +52,7 @@ const Checkbox = ({ label, id, ...props }) => (
 
 // --- Main Application Components ---
 const QuoteCalculator = ({ onSaveQuote }) => {
-    const [customerDetails, setCustomerDetails] = useState({ name: '', number: '', tin: '', address: '' });
+    const [customerDetails, setCustomerDetails] = useState({ name: '', number: '', tin: '', address: '', saleType: 'Export' });
     const [commercialTerms, setCommercialTerms] = useState({ shipping: 'Ex-Works Warehouse', delivery: '3-5 days from payment', dueDate: '11 March 2025', discount: 0, wht: 0 });
     const [docControl, setDocControl] = useState({ quoteStart: 23, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' });
     const [costing, setCosting] = useState({ forex: 58.50, transport: 0, duties: 1, vat: 12, broker: 0 });
@@ -106,14 +107,8 @@ const QuoteCalculator = ({ onSaveQuote }) => {
     };
 
     const generatePDF = () => {
-        if (!customerDetails.name) {
-            alert("Please enter a customer name.");
-            return;
-        }
-        if (lineItems.length === 0) {
-            alert("Please add at least one product to the quote.");
-            return;
-        }
+        if (!customerDetails.name) { alert("Please enter a customer name."); return; }
+        if (lineItems.length === 0) { alert("Please add at least one product to the quote."); return; }
 
         const { subtotal, totalDiscount, finalSalesPrice } = quoteTotals;
         const todayFormatted = new Date().toLocaleDateString('en-CA');
@@ -208,10 +203,11 @@ const QuoteCalculator = ({ onSaveQuote }) => {
             </div>`;
         }
         if (docGen.bir) {
-            // BIR calculations
+            const isExport = customerDetails.saleType === 'Export';
             const totalPHP = finalSalesPrice * costing.forex;
-            const vatableSales = totalPHP / 1.12;
-            const vatAmount = vatableSales * 0.12;
+            const vatableSales = isExport ? 0 : totalPHP / 1.12;
+            const vatAmount = isExport ? 0 : vatableSales * 0.12;
+            const zeroRatedSales = isExport ? totalPHP : 0;
             const whtAmount = vatableSales * (commercialTerms.wht / 100);
             const totalDue = totalPHP - whtAmount;
             
@@ -230,7 +226,7 @@ const QuoteCalculator = ({ onSaveQuote }) => {
                             <td style="text-align:right;">Less: 12% VAT: ${formatCurrency(vatAmount, true)}</td>
                         </tr>
                         <tr>
-                            <td>Zero-Rated Sales: ${formatCurrency(0, true)}</td>
+                            <td>Zero-Rated Sales: ${formatCurrency(zeroRatedSales, true)}</td>
                             <td style="text-align:right;">Net of VAT: ${formatCurrency(vatableSales, true)}</td>
                         </tr>
                          <tr>
@@ -246,11 +242,7 @@ const QuoteCalculator = ({ onSaveQuote }) => {
             </div>`;
         }
 
-        if (!generatedDocumentsHTML) {
-            alert("Please select at least one document type to generate.");
-            return;
-        }
-
+        if (!generatedDocumentsHTML) { alert("Please select at least one document type to generate."); return; }
         const fullHtml = `<html><head><style>.page{width:210mm;min-height:297mm;padding:20mm;margin:auto;box-sizing:border-box;page-break-after:always;}.page:last-child{page-break-after:auto;}</style></head><body>${generatedDocumentsHTML}</body></html>`;
         
         const element = document.createElement('div');
@@ -267,7 +259,11 @@ const QuoteCalculator = ({ onSaveQuote }) => {
                     <h3 className="text-xl font-bold border-b-2 border-orange-500 pb-2">1. Customer Details</h3>
                     <Input label="Registered Name" value={customerDetails.name} onChange={e => handleInputChange(setCustomerDetails, 'name', e.target.value)} />
                     <Input label="Customer No." value={customerDetails.number} onChange={e => handleInputChange(setCustomerDetails, 'number', e.target.value)} />
-                    <Input label="TIN" value={customerDetails.tin} onChange={e => handleInputChange(setCustomerDetails, 'tin', e.target.value)} />
+                    <div className="flex gap-4">
+                         <label className="block text-sm font-medium text-gray-600">Sale Type</label>
+                         <Checkbox label="Export" checked={customerDetails.saleType === 'Export'} onChange={() => handleInputChange(setCustomerDetails, 'saleType', 'Export')} />
+                         <Checkbox label="Domestic" checked={customerDetails.saleType === 'Domestic'} onChange={() => handleInputChange(setCustomerDetails, 'saleType', 'Domestic')} />
+                    </div>
                     <Textarea label="Business Address" rows="4" value={customerDetails.address} onChange={e => handleInputChange(setCustomerDetails, 'address', e.target.value)} />
                 </div>
                 {/* Column 2: Commercial Terms */}
@@ -410,44 +406,61 @@ const SavedQuotesList = ({ quotes, onUpdateQuoteStatus, onDeleteQuote }) => {
 const Dashboard = ({ quotes }) => {
     const stats = useMemo(() => {
         const approvedQuotes = quotes.filter(q => q.status === 'APPROVED');
-        const outstandingQuotes = quotes.filter(q => q.status === 'DRAFT' || q.status === 'SENT');
-        const ordersWonValue = approvedQuotes.reduce((acc, q) => acc + q.finalSalesPrice, 0);
-        const outstandingValue = outstandingQuotes.reduce((acc, q) => acc + q.finalSalesPrice, 0);
-        const totalMargin = approvedQuotes.reduce((acc, q) => acc + q.grossMarginAmount, 0);
-        const avgMargin = approvedQuotes.length > 0 ? (totalMargin / ordersWonValue) * 100 : 0;
-        const statusCounts = quotes.reduce((acc, q) => {
-            acc[q.status] = (acc[q.status] || 0) + 1;
+        const exportSales = approvedQuotes.filter(q => q.customerDetails.saleType === 'Export').reduce((acc, q) => acc + q.finalSalesPrice, 0);
+        const domesticSales = approvedQuotes.filter(q => q.customerDetails.saleType === 'Domestic').reduce((acc, q) => acc + q.finalSalesPrice, 0);
+        const totalSales = exportSales + domesticSales;
+        const exportPercentage = totalSales > 0 ? (exportSales / totalSales) * 100 : 0;
+        
+        const salesByYear = approvedQuotes.reduce((acc, q) => {
+            const year = new Date(q.createdAt).getFullYear();
+            acc[year] = (acc[year] || 0) + q.finalSalesPrice;
             return acc;
         }, {});
-        return { ordersWonValue, outstandingValue, avgMargin, statusCounts };
+
+        return { exportSales, domesticSales, exportPercentage, salesByYear };
     }, [quotes]);
 
-    const StatCard = ({ title, value, icon, color }) => (
-        <Card className="flex items-center">
-            <div className={`p-3 rounded-full mr-4 ${color}`}>{icon}</div>
-            <div><p className="text-gray-500 text-sm">{title}</p><p className="text-2xl font-bold">{value}</p></div>
-        </Card>
-    );
+    const CircularProgress = ({ percentage, target }) => {
+        const radius = 50;
+        const circumference = 2 * Math.PI * radius;
+        const offset = circumference - (percentage / 100 * circumference);
+        return (
+            <div className="relative flex items-center justify-center w-32 h-32">
+                <svg className="w-full h-full" viewBox="0 0 120 120">
+                    <circle className="text-gray-200" strokeWidth="10" stroke="currentColor" fill="transparent" r={radius} cx="60" cy="60" />
+                    <circle className="text-orange-500" strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" stroke="currentColor" fill="transparent" r={radius} cx="60" cy="60" style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }} />
+                </svg>
+                <span className="absolute text-xl font-bold">{percentage.toFixed(1)}%</span>
+            </div>
+        );
+    };
 
     return (
         <div>
-            <h2 className="text-3xl font-bold text-gray-800 mb-6">Sales Dashboard</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatCard title="Orders Won" value={`$${stats.ordersWonValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} icon={<DollarSign className="text-white"/>} color="bg-green-500" />
-                <StatCard title="Outstanding Quotes" value={`$${stats.outstandingValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} icon={<Target className="text-white"/>} color="bg-blue-500" />
-                <StatCard title="Avg. Margin (Won)" value={`${stats.avgMargin.toFixed(2)}%`} icon={<PieChart className="text-white"/>} color="bg-yellow-500" />
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">BOI Compliance Dashboard</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                    <h3 className="text-xl font-bold mb-4">Sales Mix (Approved)</h3>
+                    <p>Export Sales: ${stats.exportSales.toLocaleString()}</p>
+                    <p>Domestic Sales: ${stats.domesticSales.toLocaleString()}</p>
+                    <div className="w-full bg-gray-200 rounded-full h-4 mt-2">
+                        <div className="bg-green-500 h-4 rounded-full" style={{ width: `${stats.exportPercentage}%` }}></div>
+                    </div>
+                    <p className="text-right font-bold">{stats.exportPercentage.toFixed(2)}% Export</p>
+                </Card>
+                <Card>
+                    <h3 className="text-xl font-bold mb-4">Annual Sales vs. Target</h3>
+                    <div className="flex justify-around">
+                        {Object.keys(BOI_TARGETS).map(year => (
+                            <div key={year} className="text-center">
+                                <p className="font-bold">{year}</p>
+                                <CircularProgress percentage={((stats.salesByYear[year] || 0) / BOI_TARGETS[year]) * 100} />
+                                <p className="text-sm text-gray-600">Target: ${BOI_TARGETS[year].toLocaleString()}</p>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
             </div>
-            <Card className="mt-8">
-                <h3 className="text-xl font-bold mb-4">Quotes by Status</h3>
-                <div className="flex justify-around">
-                    {Object.keys(QUOTE_STATUSES).map(statusKey => (
-                        <div key={statusKey} className="text-center">
-                            <p className="text-3xl font-bold">{stats.statusCounts[statusKey] || 0}</p>
-                            <span className={`px-3 py-1 text-sm font-semibold text-white rounded-full ${QUOTE_STATUSES[statusKey].color}`}>{QUOTE_STATUSES[statusKey].text}</span>
-                        </div>
-                    ))}
-                </div>
-            </Card>
         </div>
     );
 };
