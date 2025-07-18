@@ -128,27 +128,37 @@ const QuoteCalculator = ({ onSaveQuote }) => {
                 <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice * item.quantity, docGen.inPhp)}</td>
             </tr>`).join('');
         
-        const companyHeaderHTML = `<div class="header">...</div>`; // Re-usable header
+        const companyHeaderHTML = (title) => `<div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid #F56600;">
+            <div style="font-size: 11px; line-height: 1.5;">
+                <strong>Karnot Energy Solutions INC.</strong><br>
+                VAT REG. TIN: 678-799-105-00000<br>
+                Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>
+                2429 Mapandan, Pangasinan, Philippines<br>
+                Tel: +63 75 510 8922
+            </div>
+            <div style="text-align: right;">
+                <h1 style="font-size: 28px; color: #F56600; margin: 0;">${title}</h1>
+                <p><strong>Quote ID:</strong> ${quoteId}</p>
+                <p><strong>Date:</strong> ${todayFormatted}</p>
+            </div>
+        </div>`;
         let generatedDocumentsHTML = '';
 
-        // Sales Quotation
         if (docGen.quote) {
-            generatedDocumentsHTML += `<div class="page">... Sales Quotation Content ...</div>`;
+            generatedDocumentsHTML += `<div class="page">${companyHeaderHTML('Sales Quotation')} ... Sales Quotation Content ...</div>`;
         }
-        // Pro Forma Invoice
         if (docGen.proForma) {
-            generatedDocumentsHTML += `<div class="page">... Pro Forma Content ...</div>`;
+            generatedDocumentsHTML += `<div class="page">${companyHeaderHTML('Pro Forma Invoice')} ... Pro Forma Content ...</div>`;
         }
-        // BIR Invoice
         if (docGen.bir) {
-            generatedDocumentsHTML += `<div class="page">... BIR Invoice Content ...</div>`;
+            generatedDocumentsHTML += `<div class="page">${companyHeaderHTML('BIR Sales Invoice')} ... BIR Invoice Content ...</div>`;
         }
 
-        const fullHtml = `<html>...${generatedDocumentsHTML}</html>`; // Wrap all pages
+        const fullHtml = `<html><head><style>.page{width:210mm;min-height:297mm;padding:20mm;margin:auto;box-sizing:border-box;page-break-after:always;}.page:last-child{page-break-after:auto;}</style></head><body>${generatedDocumentsHTML}</body></html>`;
         
         const element = document.createElement('div');
         element.innerHTML = fullHtml;
-        html2pdf().from(element).set({ /* options */ }).save();
+        html2pdf().from(element).set({ margin: 0, filename: `Karnot-Documents.pdf`, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } }).save();
     };
 
     return (
@@ -237,18 +247,135 @@ const QuoteCalculator = ({ onSaveQuote }) => {
 };
 
 const SavedQuotesList = ({ quotes, onUpdateQuoteStatus, onDeleteQuote }) => {
-    /* This component remains the same */
-    return <Card>Saved Quotes...</Card>
+    const [expandedQuoteId, setExpandedQuoteId] = useState(null);
+    const [regionFilter, setRegionFilter] = useState('ALL');
+
+    const filteredQuotes = useMemo(() => {
+        if (regionFilter === 'ALL') return quotes;
+        return quotes.filter(q => q.customerDetails.region === regionFilter);
+    }, [quotes, regionFilter]);
+
+    const StatusBadge = ({ status }) => (
+        <span className={`px-2 py-1 text-xs font-semibold text-white rounded-full ${QUOTE_STATUSES[status]?.color || 'bg-gray-400'}`}>
+            {QUOTE_STATUSES[status]?.text || 'Unknown'}
+        </span>
+    );
+
+    const handleDelete = (quoteId) => {
+        if (window.confirm("Are you sure you want to permanently delete this quote?")) {
+            onDeleteQuote(quoteId);
+        }
+    };
+
+    return (
+        <Card>
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800">Saved Quotes</h2>
+                <div className="w-1/4">
+                    <select id="regionFilter" value={regionFilter} onChange={e => setRegionFilter(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500">
+                        <option value="ALL">All Regions</option>
+                        {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                </div>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead><tr className="border-b bg-gray-50"><th className="p-3"></th><th className="p-3">Quote ID</th><th className="p-3">Customer</th><th className="p-3">Region</th><th className="p-3">Status</th><th className="p-3 text-right">Sales Price</th><th className="p-3 text-right">Margin</th></tr></thead>
+                    <tbody>
+                        {filteredQuotes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(quote => (
+                            <React.Fragment key={quote.id}>
+                                <tr className="border-b hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedQuoteId(expandedQuoteId === quote.id ? null : quote.id)}>
+                                    <td className="p-3">{expandedQuoteId === quote.id ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}</td>
+                                    <td className="p-3 font-mono text-sm">{quote.id}</td>
+                                    <td className="p-3">{quote.customerDetails.name}</td>
+                                    <td className="p-3">{quote.customerDetails.region}</td>
+                                    <td className="p-3"><StatusBadge status={quote.status} /></td>
+                                    <td className="p-3 text-right font-semibold">${quote.finalSalesPrice.toFixed(2)}</td>
+                                    <td className="p-3 text-right text-green-600">{quote.grossMarginPercentage ? `${quote.grossMarginPercentage.toFixed(2)}%` : 'N/A'}</td>
+                                </tr>
+                                {expandedQuoteId === quote.id && (
+                                    <tr className="bg-gray-100"><td colSpan="8" className="p-4">
+                                        <div className="flex justify-end">
+                                            <Button onClick={() => handleDelete(quote.id)} variant="danger"><Trash2 size={16} className="mr-2"/>Delete Quote</Button>
+                                        </div>
+                                    </td></tr>
+                                )}
+                            </React.Fragment>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {filteredQuotes.length === 0 && <p className="text-center text-gray-500 mt-6">No quotes match the current filter.</p>}
+        </Card>
+    );
 };
 
 const Dashboard = ({ quotes }) => {
-    /* This component remains the same */
-    return <Card>Dashboard...</Card>
+    const stats = useMemo(() => {
+        const approvedQuotes = quotes.filter(q => q.status === 'APPROVED');
+        const outstandingQuotes = quotes.filter(q => q.status === 'DRAFT' || q.status === 'SENT');
+        const ordersWonValue = approvedQuotes.reduce((acc, q) => acc + q.finalSalesPrice, 0);
+        const outstandingValue = outstandingQuotes.reduce((acc, q) => acc + q.finalSalesPrice, 0);
+        const totalMargin = approvedQuotes.reduce((acc, q) => acc + q.grossMarginAmount, 0);
+        const avgMargin = approvedQuotes.length > 0 ? (totalMargin / ordersWonValue) * 100 : 0;
+        const statusCounts = quotes.reduce((acc, q) => {
+            acc[q.status] = (acc[q.status] || 0) + 1;
+            return acc;
+        }, {});
+        return { ordersWonValue, outstandingValue, avgMargin, statusCounts };
+    }, [quotes]);
+
+    const StatCard = ({ title, value, icon, color }) => (
+        <Card className="flex items-center">
+            <div className={`p-3 rounded-full mr-4 ${color}`}>{icon}</div>
+            <div><p className="text-gray-500 text-sm">{title}</p><p className="text-2xl font-bold">{value}</p></div>
+        </Card>
+    );
+
+    return (
+        <div>
+            <h2 className="text-3xl font-bold text-gray-800 mb-6">Sales Dashboard</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard title="Orders Won" value={`$${stats.ordersWonValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} icon={<DollarSign className="text-white"/>} color="bg-green-500" />
+                <StatCard title="Outstanding Quotes" value={`$${stats.outstandingValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} icon={<Target className="text-white"/>} color="bg-blue-500" />
+                <StatCard title="Avg. Margin (Won)" value={`${stats.avgMargin.toFixed(2)}%`} icon={<PieChart className="text-white"/>} color="bg-yellow-500" />
+            </div>
+            <Card className="mt-8">
+                <h3 className="text-xl font-bold mb-4">Quotes by Status</h3>
+                <div className="flex justify-around">
+                    {Object.keys(QUOTE_STATUSES).map(statusKey => (
+                        <div key={statusKey} className="text-center">
+                            <p className="text-3xl font-bold">{stats.statusCounts[statusKey] || 0}</p>
+                            <span className={`px-3 py-1 text-sm font-semibold text-white rounded-full ${QUOTE_STATUSES[statusKey].color}`}>{QUOTE_STATUSES[statusKey].text}</span>
+                        </div>
+                    ))}
+                </div>
+            </Card>
+        </div>
+    );
 };
 
 const LoginScreen = ({ onLoginSuccess }) => {
-    /* This component remains the same */
-    return <Card>Login...</Card>
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const CORRECT_PASSWORD = 'Karnot18931!';
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (password === CORRECT_PASSWORD) onLoginSuccess();
+        else setError('Incorrect password. Please try again.');
+    };
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-100">
+            <Card className="w-full max-w-sm">
+                <div className="text-center"><Lock size={40} className="mx-auto text-orange-600"/><h2 className="text-2xl font-bold text-gray-800 mt-4">Karnot CRM Login</h2></div>
+                <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+                    <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" required />
+                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                    <Button type="submit" className="w-full">Unlock</Button>
+                </form>
+            </Card>
+        </div>
+    );
 };
 
 export default function App() {
