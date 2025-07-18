@@ -117,7 +117,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
     };
 
     // #############################################################
-    // ### START OF UPDATED PDF GENERATION FUNCTION
+    // ### START OF CORRECTED PDF GENERATION FUNCTION
     // #############################################################
     const generatePDF = () => {
         if (!customerDetails.name || lineItems.length === 0) {
@@ -142,55 +142,37 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
         
         let docs = [];
         if (docGen.quote) {
-            docs.push(`<div>${companyHeaderHTML('Sales Quotation', { label: 'Quote ID', value: quoteIdString })}${customerInfoHTML('Quote For')}${lineItemsTableHTML}${totalsHTML(false)}${docGen.landedCost ? landedCostHTML : ''}${termsAndConditionsHTML}</div>`);
+            docs.push(`${companyHeaderHTML('Sales Quotation', { label: 'Quote ID', value: quoteIdString })}${customerInfoHTML('Quote For')}${lineItemsTableHTML}${totalsHTML(false)}${docGen.landedCost ? landedCostHTML : ''}${termsAndConditionsHTML}`);
         }
         if (docGen.proForma) {
-            docs.push(`<div>${companyHeaderHTML('Pro Forma Invoice', { label: 'Reference', value: `PF-${quoteIdString}`, dueDate: commercialTerms.dueDate })}${customerInfoHTML('Bill To')}${lineItemsTableHTML}${totalsHTML(true)}${docGen.landedCost ? landedCostHTML : ''}${bankDetailsHTML}</div>`);
+            docs.push(`${companyHeaderHTML('Pro Forma Invoice', { label: 'Reference', value: `PF-${quoteIdString}`, dueDate: commercialTerms.dueDate })}${customerInfoHTML('Bill To')}${lineItemsTableHTML}${totalsHTML(true)}${docGen.landedCost ? landedCostHTML : ''}${bankDetailsHTML}`);
         }
         
-        // This logic wraps each document in a "page" div and prevents a page-break on the last one.
-        const contentHtml = docs.map((doc, index) => {
-            const isLast = index === docs.length - 1;
-            return `<div class="page" style="${isLast ? '' : 'page-break-after: always;'}">${doc}</div>`;
-        }).join('');
-
         if (docs.length === 0) {
             alert("Please select at least one document type to generate.");
             return;
         }
 
-        const fullHtml = `
-            <html>
-                <head>
-                    <style>
-                        body { font-family: 'Helvetica', Arial, sans-serif; margin: 0; }
-                        .page {
-                            width: 210mm;
-                            min-height: 297mm;
-                            padding: 20mm;
-                            margin: 0;
-                            box-sizing: border-box;
-                        }
-                    </style>
-                </head>
-                <body>
-                    ${contentHtml}
-                </body>
-            </html>`;
-        
+        // Create a single element with all documents inside it.
+        // Each document is wrapped in a div that will become a page.
+        // html2pdf will handle the page breaks automatically.
         const element = document.createElement('div');
-        element.innerHTML = fullHtml;
-        
-        html2pdf().from(element).set({
-            margin: 0,
-            filename: `Karnot-Documents-${quoteIdString.replace(/\s/g, '')}.pdf`,
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        }).save();
+        element.innerHTML = docs.join('');
+
+        const opt = {
+          margin:       [20, 20, 20, 20], // top, left, bottom, right in mm
+          filename:     `Karnot-Documents-${quoteIdString.replace(/\s/g, '')}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        // New Promise-based usage of html2pdf
+        html2pdf().from(element).set(opt).save();
     };
     // #############################################################
-    // ### END OF UPDATED PDF GENERATION FUNCTION
+    // ### END OF CORRECTED PDF GENERATION FUNCTION
     // #############################################################
-
 
     return (
         <Card>
