@@ -116,7 +116,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
         onSaveQuote(newQuote);
     };
 
-    // #############################################################
+  // #############################################################
 // ### START OF DEFINITIVE PDF GENERATION FUNCTION
 // #############################################################
 const generatePDF = () => {
@@ -131,18 +131,16 @@ const generatePDF = () => {
     
     const formatCurrency = (num) => `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-    // --- Reusable HTML Blocks (No changes needed here) ---
+    // --- Reusable HTML Blocks (No changes) ---
     const companyHeaderHTML = (title, reference) => `<div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid #F56600;"><div style="font-size: 11px; line-height: 1.5; color: #333;"><img src="${KARNOT_LOGO_BASE64}" style="width: 150px; margin-bottom: 10px;" alt="Karnot Logo" /><strong>Karnot Energy Solutions INC.</strong><br>VAT REG. TIN: 678-799-105-00000<br>Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>2429 Mapandan, Pangasinan, Philippines<br>Tel: +63 75 510 8922</div><div style="text-align: right; font-size: 12px; color: #333;"><h1 style="font-size: 28px; color: #F56600; margin: 0 0 10px 0;">${title}</h1><p style="margin: 2px 0;"><strong>Date:</strong> ${todayFormatted}</p><p style="margin: 2px 0;"><strong>${reference.label}:</strong> ${reference.value}</p>${reference.dueDate ? `<p style="margin: 2px 0;"><strong>Due Date:</strong> ${reference.dueDate}</p>` : ''}</div></div>`;
     const customerInfoHTML = (type) => `<div style="margin-top: 30px; padding: 15px; border: 1px solid #eaeaea; border-radius: 8px; font-size: 12px; color: #333;"><strong>${type}:</strong><br>Customer No.: ${customerDetails.number || 'N/A'}<br>${customerDetails.name}<br>${customerDetails.address.replace(/\n/g, '<br>')}<br>TIN: ${customerDetails.tin || 'N/A'}</div>`;
-    const lineItemsTableHTML = `<h2 style="font-size: 16px; color: #333; border-bottom: 1px solid #eaeaea; padding-bottom: 8px; margin-top: 30px;">Products & Services</h2><table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px;"><thead><tr style="background-color: #f9f9f9; font-weight: bold;"><th style="padding: 10px; text-align: left;">Description</th><th style="padding: 10px; text-align: center;">Qty</th><th style="padding: 10px; text-align: right;">Unit Price (USD)</th><th style="padding: 10px; text-align: right;">Amount (USD)</th></tr></thead><tbody>${lineItems.map(item => `<tr><td style="padding: 10px; border-bottom: 1px solid #eaeaea;">${item.name}</td><td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: center;">${item.quantity}</td><td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice)}</td><td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice * item.quantity)}</td></tr>`).join('')}</tbody></table>`;
-    const totalsHTML = (isProForma) => `<div style="margin-top: 20px; text-align: right; font-size: 12px;"><table style="margin-left: auto; width: 280px; border-collapse: collapse;"><tr><td style="padding: 6px;">Subtotal</td><td style="padding: 6px; text-align: right;">${formatCurrency(subtotal)}</td></tr>${commercialTerms.discount > 0 ? `<tr><td style="padding: 6px;">Discount (${commercialTerms.discount}%)</td><td style="padding: 6px; text-align: right;">-${formatCurrency(totalDiscount)}</td></tr>` : ''}<tr style="font-weight: bold; font-size: 14px; border-top: 2px solid #333;"><td style="padding: 8px 6px;">${isProForma ? 'Total Amount Due' : 'Total Amount'}</td><td style="padding: 8px 6px; text-align: right;">${formatCurrency(finalSalesPrice)}</td></tr></table></div>`;
-    const landedCostHTML = `<div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #eaeaea;"><h3 style="font-size: 13px; color: #333;">Estimated Landed Cost Breakdown (USD)</h3><table style="width: 350px; font-size: 11px; border: 1px solid #ccc;"><thead></thead><tbody><tr style="background-color: #f9f9f9;"><td style="padding: 5px; border-bottom: 1px solid #ccc;">Equipment Price (Ex-Works, after discount)</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(finalSalesPrice)}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">Freight Cost</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(costing.transport)}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">Duties (${costing.duties}%)</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(finalSalesPrice * (costing.duties / 100))}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">VAT / IVA (${costing.vat}%)</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(finalSalesPrice * (costing.vat / 100))}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">Broker & Handling Fees</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(costing.broker)}</td></tr><tr style="font-weight: bold; background-color: #f0f0f0;"><td style="padding: 5px;">Total Estimated Landed Cost</td><td style="padding: 5px; text-align: right;">${formatCurrency(finalSalesPrice + costing.transport + (finalSalesPrice * (costing.duties / 100)) + (finalSalesPrice * (costing.vat / 100)) + costing.broker)}</td></tr></tbody></table></div>`;
+    const lineItemsTableHTML = `<h2 style="font-size: 16px; color: #333; border-bottom: 1px solid #eaeaea; padding-bottom: 8px; margin-top: 30px;">Products & Services</h2><table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 10px; page-break-inside: auto;"><thead><tr style="background-color: #f9f9f9; font-weight: bold;"><th style="padding: 10px; text-align: left;">Description</th><th style="padding: 10px; text-align: center;">Qty</th><th style="padding: 10px; text-align: right;">Unit Price (USD)</th><th style="padding: 10px; text-align: right;">Amount (USD)</th></tr></thead><tbody>${lineItems.map(item => `<tr style="page-break-inside: avoid; page-break-after: auto;"><td style="padding: 10px; border-bottom: 1px solid #eaeaea;">${item.name}</td><td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: center;">${item.quantity}</td><td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice)}</td><td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice * item.quantity)}</td></tr>`).join('')}</tbody></table>`;
+    const totalsHTML = (isProForma) => `<div style="margin-top: 20px; text-align: right; font-size: 12px; page-break-inside: avoid;"><table style="margin-left: auto; width: 280px; border-collapse: collapse;"><tr><td style="padding: 6px;">Subtotal</td><td style="padding: 6px; text-align: right;">${formatCurrency(subtotal)}</td></tr>${commercialTerms.discount > 0 ? `<tr><td style="padding: 6px;">Discount (${commercialTerms.discount}%)</td><td style="padding: 6px; text-align: right;">-${formatCurrency(totalDiscount)}</td></tr>` : ''}<tr style="font-weight: bold; font-size: 14px; border-top: 2px solid #333;"><td style="padding: 8px 6px;">${isProForma ? 'Total Amount Due' : 'Total Amount'}</td><td style="padding: 8px 6px; text-align: right;">${formatCurrency(finalSalesPrice)}</td></tr></table></div>`;
+    const landedCostHTML = `<div style="margin-top: 25px; padding-top: 15px; border-top: 1px solid #eaeaea; page-break-inside: avoid;"><h3 style="font-size: 13px; color: #333;">Estimated Landed Cost Breakdown (USD)</h3><table style="width: 350px; font-size: 11px; border: 1px solid #ccc;"><thead></thead><tbody><tr style="background-color: #f9f9f9;"><td style="padding: 5px; border-bottom: 1px solid #ccc;">Equipment Price (Ex-Works, after discount)</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(finalSalesPrice)}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">Freight Cost</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(costing.transport)}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">Duties (${costing.duties}%)</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(finalSalesPrice * (costing.duties / 100))}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">VAT / IVA (${costing.vat}%)</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(finalSalesPrice * (costing.vat / 100))}</td></tr><tr><td style="padding: 5px; border-bottom: 1px solid #ccc;">Broker & Handling Fees</td><td style="padding: 5px; text-align: right; border-bottom: 1px solid #ccc;">${formatCurrency(costing.broker)}</td></tr><tr style="font-weight: bold; background-color: #f0f0f0;"><td style="padding: 5px;">Total Estimated Landed Cost</td><td style="padding: 5px; text-align: right;">${formatCurrency(finalSalesPrice + costing.transport + (finalSalesPrice * (costing.duties / 100)) + (finalSalesPrice * (costing.vat / 100)) + costing.broker)}</td></tr></tbody></table></div>`;
     const termsAndConditionsHTML = `<div style="margin-top: 30px; font-size: 10px; color: #555; border-top: 1px solid #eaeaea; padding-top: 15px;"><h3 style="font-size: 13px; color: #333; margin-bottom: 5px;">Terms and Conditions</h3><pre style="white-space: pre-wrap; font-family: inherit; font-size: 10px;">${termsAndConditions}</pre></div>`;
     const bankDetailsHTML = `<div style="margin-top: 30px; font-size: 10px; color: #555; border-top: 1px solid #eaeaea; padding-top: 15px;"><h3 style="font-size: 13px; color: #333; margin-bottom: 5px;">Bank Account Details (For USD Payments)</h3><pre style="white-space: pre-wrap; font-family: inherit; font-size: 10px;">${bankDetails}</pre></div>`;
     
-    // --- Assemble Final HTML with Page Breaks ---
-    const pageBreakCSS = `<style>.html2pdf__page-break { page-break-before: always; } </style>`;
-
+    // --- Assemble Final HTML ---
     let docs = [];
     if (docGen.quote) {
         docs.push(`${companyHeaderHTML('Sales Quotation', { label: 'Quote ID', value: quoteIdString })}${customerInfoHTML('Quote For')}${lineItemsTableHTML}${totalsHTML(false)}${docGen.landedCost ? landedCostHTML : ''}${termsAndConditionsHTML}`);
@@ -156,30 +154,28 @@ const generatePDF = () => {
         return;
     }
     
-    // Join documents with the library's official page-break class
-    const contentHtml = pageBreakCSS + docs.join('<div class="html2pdf__page-break"></div>');
+    // **THE FIX**: Wrap each document in a container div.
+    const contentHtml = docs.map(doc => `<div class="pdf-page-wrapper">${doc}</div>`).join('');
     
     const element = document.createElement('div');
     element.innerHTML = contentHtml;
 
     const opt = {
-      margin:       20, // Margin in mm
+      margin:       20,
       filename:     `Karnot-Documents-${quoteIdString.replace(/\s/g, '')}.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true }, // Added useCORS for better image handling
+      html2canvas:  { scale: 2, useCORS: true },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      // ### THE FIX IS HERE ###
-      // Remove 'avoid-all' to prevent conflicts. 'css' mode is all you need
-      // to make the '.html2pdf__page-break' class work correctly.
-      pagebreak:    { mode: 'css' } 
+      // **THE FIX**: This tells the library to add a page break AFTER each wrapper div.
+      // The 'avoid-all' mode also helps prevent content from splitting awkwardly inside the wrapper.
+      pagebreak:    { mode: 'avoid-all', after: '.pdf-page-wrapper' }
     };
 
     html2pdf().from(element).set(opt).save();
 };
 // #############################################################
 // ### END OF DEFINITIVE PDF GENERATION FUNCTION
-// #######################################################################################################################
-
+// #############################################################
 
     return (
         <Card>
