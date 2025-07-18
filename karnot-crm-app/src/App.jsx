@@ -112,7 +112,7 @@ const QuoteCalculator = ({ onSaveQuote }) => {
         const todayFormatted = new Date().toLocaleDateString('en-CA');
         const quoteId = `QN${String(docControl.quoteStart).padStart(4, '0')}/${new Date().getFullYear()}${docControl.revision ? ` - Rev ${docControl.revision}` : ''}`;
 
-        const formatCurrency = (num, inPhp) => {
+        const formatCurrency = (num, inPhp = docGen.inPhp) => {
             const options = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
             if (inPhp) {
                 return `₱${(num * costing.forex).toLocaleString('en-US', options)}`;
@@ -124,11 +124,11 @@ const QuoteCalculator = ({ onSaveQuote }) => {
             <tr>
                 <td style="padding: 10px; border-bottom: 1px solid #eaeaea;">${item.name}</td>
                 <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: center;">${item.quantity}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice, docGen.inPhp)}</td>
-                <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice * item.quantity, docGen.inPhp)}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice)}</td>
+                <td style="padding: 10px; border-bottom: 1px solid #eaeaea; text-align: right;">${formatCurrency(item.customPrice * item.quantity)}</td>
             </tr>`).join('');
         
-        const companyHeaderHTML = (title) => `<div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid #F56600;">
+        const companyHeaderHTML = (title, reference) => `<div style="display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid #F56600;">
             <div style="font-size: 11px; line-height: 1.5;">
                 <strong>Karnot Energy Solutions INC.</strong><br>
                 VAT REG. TIN: 678-799-105-00000<br>
@@ -138,20 +138,34 @@ const QuoteCalculator = ({ onSaveQuote }) => {
             </div>
             <div style="text-align: right;">
                 <h1 style="font-size: 28px; color: #F56600; margin: 0;">${title}</h1>
-                <p><strong>Quote ID:</strong> ${quoteId}</p>
                 <p><strong>Date:</strong> ${todayFormatted}</p>
+                <p><strong>${reference.label}:</strong> ${reference.value}</p>
+                ${reference.dueDate ? `<p><strong>Due Date:</strong> ${reference.dueDate}</p>` : ''}
             </div>
         </div>`;
+        
         let generatedDocumentsHTML = '';
 
+        // Sales Quotation
         if (docGen.quote) {
-            generatedDocumentsHTML += `<div class="page">${companyHeaderHTML('Sales Quotation')} ... Sales Quotation Content ...</div>`;
+             generatedDocumentsHTML += `<div class="page">
+                ${companyHeaderHTML('Sales Quotation', { label: 'Quote ID', value: quoteId })}
+                ... Sales Quotation Content ...
+            </div>`;
         }
+        // Pro Forma Invoice
         if (docGen.proForma) {
-            generatedDocumentsHTML += `<div class="page">${companyHeaderHTML('Pro Forma Invoice')} ... Pro Forma Content ...</div>`;
+             generatedDocumentsHTML += `<div class="page">
+                ${companyHeaderHTML('Pro Forma Invoice', { label: 'Reference', value: `PF-${quoteId}`, dueDate: commercialTerms.dueDate })}
+                ... Pro Forma Content ...
+            </div>`;
         }
+        // BIR Invoice
         if (docGen.bir) {
-            generatedDocumentsHTML += `<div class="page">${companyHeaderHTML('BIR Sales Invoice')} ... BIR Invoice Content ...</div>`;
+             generatedDocumentsHTML += `<div class="page">
+                ${companyHeaderHTML('SALES INVOICE', { label: 'No', value: String(docControl.quoteStart).padStart(4, '0'), dueDate: commercialTerms.dueDate })}
+                ... BIR Invoice Content ...
+            </div>`;
         }
 
         const fullHtml = `<html><head><style>.page{width:210mm;min-height:297mm;padding:20mm;margin:auto;box-sizing:border-box;page-break-after:always;}.page:last-child{page-break-after:auto;}</style></head><body>${generatedDocumentsHTML}</body></html>`;
