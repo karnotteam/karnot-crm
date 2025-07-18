@@ -491,10 +491,11 @@ export default function App() {
     }
     
     const nextQuoteNumber = useMemo(() => {
+        if (savedQuotes.length === 0) return 2501;
         const lastQuoteNum = savedQuotes
             .map(q => parseInt(q.id.split('/')[0].replace('QN', ''), 10))
             .filter(num => !isNaN(num))
-            .reduce((max, num) => Math.max(max, num), 2500);
+            .reduce((max, num) => Math.max(max, num), 0);
         return lastQuoteNum + 1;
     }, [savedQuotes]);
 
