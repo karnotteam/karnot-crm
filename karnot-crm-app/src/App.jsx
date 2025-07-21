@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List, Send, CheckCircle, XCircle, BarChart2, DollarSign, Target, PieChart, Edit, Eye } from 'lucide-react';
 
-// --- DATA: Merged from your HTML tool ---
+// --- DATA ---
 const ALL_PRODUCTS = [
     // iHEAT (R290)
     { id: 'iheat_r290_9_5_240v', name: "Karnot iHEAT R290 - 9.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2865.00, salesPriceUSD: 4776.00 },
@@ -12,18 +12,15 @@ const ALL_PRODUCTS = [
     { id: 'iheat_r290_18_5_240v', name: "Karnot iHEAT R290 - 18.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 4874.00, salesPriceUSD: 8124.00 },
     { id: 'aquahero_200l', name: "Karnot R290 AquaHERO 200L", category: 'iHEAT (R290)', costPriceUSD: 906.00, salesPriceUSD: 1511.00 },
     { id: 'aquahero_300l', name: "Karnot R290 AquaHERO 300L", category: 'iHEAT (R290)', costPriceUSD: 1526.00, salesPriceUSD: 2544.00 },
-
     // iHEAT (CO₂)
     { id: 'iheat_co2_35', name: "Karnot iHEAT - CO2 - 35kW", category: 'iHEAT (CO₂)', costPriceUSD: 21471.00, salesPriceUSD: 35786.00 },
     { id: 'iheat_co2_75', name: "Karnot iHEAT - CO2 - 75kW", category: 'iHEAT (CO₂)', costPriceUSD: 45000.00, salesPriceUSD: 75000.00 },
     { id: 'iheat_co2_105', name: "Karnot iHEAT - CO2 - 105kW", category: 'iHEAT (CO₂)', costPriceUSD: 57000.00, salesPriceUSD: 95000.00 },
-
     // iCOOL (CO₂ Refrigeration)
     { id: 'icool_5_mt', name: "Karnot iCOOL 5 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 7950.00, salesPriceUSD: 13250.00 },
     { id: 'icool_7_mt', name: "Karnot iCOOL 7 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 11977.00, salesPriceUSD: 19962.00 },
     { id: 'icool_15_mt_lt', name: "Karnot iCOOL 15 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 21199.00, salesPriceUSD: 35332.00 },
     { id: 'icool_max_15', name: "Karnot iCOOL MAX 15 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 24000.00, salesPriceUSD: 40000.00 },
-
     // iSTOR (Thermal Storage)
     { id: 'iheat_integrated_storage_200l', name: "iHEAT Integrated Storage Tank 200Ltr", category: 'iSTOR (Thermal Storage)', costPriceUSD: 2059.00, salesPriceUSD: 3432.00 },
     { id: 'istor_58', name: "iSTOR 58 Compact Thermal Battery", category: 'iSTOR (Thermal Storage)', costPriceUSD: 4800.00, salesPriceUSD: 8000.00 },
@@ -34,6 +31,12 @@ const QUOTE_STATUSES = {
     SENT: { text: "Sent", color: "bg-blue-500" },
     APPROVED: { text: "Approved", color: "bg-green-500" },
     DECLINED: { text: "Declined", color: "bg-red-500" }
+};
+// BOI Targets in PHP (Trillions)
+const BOI_TARGETS = {
+    2025: 1.75e12, // ₱1.75 Trillion
+    2026: 1.85e12, // Placeholder: Assuming a modest increase
+    2027: 2.0e12   // Placeholder: Assuming a modest increase
 };
 const KARNOT_LOGO_BASE64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAABkCAYAAADDhn8LAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAA1rSURBVHgB7Z15fFTlGcd/98zMm8lkMsmEkCQhIUAI2QhZEOyK4lYVq1ar1Vq1tVprrVprwVprrUfF/WlVq1Zt1aJa69a19V5r1XUFVkEQ2QhZCAlhAyEhySQzyWS+nJk57j1nJplM5iYhCcn7+X7y/eY+555z5j3P+5zn+Z5zLgEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-";
 
@@ -155,7 +158,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
         return { allItems, subtotalUSD, finalSalesPrice, grossMarginAmount, grossMarginPercentage };
     }, [selectedProducts, manualItems, commercial.discount]);
 
-    // --- ENHANCED FUNCTION to generate full quote preview ---
     const generateQuotePreview = () => {
         const { allItems, subtotalUSD } = quoteTotals;
 
@@ -164,7 +166,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
             return;
         }
 
-        // --- All calculations and HTML templates from your original file ---
         const discountAmountUSD = subtotalUSD * (commercial.discount / 100);
         const totalAfterDiscountUSD = subtotalUSD - discountAmountUSD;
         
@@ -196,7 +197,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
             const unitPrice = docGeneration.generateInPHP ? (p.salesPriceUSD || p.priceUSD || 0) * costing.forexRate : (p.salesPriceUSD || p.priceUSD || 0);
             const lineTotal = unitPrice * (p.quantity || 1);
             let description = p.name;
-            if (p.specs) { // Add description for manual items
+            if (p.specs) {
                 description += `<br><small style="color:#6e6e73; font-style:italic;">${p.specs.replace(/\n/g, "<br>")}</small>`;
             }
             return `<tr><td>${description}</td><td class="text-center">${p.quantity || 1}</td><td class="text-right">${primaryFormat(unitPrice)}</td><td class="text-right">${primaryFormat(lineTotal)}</td></tr>`;
@@ -246,7 +247,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
 
         const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Karnot Document for ${customer.name}</title><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"><style>:root{--primary-orange:#F56600;--text-primary:#1d1d1f;--text-secondary:#6e6e73;--bg-light:#f5f5f7;--bg-main:#fff;--border-color:#d2d2d7;--border-radius:16px;--box-shadow:0 6px 24px rgba(0,0,0,.07)} body{font-family:'Inter',sans-serif;margin:0;padding:0;color:#1d1d1f;background-color:#f5f5f7}.report-container{max-width:1100px;margin:auto}.report-page{padding:40px;margin:20px auto;border:1px solid #ddd;background:#fff;position:relative;box-shadow:0 0 10px rgba(0,0,0,.1);page-break-after:always;}.report-page:last-of-type{page-break-after:auto;}.report-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;border-bottom:2px solid #ccc;padding-bottom:20px}.company-details{font-size:13px;line-height:1.5;flex-basis:50%}.report-info{text-align:right;font-size:14px;line-height:1.5;flex-basis:50%}.report-info h2{font-size:24px;color:#000;text-align:right;margin-bottom:10px;margin-top:0;font-weight:700}h3{font-size:16px;color:#1d1d1f;border-bottom:1px solid #F56600;padding-bottom:8px;margin-top:25px}p{line-height:1.6}.text-right{text-align:right}.text-center{text-align:center}.customer-info-box{border:1px solid #ccc;padding:15px;border-radius:8px;margin-bottom:20px;line-height:1.7}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}.line-items-table th,.line-items-table td{padding:10px;border-bottom:1px solid #d2d2d7;text-align:left;vertical-align:top}.line-items-table th{font-weight:600;background-color:#f5f5f7}.summary-wrapper{display:flex;flex-direction:column;align-items:flex-end;margin-top:20px;page-break-inside:avoid;}.simple-summary-table{width:60%;border:1px solid #eee;margin-top:10px}.simple-summary-table td{padding:8px;border-bottom:1px solid #eee}.summary-table{width:100%}.summary-table td{padding:6px 8px;vertical-align:top}.grand-total-row td{border-top:2px solid #000;font-size:1.1em;font-weight:700;padding-top:10px}.bir-grand-total-row td{border-top:2px solid #000;font-size:1.2em;font-weight:700;padding-top:10px}.terms-conditions{margin-top:30px;font-size:12px;line-height:1.5;border-top:1px solid #eee;padding-top:15px;page-break-inside:avoid;}.terms-conditions h3{font-size:14px;border-bottom:none;margin-top:0}.terms-conditions dt{font-weight:600;color:#1d1d1f;margin-top:10px}.terms-conditions dd{margin-left:0;margin-bottom:5px;color:#6e6e73}.quote-footer{margin-top:50px;text-align:center;font-size:12px;color:#6c757d;border-top:1px solid #d2d2d7;padding-top:20px}</style></head><body><div class="report-container">${generatedDocumentsHTML}<div class="quote-footer"><p>SEC REG. 2025060205860-05 | TIN 678-799-105-0000</p><p>Thank you for your business. Please contact us if you have any questions.</p></div></div></body></html>`;
         
-        const win = window.open("", "QuotePreview", "width=800,height=600");
+        const win = window.open("", "QuotePreview");
         win.document.write(finalReportHTML);
         win.document.close();
     };
@@ -331,7 +332,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
             </Section>
 
             <Section title="4. Document Options">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <Checkbox label="Generate in PHP" checked={docGeneration.generateInPHP} onChange={handleCheckboxChange(setDocGeneration, 'generateInPHP')} />
                     <Checkbox label="Sales Quotation" checked={docGeneration.generateQuote} onChange={handleCheckboxChange(setDocGeneration, 'generateQuote')} />
                     <Checkbox label="Pro Forma Invoice" checked={docGeneration.generateProForma} onChange={handleCheckboxChange(setDocGeneration, 'generateProForma')} />
@@ -357,12 +358,12 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
             </Section>
 
             <Section title="6. Manual Line Items (USD)">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div className="md:col-span-2"><Input label="Item Name" value={manualItemInput.name} onChange={e => setManualItemInput(p => ({...p, name: e.target.value}))} /></div>
-                    <div><Input label="Price (USD)" type="number" value={manualItemInput.price} onChange={e => setManualItemInput(p => ({...p, price: e.target.value}))} /></div>
-                    <div className="md:col-span-2"><Textarea label="Description (Optional)" rows={2} value={manualItemInput.specs} onChange={e => setManualItemInput(p => ({...p, specs: e.target.value}))} /></div>
-                    <div className="md:col-span-2"><Button onClick={addManualItem} className="w-full">Add Item</Button></div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                    <Input label="Item Name" value={manualItemInput.name} onChange={e => setManualItemInput(p => ({...p, name: e.target.value}))} />
+                    <Input label="Price (USD)" type="number" value={manualItemInput.price} onChange={e => setManualItemInput(p => ({...p, price: e.target.value}))} />
+                    <Textarea label="Description (Optional)" rows={1} value={manualItemInput.specs} onChange={e => setManualItemInput(p => ({...p, specs: e.target.value}))} />
                 </div>
+                <Button onClick={addManualItem} className="w-full md:w-auto mt-4">Add Item</Button>
                  {manualItems.length > 0 && <div className="mt-4 space-y-2">
                      {manualItems.map((item, index) => (
                          <div key={item.id} className="flex justify-between items-center bg-gray-100 p-2 rounded-lg">
@@ -438,7 +439,15 @@ const Dashboard = ({ quotes }) => {
             acc[q.status] = (acc[q.status] || 0) + 1;
             return acc;
         }, {});
-        return { ordersWonValue, outstandingValue, avgMargin, statusCounts };
+        
+        const salesByYear = approvedQuotes.reduce((acc, q) => {
+            const year = new Date(q.createdAt).getFullYear();
+            const saleInPHP = q.finalSalesPrice * (q.costing.forexRate || 58.5);
+            acc[year] = (acc[year] || 0) + saleInPHP;
+            return acc;
+        }, {});
+
+        return { ordersWonValue, outstandingValue, avgMargin, statusCounts, salesByYear };
     }, [quotes]);
 
     const StatCard = ({ title, value, icon, color }) => (
@@ -447,11 +456,25 @@ const Dashboard = ({ quotes }) => {
             <div><p className="text-gray-500 text-sm">{title}</p><p className="text-2xl font-bold">{value}</p></div>
         </Card>
     );
+    
+    const CircularProgress = ({ percentage, label }) => {
+        const radius = 50;
+        const circumference = 2 * Math.PI * radius;
+        const offset = circumference - (percentage / 100 * circumference);
+        return (
+            <div className="relative flex items-center justify-center w-32 h-32">
+                <svg className="w-full h-full" viewBox="0 0 120 120">
+                    <circle className="text-gray-200" strokeWidth="10" stroke="currentColor" fill="transparent" r={radius} cx="60" cy="60" />
+                    <circle className="text-orange-500" strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" stroke="currentColor" fill="transparent" r={radius} cx="60" cy="60" style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }} />
+                </svg>
+                <span className="absolute text-xl font-bold">{label}</span>
+            </div>
+        );
+    };
 
     return (
         <div className="space-y-10">
-            <div>
-                <h2 className="text-3xl font-bold text-gray-800 mb-6">Sales Dashboard</h2>
+            <Section title="Sales Dashboard">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <StatCard title="Orders Won" value={`$${stats.ordersWonValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} icon={<DollarSign className="text-white"/>} color="bg-green-500" />
                     <StatCard title="Outstanding Quotes" value={`$${stats.outstandingValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} icon={<Target className="text-white"/>} color="bg-blue-500" />
@@ -468,7 +491,30 @@ const Dashboard = ({ quotes }) => {
                         ))}
                     </div>
                 </Card>
-            </div>
+            </Section>
+            
+            <Section title="BOI Compliance Dashboard">
+                 <Card>
+                    <h3 className="text-xl font-bold mb-4">Annual Sales vs. BOI Target (PHP)</h3>
+                    <div className="flex flex-col md:flex-row justify-around items-center text-center gap-6">
+                        {Object.keys(BOI_TARGETS).map(year => {
+                            const sales = stats.salesByYear[year] || 0;
+                            const target = BOI_TARGETS[year];
+                            const percentage = target > 0 ? (sales / target) * 100 : 0;
+                            return (
+                                <div key={year}>
+                                    <p className="font-bold text-lg">{year}</p>
+                                    <CircularProgress percentage={percentage} label={`${percentage.toFixed(1)}%`} />
+                                    <p className="text-sm mt-2">
+                                        <span className="font-semibold">Actual:</span> {formatPHP(sales)}<br/>
+                                        <span className="text-gray-500">Target: {formatPHP(target)}</span>
+                                    </p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                 </Card>
+            </Section>
         </div>
     );
 };
