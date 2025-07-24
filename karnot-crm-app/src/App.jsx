@@ -428,6 +428,8 @@ const SavedQuotesList = ({ quotes, onUpdateQuoteStatus, onDeleteQuote, onEditQuo
 };
 
 const Dashboard = ({ quotes }) => {
+    const formatPHP = (num) => `₱${(num || 0).toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+
     const stats = useMemo(() => {
         const approvedQuotes = quotes.filter(q => q.status === 'APPROVED');
         const outstandingQuotes = quotes.filter(q => ['DRAFT', 'SENT'].includes(q.status));
@@ -442,7 +444,8 @@ const Dashboard = ({ quotes }) => {
         
         const salesByYear = approvedQuotes.reduce((acc, q) => {
             const year = new Date(q.createdAt).getFullYear();
-            const saleInPHP = q.finalSalesPrice * (q.costing.forexRate || 58.5);
+            // Use optional chaining `?.` to safely access nested properties
+            const saleInPHP = q.finalSalesPrice * (q.costing?.forexRate || 58.5);
             acc[year] = (acc[year] || 0) + saleInPHP;
             return acc;
         }, {});
@@ -460,12 +463,12 @@ const Dashboard = ({ quotes }) => {
     const CircularProgress = ({ percentage, label }) => {
         const radius = 50;
         const circumference = 2 * Math.PI * radius;
-        const offset = circumference - (percentage / 100 * circumference);
+        const offset = circumference - (Math.min(100, Math.max(0, percentage)) / 100 * circumference);
         return (
             <div className="relative flex items-center justify-center w-32 h-32">
                 <svg className="w-full h-full" viewBox="0 0 120 120">
                     <circle className="text-gray-200" strokeWidth="10" stroke="currentColor" fill="transparent" r={radius} cx="60" cy="60" />
-                    <circle className="text-orange-500" strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" stroke="currentColor" fill="transparent" r={radius} cx="60" cy="60" style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }} />
+                    <circle className="text-orange-500 transition-all duration-500" strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" stroke="currentColor" fill="transparent" r={radius} cx="60" cy="60" style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }} />
                 </svg>
                 <span className="absolute text-xl font-bold">{label}</span>
             </div>
@@ -555,7 +558,7 @@ export default function App() {
 
     useEffect(() => {
         try { localStorage.setItem('karnotQuotes', JSON.stringify(savedQuotes)); } 
-        catch (error) { console.error("Failed to save quotes to localStorage", error); }
+        catch (error) { console.error("Failed to save quotes from localStorage", error); }
     }, [savedQuotes]);
 
     const handleSaveQuote = (quote) => {
