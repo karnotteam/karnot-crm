@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List, Send, CheckCircle, XCircle, BarChart2, DollarSign, Target, PieChart, Edit, Eye } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List, Send, CheckCircle, XCircle, BarChart2, DollarSign, Target, PieChart, Edit, Eye, Save, X } from 'lucide-react';
 
 // --- DATA ---
 const ALL_PRODUCTS = [
@@ -90,6 +90,10 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
     const [manualItems, setManualItems] = useState([]);
     const [manualItemInput, setManualItemInput] = useState({ name: '', price: '', specs: '' });
 
+    // State for managing inline editing of manual items
+    const [editingIndex, setEditingIndex] = useState(null);
+    const [editingItem, setEditingItem] = useState(null);
+
     useEffect(() => {
         if (initialData) {
             setCustomer(initialData.customer);
@@ -100,7 +104,14 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
             setSelectedProducts(initialData.selectedProducts || {});
             setManualItems(initialData.manualItems || []);
         } else {
-             setDocControl(prev => ({ ...prev, quoteNumber: nextQuoteNumber, revision: 'A' }));
+             // Reset form for new quote
+             setCustomer({ name: '', number: '', tin: '', address: '', saleType: 'Export' });
+             setCommercial({ shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 });
+             setDocControl({ quoteNumber: nextQuoteNumber, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' });
+             setCosting({ forexRate: 58.50, transportCost: 0, dutiesRate: 1, vatRate: 12, brokerFees: 0 });
+             setDocGeneration({ generateInPHP: false, generateQuote: true, generateProForma: true, generateBirInvoice: false, includeLandedCost: true });
+             setSelectedProducts({});
+             setManualItems([]);
         }
     }, [initialData, nextQuoteNumber]);
 
@@ -139,6 +150,27 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
     
     const removeManualItem = (index) => {
         setManualItems(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const startEditing = (index) => {
+        setEditingIndex(index);
+        setEditingItem(manualItems[index]);
+    };
+
+    const cancelEditing = () => {
+        setEditingIndex(null);
+        setEditingItem(null);
+    };
+
+    const saveEditing = (index) => {
+        const updatedItems = [...manualItems];
+        updatedItems[index] = { ...editingItem, priceUSD: parseFloat(editingItem.priceUSD) };
+        setManualItems(updatedItems);
+        cancelEditing();
+    };
+
+    const handleEditInputChange = (field) => (e) => {
+        setEditingItem(prev => ({ ...prev, [field]: e.target.value }));
     };
 
     const quoteTotals = useMemo(() => {
@@ -370,9 +402,26 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
                 <Button onClick={addManualItem} className="w-full md:w-auto mt-4">Add Item</Button>
                  {manualItems.length > 0 && <div className="mt-4 space-y-2">
                      {manualItems.map((item, index) => (
-                         <div key={item.id} className="flex justify-between items-center bg-gray-100 p-2 rounded-lg">
-                             <span>{item.name} - ${parseFloat(item.priceUSD).toLocaleString()}</span>
-                             <Button onClick={() => removeManualItem(index)} variant="danger" className="px-2 py-1"><Trash2 size={16}/></Button>
+                         <div key={item.id}>
+                            {editingIndex === index ? (
+                                <div className="p-2 bg-orange-100 rounded-lg space-y-2">
+                                    <Input label="Item Name" value={editingItem.name} onChange={handleEditInputChange('name')} />
+                                    <Input label="Price (USD)" type="number" value={editingItem.priceUSD} onChange={handleEditInputChange('priceUSD')} />
+                                    <Textarea label="Description" rows={2} value={editingItem.specs} onChange={handleEditInputChange('specs')} />
+                                    <div className="flex gap-2 justify-end">
+                                        <Button onClick={cancelEditing} variant="secondary" className="px-2 py-1"><X size={16} /></Button>
+                                        <Button onClick={() => saveEditing(index)} variant="success" className="px-2 py-1"><Save size={16} /></Button>
+                                    </div>
+                                </div>
+                            ) : (
+                                 <div className="flex justify-between items-center bg-gray-100 p-2 rounded-lg">
+                                     <span>{item.name} - ${parseFloat(item.priceUSD).toLocaleString()}</span>
+                                     <div className="flex gap-2">
+                                        <Button onClick={() => startEditing(index)} variant="secondary" className="px-2 py-1"><Edit size={16}/></Button>
+                                        <Button onClick={() => removeManualItem(index)} variant="danger" className="px-2 py-1"><Trash2 size={16}/></Button>
+                                     </div>
+                                 </div>
+                            )}
                          </div>
                      ))}
                  </div>}
