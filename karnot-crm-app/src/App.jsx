@@ -4,25 +4,25 @@ import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List, Send, CheckCir
 // --- DATA ---
 const ALL_PRODUCTS = [
     // iHEAT (R290)
-    { id: 'iheat_r290_9_5_240v', name: "Karnot iHEAT R290 - 9.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2865.00, salesPriceUSD: 4776.00 },
-    { id: 'iheat_r290_9_5_127v', name: "Karnot iHEAT R290 - 9.5kW - 127V", category: 'iHEAT (R290)', costPriceUSD: 2865.00, salesPriceUSD: 4776.00 },
-    { id: 'iheat_r290_11_5_240v', name: "Karnot iHEAT R290 - 11.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 3298.00, salesPriceUSD: 5497.00 },
-    { id: 'iheat_r290_11_5_127v', name: "Karnot iHEAT R290 - 11.5kW - 127V", category: 'iHEAT (R290)', costPriceUSD: 3298.00, salesPriceUSD: 5497.00 },
-    { id: 'iheat_r290_15_5_240v', name: "Karnot iHEAT R290 - 15.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 4610.00, salesPriceUSD: 7683.00 },
-    { id: 'iheat_r290_18_5_240v', name: "Karnot iHEAT R290 - 18.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 4874.00, salesPriceUSD: 8124.00 },
-    { id: 'aquahero_200l', name: "Karnot R290 AquaHERO 200L", category: 'iHEAT (R290)', costPriceUSD: 906.00, salesPriceUSD: 1511.00 },
-    { id: 'aquahero_300l', name: "Karnot R290 AquaHERO 300L", category: 'iHEAT (R290)', costPriceUSD: 1526.00, salesPriceUSD: 2544.00 },
+    { id: 'iheat_r290_9_5_240v', name: "Karnot iHEAT R290 - 9.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 1972.00, salesPriceUSD: 3944.00 },
+    { id: 'iheat_r290_9_5_127v', name: "Karnot iHEAT R290 - 9.5kW - 127V", category: 'iHEAT (R290)', costPriceUSD: 1972.00, salesPriceUSD: 3944.00 },
+    { id: 'iheat_r290_11_5_240v', name: "Karnot iHEAT R290 - 11.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2063.00, salesPriceUSD: 4126.00 },
+    { id: 'iheat_r290_11_5_127v', name: "Karnot iHEAT R290 - 11.5kW - 127V", category: 'iHEAT (R290)', costPriceUSD: 2063.00, salesPriceUSD: 4126.00 },
+    { id: 'iheat_r290_15_5_240v', name: "Karnot iHEAT R290 - 15.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2791.00, salesPriceUSD: 5582.00 },
+    { id: 'iheat_r290_18_5_240v', name: "Karnot iHEAT R290 - 18.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2791.00, salesPriceUSD: 5582.00 },
+    { id: 'aquahero_200l', name: "Karnot R290 AquaHERO 200L", category: 'iHEAT (R290)', costPriceUSD: 855.00, salesPriceUSD: 1710.00 },
+    { id: 'aquahero_300l', name: "Karnot R290 AquaHERO 300L", category: 'iHEAT (R290)', costPriceUSD: 958.00, salesPriceUSD: 1916.00 },
     // iHEAT (CO₂)
-    { id: 'iheat_co2_35', name: "Karnot iHEAT - CO2 - 35kW", category: 'iHEAT (CO₂)', costPriceUSD: 21471.00, salesPriceUSD: 35786.00 },
-    { id: 'iheat_co2_75', name: "Karnot iHEAT - CO2 - 75kW", category: 'iHEAT (CO₂)', costPriceUSD: 45000.00, salesPriceUSD: 75000.00 },
-    { id: 'iheat_co2_105', name: "Karnot iHEAT - CO2 - 105kW", category: 'iHEAT (CO₂)', costPriceUSD: 57000.00, salesPriceUSD: 95000.00 },
+    { id: 'iheat_co2_35', name: "Karnot iHEAT - CO2 - 35kW", category: 'iHEAT (CO₂)', costPriceUSD: 21471.00, salesPriceUSD: 42942.00 },
+    { id: 'iheat_co2_75', name: "Karnot iHEAT - CO2 - 75kW", category: 'iHEAT (CO₂)', costPriceUSD: 45000.00, salesPriceUSD: 90000.00 },
+    { id: 'iheat_co2_105', name: "Karnot iHEAT - CO2 - 105kW", category: 'iHEAT (CO₂)', costPriceUSD: 57000.00, salesPriceUSD: 105000.00 },
     // iCOOL (CO₂ Refrigeration)
-    { id: 'icool_5_mt', name: "Karnot iCOOL 5 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 7950.00, salesPriceUSD: 13250.00 },
-    { id: 'icool_7_mt', name: "Karnot iCOOL 7 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 11977.00, salesPriceUSD: 19962.00 },
-    { id: 'icool_15_mt_lt', name: "Karnot iCOOL 15 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 21199.00, salesPriceUSD: 35332.00 },
-    { id: 'icool_max_15', name: "Karnot iCOOL MAX 15 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 24000.00, salesPriceUSD: 40000.00 },
+    { id: 'icool_5_mt', name: "Karnot iCOOL 5 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 7012.00, salesPriceUSD: 10518.00 },
+    { id: 'icool_7_mt', name: "Karnot iCOOL 7 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 9981.00, salesPriceUSD: 14972.00 },
+    { id: 'icool_15_mt_lt', name: "Karnot iCOOL 15 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 13677.00, salesPriceUSD: 20516.00 },
+    { id: 'icool_max_15', name: "Karnot iCOOL MAX 15 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 19830.00, salesPriceUSD: 29745.00 },
     // iSTOR (Thermal Storage)
-    { id: 'iheat_integrated_storage_200l', name: "iHEAT Integrated Storage Tank 200Ltr", category: 'iSTOR (Thermal Storage)', costPriceUSD: 2059.00, salesPriceUSD: 3432.00 },
+    { id: 'iheat_integrated_storage_200l', name: "iHEAT Integrated Storage Tank 200Ltr", category: 'iSTOR (Thermal Storage)', costPriceUSD: 1716.00, salesPriceUSD: 3432.00 },
     { id: 'istor_58', name: "iSTOR 58 Compact Thermal Battery", category: 'iSTOR (Thermal Storage)', costPriceUSD: 4800.00, salesPriceUSD: 8000.00 },
     { id: 'istor_89', name: "iSTOR 89 Compact Thermal Battery", category: 'iSTOR (Thermal Storage)', costPriceUSD: 7200.00, salesPriceUSD: 12000.00 }
 ];
