@@ -3,6 +3,23 @@ import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List, Send, CheckCir
 
 // --- DATA ---
 const ALL_PRODUCTS = [
+    // iHEAT (R32)
+    { id: 'iheat_r32_6_220v', name: "Karnot iHEAT R32 - 6kW (220V)", category: 'iHEAT (R32)', costPriceUSD: 1273.00, salesPriceUSD: 2546.00 },
+    { id: 'iheat_r32_9_5_220v', name: "Karnot iHEAT R32 - 9.5kW (220V)", category: 'iHEAT (R32)', costPriceUSD: 1339.00, salesPriceUSD: 2678.00 },
+    { id: 'iheat_r32_12_220v', name: "Karnot iHEAT R32 - 12kW (220V)", category: 'iHEAT (R32)', costPriceUSD: 1442.00, salesPriceUSD: 2884.00 },
+    { id: 'iheat_r32_16_220v', name: "Karnot iHEAT R32 - 16kW (220V)", category: 'iHEAT (R32)', costPriceUSD: 1577.00, salesPriceUSD: 3154.00 },
+    { id: 'iheat_r32_20_220v', name: "Karnot iHEAT R32 - 20kW (220V)", category: 'iHEAT (R32)', costPriceUSD: 1790.00, salesPriceUSD: 3580.00 },
+    { id: 'iheat_r32_22_220v', name: "Karnot iHEAT R32 - 22kW (220V)", category: 'iHEAT (R32)', costPriceUSD: 1864.00, salesPriceUSD: 3728.00 },
+    { id: 'iheat_r32_9_5_380v', name: "Karnot iHEAT R32 - 9.5kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 1427.00, salesPriceUSD: 2854.00 },
+    { id: 'iheat_r32_12_380v', name: "Karnot iHEAT R32 - 12kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 1530.00, salesPriceUSD: 3060.00 },
+    { id: 'iheat_r32_16_380v', name: "Karnot iHEAT R32 - 16kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 1666.00, salesPriceUSD: 3332.00 },
+    { id: 'iheat_r32_20_380v', name: "Karnot iHEAT R32 - 20kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 1878.00, salesPriceUSD: 3756.00 },
+    { id: 'iheat_r32_22_380v', name: "Karnot iHEAT R32 - 22kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 1952.00, salesPriceUSD: 3904.00 },
+    // -- NEWLY ADDED LARGER R32 MODELS --
+    { id: 'iheat_r32_25_380v', name: "Karnot iHEAT R32 - 25kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 2746.00, salesPriceUSD: 5492.00 },
+    { id: 'iheat_r32_30_380v', name: "Karnot iHEAT R32 - 30kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 3428.00, salesPriceUSD: 6856.00 },
+    { id: 'iheat_r32_50_380v', name: "Karnot iHEAT R32 - 50kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 5150.00, salesPriceUSD: 10300.00 },
+    { id: 'iheat_r32_100_380v', name: "Karnot iHEAT R32 - 100kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 10226.00, salesPriceUSD: 20452.00 },
     // iHEAT (R290)
     { id: 'iheat_r290_9_5_240v', name: "Karnot iHEAT R290 - 9.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 1972.00, salesPriceUSD: 3944.00 },
     { id: 'iheat_r290_9_5_127v', name: "Karnot iHEAT R290 - 9.5kW - 127V", category: 'iHEAT (R290)', costPriceUSD: 1972.00, salesPriceUSD: 3944.00 },
@@ -15,16 +32,16 @@ const ALL_PRODUCTS = [
     // iHEAT (CO₂)
     { id: 'iheat_co2_35', name: "Karnot iHEAT - CO2 - 35kW", category: 'iHEAT (CO₂)', costPriceUSD: 21471.00, salesPriceUSD: 42942.00 },
     { id: 'iheat_co2_75', name: "Karnot iHEAT - CO2 - 75kW", category: 'iHEAT (CO₂)', costPriceUSD: 45000.00, salesPriceUSD: 90000.00 },
-    { id: 'iheat_co2_105', name: "Karnot iHEAT - CO2 - 105kW", category: 'iHEAT (CO₂)', costPriceUSD: 57000.00, salesPriceUSD: 105000.00 },
+    { id: 'iheat_co2_105', name: "Karnot iHEAT - CO2 - 105kW", category: 'iHEAT (CO₂)', costPriceUSD: 57000.00, salesPriceUSD: 114000.00 },
     // iCOOL (CO₂ Refrigeration)
-    { id: 'icool_5_mt', name: "Karnot iCOOL 5 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 7012.00, salesPriceUSD: 10518.00 },
-    { id: 'icool_7_mt', name: "Karnot iCOOL 7 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 9981.00, salesPriceUSD: 14972.00 },
-    { id: 'icool_15_mt_lt', name: "Karnot iCOOL 15 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 13677.00, salesPriceUSD: 20516.00 },
-    { id: 'icool_max_15', name: "Karnot iCOOL MAX 15 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 19830.00, salesPriceUSD: 29745.00 },
+    { id: 'icool_5_mt', name: "Karnot iCOOL 5 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 7012.00, salesPriceUSD: 14024.00 },
+    { id: 'icool_7_mt', name: "Karnot iCOOL 7 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 9981.00, salesPriceUSD: 19962.00 },
+    { id: 'icool_15_mt_lt', name: "Karnot iCOOL 15 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 13677.00, salesPriceUSD: 27354.00 },
+    { id: 'icool_max_15', name: "Karnot iCOOL MAX 15 HP", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 19830.00, salesPriceUSD: 39660.00 },
     // iSTOR (Thermal Storage)
     { id: 'iheat_integrated_storage_200l', name: "iHEAT Integrated Storage Tank 200Ltr", category: 'iSTOR (Thermal Storage)', costPriceUSD: 1716.00, salesPriceUSD: 3432.00 },
-    { id: 'istor_58', name: "iSTOR 58 Compact Thermal Battery", category: 'iSTOR (Thermal Storage)', costPriceUSD: 4800.00, salesPriceUSD: 8000.00 },
-    { id: 'istor_89', name: "iSTOR 89 Compact Thermal Battery", category: 'iSTOR (Thermal Storage)', costPriceUSD: 7200.00, salesPriceUSD: 12000.00 }
+    { id: 'istor_58', name: "iSTOR 58 Compact Thermal Battery", category: 'iSTOR (Thermal Storage)', costPriceUSD: 4800.00, salesPriceUSD: 9600.00 },
+    { id: 'istor_89', name: "iSTOR 89 Compact Thermal Battery", category: 'iSTOR (Thermal Storage)', costPriceUSD: 7200.00, salesPriceUSD: 14400.00 }
 ];
 const QUOTE_STATUSES = {
     DRAFT: { text: "Draft", color: "bg-gray-500" },
@@ -378,7 +395,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
             </Section>
             
             <Section title="5. Product Selection">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
                     {Object.entries(productCategories).map(([category, products]) => (
                         <div key={category}>
                            <h4 className="text-orange-600 font-semibold mt-4 mb-2">{category}</h4>
