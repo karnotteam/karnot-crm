@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List, Send, CheckCircle, XCircle, BarChart2, DollarSign, Target, PieChart, Edit, Eye, Save, X } from 'lucide-react';
 
-// --- DATA ---
 const ALL_PRODUCTS = [
     // iHEAT (R32)
     { id: 'iheat_r32_6_220v', name: "Karnot iHEAT R32 - 6kW (220V)", category: 'iHEAT (R32)', costPriceUSD: 1273.00, salesPriceUSD: 2546.00 },
@@ -27,6 +26,12 @@ const ALL_PRODUCTS = [
     { id: 'iheat_r290_11_5_127v', name: "Karnot iHEAT R290 - 11.5kW - 127V", category: 'iHEAT (R290)', costPriceUSD: 2063.00, salesPriceUSD: 4126.00 },
     { id: 'iheat_r290_15_5_240v', name: "Karnot iHEAT R290 - 15.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2791.00, salesPriceUSD: 5582.00 },
     { id: 'iheat_r290_18_5_240v', name: "Karnot iHEAT R290 - 18.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2791.00, salesPriceUSD: 5582.00 },
+    // --- NEWLY ADDED R290 COMMERCIAL MODELS ---
+    { id: 'iheat_r290_25_380v', name: "Karnot iHEAT R290 - 25kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 2746.00, salesPriceUSD: 5492.00 },
+    { id: 'iheat_r290_30_380v', name: "Karnot iHEAT R290 - 30kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 3428.00, salesPriceUSD: 6856.00 },
+    { id: 'iheat_r290_50_380v', name: "Karnot iHEAT R290 - 50kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 5150.00, salesPriceUSD: 10300.00 },
+    { id: 'iheat_r290_100_380v', name: "Karnot iHEAT R290 - 100kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 10226.00, salesPriceUSD: 20452.00 },
+    // --- END NEW R290 MODELS ---
     { id: 'aquahero_200l', name: "Karnot R290 AquaHERO 200L", category: 'iHEAT (R290)', costPriceUSD: 855.00, salesPriceUSD: 1710.00 },
     { id: 'aquahero_300l', name: "Karnot R290 AquaHERO 300L", category: 'iHEAT (R290)', costPriceUSD: 958.00, salesPriceUSD: 1916.00 },
     // iHEAT (CO₂)
