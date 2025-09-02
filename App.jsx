@@ -14,7 +14,6 @@ const ALL_PRODUCTS = [
     { id: 'iheat_r32_16_380v', name: "Karnot iHEAT R32 - 16kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 1666.00, salesPriceUSD: 3332.00 },
     { id: 'iheat_r32_20_380v', name: "Karnot iHEAT R32 - 20kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 1878.00, salesPriceUSD: 3756.00 },
     { id: 'iheat_r32_22_380v', name: "Karnot iHEAT R32 - 22kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 1952.00, salesPriceUSD: 3904.00 },
-    // -- NEWLY ADDED LARGER R32 MODELS --
     { id: 'iheat_r32_25_380v', name: "Karnot iHEAT R32 - 25kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 2746.00, salesPriceUSD: 5492.00 },
     { id: 'iheat_r32_30_380v', name: "Karnot iHEAT R32 - 30kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 3428.00, salesPriceUSD: 6856.00 },
     { id: 'iheat_r32_50_380v', name: "Karnot iHEAT R32 - 50kW (380V)", category: 'iHEAT (R32)', costPriceUSD: 5150.00, salesPriceUSD: 10300.00 },
@@ -26,12 +25,10 @@ const ALL_PRODUCTS = [
     { id: 'iheat_r290_11_5_127v', name: "Karnot iHEAT R290 - 11.5kW - 127V", category: 'iHEAT (R290)', costPriceUSD: 2063.00, salesPriceUSD: 4126.00 },
     { id: 'iheat_r290_15_5_240v', name: "Karnot iHEAT R290 - 15.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2791.00, salesPriceUSD: 5582.00 },
     { id: 'iheat_r290_18_5_240v', name: "Karnot iHEAT R290 - 18.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2791.00, salesPriceUSD: 5582.00 },
-    // --- NEWLY ADDED R290 COMMERCIAL MODELS ---
-    { id: 'iheat_r290_25_380v', name: "Karnot iHEAT R290 - 25kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 2746.00, salesPriceUSD: 5492.00 },
-    { id: 'iheat_r290_30_380v', name: "Karnot iHEAT R290 - 30kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 3428.00, salesPriceUSD: 6856.00 },
-    { id: 'iheat_r290_50_380v', name: "Karnot iHEAT R290 - 50kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 5150.00, salesPriceUSD: 10300.00 },
-    { id: 'iheat_r290_100_380v', name: "Karnot iHEAT R290 - 100kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 10226.00, salesPriceUSD: 20452.00 },
-    // --- END NEW R290 MODELS ---
+    { id: 'iheat_r290_25_380v', name: "Karnot iHEAT R290 - 25kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 2746.00, salesPriceUSD: 4119.00 },
+    { id: 'iheat_r290_30_380v', name: "Karnot iHEAT R290 - 30kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 3428.00, salesPriceUSD: 5142.00 },
+    { id: 'iheat_r290_50_380v', name: "Karnot iHEAT R290 - 50kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 5150.00, salesPriceUSD: 7725.00 },
+    { id: 'iheat_r290_100_380v', name: "Karnot iHEAT R290 - 100kW (380V)", category: 'iHEAT (R290)', costPriceUSD: 10226.00, salesPriceUSD: 15339.00 },
     { id: 'aquahero_200l', name: "Karnot R290 AquaHERO 200L", category: 'iHEAT (R290)', costPriceUSD: 855.00, salesPriceUSD: 1710.00 },
     { id: 'aquahero_300l', name: "Karnot R290 AquaHERO 300L", category: 'iHEAT (R290)', costPriceUSD: 958.00, salesPriceUSD: 1916.00 },
     // iHEAT (CO₂)
@@ -46,7 +43,18 @@ const ALL_PRODUCTS = [
     // iSTOR (Thermal Storage)
     { id: 'iheat_integrated_storage_200l', name: "iHEAT Integrated Storage Tank 200Ltr", category: 'iSTOR (Thermal Storage)', costPriceUSD: 1716.00, salesPriceUSD: 3432.00 },
     { id: 'istor_58', name: "iSTOR 58 Compact Thermal Battery", category: 'iSTOR (Thermal Storage)', costPriceUSD: 4800.00, salesPriceUSD: 9600.00 },
-    { id: 'istor_89', name: "iSTOR 89 Compact Thermal Battery", category: 'iSTOR (Thermal Storage)', costPriceUSD: 7200.00, salesPriceUSD: 14400.00 }
+    { id: 'istor_89', name: "iSTOR 89 Compact Thermal Battery", category: 'iSTOR (Thermal Storage)', costPriceUSD: 7200.00, salesPriceUSD: 14400.00 },
+    // --- NEWLY ADDED STAINLESS STEEL TANKS ---
+    { id: 'istor_tank_ss_60l', name: "iSTOR Stainless Steel Tank - 60L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 162.00, salesPriceUSD: 243.00 },
+    { id: 'istor_tank_ss_100l', name: "iSTOR Stainless Steel Tank - 100L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 225.00, salesPriceUSD: 337.50 },
+    { id: 'istor_tank_ss_150l', name: "iSTOR Stainless Steel Tank - 150L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 256.00, salesPriceUSD: 384.00 },
+    { id: 'istor_tank_ss_200l', name: "iSTOR Stainless Steel Tank - 200L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 321.00, salesPriceUSD: 481.50 },
+    { id: 'istor_tank_ss_260l', name: "iSTOR Stainless Steel Tank - 260L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 368.00, salesPriceUSD: 552.00 },
+    { id: 'istor_tank_ss_320l', name: "iSTOR Stainless Steel Tank - 320L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 413.00, salesPriceUSD: 619.50 },
+    { id: 'istor_tank_ss_400l', name: "iSTOR Stainless Steel Tank - 400L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 534.00, salesPriceUSD: 801.00 },
+    { id: 'istor_tank_ss_500l', name: "iSTOR Stainless Steel Tank - 500L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 603.00, salesPriceUSD: 904.50 },
+    { id: 'istor_tank_ss_600l', name: "iSTOR Stainless Steel Tank - 600L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 721.00, salesPriceUSD: 1081.50 },
+    { id: 'istor_tank_ss_1000l', name: "iSTOR Stainless Steel Tank - 1000L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 1489.00, salesPriceUSD: 2233.50 }
 ];
 const QUOTE_STATUSES = {
     DRAFT: { text: "Draft", color: "bg-gray-500" },
