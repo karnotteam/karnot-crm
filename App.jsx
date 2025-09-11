@@ -23,7 +23,7 @@ const ALL_PRODUCTS = [
     { id: 'iheat_pro_r32_20_380v', name: "Karnot iHEAT Pro R32 - 20kW (380V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1878.00, salesPriceUSD: 2817.00 },
     { id: 'iheat_pro_r32_22_380v', name: "Karnot iHEAT Pro R32 - 22kW (380V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1952.00, salesPriceUSD: 2928.00 },
 
-    // iHEAT (R290) - Updated prices from image
+    // iHEAT (R290)
     { id: 'iheat_r290_9_5_240v', name: "Karnot iHEAT R290 - 9.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 1972.00, salesPriceUSD: 3944.00 },
     { id: 'iheat_r290_11_5_240v', name: "Karnot iHEAT R290 - 11.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2063.00, salesPriceUSD: 4126.00 },
     { id: 'iheat_r290_15_5_380v', name: "Karnot iHEAT R290 - 15.5kW - 380V", category: 'iHEAT (R290)', costPriceUSD: 2791.00, salesPriceUSD: 5582.00 },
@@ -33,11 +33,11 @@ const ALL_PRODUCTS = [
     { id: 'aquahero_200l', name: "Karnot R290 AquaHERO 200L", category: 'iHEAT (R290)', costPriceUSD: 877.00, salesPriceUSD: 1754.00 },
     { id: 'aquahero_300l', name: "Karnot R290 AquaHERO 300L", category: 'iHEAT (R290)', costPriceUSD: 958.00, salesPriceUSD: 1916.00 },
 
-    // iHEAT (CO₂) - Updated prices from image
+    // iHEAT (CO₂)
     { id: 'iheat_co2_35', name: "Karnot iHEAT - CO2 - 35kW", category: 'iHEAT (CO₂)', costPriceUSD: 21471.00, salesPriceUSD: 42942.00 },
     { id: 'iheat_co2_75', name: "Karnot iHEAT - CO2 - 75kW", category: 'iHEAT (CO₂)', costPriceUSD: 35000.00, salesPriceUSD: 70000.00 },
     
-    // iCOOL (CO₂ Refrigeration) - Updated prices from image
+    // iCOOL (CO₂ Refrigeration)
     { id: 'icool_5_mt', name: "Karnot iCOOL 5 CO2 MT", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 7012.00, salesPriceUSD: 10518.00 },
     { id: 'icool_7_mt', name: "Karnot iCOOL 7 CO2 MT", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 9981.00, salesPriceUSD: 14972.00 },
     { id: 'icool_15_mt_lt', name: "Karnot iCOOL 15 CO2 MT/LT", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 13677.00, salesPriceUSD: 20516.00 },
@@ -74,8 +74,8 @@ const QUOTE_STATUSES = {
     APPROVED: { text: "Approved", color: "bg-green-500" },
     DECLINED: { text: "Declined", color: "bg-red-500" }
 };
-// BOI Targets in Millions (PHP)
-const BOI_TARGETS = {
+// BOI Targets in Millions (USD) - Will be converted to PHP in the dashboard
+const BOI_TARGETS_USD = {
     2025: 1073035,
     2026: 2175323,
     2027: 3380671
@@ -132,7 +132,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
     const [manualItems, setManualItems] = useState([]);
     const [manualItemInput, setManualItemInput] = useState({ name: '', price: '', specs: '' });
 
-    // State for managing inline editing of manual items
     const [editingIndex, setEditingIndex] = useState(null);
     const [editingItem, setEditingItem] = useState(null);
 
@@ -146,7 +145,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
             setSelectedProducts(initialData.selectedProducts || {});
             setManualItems(initialData.manualItems || []);
         } else {
-             // Reset form for new quote
              setCustomer({ name: '', number: '', tin: '', address: '', saleType: 'Export' });
              setCommercial({ shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 });
              setDocControl({ quoteNumber: nextQuoteNumber, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' });
