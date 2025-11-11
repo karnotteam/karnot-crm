@@ -1,5 +1,7 @@
+// src/pages/LoginPage.jsx
 import React, { useState } from 'react';
-import { KARNOT_LOGO_BASE64, Card, Button, Input } from '../data/constants';
+// --- FIX: Import from .jsx file ---
+import { KARNOT_LOGO_BASE_64, Card, Button, Input } from '../data/constants.jsx';
 
 // This is your LoginScreen component, moved from App.jsx
 // We've updated it for Firebase Email/Password login
@@ -22,7 +24,7 @@ const LoginPage = ({ onLogin }) => {
         <div className="flex items-center justify-center min-h-screen bg-gray-100">
             <Card className="w-full max-w-sm">
                 <div className="text-center">
-                    <img src={KARNOT_LOGO_BASE64} alt="Karnot Logo" className="mx-auto" style={{height: '60px'}}/>
+                    <img src={KARNOT_LOGO_BASE_64} alt="Karnot Logo" className="mx-auto" style={{height: '60px'}}/>
                     <h2 className="text-2xl font-bold text-gray-800 mt-4">Karnot CRM Login</h2>
                 </div>
                 <form onSubmit={handleSubmit} className="mt-8 space-y-6">
