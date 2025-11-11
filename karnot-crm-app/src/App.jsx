@@ -6,7 +6,7 @@ import { collection, onSnapshot, query, doc, addDoc, setDoc, deleteDoc, serverTi
 
 // --- Import Pages & Components ---
 import LoginPage from './pages/LoginPage';
-import FunnelPage from './pages.FunnelPage'; // Your new funnel page
+import FunnelPage from './pages/FunnelPage'; // Your new funnel page
 import DashboardPage from './pages/DashboardPage';
 import QuotesListPage from './pages/QuotesListPage';
 import QuoteCalculator from './components/QuoteCalculator';
