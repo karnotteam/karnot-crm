@@ -106,23 +106,29 @@ export default function App() {
 
     // --- Firebase Database Functions (Replaces your old localStorage) ---
     const handleSaveQuote = async (quoteData) => {
+        // Ensure user is still logged in before saving
         if (!user) {
-            alert("Error: You are not logged in. Please refresh and log in again.");
+            alert("Error: You are no longer logged in. Please refresh and log in again.");
             return;
         }
-        
+
+        // Create a reference to the document. 
+        // This will save to: users / {your_user_id} / quotes / {quote_id}
         const quoteRef = doc(db, "users", user.uid, "quotes", quoteData.id);
+        
         try {
+            // setDoc will create the document if it doesn't exist, 
+            // or update it if it does (e.g., if you are editing)
             await setDoc(quoteRef, {
                 ...quoteData,
                 // Use serverTimestamp for accuracy
-                createdAt: quoteData.createdAt || serverTimestamp(), 
+                createdAt: quoteData.createdAt ? quoteData.createdAt : serverTimestamp(), 
                 lastModified: serverTimestamp()
             }, { merge: true }); // 'merge: true' creates new or updates existing
             
             alert(`Quote ${quoteData.id} has been saved to the cloud!`);
-            setActiveView('list');
-            setQuoteToEdit(null);
+            setActiveView('list'); // Go to the quote list page after saving
+            setQuoteToEdit(null); // Clear the editor
         } catch (error) {
             console.error("Error saving quote: ", error);
             alert("Error saving quote. See console.");
