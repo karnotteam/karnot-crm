@@ -220,7 +220,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
             return;
         }
         
-        const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}/${new Date().getFullYear()}`;
+        const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
 
         const newQuote = {
             id: quoteId,
