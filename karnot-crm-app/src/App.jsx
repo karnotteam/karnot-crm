@@ -5,11 +5,11 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebas
 import { collection, onSnapshot, query, doc, addDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"; // For the database
 
 // --- Import Pages & Components ---
-import LoginPage from './pages/LoginPage';
-import FunnelPage from './pages/FunnelPage'; // Your new funnel page
-import DashboardPage from './pages/DashboardPage';
-import QuotesListPage from './pages/QuotesListPage';
-import QuoteCalculator from './components/QuoteCalculator';
+import LoginPage from './pages/LoginPage.jsx';
+import FunnelPage from './pages/FunnelPage.jsx';
+import DashboardPage from './pages/DashboardPage.jsx';
+import QuotesListPage from './pages/QuotesListPage.jsx';
+import QuoteCalculator from './components/QuoteCalculator.jsx';
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE64, Button } from './data/constants';
