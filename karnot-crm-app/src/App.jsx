@@ -92,7 +92,7 @@ export default function App() {
     // --- Firebase Login/Logout ---
     const handleLogin = (email, password) => {
         signInWithEmailAndPassword(auth, email, password)
-            .catch((error) => alert("Login Failed: "D" + error.message));
+            .catch((error) => alert("Login Failed: " + error.message));
     };
 
     const handleLogout = () => {
