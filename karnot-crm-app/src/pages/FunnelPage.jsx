@@ -1,16 +1,59 @@
 import React, { useState } from 'react';
-import { db } from '../firebase'; // Import our database
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { Plus, X } from 'lucide-react';
-// --- FIX: Import from .jsx file ---
+import { db } from '../firebase'; 
+import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { Plus, X, Edit, Trash2 } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
-// This is the new "Opportunity" card component
-const OpportunityCard = ({ opp }) => {
+// Define the fixed list of stages to calculate the "next" step
+const STAGE_ORDER = [
+    'Lead',
+    'Qualifying',
+    'Site Visit / Demo',
+    'Proposal Sent',
+    'Negotiation',
+    'Closed-Won',
+    'Closed-Lost'
+];
+
+// --- UPDATED: Opportunity Card Component (Interactive) ---
+// Now accepts onUpdate and onDelete props
+const OpportunityCard = ({ opp, onUpdate, onDelete }) => {
+    // Logic to calculate the index of the next stage
+    const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
+    const nextStage = STAGE_ORDER[currentStageIndex + 1];
+
+    // Handle button click: move to the next stage in the array
+    const handleMoveForward = () => {
+        if (nextStage) {
+            onUpdate(opp.id, nextStage);
+        }
+    };
+    
     return (
-        <div className="bg-white p-4 mb-3 rounded-lg shadow border border-gray-200 cursor-pointer hover:shadow-md">
-            <h4 className="font-bold text-gray-800">{opp.customerName}</h4>
+        <Card className="p-4 mb-3 rounded-lg shadow border border-gray-200">
+            <div className="flex justify-between items-start">
+                <h4 className="font-bold text-gray-800">{opp.customerName}</h4>
+                <div className="flex gap-1">
+                    {/* EDIT BUTTON (Placeholder) */}
+                    <Button 
+                        onClick={() => alert(`Edit feature coming soon for ${opp.customerName}`)} 
+                        variant="secondary" 
+                        className="p-1 h-auto w-auto"
+                    >
+                        <Edit size={14}/>
+                    </Button>
+                    {/* DELETE BUTTON - calls the actual delete function */}
+                    <Button 
+                        onClick={() => onDelete(opp.id)} 
+                        variant="danger" 
+                        className="p-1 h-auto w-auto"
+                    >
+                        <Trash2 size={14}/>
+                    </Button>
+                </div>
+            </div>
             <p className="text-sm text-gray-600">{opp.project}</p>
+            
             <div className="mt-3 flex justify-between items-center">
                 <span className="text-lg font-semibold text-orange-600">
                     ${(opp.estimatedValue || 0).toLocaleString()}
@@ -19,9 +62,23 @@ const OpportunityCard = ({ opp }) => {
                     {opp.probability || 0}%
                 </span>
             </div>
-        </div>
+
+            {/* HOOKED UP BUTTON: Only shows if there is a stage after the current one */}
+            {nextStage && opp.stage !== 'Closed-Won' && opp.stage !== 'Closed-Lost' && (
+                <div className="mt-3">
+                    <Button 
+                        onClick={handleMoveForward} 
+                        variant="secondary" 
+                        className="w-full text-xs py-1"
+                    >
+                        Move to {nextStage} Stage
+                    </Button>
+                </div>
+            )}
+        </Card>
     );
 };
+
 
 // This is the modal (popup) for adding a new deal
 const NewOpportunityModal = ({ onClose, onSave }) => {
@@ -73,34 +130,74 @@ const NewOpportunityModal = ({ onClose, onSave }) => {
 };
 
 // This is the main "Funnel" component
-const FunnelPage = ({ opportunities, user }) => { // We get the user to save data
+const FunnelPage = ({ opportunities, user }) => { 
     const [showModal, setShowModal] = useState(false);
     
     // Define your sales stages
-    const STAGES = [
-        'Lead',
-        'Qualifying',
-        'Site Visit / Demo',
-        'Proposal Sent',
-        'Negotiation',
-        'Closed-Won',
-        'Closed-Lost'
-    ];
+    const STAGES = STAGE_ORDER;
 
-    // This function adds the new Opportunity to your Firebase database
+    // Function to handle saving a NEW opportunity to Firebase
     const handleSaveOpportunity = async (newOpp) => {
         if (!user || !user.uid) {
             alert("Error: You are not logged in.");
             return;
         }
         try {
-            // Save this new opportunity under the logged-in user's data
             await addDoc(collection(db, "users", user.uid, "opportunities"), newOpp);
             console.log("Opportunity saved!");
             setShowModal(false);
         } catch (e) {
             console.error("Error adding document: ", e);
             alert("Failed to save opportunity. Check console.");
+        }
+    };
+
+    // --- NEW FUNCTION: Update Stage in Firebase ---
+    const handleUpdateOpportunityStage = async (oppId, newStage) => {
+        if (!user || !user.uid) return alert("Error: User not logged in.");
+
+        const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
+        
+        // Find the correct probability based on the new stage
+        let newProbability;
+        switch (newStage) {
+            case 'Lead': newProbability = 10; break;
+            case 'Qualifying': newProbability = 25; break;
+            case 'Site Visit / Demo': newProbability = 50; break;
+            case 'Proposal Sent': newProbability = 75; break;
+            case 'Negotiation': newProbability = 90; break;
+            case 'Closed-Won': newProbability = 100; break;
+            case 'Closed-Lost': newProbability = 0; break;
+            default: newProbability = 0;
+        }
+
+        try {
+            await setDoc(oppRef, {
+                stage: newStage,
+                probability: newProbability,
+                lastModified: serverTimestamp()
+            }, { merge: true });
+            console.log(`Opportunity ${oppId} updated to ${newStage}`);
+        } catch (error) {
+            console.error("Error updating opportunity: ", error);
+            alert("Failed to update lead stage.");
+        }
+    };
+    // --- END NEW FUNCTION ---
+
+    // Function to delete a lead from Firebase
+    const handleDeleteOpportunity = async (oppId) => {
+        if (!user || !user.uid) return alert("Error: User not logged in.");
+
+        if (window.confirm("Are you sure you want to permanently delete this Opportunity?")) {
+            const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
+            try {
+                await deleteDoc(oppRef);
+                console.log(`Opportunity ${oppId} deleted`);
+            } catch (error) {
+                console.error("Error deleting opportunity: ", error);
+                alert("Failed to delete lead.");
+            }
         }
     };
 
@@ -142,7 +239,13 @@ const FunnelPage = ({ opportunities, user }) => { // We get the user to save dat
                                 {stageOpps
                                     .sort((a, b) => b.estimatedValue - a.estimatedValue)
                                     .map(opp => (
-                                        <OpportunityCard key={opp.id} opp={opp} />
+                                        <OpportunityCard 
+                                            key={opp.id} 
+                                            opp={opp} 
+                                            // HOOK UP THE UPDATE AND DELETE FUNCTIONS
+                                            onUpdate={handleUpdateOpportunityStage}
+                                            onDelete={handleDeleteOpportunity}
+                                        />
                                     ))
                                 }
                             </div>
