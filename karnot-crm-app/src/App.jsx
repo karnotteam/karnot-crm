@@ -4,30 +4,31 @@ import { auth, db } from './firebase'; // Import your new firebase config
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth"; // For login/logout
 import { collection, onSnapshot, query, doc, addDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"; // For the database
 
-// --- Import Pages & Components ---
+// --- Import Pages & Components (FIX: Added .jsx to all imports) ---
 import LoginPage from './pages/LoginPage.jsx';
 import FunnelPage from './pages/FunnelPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import QuotesListPage from './pages/QuotesListPage.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 
-// --- Import Constants & Header ---
-import { KARNOT_LOGO_BASE64, Button } from './data/constants';
-import { BarChart2, FileText, List, HardHat, LogOut } from 'lucide-react'; // Added Funnel (HardHat) and Logout icons
+// --- Import Constants & Header (FIX: Added .jsx to all imports) ---
+import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
+import { BarChart2, FileText, List, HardHat, LogOut } from 'lucide-react'; 
 
 // --- Header Component ---
 // This is your new navigation bar
-const Header = ({ activeView, setActiveView, quoteCount, onLogout }) => (
+const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( // FIX: Added onNewQuote
     <header className="bg-white shadow-md sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
             <div className="flex items-center gap-2">
-                <img src={KARNOT_LOGO_BASE64} alt="Karnot Logo" style={{height: '40px'}}/>
+                <img src={KARNOT_LOGO_BASE_64} alt="Karnot Logo" style={{height: '40px'}}/>
                 <h1 className="text-2xl font-bold text-orange-600">Funnel CRM</h1>
             </div>
             <nav className="flex flex-wrap gap-2 justify-end">
                 <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'}><HardHat className="mr-2" size={16} /> Funnel</Button>
                 <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'}><BarChart2 className="mr-2" size={16} /> Dashboard</Button>
-                <Button onClick={() => setActiveView('calculator')} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
+                {/* FIX: This button now calls onNewQuote to clear old data */}
+                <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
                 <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
                 <Button onClick={onLogout} variant="secondary"><LogOut className="mr-2" size={16} />Logout</Button>
             </nav>
@@ -38,7 +39,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout }) => (
 // --- Main App Component ---
 export default function App() {
     const [user, setUser] = useState(null); // This tracks the logged-in user
-    const [activeView, setActiveView] =useState('funnel');
+    const [activeView, setActiveView] = useState('funnel');
     const [quoteToEdit, setQuoteToEdit] = useState(null);
     
     // --- State from Firebase ---
@@ -66,12 +67,14 @@ export default function App() {
             setLoading(true);
             
             // 1. Sync Quotes
-            // This is safer: it saves quotes under a "users" collection, then your user ID
             const quotesQuery = query(collection(db, "users", user.uid, "quotes"));
             const unsubQuotes = onSnapshot(quotesQuery, (snapshot) => {
                 const liveQuotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setQuotes(liveQuotes);
                 setLoading(false); // We have quotes, so stop loading
+            }, (error) => {
+                console.error("Error syncing quotes: ", error);
+                setLoading(false);
             });
 
             // 2. Sync Opportunities
@@ -79,6 +82,8 @@ export default function App() {
             const unsubOpps = onSnapshot(oppsQuery, (snapshot) => {
                 const liveOpps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setOpportunities(liveOpps);
+            }, (error) => {
+                console.error("Error syncing opportunities: ", error);
             });
             
             // This stops listening when you log out
@@ -101,6 +106,11 @@ export default function App() {
 
     // --- Firebase Database Functions (Replaces your old localStorage) ---
     const handleSaveQuote = async (quoteData) => {
+        if (!user) {
+            alert("Error: You are not logged in. Please refresh and log in again.");
+            return;
+        }
+        
         const quoteRef = doc(db, "users", user.uid, "quotes", quoteData.id);
         try {
             await setDoc(quoteRef, {
@@ -145,6 +155,7 @@ export default function App() {
         setActiveView('calculator');
     };
 
+    // This function is now passed to the Header
     const handleNewQuote = () => {
         setQuoteToEdit(null); // Clear any quote being edited
         setActiveView('calculator');
@@ -180,6 +191,7 @@ export default function App() {
                 setActiveView={setActiveView} 
                 quoteCount={quotes.length} 
                 onLogout={handleLogout}
+                onNewQuote={handleNewQuote} // <-- Pass the function to the header
             />
             
             <main className="container mx-auto p-4 md:p-8">
@@ -187,7 +199,7 @@ export default function App() {
                 {activeView === 'funnel' && (
                     <FunnelPage 
                         opportunities={opportunities} 
-                        user={user}
+                        user={user} // <-- Pass the user to the funnel
                     />
                 )}
                 
