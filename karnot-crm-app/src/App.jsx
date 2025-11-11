@@ -2,23 +2,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, db } from './firebase'; // Import your new firebase config
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth"; // For login/logout
-import { collection, onSnapshot, query, doc, addDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"; // For the database
+import { collection, onSnapshot, query, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"; // For the database
 
-// --- Import Pages & Components ---
+// --- Import Pages & Components (All with .jsx extension) ---
 import LoginPage from './pages/LoginPage.jsx';
 import FunnelPage from './pages/FunnelPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import QuotesListPage from './pages/QuotesListPage.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
+import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
 
 // --- Import Constants & Header ---
-// THIS IS THE LINE TO FIX:
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { BarChart2, FileText, List, HardHat, LogOut } from 'lucide-react'; 
 
 // --- Header Component ---
-// This is your new navigation bar
-const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => (
+const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( 
     <header className="bg-white shadow-md sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
             <div className="flex items-center gap-2">
@@ -38,30 +37,31 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
 
 // --- Main App Component ---
 export default function App() {
-    const [user, setUser] = useState(null); // This tracks the logged-in user
+    const [user, setUser] = useState(null); 
     const [activeView, setActiveView] = useState('funnel');
     const [quoteToEdit, setQuoteToEdit] = useState(null);
+    const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
     
     // --- State from Firebase ---
     const [opportunities, setOpportunities] = useState([]);
     const [quotes, setQuotes] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // This hook checks if you are logged in
+    // AUTH HOOK
     useEffect(() => {
         setLoading(true);
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             if (user) {
-                setUser(user); // User is logged in
+                setUser(user); 
             } else {
-                setUser(null); // User is logged out
+                setUser(null); 
                 setLoading(false);
             }
         });
-        return () => unsubscribe(); // Cleanup on unmount
+        return () => unsubscribe(); 
     }, []);
 
-    // This hook syncs all your data from Firebase *after* you log in
+    // DATA SYNC HOOK
     useEffect(() => {
         if (user) {
             setLoading(true);
@@ -71,28 +71,22 @@ export default function App() {
             const unsubQuotes = onSnapshot(quotesQuery, (snapshot) => {
                 const liveQuotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setQuotes(liveQuotes);
-                setLoading(false); // We have quotes, so stop loading
-            }, (error) => {
-                console.error("Error syncing quotes: ", error);
-                setLoading(false);
-            });
+                setLoading(false); 
+            }, (error) => { console.error("Error syncing quotes: ", error); setLoading(false); });
 
             // 2. Sync Opportunities
             const oppsQuery = query(collection(db, "users", user.uid, "opportunities"));
             const unsubOpps = onSnapshot(oppsQuery, (snapshot) => {
                 const liveOpps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setOpportunities(liveOpps);
-            }, (error) => {
-                console.error("Error syncing opportunities: ", error);
-            });
+            }, (error) => { console.error("Error syncing opportunities: ", error); });
             
-            // This stops listening when you log out
             return () => {
                 unsubQuotes();
                 unsubOpps();
             };
         }
-    }, [user]); // Re-run this effect when the user object changes
+    }, [user]); 
 
     // --- Firebase Login/Logout ---
     const handleLogin = (email, password) => {
@@ -104,31 +98,25 @@ export default function App() {
         signOut(auth);
     };
 
-    // --- Firebase Database Functions (Replaces your old localStorage) ---
+    // --- Firebase Database Functions (Quote CRUD) ---
     const handleSaveQuote = async (quoteData) => {
-        // Ensure user is still logged in before saving
         if (!user) {
-            alert("Error: You are no longer logged in. Please refresh and log in again.");
+            alert("Error: You are not logged in. Please refresh and log in again.");
             return;
         }
-
-        // Create a reference to the document. 
-        // This will save to: users / {your_user_id} / quotes / {quote_id}
-        const quoteRef = doc(db, "users", user.uid, "quotes", quoteData.id);
         
+        const quoteRef = doc(db, "users", user.uid, "quotes", quoteData.id);
         try {
-            // setDoc will create the document if it doesn't exist, 
-            // or update it if it does (e.g., if you are editing)
             await setDoc(quoteRef, {
                 ...quoteData,
-                // Use serverTimestamp for accuracy
-                createdAt: quoteData.createdAt ? quoteData.createdAt : serverTimestamp(), 
+                createdAt: quoteData.createdAt || serverTimestamp(), 
                 lastModified: serverTimestamp()
-            }, { merge: true }); // 'merge: true' creates new or updates existing
+            }, { merge: true }); 
             
             alert(`Quote ${quoteData.id} has been saved to the cloud!`);
-            setActiveView('list'); // Go to the quote list page after saving
-            setQuoteToEdit(null); // Clear the editor
+            setActiveView('list');
+            setQuoteToEdit(null);
+            setSelectedOpportunity(null); 
         } catch (error) {
             console.error("Error saving quote: ", error);
             alert("Error saving quote. See console.");
@@ -138,7 +126,7 @@ export default function App() {
     const handleUpdateQuoteStatus = async (quoteId, newStatus) => {
         const quoteRef = doc(db, "users", user.uid, "quotes", quoteId);
         try {
-            await setDoc(quoteRef, { status: newStatus }, { merge: true });
+            await setDoc(quoteRef, { status: newStatus, lastModified: serverTimestamp() }, { merge: true });
         } catch (error) {
             console.error("Error updating status: ", error);
         }
@@ -156,39 +144,63 @@ export default function App() {
     };
     
     // --- Navigation Functions ---
+
+    // FIX: This function now exists and handles the transition to the calculator
     const handleEditQuote = (quote) => {
         setQuoteToEdit(quote);
         setActiveView('calculator');
     };
 
-    const handleNewQuote = () => {
-        setQuoteToEdit(null); // Clear any quote being edited
+    const handleOpenOpportunity = (opp) => {
+        setSelectedOpportunity(opp);
+        setActiveView('opportunityDetail'); 
+    };
+
+    const handleBackToFunnel = () => {
+        setSelectedOpportunity(null);
+        setActiveView('funnel');
+    };
+
+    const handleNewQuoteFromOpp = () => {
+        if (!selectedOpportunity) return;
+        
+        const initialQuoteData = {
+            customer: { 
+                name: selectedOpportunity.customerName, 
+                saleType: selectedOpportunity.customerName.includes('Canada') ? 'Export' : 'Domestic'
+            },
+            opportunityId: selectedOpportunity.id 
+        };
+
+        setQuoteToEdit(initialQuoteData);
         setActiveView('calculator');
     };
 
-    // --- Logic from your old app, now powered by Firebase state ---
+    const handleNewQuote = () => {
+        setQuoteToEdit(null); 
+        setSelectedOpportunity(null); 
+        setActiveView('calculator');
+    };
+
+    // --- Logic from your old app ---
     const nextQuoteNumber = useMemo(() => {
         if (quotes.length === 0) return 2501;
         const lastQuoteNum = quotes
-           .map(q => parseInt(q.id.split('/')[0].replace('QN', ''), 10))
+           .map(q => parseInt(q.id.split('-')[0].replace('QN', ''), 10))
            .filter(num => !isNaN(num))
            .reduce((max, num) => Math.max(max, num), 0);
         return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
-    }, [quotes]); // Recalculates when 'quotes' from Firebase changes
+    }, [quotes]); 
 
     // --- RENDER ---
-
-    // 1. If not logged in, show Login Page
     if (!user) {
         return <LoginPage onLogin={handleLogin} />;
     }
 
-    // 2. If logged in but data is loading, show loading screen
     if (loading) {
         return <div className="text-center p-10 font-semibold">Loading Karnot CRM...</div>;
     }
 
-    // 3. If logged in and loaded, show the main app
     return (
         <div className="bg-gray-100 min-h-screen font-sans text-gray-900">
             <Header 
@@ -201,10 +213,22 @@ export default function App() {
             
             <main className="container mx-auto p-4 md:p-8">
                 
+                {activeView === 'opportunityDetail' && (
+                    <OpportunityDetailPage
+                        opportunity={selectedOpportunity}
+                        // FIX: Filter quotes to only show related ones
+                        quotes={quotes.filter(q => q.opportunityId === selectedOpportunity.id)} 
+                        onBack={handleBackToFunnel}
+                        onAddQuote={handleNewQuoteFromOpp} 
+                        user={user} 
+                    />
+                )}
+                
                 {activeView === 'funnel' && (
                     <FunnelPage 
                         opportunities={opportunities} 
-                        user={user} 
+                        user={user}
+                        onOpen={handleOpenOpportunity} 
                     />
                 )}
                 
@@ -214,7 +238,7 @@ export default function App() {
                     <QuoteCalculator 
                         onSaveQuote={handleSaveQuote} 
                         nextQuoteNumber={nextQuoteNumber}
-                        key={quoteToEdit ? quoteToEdit.id : 'new'} // This trick forces component to reset for a new quote
+                        key={quoteToEdit ? quoteToEdit.id : 'new'} 
                         initialData={quoteToEdit} 
                     />
                 )}
@@ -224,7 +248,7 @@ export default function App() {
                         quotes={quotes} 
                         onUpdateQuoteStatus={handleUpdateQuoteStatus} 
                         onDeleteQuote={handleDeleteQuote} 
-                        onEditQuote={handleEditQuote} 
+                        onEditQuote={handleEditQuote} // FIX: Now correctly passed
                     />
                 )}
 
