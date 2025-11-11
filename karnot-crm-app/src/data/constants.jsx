@@ -97,7 +97,7 @@ export const Card = ({ children, className = '' }) => (
 );
 
 export const Button = ({ children, onClick, variant = 'primary', className = '', ...props }) => {
- NewA   const baseClasses = 'px-4 py-2 rounded-lg font-semibold flex items-center justify-center transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+const baseClasses = 'px-4 py-2 rounded-lg font-semibold flex items-center justify-center transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
     const variants = {
         primary: 'bg-orange-600 text-white hover:bg-orange-700 focus:ring-orange-500',
         secondary: 'bg-gray-200 text-gray-800 hover:bg-gray-300 focus:ring-gray-400',
