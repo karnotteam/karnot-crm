@@ -1,6 +1,8 @@
+// src/pages/DashboardPage.jsx
 import React, { useMemo } from 'react';
 import { DollarSign, Target, PieChart } from 'lucide-react';
-import { QUOTE_STATUSES, BOI_TARGETS_USD, Card, Section } from '../data/constants';
+// --- FIX: Import from .jsx file ---
+import { QUOTE_STATUSES, BOI_TARGETS_USD, Card, Section } from '../data/constants.jsx';
 
 // This is your Dashboard component, moved from App.jsx
 const DashboardPage = ({ quotes }) => {
@@ -18,9 +20,9 @@ const DashboardPage = ({ quotes }) => {
         const approvedQuotes = quotes.filter(q => q.status === 'APPROVED');
         const outstandingQuotes = quotes.filter(q => ['DRAFT', 'SENT'].includes(q.status));
         
-        const ordersWonValue = approvedQuotes.reduce((acc, q) => acc + q.finalSalesPrice, 0);
-        const outstandingValue = outstandingQuotes.reduce((acc, q) => acc + q.finalSalesPrice, 0);
-        const totalMarginAmount = approvedQuotes.reduce((acc, q) => acc + q.grossMarginAmount, 0);
+        const ordersWonValue = approvedQuotes.reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
+        const outstandingValue = outstandingQuotes.reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
+        const totalMarginAmount = approvedQuotes.reduce((acc, q) => acc + (q.grossMarginAmount || 0), 0);
         const avgMargin = ordersWonValue > 0 ? (totalMarginAmount / ordersWonValue) * 100 : 0;
         
         const statusCounts = quotes.reduce((acc, q) => {
@@ -29,14 +31,14 @@ const DashboardPage = ({ quotes }) => {
         }, {});
         
         const salesByYear = approvedQuotes.reduce((acc, q) => {
-            const year = new Date(q.createdAt).getFullYear();
-            const saleInPHP = q.finalSalesPrice * (q.costing?.forexRate || forexRate);
+            const year = q.createdAt ? new Date(q.createdAt).getFullYear() : new Date().getFullYear();
+            const saleInPHP = (q.finalSalesPrice || 0) * (q.costing?.forexRate || forexRate);
             acc[year] = (acc[year] || 0) + saleInPHP;
             return acc;
         }, {});
         
-        const exportSales = approvedQuotes.filter(q => q.customer?.saleType === 'Export').reduce((acc, q) => acc + q.finalSalesPrice, 0);
-        const domesticSales = approvedQuotes.filter(q => q.customer?.saleType === 'Domestic').reduce((acc, q) => acc + q.finalSalesPrice, 0);
+        const exportSales = approvedQuotes.filter(q => q.customer?.saleType === 'Export').reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
+        const domesticSales = approvedQuotes.filter(q => q.customer?.saleType === 'Domestic').reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
         const totalSales = exportSales + domesticSales;
         const exportPercentage = totalSales > 0 ? (exportSales / totalSales) * 100 : 0;
 
@@ -75,7 +77,7 @@ const DashboardPage = ({ quotes }) => {
                 </div>
                 <Card className="mt-8">
                     <h3 className="text-xl font-bold mb-4">Quotes by Status</h3>
-                    <div className="flex justify-around items-center">
+                    <div className="flex flex-wrap justify-around items-center gap-4">
                         {Object.keys(QUOTE_STATUSES).map(statusKey => (
                             <div key={statusKey} className="text-center">
                                 <p className="text-4xl font-bold">{stats.statusCounts[statusKey] || 0}</p>
@@ -90,7 +92,7 @@ const DashboardPage = ({ quotes }) => {
                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <Card>
                         <h3 className="text-xl font-bold mb-4">Sales Mix (Export vs. Domestic)</h3>
-                        <div className="w-full bg-blue-200 rounded-full h-8 dark:bg-gray-700">
+                        <div className="w-full bg-blue-200 rounded-full h-8">
                             <div className="bg-green-600 h-8 rounded-l-full text-center text-white font-bold leading-8" style={{ width: `${stats.exportPercentage}%` }}>
                                 {stats.exportPercentage > 15 && `Export ${stats.exportPercentage.toFixed(1)}%`}
                             </div>
