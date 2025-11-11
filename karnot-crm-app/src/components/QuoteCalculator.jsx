@@ -1,7 +1,8 @@
 // src/components/QuoteCalculator.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { Eye, Plus, Trash2, Edit, Save, X } from 'lucide-react';
-import { ALL_PRODUCTS, Card, Button, Input, Textarea, Checkbox, Section } from '../data/constants';
+// --- FIX 1: Import from .jsx file ---
+import { ALL_PRODUCTS, Card, Button, Input, Textarea, Checkbox, Section } from '../data/constants.jsx';
 
 // This is the entire QuoteCalculator component, moved from App.jsx
 const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) => {
@@ -302,7 +303,8 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null }) =
                     <Checkbox label="Sales Quotation" checked={docGeneration.generateQuote} onChange={handleCheckboxChange(setDocGeneration, 'generateQuote')} />
                     <Checkbox label="Pro Forma Invoice" checked={docGeneration.generateProForma} onChange={handleCheckboxChange(setDocGeneration, 'generateProForma')} />
                     <Checkbox label="BIR Sales Invoice" checked={docGeneration.generateBirInvoice} onChange={handleCheckboxChange(setDocGeneration, 'generateBirInvoice')} />
-                    <Checkbox label="Include Landed Cost" checked={docGeneration.includeLandedCost} onChange={handleCheckboxChange(setDocGeneration, 'includeLamdCost')} />
+                    {/* --- FIX 2: Typo 'includeLamdCost' corrected to 'includeLandedCost' --- */}
+                    <Checkbox label="Include Landed Cost" checked={docGeneration.includeLandedCost} onChange={handleCheckboxChange(setDocGeneration, 'includeLandedCost')} />
                 </div>
             </Section>
             
