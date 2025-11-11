@@ -4,20 +4,21 @@ import { auth, db } from './firebase'; // Import your new firebase config
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth"; // For login/logout
 import { collection, onSnapshot, query, doc, addDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"; // For the database
 
-// --- Import Pages & Components (FIX: Added .jsx to all imports) ---
+// --- Import Pages & Components ---
 import LoginPage from './pages/LoginPage.jsx';
 import FunnelPage from './pages/FunnelPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import QuotesListPage from './pages/QuotesListPage.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 
-// --- Import Constants & Header (FIX: Added .jsx to all imports) ---
+// --- Import Constants & Header ---
+// THIS IS THE LINE TO FIX:
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { BarChart2, FileText, List, HardHat, LogOut } from 'lucide-react'; 
 
 // --- Header Component ---
 // This is your new navigation bar
-const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( // FIX: Added onNewQuote
+const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => (
     <header className="bg-white shadow-md sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
             <div className="flex items-center gap-2">
@@ -27,7 +28,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
             <nav className="flex flex-wrap gap-2 justify-end">
                 <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'}><HardHat className="mr-2" size={16} /> Funnel</Button>
                 <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'}><BarChart2 className="mr-2" size={16} /> Dashboard</Button>
-                {/* FIX: This button now calls onNewQuote to clear old data */}
                 <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
                 <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
                 <Button onClick={onLogout} variant="secondary"><LogOut className="mr-2" size={16} />Logout</Button>
@@ -155,7 +155,6 @@ export default function App() {
         setActiveView('calculator');
     };
 
-    // This function is now passed to the Header
     const handleNewQuote = () => {
         setQuoteToEdit(null); // Clear any quote being edited
         setActiveView('calculator');
@@ -191,7 +190,7 @@ export default function App() {
                 setActiveView={setActiveView} 
                 quoteCount={quotes.length} 
                 onLogout={handleLogout}
-                onNewQuote={handleNewQuote} // <-- Pass the function to the header
+                onNewQuote={handleNewQuote} 
             />
             
             <main className="container mx-auto p-4 md:p-8">
@@ -199,7 +198,7 @@ export default function App() {
                 {activeView === 'funnel' && (
                     <FunnelPage 
                         opportunities={opportunities} 
-                        user={user} // <-- Pass the user to the funnel
+                        user={user} 
                     />
                 )}
                 
