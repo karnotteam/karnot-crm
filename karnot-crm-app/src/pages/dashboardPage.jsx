@@ -1,7 +1,5 @@
-// src/pages/DashboardPage.jsx
 import React, { useMemo } from 'react';
 import { DollarSign, Target, PieChart } from 'lucide-react';
-// --- FIX: Import from .jsx file ---
 import { QUOTE_STATUSES, BOI_TARGETS_USD, Card, Section } from '../data/constants.jsx';
 
 // This is your Dashboard component, moved from App.jsx
@@ -81,7 +79,7 @@ const DashboardPage = ({ quotes }) => {
                         {Object.keys(QUOTE_STATUSES).map(statusKey => (
                             <div key={statusKey} className="text-center">
                                 <p className="text-4xl font-bold">{stats.statusCounts[statusKey] || 0}</p>
-                                <span className={`px-3 py-1 text-sm font-semibold text-white rounded-full ${QUOTE_STATUSES[statusKey].color}`}>{QUOTE_STATUSES[statusKey].text}</span>
+                                <span className={`px-3 py-1 text-sm font-semibold text-white rounded-full ${QUOTE_STATUSES[statusKey]?.color || 'bg-gray-400'}`}>{QUOTE_STATUSES[statusKey]?.text || statusKey}</span>
                             </div>
                         ))}
                     </div>
