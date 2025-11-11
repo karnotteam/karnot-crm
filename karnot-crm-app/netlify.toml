@@ -1,9 +1,0 @@
-[build]
-  # This tells Netlify to look inside your app folder
-  base = "karnot-crm-app"
-
-  # This is the build command
-  command = "npm run build"
-
-  # This is the folder to publish (relative to the base)
-  publish = "dist"
