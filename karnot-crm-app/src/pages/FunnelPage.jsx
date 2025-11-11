@@ -80,16 +80,19 @@ const OpportunityCard = ({ opp, onUpdate, onDelete }) => {
 };
 
 
-// This is the modal (popup) for adding a new deal
+// --- UPDATED: New Opportunity Modal (with Contact fields) ---
 const NewOpportunityModal = ({ onClose, onSave }) => {
     const [customerName, setCustomerName] = useState('');
     const [project, setProject] = useState('');
     const [estimatedValue, setEstimatedValue] = useState(0);
-    const [probability, setProbability] = useState(10); // Default probability
+    const [probability, setProbability] = useState(10);
+    // --- NEW CONTACT FIELDS ---
+    const [contactName, setContactName] = useState('');
+    const [contactEmail, setContactEmail] = useState('');
 
     const handleSave = async () => {
-        if (!customerName || !project) {
-            alert('Please fill out Customer Name and Project.');
+        if (!customerName || !project || !contactName || !contactEmail) {
+            alert('Please fill out all required fields.');
             return;
         }
         
@@ -97,10 +100,14 @@ const NewOpportunityModal = ({ onClose, onSave }) => {
             customerName,
             project,
             estimatedValue: Number(estimatedValue),
-            stage: 'Lead', // All new deals start as a "Lead"
+            stage: 'Lead',
             probability: Number(probability),
-            createdAt: serverTimestamp(), // Firebase adds the current date
-            notes: [] // An empty log for notes
+            // --- ADDED CONTACT INFO ---
+            contactName,
+            contactEmail,
+            // ---------------------------
+            createdAt: serverTimestamp(), 
+            notes: [] 
         };
         
         onSave(newOpp);
@@ -114,10 +121,17 @@ const NewOpportunityModal = ({ onClose, onSave }) => {
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X /></button>
                 </div>
                 <div className="space-y-4">
-                    <Input label="Customer Name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="e.g., Nestlé Ice Cream" />
-                    <Input label="Project" value={project} onChange={(e) => setProject(e.target.value)} placeholder="e.g., Laguna Plant - Cooling/Heat Recovery" />
+                    <Input label="Customer/Client Name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="e.g., Nestlé Ice Cream" required />
+                    <Input label="Project Name" value={project} onChange={(e) => setProject(e.target.value)} placeholder="e.g., Laguna Plant - Cooling/Heat Recovery" required />
                     <Input label="Estimated Value ($)" type="number" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} />
                     <Input label="Probability (%)" type="number" value={probability} onChange={(e) => setProbability(e.target.value)} />
+
+                    {/* --- NEW INPUT FIELDS FOR CONTACT --- */}
+                    <hr className="my-2"/>
+                    <h4 className="text-lg font-semibold text-gray-700">Primary Contact</h4>
+                    <Input label="Contact Name" value={contactName} onChange={(e) => setContactName(e.target.value)} placeholder="e.g., Engineer Smith" required />
+                    <Input label="Contact Email" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="smith@client.com" required />
+                    {/* ------------------------------------- */}
                 </div>
                 <div className="mt-6 flex justify-end">
                     <Button onClick={handleSave} variant="primary">
