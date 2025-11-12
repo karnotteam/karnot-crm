@@ -1,7 +1,7 @@
 // src/pages/OpportunityDetailPage.jsx
 
 import React, { useState, useEffect } from 'react';
-// --- 'Link' import is REMOVED ---
+// 'Link' import is removed
 import { 
     Mail, Phone, Hash, ArrowLeft, DollarSign, List, Calendar, 
     Edit, Plus, FileText 
@@ -14,7 +14,7 @@ import {
 
 import { Card, Button, Section, Input, Textarea } from '../data/constants.jsx';
 
-// --- 'onEdit' is REMOVED from the props list ---
+// 'onEdit' is removed from the props list
 const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote, user }) => {
     
     const [newNoteText, setNewNoteText] = useState('');
@@ -83,9 +83,6 @@ const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote, user }
                     <ArrowLeft size={16} className="mr-2"/> Back to Funnel
                 </Button>
                 
-                {/* --- THIS IS THE FIX --- */}
-                {/* Replaced the <Link> with a <Button> that shows an alert. */}
-                {/* This will get the build to pass. */}
                 <Button onClick={() => alert('Edit feature coming soon!')} variant="primary">
                     <Edit size={16} className="mr-2"/> Edit Opportunity
                 </Button>
@@ -151,7 +148,7 @@ const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote, user }
                                         <p className="text-gray-700">{note.text}</p>
                                         <p className="text-xs text-gray-400 text-right mt-2">
                                             {note.authorName} - {note.createdAt ? note.createdAt.toDate().toLocaleString() : 'Just now'}
-                                        </d>
+                                        </p> {/* <-- **** THIS IS THE FIX (was </d>) **** */}
                                     </div>
                                 ))
                             ) : (
