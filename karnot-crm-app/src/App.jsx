@@ -11,10 +11,13 @@ import QuotesListPage from './pages/QuotesListPage.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
 import CompaniesPage from './pages/CompaniesPage.jsx'; 
+// --- 1. IMPORT THE NEW CONTACTS PAGE ---
+import ContactsPage from './pages/ContactsPage.jsx';
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
-import { BarChart2, FileText, List, HardHat, LogOut, Building } from 'lucide-react'; 
+// --- 2. IMPORT THE 'Users' ICON ---
+import { BarChart2, FileText, List, HardHat, LogOut, Building, Users } from 'lucide-react'; 
 
 // --- Header Component ---
 const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( 
@@ -29,6 +32,9 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'}><BarChart2 className="mr-2" size={16} /> Dashboard</Button>
                 
                 <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'}><Building className="mr-2" size={16} /> Companies</Button>
+                
+                {/* --- 3. ADD THE NEW "CONTACTS" BUTTON --- */}
+                <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'}><Users className="mr-2" size={16} /> Contacts</Button>
 
                 <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
                 <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
@@ -49,6 +55,8 @@ export default function App() {
     const [opportunities, setOpportunities] = useState([]);
     const [quotes, setQuotes] = useState([]);
     const [companies, setCompanies] = useState([]); 
+    // --- 4. ADD NEW STATE FOR CONTACTS ---
+    const [contacts, setContacts] = useState([]);
     const [loading, setLoading] = useState(true);
 
     // AUTH HOOK
@@ -75,6 +83,7 @@ export default function App() {
             const unsubQuotes = onSnapshot(quotesQuery, (snapshot) => {
                 const liveQuotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setQuotes(liveQuotes);
+                // Set loading false after quotes (main data) are loaded
                 setLoading(false); 
             }, (error) => { console.error("Error syncing quotes: ", error); setLoading(false); });
 
@@ -85,22 +94,30 @@ export default function App() {
                 setOpportunities(liveOpps);
             }, (error) => { console.error("Error syncing opportunities: ", error); });
             
-            // 3. SYNC COMPANIES
+            // 3. Sync Companies
             const companiesQuery = query(collection(db, "users", user.uid, "companies"));
             const unsubCompanies = onSnapshot(companiesQuery, (snapshot) => {
                 const liveCompanies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setCompanies(liveCompanies);
             }, (error) => { console.error("Error syncing companies: ", error); });
             
+            // --- 5. SYNC CONTACTS ---
+            const contactsQuery = query(collection(db, "users", user.uid, "contacts"));
+            const unsubContacts = onSnapshot(contactsQuery, (snapshot) => {
+                const liveContacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setContacts(liveContacts);
+            }, (error) => { console.error("Error syncing contacts: ", error); });
+
             return () => {
                 unsubQuotes();
                 unsubOpps();
                 unsubCompanies(); 
+                unsubContacts(); // --- 6. CLEANUP CONTACTS ---
             };
         }
     }, [user]); 
 
-    // --- Firebase Login/Logout ---
+    // --- (All your handleLogin, handleLogout, handleSaveQuote, etc. functions are here, no changes) ---
     const handleLogin = (email, password) => {
         signInWithEmailAndPassword(auth, email, password)
             .catch((error) => alert("Login Failed: " + error.message));
@@ -110,7 +127,6 @@ export default function App() {
         signOut(auth);
     };
 
-    // --- Firebase Database Functions (Quote CRUD) ---
     const handleSaveQuote = async (quoteData) => {
         if (!user) {
             alert("Error: You are not logged in. Please refresh and log in again.");
@@ -119,15 +135,13 @@ export default function App() {
         
         let currentOpportunityId = quoteData.opportunityId;
         
-        // --- LOGIC TO CREATE OPPORTUNITY IF QUOTE IS NEW AND NOT LINKED ---
         if (!currentOpportunityId) {
             try {
-                // Creates a new Opportunity document
                 const newOppData = {
                     customerName: quoteData.customer.name, 
                     project: `Quote ${quoteData.id} Project`,
                     estimatedValue: quoteData.finalSalesPrice || 0,
-                    stage: 'Proposal Sent', // Auto-set stage
+                    stage: 'Proposal Sent', 
                     probability: 75,
                     contactName: quoteData.customer.name || 'Unknown', 
                     contactEmail: 'N/A',
@@ -138,14 +152,13 @@ export default function App() {
                 const oppsCollectionRef = collection(db, "users", user.uid, "opportunities");
                 const oppDocRef = await addDoc(oppsCollectionRef, newOppData); 
 
-                currentOpportunityId = oppDocRef.id; // Get the newly generated ID
+                currentOpportunityId = oppDocRef.id; 
             } catch (error) {
                 console.error("Error creating new opportunity automatically: ", error);
                 alert("Quote saved, but failed to create linked funnel entry. See console.");
             }
         }
         
-        // --- SAVE THE QUOTE DATA ---
         const quoteRef = doc(db, "users", user.uid, "quotes", quoteData.id);
         
         try {
@@ -186,7 +199,6 @@ export default function App() {
         }
     };
     
-    // --- Navigation Functions ---
     const handleEditQuote = (quote) => {
         setQuoteToEdit(quote);
         setActiveView('calculator');
@@ -223,7 +235,6 @@ export default function App() {
         setActiveView('calculator');
     };
 
-    // --- Logic from your old app ---
     const nextQuoteNumber = useMemo(() => {
         if (quotes.length === 0) return 2501;
         const lastQuoteNum = quotes
@@ -256,6 +267,15 @@ export default function App() {
                 
                 {activeView === 'companies' && (
                     <CompaniesPage 
+                        companies={companies}
+                        user={user}
+                    />
+                )}
+                
+                {/* --- 7. ADD RENDER LOGIC FOR CONTACTS PAGE --- */}
+                {activeView === 'contacts' && (
+                    <ContactsPage 
+                        contacts={contacts}
                         companies={companies}
                         user={user}
                     />
