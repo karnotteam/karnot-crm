@@ -1,23 +1,23 @@
 import React, { useState, useRef, useMemo } from 'react'; 
 import { db } from '../firebase'; 
-// --- 1. ADD 'query' and 'getDocs' ---
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
-import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, User, Mail, Phone, Briefcase } from 'lucide-react';
-import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
+// --- 1. IMPORT 'ShieldCheck' icon ---
+import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, User, Mail, Phone, Briefcase, ShieldCheck } from 'lucide-react';
+// --- 2. IMPORT 'Checkbox' ---
+import { Card, Button, Input, Textarea, Checkbox } from '../data/constants.jsx'; 
 
 // --- ContactModal Component ---
-// (This component is unchanged)
 const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
     const isEditMode = Boolean(contactToEdit);
     
-    // State for the form fields
     const [firstName, setFirstName] = useState(contactToEdit?.firstName || '');
     const [lastName, setLastName] = useState(contactToEdit?.lastName || '');
     const [jobTitle, setJobTitle] = useState(contactToEdit?.jobTitle || '');
     const [email, setEmail] = useState(contactToEdit?.email || '');
     const [phone, setPhone] = useState(contactToEdit?.phone || '');
-    
     const [companyId, setCompanyId] = useState(contactToEdit?.companyId || (companies.length > 0 ? companies[0].id : ''));
+    // --- 3. ADD State for 'isVerified' ---
+    const [isVerified, setIsVerified] = useState(contactToEdit?.isVerified || false);
 
     const handleSave = () => {
         if (!firstName || !lastName || !companyId) {
@@ -36,6 +36,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
             phone,
             companyId, 
             companyName,
+            isVerified, // --- 4. ADD 'isVerified' to saved data ---
         };
         onSave(contactData);
     };
@@ -79,6 +80,15 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
                             )}
                         </select>
                     </div>
+
+                    {/* --- 5. ADD 'Verified' Checkbox --- */}
+                    <hr />
+                    <Checkbox 
+                        id="isVerifiedContact"
+                        label="Data Verified (Contact details are correct)"
+                        checked={isVerified}
+                        onChange={(e) => setIsVerified(e.target.checked)}
+                    />
                 </div>
                 <div className="mt-6 flex justify-end">
                     <Button onClick={handleSave} variant="primary">
@@ -92,13 +102,18 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
 };
 
 // --- ContactCard Component ---
-// (This component is unchanged)
 const ContactCard = ({ contact, onEdit, onDelete }) => {
     return (
         <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between">
             <div>
                 <div className="flex justify-between items-start">
-                    <h4 className="font-bold text-lg text-gray-800">{contact.firstName} {contact.lastName}</h4>
+                    {/* --- 6. ADD 'Verified' Icon to Title --- */}
+                    <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-lg text-gray-800">{contact.firstName} {contact.lastName}</h4>
+                        {contact.isVerified && (
+                            <ShieldCheck size={18} className="text-green-600" title="Verified"/>
+                        )}
+                    </div>
                     <div className="flex gap-1 flex-shrink-0">
                         <Button onClick={() => onEdit(contact)} variant="secondary" className="p-1 h-auto w-auto"><Edit size={14}/></Button>
                         <Button onClick={() => onDelete(contact.id)} variant="danger" className="p-1 h-auto w-auto"><Trash2 size={14}/></Button>
@@ -135,6 +150,7 @@ const ContactCard = ({ contact, onEdit, onDelete }) => {
 
 
 // --- Main Contacts Page Component ---
+// (The rest of this component is unchanged)
 const ContactsPage = ({ contacts, companies, user }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingContact, setEditingContact] = useState(null);
@@ -142,7 +158,6 @@ const ContactsPage = ({ contacts, companies, user }) => {
     const fileInputRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    // --- (Database and Modal functions are unchanged) ---
     const handleSaveContact = async (contactData) => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
         try {
@@ -168,13 +183,15 @@ const ContactsPage = ({ contacts, companies, user }) => {
     };
     const handleDeleteContact = async (contactId) => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
-        // We removed the window.confirm from here because the button is now "Delete All"
-        const contactRef = doc(db, "users", user.uid, "contacts", contactId);
-        try {
-            await deleteDoc(contactRef);
-        } catch (error) {
-            console.error("Error deleting contact: ", error);
-            alert("Failed to delete contact.");
+        // This is the single-delete function, we keep the confirm here
+        if (window.confirm("Are you sure you want to delete this contact?")) {
+            const contactRef = doc(db, "users", user.uid, "contacts", contactId);
+            try {
+                await deleteDoc(contactRef);
+            } catch (error) {
+                console.error("Error deleting contact: ", error);
+                alert("Failed to delete contact.");
+            }
         }
     };
     const handleSave = (contactData) => {
@@ -199,14 +216,10 @@ const ContactsPage = ({ contacts, companies, user }) => {
     const handleImportClick = () => {
         fileInputRef.current.click();
     };
-    // --- (End of unchanged functions) ---
 
-
-    // --- 2. ADD "DELETE ALL CONTACTS" FUNCTION ---
     const handleDeleteAllContacts = async () => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
         
-        // Confirm twice because this is very destructive
         if (!window.confirm("ARE YOU SURE? This will permanently delete ALL contacts for your user.")) {
             return;
         }
@@ -240,7 +253,6 @@ const ContactsPage = ({ contacts, companies, user }) => {
         }
     };
     
-    // --- (This is your corrected import logic, no changes) ---
     const findCompanyId = (companyName) => {
         if (!companyName || !companies.length) return null;
         const lowerName = companyName.toLowerCase().trim();
@@ -314,7 +326,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
                     
                     const garbageText = "Certificate Number Salutation";
                     if (!firstName || !lastName || (csvCompanyName && csvCompanyName.includes(garbageText))) {
-                        return; // Skip this row, it's garbage
+                        return; 
                     }
 
                     const companyMatch = findCompanyId(csvCompanyName);
@@ -328,6 +340,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
                         phone: '', 
                         companyId: companyMatch ? companyMatch.id : null,
                         companyName: companyMatch ? companyMatch.name : (csvCompanyName || 'N/A'),
+                        isVerified: false, // Default new imports to not verified
                         createdAt: serverTimestamp()
                     };
                     
@@ -358,10 +371,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
             }
         });
     };
-    // --- (End of updated import logic) ---
 
-
-    // --- Search Filter ---
     const filteredContacts = useMemo(() => {
         const lowerSearchTerm = searchTerm.toLowerCase();
         if (!lowerSearchTerm) {
@@ -388,7 +398,6 @@ const ContactsPage = ({ contacts, companies, user }) => {
             
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Contacts ({filteredContacts.length})</h1>
-                {/* --- 3. WRAP BUTTONS AND ADD "DELETE ALL" --- */}
                 <div className="flex flex-wrap gap-2 justify-end">
                     <Button 
                         onClick={handleDeleteAllContacts}
@@ -443,7 +452,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
                             key={contact.id} 
                             contact={contact} 
                             onEdit={handleOpenEditModal}
-                            onDelete={handleDeleteContact} // This now deletes one card
+                            onDelete={handleDeleteContact}
                         />
                     ))
                 }
