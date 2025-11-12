@@ -288,6 +288,7 @@ export default function App() {
                         nextQuoteNumber={nextQuoteNumber}
                         key={quoteToEdit ? quoteToEdit.id : 'new'} 
                         initialData={quoteToEdit} 
+                        companies={companies}
                     />
                 )}
                 
