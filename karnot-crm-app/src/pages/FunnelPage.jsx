@@ -14,7 +14,7 @@ const STAGE_ORDER = [
     'Closed-Lost'
 ];
 
-// --- 1. ADD 'onOpen' TO THE PROPS LIST ---
+// --- 1. ACCEPTS 'onOpen' PROP ---
 const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
     const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
     const nextStage = STAGE_ORDER[currentStageIndex + 1];
@@ -29,8 +29,7 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
         <Card className="p-4 mb-3 rounded-lg shadow border border-gray-200">
             <div className="flex justify-between items-start">
                 
-                {/* --- 2. MAKE THE CUSTOMER NAME CLICKABLE --- */}
-                {/* It now calls the onOpen function when clicked */}
+                {/* --- 2. MAKES NAME CLICKABLE --- */}
                 <h4 
                     className="font-bold text-gray-800 cursor-pointer hover:text-orange-600"
                     onClick={() => onOpen(opp)}
@@ -158,15 +157,14 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit }) => {
     );
 };
 
-// --- 3. ADD 'onOpen' TO THE PROPS LIST ---
+// --- 3. ACCEPTS 'onOpen' PROP ---
 const FunnelPage = ({ opportunities, user, onOpen }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingOpportunity, setEditingOpportunity] = useState(null);
     
     const STAGES = STAGE_ORDER;
 
-    // (All your existing functions like handleSaveOpportunity, etc. are here)
-    // ...
+    // (All your existing functions are here)
     const handleSaveOpportunity = async (newOppData) => {
         if (!user || !user.uid) {
             alert("Error: You are not logged in.");
@@ -320,7 +318,7 @@ const FunnelPage = ({ opportunities, user, onOpen }) => {
                                             onUpdate={handleUpdateOpportunityStage}
                                             onDelete={handleDeleteOpportunity}
                                             onEdit={handleOpenEditModal}
-                                            // --- 4. PASS 'onOpen' DOWN TO THE CARD ---
+                                            // --- 4. PASSES 'onOpen' TO THE CARD ---
                                             onOpen={onOpen}
                                         />
                                     ))
