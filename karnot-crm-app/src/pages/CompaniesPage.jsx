@@ -1,9 +1,8 @@
-import React, { useState, useRef, useMemo } from 'react'; // --- 1. IMPORT 'useMemo' ---
+import React, { useState, useRef, useMemo } from 'react'; 
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
-// --- 2. IMPORT 'Search' and 'MapPin' icons ---
 import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin } from 'lucide-react';
-import { Card, Button, Input, Textarea } from '../data/constants.jsx'; // --- 3. IMPORT 'Textarea' ---
+import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
 // --- Updated: CompanyModal ---
 const CompanyModal = ({ onClose, onSave, companyToEdit }) => {
@@ -11,7 +10,6 @@ const CompanyModal = ({ onClose, onSave, companyToEdit }) => {
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
     const [industry, setIndustry] = useState(companyToEdit?.industry || '');
-    // --- 4. ADD State for Address ---
     const [address, setAddress] = useState(companyToEdit?.address || '');
 
     const handleSave = () => {
@@ -23,7 +21,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit }) => {
             companyName,
             website,
             industry,
-            address, // --- 5. ADD Address to saved data ---
+            address, 
         };
         onSave(companyData);
     };
@@ -41,7 +39,6 @@ const CompanyModal = ({ onClose, onSave, companyToEdit }) => {
                     <Input label="Company Name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g., Nestlé Inc." required />
                     <Input label="Website" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="e.g., www.nestle.com" />
                     <Input label="Industry" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="e.g., Food & Beverage" />
-                    {/* --- 6. ADD Address Textarea --- */}
                     <Textarea label="Company Address" rows="3" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g., 123 Main St, Metro Manila" />
                 </div>
                 <div className="mt-6 flex justify-end">
@@ -85,7 +82,6 @@ const CompanyCard = ({ company, onEdit, onDelete }) => {
             </div>
             
             <div className="mt-2">
-                {/* --- 7. ADD Address Display --- */}
                 {company.address && (
                     <div className="text-sm text-gray-500 flex items-start gap-1 mt-2">
                         <MapPin size={14} className="flex-shrink-0 mt-0.5" />
@@ -110,12 +106,9 @@ const CompaniesPage = ({ companies, user }) => {
     const [editingCompany, setEditingCompany] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
     const fileInputRef = useRef(null);
-    
-    // --- 8. ADD State for Search Term ---
     const [searchTerm, setSearchTerm] = useState('');
 
-    // --- (Your existing save, update, delete, and modal functions) ---
-    // (No changes to any of these 'handle' functions)
+    // --- (All your handle functions are here, no changes) ---
     const handleSaveCompany = async (companyData) => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
         try {
@@ -178,7 +171,6 @@ const CompaniesPage = ({ companies, user }) => {
         setShowModal(false);
     };
     
-    // (Import functions are also unchanged)
     const handleImportClick = () => {
         fileInputRef.current.click();
     };
@@ -214,7 +206,6 @@ const CompaniesPage = ({ companies, user }) => {
                             companyName: companyName,
                             website: row.WebsiteGuess || '',
                             industry: '', 
-                            // We can add address here if your CSV has it
                             address: row.Address || '', 
                             createdAt: serverTimestamp()
                         };
@@ -244,15 +235,19 @@ const CompaniesPage = ({ companies, user }) => {
         });
     };
 
-    // --- 9. ADD 'useMemo' hook to filter companies ---
+    // --- 9. THIS IS THE FIX ---
+    // The filter logic is updated to use 'startsWith' for companyName
     const filteredCompanies = useMemo(() => {
-        if (!searchTerm) {
+        const lowerSearchTerm = searchTerm.toLowerCase();
+        if (!lowerSearchTerm) {
             return companies; // Return all if search is empty
         }
         return companies.filter(company =>
-            company.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (company.industry && company.industry.toLowerCase().includes(searchTerm.toLowerCase())) ||
-            (company.address && company.address.toLowerCase().includes(searchTerm.toLowerCase()))
+            // Only companyName uses startsWith
+            company.companyName.toLowerCase().startsWith(lowerSearchTerm) ||
+            // Other fields use includes
+            (company.industry && company.industry.toLowerCase().includes(lowerSearchTerm)) ||
+            (company.address && company.address.toLowerCase().includes(lowerSearchTerm))
         );
     }, [companies, searchTerm]); // Recalculate when companies list or search term changes
 
@@ -295,11 +290,10 @@ const CompaniesPage = ({ companies, user }) => {
                 style={{ display: 'none' }}
             />
 
-            {/* --- 10. ADD THE SEARCH BAR --- */}
             <div className="mb-4 relative">
                 <Input
                     type="text"
-                    placeholder="Search companies by name, industry, or address..."
+                    placeholder="Search companies (by name starts with) or industry/address (contains)..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10" // Add padding for the icon
@@ -307,7 +301,6 @@ const CompaniesPage = ({ companies, user }) => {
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
 
-            {/* --- 11. MAP over 'filteredCompanies' --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredCompanies
                     .sort((a, b) => a.companyName.localeCompare(b.companyName))
@@ -322,7 +315,6 @@ const CompaniesPage = ({ companies, user }) => {
                 }
             </div>
             
-            {/* --- 12. UPDATE "No companies" text --- */}
             {companies.length === 0 && (
                 <div className="text-center py-10 bg-white rounded-lg shadow">
                     <Building size={48} className="mx-auto text-gray-400" />
