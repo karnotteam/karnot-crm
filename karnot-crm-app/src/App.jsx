@@ -106,79 +106,49 @@ export default function App() {
     }, [user]); 
 
     // --- (All your handleLogin, handleLogout, handleSaveQuote, etc. functions) ---
-    // --- (No changes needed to these functions) ---
     // ...
-    // ... (rest of your existing functions) ...
     // ...
+    const handleNewQuote = () => {
+        setQuoteToEdit(null); 
+        setSelectedOpportunity(null); 
+        setActiveView('calculator');
+    };
 
-    // --- RENDER ---
-    if (!user) {
-        return <LoginPage onLogin={handleLogin} />;
-    }
+    // --- ADD THIS WHOLE SECTION BACK IN ---
 
-    if (loading) {
-        return <div className="text-center p-10 font-semibold">Loading Karnot CRM...</div>;
-    }
+    // --- Navigation Functions for Opportunities ---
+    
+    // This is called from FunnelPage to open the details
+    const handleOpenOpportunity = (opp) => {
+        setSelectedOpportunity(opp);
+        setActiveView('opportunityDetail'); 
+    };
 
-    return (
-        <div className="bg-gray-100 min-h-screen font-sans text-gray-900">
-            <Header 
-                activeView={activeView} 
-                setActiveView={setActiveView} 
-                quoteCount={quotes.length} 
-                onLogout={handleLogout}
-                onNewQuote={handleNewQuote} 
-            />
-            
-            <main className="container mx-auto p-4 md:p-8">
-                
-                {/* --- 6. ADD RENDER LOGIC FOR COMPANIES PAGE --- */}
-                {activeView === 'companies' && (
-                    <CompaniesPage 
-                        companies={companies}
-                        user={user}
-                    />
-                )}
-                
-                {activeView === 'opportunityDetail' && (
-                    <OpportunityDetailPage
-                        opportunity={selectedOpportunity}
-                        quotes={quotes.filter(q => q.opportunityId === selectedOpportunity.id)} 
-                        onBack={handleBackToFunnel}
-                        onAddQuote={handleNewQuoteFromOpp} 
-                        user={user} 
-                    />
-                )}
-                
-                {activeView === 'funnel' && (
-                    <FunnelPage 
-                        opportunities={opportunities} 
-                        user={user}
-                        onOpen={handleOpenOpportunity} 
-                    />
-                )}
-                
-                {activeView === 'dashboard' && <DashboardPage quotes={quotes} />}
-                
-                {activeView === 'calculator' && (
-                    <QuoteCalculator 
-                        onSaveQuote={handleSaveQuote} 
-                        nextQuoteNumber={nextQuoteNumber}
-                        key={quoteToEdit ? quoteToEdit.id : 'new'} 
-                        initialData={quoteToEdit} 
-                    />
-                )}
-                
-                {activeView === 'list' && (
-                    <QuotesListPage 
-                        quotes={quotes} 
-                        onUpdateQuoteStatus={handleUpdateQuoteStatus} 
-                        onDeleteQuote={handleDeleteQuote} 
-                        onEditQuote={handleEditQuote} 
-                    />
-                )}
+    // This is called from OpportunityDetailPage to go back
+    const handleBackToFunnel = () => {
+        setSelectedOpportunity(null);
+        setActiveView('funnel');
+    };
 
-            </main>
-        </div>
-    );
-}
+    // This is called from OpportunityDetailPage to create a new quote
+    const handleNewQuoteFromOpp = () => {
+        if (!selectedOpportunity) return;
+        
+        // Pre-fill the new quote with the opportunity's data
+        const initialQuoteData = {
+            customer: { 
+                name: selectedOpportunity.customerName, 
+                // A bit of guesswork for saleType, you can adjust this
+                saleType: selectedOpportunity.customerName.includes('Canada') ? 'Export' : 'Domestic'
+            },
+            opportunityId: selectedOpportunity.id 
+        };
+
+        setQuoteToEdit(initialQuoteData); // Use 'quoteToEdit' to pass pre-filled data
+        setActiveView('calculator');
+    };
+    // --- END OF NEW SECTION ---
+
+
+    // --- Logic from your old app ---
+    const next
