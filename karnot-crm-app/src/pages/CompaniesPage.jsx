@@ -1,15 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react'; // --- 1. IMPORT 'useRef' ---
 import { db } from '../firebase'; 
-import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { Plus, X, Edit, Trash2, Building, Globe } from 'lucide-react';
+import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch } from "firebase/firestore"; // --- 2. IMPORT 'writeBatch' ---
+import { Plus, X, Edit, Trash2, Building, Globe, Upload } from 'lucide-react'; // --- 3. IMPORT 'Upload' ---
 import { Card, Button, Input } from '../data/constants.jsx'; 
 
-// --- Company Modal ---
-// This is the popup for adding a new company or editing an existing one
+// --- (CompanyModal and CompanyCard components are unchanged) ---
 const CompanyModal = ({ onClose, onSave, companyToEdit }) => {
     const isEditMode = Boolean(companyToEdit);
-
-    // Form state
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
     const [industry, setIndustry] = useState(companyToEdit?.industry || '');
@@ -19,15 +16,11 @@ const CompanyModal = ({ onClose, onSave, companyToEdit }) => {
             alert('Please enter a company name.');
             return;
         }
-        
         const companyData = {
             companyName,
             website,
             industry,
         };
-        
-        // onSave will be our "smart" function that knows
-        // if it's creating or updating.
         onSave(companyData);
     };
 
@@ -56,8 +49,6 @@ const CompanyModal = ({ onClose, onSave, companyToEdit }) => {
     );
 };
 
-// --- Company Card ---
-// This is the card that displays a single company in the list
 const CompanyCard = ({ company, onEdit, onDelete }) => {
     return (
         <Card className="p-4 rounded-lg shadow border border-gray-200">
@@ -99,14 +90,15 @@ const CompaniesPage = ({ companies, user }) => {
     const [showModal, setShowModal] = useState(false);
     const [editingCompany, setEditingCompany] = useState(null);
     
-    // --- Firestore Save (CREATE) ---
+    // --- 4. ADD STATE for importing and a ref for the file input ---
+    const [isImporting, setIsImporting] = useState(false);
+    const fileInputRef = useRef(null);
+    
+    // --- (Your existing save, update, delete, and modal functions) ---
     const handleSaveCompany = async (companyData) => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
         try {
-            const newCompany = {
-                ...companyData,
-                createdAt: serverTimestamp(), 
-            };
+            const newCompany = { ...companyData, createdAt: serverTimestamp() };
             await addDoc(collection(db, "users", user.uid, "companies"), newCompany);
             handleCloseModal(); 
         } catch (e) {
@@ -115,18 +107,13 @@ const CompaniesPage = ({ companies, user }) => {
         }
     };
 
-    // --- Firestore Save (UPDATE) ---
     const handleUpdateCompany = async (companyData) => {
         if (!editingCompany || !editingCompany.id) return;
         if (!user || !user.uid) return alert("Error: User not logged in.");
 
         const companyRef = doc(db, "users", user.uid, "companies", editingCompany.id);
         try {
-            await setDoc(companyRef, {
-                ...companyData,
-                lastModified: serverTimestamp() 
-            }, { merge: true });
-            
+            await setDoc(companyRef, { ...companyData, lastModified: serverTimestamp() }, { merge: true });
             handleCloseModal(); 
         } catch (e) {
             console.error("Error updating document: ", e);
@@ -134,12 +121,9 @@ const CompaniesPage = ({ companies, user }) => {
         }
     };
     
-    // --- Firestore Save (DELETE) ---
     const handleDeleteCompany = async (companyId) => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
-
-        if (window.confirm("Are you sure you want to permanently delete this company and all related contacts?")) {
-            // TODO: In the future, we'll also delete contacts here.
+        if (window.confirm("Are you sure you want to permanently delete this company?")) {
             const companyRef = doc(db, "users", user.uid, "companies", companyId);
             try {
                 await deleteDoc(companyRef);
@@ -150,7 +134,6 @@ const CompaniesPage = ({ companies, user }) => {
         }
     };
 
-    // --- Modal Control ---
     const handleSave = (companyData) => {
         if (editingCompany) {
             handleUpdateCompany(companyData);
@@ -170,8 +153,84 @@ const CompaniesPage = ({ companies, user }) => {
     };
 
     const handleCloseModal = () => {
-        setShowModal(false);
         setEditingCompany(null);
+        setShowModal(false);
+    };
+
+    // --- 5. ADD NEW FUNCTIONS for CSV IMPORT ---
+    
+    // This function triggers the hidden file input
+    const handleImportClick = () => {
+        fileInputRef.current.click();
+    };
+
+    // This function runs when a file is selected
+    const handleFileChange = (event) => {
+        const file = event.target.files[0];
+        if (!file) {
+            return;
+        }
+
+        setIsImporting(true);
+        
+        // Use PapaParse (from index.html) to read the file
+        // Note: 'Papa' is available globally because we added it in index.html
+        Papa.parse(file, {
+            header: true, // This tells PapaParse to use the first row as object keys
+            skipEmptyLines: true,
+            complete: async (results) => {
+                const rows = results.data;
+                console.log("Parsed rows:", rows);
+
+                // This checks your 'companies_consolidated.csv' file
+                if (!rows.length || !rows[0].CompanyFinal) {
+                    alert("Error: Could not find 'CompanyFinal' column in CSV. Please check the file.");
+                    setIsImporting(false);
+                    return;
+                }
+
+                // Use a "batch" to upload all companies at once
+                const batch = writeBatch(db);
+                const companiesRef = collection(db, "users", user.uid, "companies");
+                let importCount = 0;
+
+                rows.forEach(row => {
+                    // Make sure the company name exists
+                    const companyName = row.CompanyFinal ? row.CompanyFinal.trim() : '';
+                    if (companyName) {
+                        const companyData = {
+                            companyName: companyName,
+                            website: row.WebsiteGuess || '',
+                            industry: '', // You can add this field to your CSV later
+                            createdAt: serverTimestamp()
+                        };
+                        
+                        // Create a new document reference and add it to the batch
+                        const docRef = doc(companiesRef); 
+                        batch.set(docRef, companyData);
+                        importCount++;
+                    }
+                });
+
+                // Commit the batch
+                try {
+                    await batch.commit();
+                    alert(`Successfully imported ${importCount} companies!`);
+                } catch (error) {
+                    console.error("Error importing companies: ", error);
+                    alert("An error occurred during import. See console for details.");
+                }
+
+                setIsImporting(false);
+                // Reset file input
+                event.target.value = null;
+            },
+            error: (error) => {
+                console.error("PapaParse error:", error);
+                alert("Failed to parse CSV file.");
+                setIsImporting(false);
+            }
+        });
     };
 
     return (
@@ -186,15 +245,39 @@ const CompaniesPage = ({ companies, user }) => {
             
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Companies ({companies.length})</h1>
-                <Button onClick={handleOpenNewModal} variant="primary">
-                    <Plus className="mr-2" size={16} /> New Company
-                </Button>
+                <div className="flex gap-2">
+                    {/* --- 6. ADD THE "IMPORT CSV" BUTTON --- */}
+                    <Button 
+                        onClick={handleImportClick} 
+                        variant="secondary"
+                        disabled={isImporting}
+                    >
+                        <Upload className="mr-2" size={16} />
+                        {isImporting ? 'Importing...' : 'Import CSV'}
+                    </Button>
+                    <Button 
+                        onClick={handleOpenNewModal} 
+                        variant="primary"
+                        disabled={isImporting}
+                    >
+                        <Plus className="mr-2" size={16} /> New Company
+                    </Button>
+                </div>
             </div>
 
-            {/* Grid for company cards */}
+            {/* --- 7. ADD THE HIDDEN FILE INPUT --- */}
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept=".csv"
+                style={{ display: 'none' }}
+            />
+
+            {/* (Your existing grid code... no changes) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {companies
-                    .sort((a, b) => a.companyName.localeCompare(b.companyName)) // Sort A-Z
+                    .sort((a, b) => a.companyName.localeCompare(b.companyName))
                     .map(company => (
                         <CompanyCard 
                             key={company.id} 
@@ -210,7 +293,7 @@ const CompaniesPage = ({ companies, user }) => {
                 <div className="text-center py-10 bg-white rounded-lg shadow">
                     <Building size={48} className="mx-auto text-gray-400" />
                     <h3 className="mt-2 text-lg font-semibold text-gray-700">No companies found.</h3>
-                    <p className="mt-1 text-sm text-gray-500">Click "New Company" to add your first one.</p>
+                    <p className="mt-1 text-sm text-gray-500">Click "New Company" or "Import CSV" to add your first one.</p>
                 </div>
             )}
         </div>
