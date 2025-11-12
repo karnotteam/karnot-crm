@@ -11,12 +11,10 @@ import QuotesListPage from './pages/QuotesListPage.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
 import CompaniesPage from './pages/CompaniesPage.jsx'; 
-// --- 1. IMPORT THE NEW CONTACTS PAGE ---
 import ContactsPage from './pages/ContactsPage.jsx';
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
-// --- 2. IMPORT THE 'Users' ICON ---
 import { BarChart2, FileText, List, HardHat, LogOut, Building, Users } from 'lucide-react'; 
 
 // --- Header Component ---
@@ -30,12 +28,8 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
             <nav className="flex flex-wrap gap-2 justify-end">
                 <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'}><HardHat className="mr-2" size={16} /> Funnel</Button>
                 <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'}><BarChart2 className="mr-2" size={16} /> Dashboard</Button>
-                
                 <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'}><Building className="mr-2" size={16} /> Companies</Button>
-                
-                {/* --- 3. ADD THE NEW "CONTACTS" BUTTON --- */}
                 <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'}><Users className="mr-2" size={16} /> Contacts</Button>
-
                 <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
                 <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
                 <Button onClick={onLogout} variant="secondary"><LogOut className="mr-2" size={16} />Logout</Button>
@@ -55,20 +49,21 @@ export default function App() {
     const [opportunities, setOpportunities] = useState([]);
     const [quotes, setQuotes] = useState([]);
     const [companies, setCompanies] = useState([]); 
-    // --- 4. ADD NEW STATE FOR CONTACTS ---
     const [contacts, setContacts] = useState([]);
-    const [loading, setLoading] = useState(true);
+    
+    const [loadingAuth, setLoadingAuth] = useState(true);
+    const [loadingData, setLoadingData] = useState(true);
 
     // AUTH HOOK
     useEffect(() => {
-        setLoading(true);
+        setLoadingAuth(true); 
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             if (user) {
                 setUser(user); 
             } else {
                 setUser(null); 
-                setLoading(false);
             }
+            setLoadingAuth(false); 
         });
         return () => unsubscribe(); 
     }, []);
@@ -76,22 +71,35 @@ export default function App() {
     // DATA SYNC HOOK
     useEffect(() => {
         if (user) {
-            setLoading(true);
+            setLoadingData(true); 
+            
+            let quotesLoaded = false;
+            let oppsLoaded = false;
+            let companiesLoaded = false;
+            let contactsLoaded = false;
+            
+            const checkAllDataLoaded = () => {
+                if (quotesLoaded && oppsLoaded && companiesLoaded && contactsLoaded) {
+                    setLoadingData(false); 
+                }
+            };
             
             // 1. Sync Quotes
             const quotesQuery = query(collection(db, "users", user.uid, "quotes"));
             const unsubQuotes = onSnapshot(quotesQuery, (snapshot) => {
                 const liveQuotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setQuotes(liveQuotes);
-                // Set loading false after quotes (main data) are loaded
-                setLoading(false); 
-            }, (error) => { console.error("Error syncing quotes: ", error); setLoading(false); });
+                quotesLoaded = true;
+                checkAllDataLoaded();
+            }, (error) => { console.error("Error syncing quotes: ", error); });
 
             // 2. Sync Opportunities
             const oppsQuery = query(collection(db, "users", user.uid, "opportunities"));
             const unsubOpps = onSnapshot(oppsQuery, (snapshot) => {
                 const liveOpps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setOpportunities(liveOpps);
+                oppsLoaded = true;
+                checkAllDataLoaded();
             }, (error) => { console.error("Error syncing opportunities: ", error); });
             
             // 3. Sync Companies
@@ -99,42 +107,48 @@ export default function App() {
             const unsubCompanies = onSnapshot(companiesQuery, (snapshot) => {
                 const liveCompanies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setCompanies(liveCompanies);
+                companiesLoaded = true;
+                checkAllDataLoaded();
             }, (error) => { console.error("Error syncing companies: ", error); });
             
-            // --- 5. SYNC CONTACTS ---
+            // 4. Sync Contacts
             const contactsQuery = query(collection(db, "users", user.uid, "contacts"));
             const unsubContacts = onSnapshot(contactsQuery, (snapshot) => {
                 const liveContacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setContacts(liveContacts);
+                contactsLoaded = true;
+                checkAllDataLoaded();
             }, (error) => { console.error("Error syncing contacts: ", error); });
 
             return () => {
                 unsubQuotes();
                 unsubOpps();
                 unsubCompanies(); 
-                unsubContacts(); // --- 6. CLEANUP CONTACTS ---
+                unsubContacts();
             };
+        } else {
+            setQuotes([]);
+            setOpportunities([]);
+            setCompanies([]);
+            setContacts([]);
+            setLoadingData(false);
         }
     }, [user]); 
 
-    // --- (All your handleLogin, handleLogout, handleSaveQuote, etc. functions are here, no changes) ---
+    // --- (All handle... functions remain unchanged) ---
     const handleLogin = (email, password) => {
         signInWithEmailAndPassword(auth, email, password)
             .catch((error) => alert("Login Failed: " + error.message));
     };
-
     const handleLogout = () => {
         signOut(auth);
     };
-
     const handleSaveQuote = async (quoteData) => {
         if (!user) {
             alert("Error: You are not logged in. Please refresh and log in again.");
             return;
         }
-        
         let currentOpportunityId = quoteData.opportunityId;
-        
         if (!currentOpportunityId) {
             try {
                 const newOppData = {
@@ -148,19 +162,15 @@ export default function App() {
                     createdAt: serverTimestamp(),
                     lastModified: serverTimestamp()
                 };
-                
                 const oppsCollectionRef = collection(db, "users", user.uid, "opportunities");
                 const oppDocRef = await addDoc(oppsCollectionRef, newOppData); 
-
                 currentOpportunityId = oppDocRef.id; 
             } catch (error) {
                 console.error("Error creating new opportunity automatically: ", error);
                 alert("Quote saved, but failed to create linked funnel entry. See console.");
             }
         }
-        
         const quoteRef = doc(db, "users", user.uid, "quotes", quoteData.id);
-        
         try {
             await setDoc(quoteRef, {
                 ...quoteData,
@@ -168,7 +178,6 @@ export default function App() {
                 createdAt: quoteData.createdAt || serverTimestamp(), 
                 lastModified: serverTimestamp()
             }, { merge: true }); 
-            
             alert(`Quote ${quoteData.id} has been saved and linked to the Funnel!`);
             setActiveView('funnel'); 
             setQuoteToEdit(null);
@@ -178,7 +187,6 @@ export default function App() {
             alert("Error saving quote. See console.");
         }
     };
-    
     const handleUpdateQuoteStatus = async (quoteId, newStatus) => {
         const quoteRef = doc(db, "users", user.uid, "quotes", quoteId);
         try {
@@ -187,7 +195,6 @@ export default function App() {
             console.error("Error updating status: ", error);
         }
     };
-    
     const handleDeleteQuote = async (quoteId) => {
         if (window.confirm("Are you sure you want to permanently delete this quote?")) {
             const quoteRef = doc(db, "users", user.uid, "quotes", quoteId);
@@ -198,25 +205,20 @@ export default function App() {
             }
         }
     };
-    
     const handleEditQuote = (quote) => {
         setQuoteToEdit(quote);
         setActiveView('calculator');
     };
-
     const handleOpenOpportunity = (opp) => {
         setSelectedOpportunity(opp);
         setActiveView('opportunityDetail'); 
     };
-
     const handleBackToFunnel = () => {
         setSelectedOpportunity(null);
         setActiveView('funnel');
     };
-
     const handleNewQuoteFromOpp = () => {
         if (!selectedOpportunity) return;
-        
         const initialQuoteData = {
             customer: { 
                 name: selectedOpportunity.customerName, 
@@ -224,16 +226,15 @@ export default function App() {
             },
             opportunityId: selectedOpportunity.id 
         };
-
         setQuoteToEdit(initialQuoteData);
         setActiveView('calculator');
     };
-
     const handleNewQuote = () => {
         setQuoteToEdit(null); 
         setSelectedOpportunity(null); 
         setActiveView('calculator');
     };
+    // --- (End of handle... functions) ---
 
     const nextQuoteNumber = useMemo(() => {
         if (quotes.length === 0) return 2501;
@@ -245,11 +246,13 @@ export default function App() {
     }, [quotes]); 
 
     // --- RENDER ---
+    if (loadingAuth) {
+        return <div className="text-center p-10 font-semibold">Authenticating...</div>;
+    }
     if (!user) {
         return <LoginPage onLogin={handleLogin} />;
     }
-
-    if (loading) {
+    if (loadingData) {
         return <div className="text-center p-10 font-semibold">Loading Karnot CRM...</div>;
     }
 
@@ -272,7 +275,6 @@ export default function App() {
                     />
                 )}
                 
-                {/* --- 7. ADD RENDER LOGIC FOR CONTACTS PAGE --- */}
                 {activeView === 'contacts' && (
                     <ContactsPage 
                         contacts={contacts}
@@ -297,6 +299,7 @@ export default function App() {
                         user={user}
                         onOpen={handleOpenOpportunity} 
                         companies={companies}
+                        contacts={contacts} // --- 1. PASS CONTACTS TO FUNNEL ---
                     />
                 )}
                 
@@ -309,6 +312,7 @@ export default function App() {
                         key={quoteToEdit ? quoteToEdit.id : 'new'} 
                         initialData={quoteToEdit} 
                         companies={companies}
+                        contacts={contacts} // --- 2. PASS CONTACTS TO CALCULATOR ---
                     />
                 )}
                 
