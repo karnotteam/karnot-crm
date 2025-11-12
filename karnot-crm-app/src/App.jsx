@@ -276,7 +276,7 @@ export default function App() {
                         opportunities={opportunities} 
                         user={user}
                         onOpen={handleOpenOpportunity} 
-                        companies={companies} {/* <-- THIS IS THE ONLY CHANGE */}
+                        companies={companies}
                     />
                 )}
                 
