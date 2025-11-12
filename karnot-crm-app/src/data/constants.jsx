@@ -81,9 +81,12 @@ export const QUOTE_STATUSES = {
 };
 
 export const BOI_TARGETS_USD = {
-   	2025: 1073035,
-   	2026: 2175323,
-   	2027: 3380671
+    // These reflect the 'Totals' row from the 2026-2030 Forecast
+    2026: 1988802,  // Total Revenue 2026 
+    2027: 3485465,  // Total Revenue 2027 
+    2028: 11344155, // Total Revenue 2028 
+    2029: 16089299, // Total Revenue 2029 
+    2030: 23071464  // Total Revenue 2030 
 };
 
 // --- THIS IS THE ONE, CORRECTED LINE ---
