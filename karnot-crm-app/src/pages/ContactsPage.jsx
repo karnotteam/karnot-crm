@@ -5,7 +5,7 @@ import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, User, Mail, Pho
 import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
 // --- ContactModal Component ---
-// This modal is for adding/editing a single contact
+// (This component is unchanged)
 const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
     const isEditMode = Boolean(contactToEdit);
     
@@ -16,7 +16,6 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
     const [email, setEmail] = useState(contactToEdit?.email || '');
     const [phone, setPhone] = useState(contactToEdit?.phone || '');
     
-    // This is the link to the company. We store the Company ID.
     const [companyId, setCompanyId] = useState(contactToEdit?.companyId || (companies.length > 0 ? companies[0].id : ''));
 
     const handleSave = () => {
@@ -25,7 +24,6 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
             return;
         }
 
-        // Find the company name from the ID for easier display
         const selectedCompany = companies.find(c => c.id === companyId);
         const companyName = selectedCompany ? selectedCompany.companyName : 'Unknown';
 
@@ -35,8 +33,8 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
             jobTitle,
             email,
             phone,
-            companyId, // The ID of the company
-            companyName, // The name (for easy display)
+            companyId, 
+            companyName,
         };
         onSave(contactData);
     };
@@ -93,6 +91,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
 };
 
 // --- ContactCard Component ---
+// (This component is unchanged)
 const ContactCard = ({ contact, onEdit, onDelete }) => {
     return (
         <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between">
@@ -142,7 +141,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
     const fileInputRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    // --- Database Functions ---
+    // --- (Database and Modal functions are unchanged) ---
     const handleSaveContact = async (contactData) => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
         try {
@@ -154,11 +153,9 @@ const ContactsPage = ({ contacts, companies, user }) => {
             alert("Failed to save contact.");
         }
     };
-
     const handleUpdateContact = async (contactData) => {
         if (!editingContact || !editingContact.id) return;
         if (!user || !user.uid) return alert("Error: User not logged in.");
-
         const contactRef = doc(db, "users", user.uid, "contacts", editingContact.id);
         try {
             await setDoc(contactRef, { ...contactData, lastModified: serverTimestamp() }, { merge: true });
@@ -168,7 +165,6 @@ const ContactsPage = ({ contacts, companies, user }) => {
             alert("Failed to update contact.");
         }
     };
-    
     const handleDeleteContact = async (contactId) => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
         if (window.confirm("Are you sure you want to permanently delete this contact?")) {
@@ -181,7 +177,6 @@ const ContactsPage = ({ contacts, companies, user }) => {
             }
         }
     };
-
     const handleSave = (contactData) => {
         if (editingContact) {
             handleUpdateContact(contactData);
@@ -189,38 +184,32 @@ const ContactsPage = ({ contacts, companies, user }) => {
             handleSaveContact(contactData);
         }
     };
-
-    // --- Modal Functions ---
     const handleOpenNewModal = () => {
         setEditingContact(null);
         setShowModal(true);
     };
-
     const handleOpenEditModal = (contact) => {
         setEditingContact(contact);
         setShowModal(true);
     };
-
     const handleCloseModal = () => {
         setEditingContact(null);
         setShowModal(false);
     };
-    
-    // --- CSV Import Functions ---
     const handleImportClick = () => {
         fileInputRef.current.click();
     };
+    // --- (End of unchanged functions) ---
 
-    // This function tries to find a matching Company ID from your database
+
+    // --- THIS IS THE UPDATED, SMARTER IMPORT LOGIC ---
     const findCompanyId = (companyName) => {
         if (!companyName || !companies.length) return null;
         const lowerName = companyName.toLowerCase().trim();
         
-        // 1. Try for an exact match
         let match = companies.find(c => c.companyName.toLowerCase().trim() === lowerName);
         if (match) return { id: match.id, name: match.companyName };
         
-        // 2. Try for a partial match (e.g., "Nestle" in "Nestle Inc.")
         match = companies.find(c => c.companyName.toLowerCase().includes(lowerName));
         if (match) return { id: match.id, name: match.companyName };
         
@@ -233,45 +222,77 @@ const ContactsPage = ({ contacts, companies, user }) => {
         
         setIsImporting(true);
         
+        // --- 1. THE FIX: We set 'header: false' and 'skipEmptyLines: true' ---
         Papa.parse(file, {
-            header: true,
+            header: false,
             skipEmptyLines: true,
             complete: async (results) => {
-                const rows = results.data;
-                console.log("Parsed rows:", rows);
-
-                // Check for the required columns from your CSV
-                if (!rows.length || !rows[0].FirstName || !rows[0].LastName) {
-                    alert("Error: Could not find 'FirstName' or 'LastName' columns in CSV.");
+                const allRows = results.data;
+                
+                if (allRows.length < 2) {
+                    alert("File is empty or only contains a header.");
                     setIsImporting(false);
                     return;
                 }
 
+                // --- 2. Find the header row (skips titles/blank lines) ---
+                let headerRowIndex = -1;
+                for (let i = 0; i < Math.min(allRows.length, 10); i++) {
+                    const row = allRows[i];
+                    if (row.includes("FirstName") && row.includes("LastName") && row.includes("EmailAddress")) {
+                        headerRowIndex = i;
+                        break;
+                    }
+                }
+
+                if (headerRowIndex === -1) {
+                    alert("Error: Could not find a header row containing 'FirstName', 'LastName', and 'EmailAddress'. Please check the file.");
+                    setIsImporting(false);
+                    return;
+                }
+
+                const header = allRows[headerRowIndex];
+                const dataRows = allRows.slice(headerRowIndex + 1);
+
+                // --- 3. Get column indexes from the header ---
+                const colFirstName = header.indexOf("FirstName");
+                const colLastName = header.indexOf("LastName");
+                const colCompany = header.indexOf("Company");
+                const colEmail = header.indexOf("EmailAddress");
+                const colJobTitle = header.indexOf("JobTitle"); // This is optional
+
+                if (colFirstName === -1 || colLastName === -1 || colEmail === -1) {
+                    alert("Error: Header is missing required columns. Must have 'FirstName', 'LastName', and 'EmailAddress'.");
+                    setIsImporting(false);
+                    return;
+                }
+                
+                // --- 4. Process rows using indexes ---
                 const batch = writeBatch(db);
                 const contactsRef = collection(db, "users", user.uid, "contacts");
                 let importCount = 0;
                 let unmatchedCount = 0;
 
-                rows.forEach(row => {
-                    const firstName = row.FirstName ? row.FirstName.trim() : '';
-                    const lastName = row.LastName ? row.LastName.trim() : '';
+                dataRows.forEach(row => {
+                    const firstName = row[colFirstName] ? row[colFirstName].trim() : '';
+                    const lastName = row[colLastName] ? row[colLastName].trim() : '';
                     
                     if (firstName && lastName) {
-                        const csvCompanyName = row.Company ? row.Company.trim() : '';
+                        const csvCompanyName = row[colCompany] ? row[colCompany].trim() : '';
                         const companyMatch = findCompanyId(csvCompanyName);
 
                         const contactData = {
                             firstName,
                             lastName,
-                            jobTitle: row.JobTitle || '', // Add other fields if you have them
-                            email: row.EmailAddress || '',
+                            jobTitle: colJobTitle !== -1 ? (row[colJobTitle] || '') : '',
+                            email: row[colEmail] ? row[colEmail].trim() : '',
                             phone: '', // Add phone if you have it
                             companyId: companyMatch ? companyMatch.id : null,
-                            companyName: companyMatch ? companyMatch.name : csvCompanyName, // Store the matched name or the original
+                            companyName: companyMatch ? companyMatch.name : (csvCompanyName || 'N/A'),
                             createdAt: serverTimestamp()
                         };
                         
-                        if (!companyMatch) {
+                        if (!companyMatch && csvCompanyName) {
                             unmatchedCount++;
                         }
                         
@@ -283,14 +304,14 @@ const ContactsPage = ({ contacts, companies, user }) => {
 
                 try {
                     await batch.commit();
-                    alert(`Successfully imported ${importCount} contacts! \n(${unmatchedCount} contacts had company names that could not be matched automatically.)`);
+                    alert(`Successfully imported ${importCount} contacts! \n(${unmatchedCount} contacts had company names that could not be automatically matched.)`);
                 } catch (error) {
                     console.error("Error importing contacts: ", error);
                     alert("An error occurred during import. See console for details.");
                 }
 
                 setIsImporting(false);
-                event.target.value = null; // Clear file input
+                event.target.value = null;
             },
             error: (error) => {
                 console.error("PapaParse error:", error);
@@ -299,6 +320,8 @@ const ContactsPage = ({ contacts, companies, user }) => {
             }
         });
     };
+    // --- (End of updated import logic) ---
+
 
     // --- Search Filter ---
     const filteredContacts = useMemo(() => {
@@ -359,7 +382,8 @@ const ContactsPage = ({ contacts, companies, user }) => {
                     type="text"
                     placeholder="Search contacts by name, company, or email..."
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.g.target.value)}
+                    // --- 5. FIX THE TYPO (removed 'e.g.') ---
+                    onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
                 />
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
