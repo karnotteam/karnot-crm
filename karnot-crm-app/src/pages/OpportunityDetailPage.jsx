@@ -1,11 +1,15 @@
 // src/pages/OpportunityDetailPage.jsx
-import React, { useState, useEffect } from 'react';
-import { Mail, Phone, Hash, ArrowLeft, DollarSign, List, Calendar } from 'lucide-react';
-// FIX: Need to import all necessary components
-import { Card, Button, Section, Input, Textarea } from '../data/constants.jsx'; 
+import React from 'react';
+// 1. --- 'Link' import is REMOVED ---
+import { 
+    Mail, Phone, Hash, ArrowLeft, DollarSign, List, Calendar, 
+    Edit, Plus, FileText 
+} from 'lucide-react';
 
-// This component simulates the detail page for one lead
-const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote }) => {
+import { Card, Button, Section, Input, Textarea } from '../data/constants.jsx';
+
+// 2. --- Add 'onEdit' to the props list here ---
+const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote, onEdit }) => {
     // Basic formatting for probability to look nice
     const formatProb = (p) => {
         if (p >= 90) return 'text-green-600';
@@ -17,15 +21,23 @@ const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote }) => {
         return <div className="text-center p-10">Opportunity data not loaded.</div>;
     }
 
-    // Filter quotes relevant to this opportunity (requires linking field to be added later)
     const relatedQuotes = quotes.filter(q => q.customer.name === opportunity.customerName);
 
     return (
         <div className="space-y-6">
             
-            <Button onClick={onBack} variant="secondary" className="mb-4">
-                <ArrowLeft size={16} className="mr-2"/> Back to Funnel
-            </Button>
+            <div className="flex justify-between items-center mb-4">
+                {/* This is your original Back button */}
+                <Button onClick={onBack} variant="secondary">
+                    <ArrowLeft size={16} className="mr-2"/> Back to Funnel
+                </Button>
+                
+                {/* 3. --- This is the corrected Edit Button --- */}
+                {/* It's now a Button that calls the onEdit function */}
+                <Button onClick={() => onEdit(opportunity)} variant="primary">
+                    <Edit size={16} className="mr-2"/> Edit Opportunity
+                </Button>
+            </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
