@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react'; // --- 1. IMPORT useEffect ---
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { Plus, X, Edit, Trash2 } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
-// Define the fixed list of stages to calculate the "next" step
 const STAGE_ORDER = [
     'Lead',
     'Qualifying',
@@ -15,14 +14,11 @@ const STAGE_ORDER = [
     'Closed-Lost'
 ];
 
-// --- UPDATED: Opportunity Card Component ---
-// --- 2. ADD 'onEdit' PROP ---
-const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit }) => {
-    // Logic to calculate the index of the next stage
+// --- 1. ADD 'onOpen' TO THE PROPS LIST ---
+const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
     const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
     const nextStage = STAGE_ORDER[currentStageIndex + 1];
 
-    // Handle button click: move to the next stage in the array
     const handleMoveForward = () => {
         if (nextStage) {
             onUpdate(opp.id, nextStage);
@@ -32,17 +28,23 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit }) => {
     return (
         <Card className="p-4 mb-3 rounded-lg shadow border border-gray-200">
             <div className="flex justify-between items-start">
-                <h4 className="font-bold text-gray-800">{opp.customerName}</h4>
+                
+                {/* --- 2. MAKE THE CUSTOMER NAME A CLICKABLE BUTTON --- */}
+                <h4 
+                    className="font-bold text-gray-800 cursor-pointer hover:text-orange-600"
+                    onClick={() => onOpen(opp)}
+                >
+                    {opp.customerName}
+                </h4>
+
                 <div className="flex gap-1">
-                    {/* --- 3. HOOK UP EDIT BUTTON --- */}
                     <Button 
-                        onClick={() => onEdit(opp)} // Call the onEdit function with the opp data
+                        onClick={() => onEdit(opp)}
                         variant="secondary" 
                         className="p-1 h-auto w-auto"
                     >
                         <Edit size={14}/>
                     </Button>
-                    {/* DELETE BUTTON - calls the actual delete function */}
                     <Button 
                         onClick={() => onDelete(opp.id)} 
                         variant="danger" 
@@ -63,7 +65,6 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit }) => {
                 </span>
             </div>
 
-            {/* HOOKED UP BUTTON: Only shows if there is a stage after the current one */}
             {nextStage && opp.stage !== 'Closed-Won' && opp.stage !== 'Closed-Lost' && (
                 <div className="mt-3">
                     <Button 
@@ -80,13 +81,8 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit }) => {
 };
 
 
-// --- UPDATED: New/Edit Opportunity Modal ---
-// --- 4. ADD 'opportunityToEdit' PROP ---
 const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit }) => {
-    // Check if we are in "edit mode"
     const isEditMode = Boolean(opportunityToEdit);
-
-    // Form state
     const [customerName, setCustomerName] = useState('');
     const [project, setProject] = useState('');
     const [estimatedValue, setEstimatedValue] = useState(0);
@@ -94,12 +90,8 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit }) => {
     const [contactName, setContactName] = useState('');
     const [contactEmail, setContactEmail] = useState('');
 
-    // --- 5. ADD useEffect TO PRE-FILL FORM ---
-    // This runs when the modal opens. If we are editing,
-    // it fills the form with the opportunity's data.
     useEffect(() => {
         if (isEditMode) {
-            // We are EDITING, so pre-fill the form
             setCustomerName(opportunityToEdit.customerName);
             setProject(opportunityToEdit.project);
             setEstimatedValue(opportunityToEdit.estimatedValue);
@@ -107,7 +99,6 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit }) => {
             setContactName(opportunityToEdit.contactName);
             setContactEmail(opportunityToEdit.contactEmail);
         } else {
-            // We are CREATING, so ensure fields are default
             setCustomerName('');
             setProject('');
             setEstimatedValue(0);
@@ -115,7 +106,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit }) => {
             setContactName('');
             setContactEmail('');
         }
-    }, [opportunityToEdit, isEditMode]); // Rerun when the opp changes
+    }, [opportunityToEdit, isEditMode]);
 
     const handleSave = async () => {
         if (!customerName || !project || !contactName || !contactEmail) {
@@ -123,9 +114,6 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit }) => {
             return;
         }
         
-        // --- 6. CLEAN UP 'oppData' ---
-        // This object *only* contains the form data.
-        // The parent (FunnelPage) will add 'createdAt' or 'stage'
         const oppData = {
             customerName,
             project,
@@ -135,14 +123,13 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit }) => {
             contactEmail,
         };
         
-        onSave(oppData); // Pass this data back to the parent's handleSave
+        onSave(oppData);
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 flex justify-center items-center p-4">
             <Card className="w-full max-w-lg">
                 <div className="flex justify-between items-center mb-4">
-                    {/* --- 7. DYNAMIC TITLE --- */}
                     <h3 className="text-2xl font-bold text-gray-800">
                         {isEditMode ? 'Edit Opportunity' : 'New Opportunity'}
                     </h3>
@@ -160,7 +147,6 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit }) => {
                     <Input label="Contact Email" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} placeholder="smith@client.com" required />
                 </div>
                 <div className="mt-6 flex justify-end">
-                    {/* --- 8. DYNAMIC BUTTON TEXT --- */}
                     <Button onClick={handleSave} variant="primary">
                         <Plus className="mr-2" size={16} /> 
                         {isEditMode ? 'Update Opportunity' : 'Save Opportunity'}
@@ -171,41 +157,34 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit }) => {
     );
 };
 
-// This is the main "Funnel" component
-const FunnelPage = ({ opportunities, user }) => { 
+// --- 3. ADD 'onOpen' TO THE PROPS LIST ---
+const FunnelPage = ({ opportunities, user, onOpen }) => { 
     const [showModal, setShowModal] = useState(false);
-    // --- 9. ADD STATE FOR EDITING ---
-    // This will hold the 'opp' object when we click "Edit"
     const [editingOpportunity, setEditingOpportunity] = useState(null);
     
-    // Define your sales stages
     const STAGES = STAGE_ORDER;
 
-    // Function to handle saving a NEW opportunity to Firebase
     const handleSaveOpportunity = async (newOppData) => {
         if (!user || !user.uid) {
             alert("Error: You are not logged in.");
             return;
         }
         try {
-            // Add creation-specific fields
             const newOpp = {
                 ...newOppData,
-                stage: 'Lead', // Default stage for new
+                stage: 'Lead',
                 createdAt: serverTimestamp(), 
                 notes: [] 
             };
             await addDoc(collection(db, "users", user.uid, "opportunities"), newOpp);
             console.log("Opportunity saved!");
-            handleCloseModal(); // Use new close function
+            handleCloseModal(); 
         } catch (e) {
             console.error("Error adding document: ", e);
             alert("Failed to save opportunity. Check console.");
         }
     };
 
-    // --- 10. ADD "UPDATE" FUNCTION ---
-    // This saves the *edited* data
     const handleUpdateFullOpportunity = async (oppData) => {
         if (!editingOpportunity || !editingOpportunity.id) return alert("Error: No opportunity selected for update.");
         if (!user || !user.uid) return alert("Error: User not logged in.");
@@ -213,49 +192,43 @@ const FunnelPage = ({ opportunities, user }) => {
         const oppRef = doc(db, "users", user.uid, "opportunities", editingOpportunity.id);
         try {
             await setDoc(oppRef, {
-                ...oppData, // Use all the new data from the form
-                lastModified: serverTimestamp() // Add a modified time
-            }, { merge: true }); // Merge to not overwrite createdAt or stage
+                ...oppData,
+                lastModified: serverTimestamp() 
+            }, { merge: true });
             
             console.log("Opportunity updated!");
-            handleCloseModal(); // Use new close function
+            handleCloseModal(); 
         } catch (e) {
             console.error("Error updating document: ", e);
             alert("Failed to update opportunity.");
         }
     };
 
-    // --- 11. CREATE "SMART" SAVE FUNCTION ---
-    // This function is passed to the modal.
-    // It decides whether to CREATE or UPDATE.
     const handleSave = (oppDataFromModal) => {
         if (editingOpportunity) {
-            // We are in EDIT mode
             handleUpdateFullOpportunity(oppDataFromModal);
         } else {
-            // We are in NEW mode
             handleSaveOpportunity(oppDataFromModal);
         }
     };
 
-    // --- 12. CREATE FUNCTIONS TO OPEN/CLOSE MODAL ---
     const handleOpenNewModal = () => {
-        setEditingOpportunity(null); // Ensure we're NOT in edit mode
-        setShowModal(true); // Open the modal
+        setEditingOpportunity(null);
+        setShowModal(true);
     };
 
     const handleOpenEditModal = (opp) => {
-        setEditingOpportunity(opp); // Set *which* opp to edit
-        setShowModal(true); // Open the modal
+        setEditingOpportunity(opp);
+        setShowModal(true);
     };
 
     const handleCloseModal = () => {
         setShowModal(false);
-        setEditingOpportunity(null); // ALWAYS reset on close
+        setEditingOpportunity(null);
     };
 
-    // --- (Existing code: handleUpdateOpportunityStage) ---
     const handleUpdateOpportunityStage = async (oppId, newStage) => {
+        // ... (your existing code, no changes)
         if (!user || !user.uid) return alert("Error: User not logged in.");
         const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
         let newProbability;
@@ -281,8 +254,9 @@ const FunnelPage = ({ opportunities, user }) => {
             alert("Failed to update lead stage.");
         }
     };
-    // --- (Existing code: handleDeleteOpportunity) ---
+    
     const handleDeleteOpportunity = async (oppId) => {
+        // ... (your existing code, no changes)
         if (!user || !user.uid) return alert("Error: User not logged in.");
         if (window.confirm("Are you sure you want to permanently delete this Opportunity?")) {
             const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
@@ -296,15 +270,13 @@ const FunnelPage = ({ opportunities, user }) => {
         }
     };
 
-    // --- (Existing code: getOppsByStage) ---
     const getOppsByStage = (stage) => {
-        if (!opportunities) return []; // Handle loading state
+        if (!opportunities) return [];
         return opportunities.filter(opp => opp.stage === stage);
     };
 
     return (
         <div className="w-full">
-            {/* --- 13. UPDATE MODAL RENDER --- */}
             {showModal && (
                 <NewOpportunityModal 
                     onSave={handleSave} 
@@ -315,7 +287,6 @@ const FunnelPage = ({ opportunities, user }) => {
             
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Sales Funnel</h1>
-                {/* --- 14. UPDATE "NEW" BUTTON onClick --- */}
                 <Button onClick={handleOpenNewModal} variant="primary">
                     <Plus className="mr-2" size={16} /> New Opportunity
                 </Button>
@@ -345,8 +316,9 @@ const FunnelPage = ({ opportunities, user }) => {
                                             opp={opp} 
                                             onUpdate={handleUpdateOpportunityStage}
                                             onDelete={handleDeleteOpportunity}
-                                            // --- 15. PASS 'onEdit' PROP ---
                                             onEdit={handleOpenEditModal}
+                                            // --- 4. PASS 'onOpen' DOWN TO THE CARD ---
+                                            onOpen={onOpen}
                                         />
                                     ))
                                 }
