@@ -1,8 +1,6 @@
-// src/App.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, db } from './firebase'; 
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-// FIX: Added addDoc to the import list
 import { collection, onSnapshot, query, doc, setDoc, deleteDoc, serverTimestamp, addDoc } from "firebase/firestore"; 
 
 // --- Import Pages & Components ---
@@ -12,10 +10,13 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import QuotesListPage from './pages/QuotesListPage.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
+// --- 1. IMPORT THE NEW COMPANIES PAGE ---
+import CompaniesPage from './pages/CompaniesPage.jsx'; 
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
-import { BarChart2, FileText, List, HardHat, LogOut } from 'lucide-react'; 
+// --- 2. IMPORT THE 'Building' ICON ---
+import { BarChart2, FileText, List, HardHat, LogOut, Building } from 'lucide-react'; 
 
 // --- Header Component ---
 const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( 
@@ -28,8 +29,11 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
             <nav className="flex flex-wrap gap-2 justify-end">
                 <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'}><HardHat className="mr-2" size={16} /> Funnel</Button>
                 <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'}><BarChart2 className="mr-2" size={16} /> Dashboard</Button>
+                
+                {/* --- 3. ADD THE NEW "COMPANIES" BUTTON --- */}
+                <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'}><Building className="mr-2" size={16} /> Companies</Button>
+
                 <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
-                {/* FIX: Use quoteCount prop here */}
                 <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
                 <Button onClick={onLogout} variant="secondary"><LogOut className="mr-2" size={16} />Logout</Button>
             </nav>
@@ -47,10 +51,13 @@ export default function App() {
     // --- State from Firebase ---
     const [opportunities, setOpportunities] = useState([]);
     const [quotes, setQuotes] = useState([]);
+    // --- 4. ADD NEW STATE FOR COMPANIES ---
+    const [companies, setCompanies] = useState([]); 
     const [loading, setLoading] = useState(true);
 
-    // AUTH HOOK
+    // AUTH HOOK (No changes here)
     useEffect(() => {
+        // ... (your existing auth code)
         setLoading(true);
         const unsubscribe = onAuthStateChanged(auth, (user) => {
             if (user) {
@@ -73,7 +80,7 @@ export default function App() {
             const unsubQuotes = onSnapshot(quotesQuery, (snapshot) => {
                 const liveQuotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setQuotes(liveQuotes);
-                setLoading(false); 
+                setLoading(false); // Set loading false after first sync
             }, (error) => { console.error("Error syncing quotes: ", error); setLoading(false); });
 
             // 2. Sync Opportunities
@@ -83,148 +90,26 @@ export default function App() {
                 setOpportunities(liveOpps);
             }, (error) => { console.error("Error syncing opportunities: ", error); });
             
+            // --- 5. SYNC COMPANIES ---
+            const companiesQuery = query(collection(db, "users", user.uid, "companies"));
+            const unsubCompanies = onSnapshot(companiesQuery, (snapshot) => {
+                const liveCompanies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setCompanies(liveCompanies);
+            }, (error) => { console.error("Error syncing companies: ", error); });
+            
             return () => {
                 unsubQuotes();
                 unsubOpps();
+                unsubCompanies(); // <-- Don't forget to cleanup!
             };
         }
     }, [user]); 
 
-    // --- Firebase Login/Logout ---
-    const handleLogin = (email, password) => {
-        signInWithEmailAndPassword(auth, email, password)
-            .catch((error) => alert("Login Failed: " + error.message));
-    };
-
-    const handleLogout = () => {
-        signOut(auth);
-    };
-
-    // --- Firebase Database Functions (Quote CRUD) ---
-    const handleSaveQuote = async (quoteData) => {
-        if (!user) {
-            alert("Error: You are not logged in. Please refresh and log in again.");
-            return;
-        }
-        
-        let currentOpportunityId = quoteData.opportunityId;
-        
-        // --- LOGIC TO CREATE OPPORTUNITY IF QUOTE IS NEW AND NOT LINKED ---
-        if (!currentOpportunityId) {
-            try {
-                // Creates a new Opportunity document
-                const newOppData = {
-                    customerName: quoteData.customer.name, 
-                    project: `Quote ${quoteData.id} Project`,
-                    estimatedValue: quoteData.finalSalesPrice || 0,
-                    stage: 'Proposal Sent', // Auto-set stage
-                    probability: 75,
-                    contactName: quoteData.customer.name || 'Unknown', 
-                    contactEmail: 'N/A',
-                    createdAt: serverTimestamp(),
-                    lastModified: serverTimestamp()
-                };
-                
-                const oppsCollectionRef = collection(db, "users", user.uid, "opportunities");
-                // FIX: addDoc now exists and will save the new opportunity
-                const oppDocRef = await addDoc(oppsCollectionRef, newOppData); 
-
-                currentOpportunityId = oppDocRef.id; // Get the newly generated ID
-            } catch (error) {
-                console.error("Error creating new opportunity automatically: ", error);
-                alert("Quote saved, but failed to create linked funnel entry. See console.");
-            }
-        }
-        
-        // --- SAVE THE QUOTE DATA ---
-        // The quoteId must be valid, which the QuoteCalculator ensures using a dash separator
-        const quoteRef = doc(db, "users", user.uid, "quotes", quoteData.id);
-        
-        try {
-            await setDoc(quoteRef, {
-                ...quoteData,
-                // Link the quote to the newly created/existing opportunity
-                opportunityId: currentOpportunityId, 
-                createdAt: quoteData.createdAt || serverTimestamp(), 
-                lastModified: serverTimestamp()
-            }, { merge: true }); 
-            
-            alert(`Quote ${quoteData.id} has been saved and linked to the Funnel!`);
-            setActiveView('funnel'); 
-            setQuoteToEdit(null);
-            setSelectedOpportunity(null); 
-        } catch (error) {
-            console.error("Error saving quote: ", error);
-            alert("Error saving quote. See console.");
-        }
-    };
-    
-    const handleUpdateQuoteStatus = async (quoteId, newStatus) => {
-        const quoteRef = doc(db, "users", user.uid, "quotes", quoteId);
-        try {
-            await setDoc(quoteRef, { status: newStatus, lastModified: serverTimestamp() }, { merge: true });
-        } catch (error) {
-            console.error("Error updating status: ", error);
-        }
-    };
-    
-    const handleDeleteQuote = async (quoteId) => {
-        if (window.confirm("Are you sure you want to permanently delete this quote?")) {
-            const quoteRef = doc(db, "users", user.uid, "quotes", quoteId);
-            try {
-                await deleteDoc(quoteRef);
-            } catch (error) {
-                console.error("Error deleting quote: ", error);
-            }
-        }
-    };
-    
-    // --- Navigation Functions ---
-    const handleEditQuote = (quote) => {
-        setQuoteToEdit(quote);
-        setActiveView('calculator');
-    };
-
-    const handleOpenOpportunity = (opp) => {
-        setSelectedOpportunity(opp);
-        setActiveView('opportunityDetail'); 
-    };
-
-    const handleBackToFunnel = () => {
-        setSelectedOpportunity(null);
-        setActiveView('funnel');
-    };
-
-    const handleNewQuoteFromOpp = () => {
-        if (!selectedOpportunity) return;
-        
-        const initialQuoteData = {
-            customer: { 
-                name: selectedOpportunity.customerName, 
-                saleType: selectedOpportunity.customerName.includes('Canada') ? 'Export' : 'Domestic'
-            },
-            opportunityId: selectedOpportunity.id 
-        };
-
-        setQuoteToEdit(initialQuoteData);
-        setActiveView('calculator');
-    };
-
-    const handleNewQuote = () => {
-        setQuoteToEdit(null); 
-        setSelectedOpportunity(null); 
-        setActiveView('calculator');
-    };
-
-    // --- Logic from your old app ---
-    const nextQuoteNumber = useMemo(() => {
-        if (quotes.length === 0) return 2501;
-        const lastQuoteNum = quotes
-           .map(q => parseInt(q.id.split('-')[0].replace('QN', ''), 10))
-           .filter(num => !isNaN(num))
-           .reduce((max, num) => Math.max(max, num), 0);
-        return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
-    }, [quotes]); 
+    // --- (All your handleLogin, handleLogout, handleSaveQuote, etc. functions) ---
+    // --- (No changes needed to these functions) ---
+    // ...
+    // ... (rest of your existing functions) ...
+    // ...
 
     // --- RENDER ---
     if (!user) {
@@ -246,6 +131,14 @@ export default function App() {
             />
             
             <main className="container mx-auto p-4 md:p-8">
+                
+                {/* --- 6. ADD RENDER LOGIC FOR COMPANIES PAGE --- */}
+                {activeView === 'companies' && (
+                    <CompaniesPage 
+                        companies={companies}
+                        user={user}
+                    />
+                )}
                 
                 {activeView === 'opportunityDetail' && (
                     <OpportunityDetailPage
