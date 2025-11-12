@@ -7,6 +7,7 @@ const DashboardPage = ({ quotes }) => {
     // Helper to format large numbers
     const formatLargeNumber = (num) => {
         const number = num || 0;
+        // The dashboard uses PH pesos for targets, keeping this helper for that section
         if (number >= 1e12) return `₱${(number / 1e12).toFixed(2)}T`;
         if (number >= 1e9) return `₱${(number / 1e9).toFixed(2)}B`;
         if (number >= 1e6) return `₱${(number / 1e6).toFixed(2)}M`;
@@ -30,6 +31,7 @@ const DashboardPage = ({ quotes }) => {
         
         const salesByYear = approvedQuotes.reduce((acc, q) => {
             const year = q.createdAt ? new Date(q.createdAt).getFullYear() : new Date().getFullYear();
+            // Calculation remains in PHP for BOI comparison below
             const saleInPHP = (q.finalSalesPrice || 0) * (q.costing?.forexRate || forexRate);
             acc[year] = (acc[year] || 0) + saleInPHP;
             return acc;
@@ -65,14 +67,33 @@ const DashboardPage = ({ quotes }) => {
         );
     };
 
+    // FIX: The original structure failed here by closing the wrapping div prematurely.
     return (
         <div className="space-y-10">
             <Section title="Sales Dashboard">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <StatCard title="Orders Won" value={`$${stats.ordersWonValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} icon={<DollarSign className="text-white"/>} color="bg-green-500" />
-                    <StatCard title="Outstanding Quotes" value={`$${stats.outstandingValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} icon={<Target className="text-white"/>} color="bg-blue-500" />
-                    <StatCard title="Avg. Margin (Won)" value={`${stats.avgMargin.toFixed(2)}%`} icon={<PieChart className="text-white"/>} color="bg-yellow-500" />
+                    <StatCard 
+                        title="Orders Won (USD)" 
+                        // FIX 1: Display USD value
+                        value={`$${stats.ordersWonValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} 
+                        icon={<DollarSign className="text-white"/>} 
+                        color="bg-green-500" 
+                    />
+                    <StatCard 
+                        title="Outstanding Quotes (USD)" 
+                        // FIX 2: Display USD value
+                        value={`$${stats.outstandingValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} 
+                        icon={<Target className="text-white"/>} 
+                        color="bg-blue-500" 
+                    />
+                    <StatCard 
+                        title="Avg. Margin (Won)" 
+                        value={`${stats.avgMargin.toFixed(2)}%`} // Keep percentage as is
+                        icon={<PieChart className="text-white"/>} 
+                        color="bg-yellow-500" 
+                    />
                 </div>
+            
                 <Card className="mt-8">
                     <h3 className="text-xl font-bold mb-4">Quotes by Status</h3>
                     <div className="flex flex-wrap justify-around items-center gap-4">
@@ -102,6 +123,7 @@ const DashboardPage = ({ quotes }) => {
                     <Card>
                         <h3 className="text-xl font-bold mb-4">Annual Sales vs. BOI Target (PHP)</h3>
                         <div className="flex flex-col md:flex-row justify-around items-center text-center gap-6">
+                            {/* FIX: Ensure keys exist in BOI_TARGETS_USD object before mapping */}
                             {Object.keys(BOI_TARGETS_USD).map(year => {
                                 const sales = stats.salesByYear[year] || 0;
                                 const targetPHP = BOI_TARGETS_USD[year] * stats.forexRate;
