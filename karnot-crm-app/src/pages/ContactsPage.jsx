@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react'; 
 import { db } from '../firebase'; 
-import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch } from "firebase/firestore";
+// --- 1. ADD 'query' and 'getDocs' ---
+import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, User, Mail, Phone, Briefcase } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
@@ -167,14 +168,13 @@ const ContactsPage = ({ contacts, companies, user }) => {
     };
     const handleDeleteContact = async (contactId) => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
-        if (window.confirm("Are you sure you want to permanently delete this contact?")) {
-            const contactRef = doc(db, "users", user.uid, "contacts", contactId);
-            try {
-                await deleteDoc(contactRef);
-            } catch (error) {
-                console.error("Error deleting contact: ", error);
-                alert("Failed to delete contact.");
-            }
+        // We removed the window.confirm from here because the button is now "Delete All"
+        const contactRef = doc(db, "users", user.uid, "contacts", contactId);
+        try {
+            await deleteDoc(contactRef);
+        } catch (error) {
+            console.error("Error deleting contact: ", error);
+            alert("Failed to delete contact.");
         }
     };
     const handleSave = (contactData) => {
@@ -202,7 +202,45 @@ const ContactsPage = ({ contacts, companies, user }) => {
     // --- (End of unchanged functions) ---
 
 
-    // --- THIS IS THE UPDATED, SMARTER IMPORT LOGIC ---
+    // --- 2. ADD "DELETE ALL CONTACTS" FUNCTION ---
+    const handleDeleteAllContacts = async () => {
+        if (!user || !user.uid) return alert("Error: User not logged in.");
+        
+        // Confirm twice because this is very destructive
+        if (!window.confirm("ARE YOU SURE? This will permanently delete ALL contacts for your user.")) {
+            return;
+        }
+        if (!window.confirm("SECOND CONFIRMATION: This action cannot be undone. Are you absolutely sure you want to delete all contacts?")) {
+            return;
+        }
+
+        console.log("Starting to delete all contacts...");
+        try {
+            const contactsRef = collection(db, "users", user.uid, "contacts");
+            const q = query(contactsRef);
+            const querySnapshot = await getDocs(q);
+            
+            if (querySnapshot.empty) {
+                alert("No contacts to delete.");
+                return;
+            }
+
+            const batch = writeBatch(db);
+            querySnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+
+            await batch.commit();
+            alert(`Successfully deleted ${querySnapshot.size} contacts.`);
+            console.log("All contacts deleted.");
+
+        } catch (error) {
+            console.error("Error deleting all contacts: ", error);
+            alert("An error occurred while deleting contacts. See console.");
+        }
+    };
+    
+    // --- (This is your corrected import logic, no changes) ---
     const findCompanyId = (companyName) => {
         if (!companyName || !companies.length) return null;
         const lowerName = companyName.toLowerCase().trim();
@@ -222,7 +260,6 @@ const ContactsPage = ({ contacts, companies, user }) => {
         
         setIsImporting(true);
         
-        // --- 1. THE FIX: We set 'header: false' and 'skipEmptyLines: true' ---
         Papa.parse(file, {
             header: false,
             skipEmptyLines: true,
@@ -235,18 +272,17 @@ const ContactsPage = ({ contacts, companies, user }) => {
                     return;
                 }
 
-                // --- 2. Find the header row (skips titles/blank lines) ---
                 let headerRowIndex = -1;
                 for (let i = 0; i < Math.min(allRows.length, 10); i++) {
                     const row = allRows[i];
-                    if (row.includes("FirstName") && row.includes("LastName") && row.includes("EmailAddress")) {
+                    if (row.includes("FirstName") && row.includes("LastName") && row.includes("EmailAddress") && row.includes("Company")) {
                         headerRowIndex = i;
                         break;
                     }
                 }
 
                 if (headerRowIndex === -1) {
-                    alert("Error: Could not find a header row containing 'FirstName', 'LastName', and 'EmailAddress'. Please check the file.");
+                    alert("Error: Could not find a header row containing 'FirstName', 'LastName', 'EmailAddress', and 'Company'. Please check the file.");
                     setIsImporting(false);
                     return;
                 }
@@ -254,20 +290,18 @@ const ContactsPage = ({ contacts, companies, user }) => {
                 const header = allRows[headerRowIndex];
                 const dataRows = allRows.slice(headerRowIndex + 1);
 
-                // --- 3. Get column indexes from the header ---
                 const colFirstName = header.indexOf("FirstName");
                 const colLastName = header.indexOf("LastName");
-                const colCompany = header.indexOf("Company");
                 const colEmail = header.indexOf("EmailAddress");
-                const colJobTitle = header.indexOf("JobTitle"); // This is optional
+                const colCompany = header.indexOf("Company"); 
+                const colJobTitle = header.indexOf("Certificates"); 
 
-                if (colFirstName === -1 || colLastName === -1 || colEmail === -1) {
-                    alert("Error: Header is missing required columns. Must have 'FirstName', 'LastName', and 'EmailAddress'.");
+                if (colFirstName === -1 || colLastName === -1) {
+                    alert("Error: Header is missing required columns 'FirstName' or 'LastName'.");
                     setIsImporting(false);
                     return;
                 }
                 
-                // --- 4. Process rows using indexes ---
                 const batch = writeBatch(db);
                 const contactsRef = collection(db, "users", user.uid, "contacts");
                 let importCount = 0;
@@ -276,30 +310,34 @@ const ContactsPage = ({ contacts, companies, user }) => {
                 dataRows.forEach(row => {
                     const firstName = row[colFirstName] ? row[colFirstName].trim() : '';
                     const lastName = row[colLastName] ? row[colLastName].trim() : '';
+                    const csvCompanyName = colCompany !== -1 ? (row[colCompany] || '').trim() : '';
                     
-                    if (firstName && lastName) {
-                        const csvCompanyName = row[colCompany] ? row[colCompany].trim() : '';
-                        const companyMatch = findCompanyId(csvCompanyName);
-
-                        const contactData = {
-                            firstName,
-                            lastName,
-                            jobTitle: colJobTitle !== -1 ? (row[colJobTitle] || '') : '',
-                            email: row[colEmail] ? row[colEmail].trim() : '',
-                            phone: '', // Add phone if you have it
-                            companyId: companyMatch ? companyMatch.id : null,
-                            companyName: companyMatch ? companyMatch.name : (csvCompanyName || 'N/A'),
-                            createdAt: serverTimestamp()
-                        };
-                        
-                        if (!companyMatch && csvCompanyName) {
-                            unmatchedCount++;
-                        }
-                        
-                        const docRef = doc(contactsRef); 
-                        batch.set(docRef, contactData);
-                        importCount++;
+                    const garbageText = "Certificate Number Salutation";
+                    if (!firstName || !lastName || (csvCompanyName && csvCompanyName.includes(garbageText))) {
+                        return; // Skip this row, it's garbage
                     }
+
+                    const companyMatch = findCompanyId(csvCompanyName);
+                    const jobTitle = colJobTitle !== -1 ? (row[colJobTitle] || '').trim() : '';
+
+                    const contactData = {
+                        firstName,
+                        lastName,
+                        jobTitle: jobTitle,
+                        email: colEmail !== -1 ? (row[colEmail] || '').trim() : '',
+                        phone: '', 
+                        companyId: companyMatch ? companyMatch.id : null,
+                        companyName: companyMatch ? companyMatch.name : (csvCompanyName || 'N/A'),
+                        createdAt: serverTimestamp()
+                    };
+                    
+                    if (!companyMatch && csvCompanyName) {
+                        unmatchedCount++;
+                    }
+                    
+                    const docRef = doc(contactsRef); 
+                    batch.set(docRef, contactData);
+                    importCount++;
                 });
 
                 try {
@@ -327,7 +365,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
     const filteredContacts = useMemo(() => {
         const lowerSearchTerm = searchTerm.toLowerCase();
         if (!lowerSearchTerm) {
-            return contacts; // Return all if search is empty
+            return contacts; 
         }
         return contacts.filter(contact =>
             contact.firstName.toLowerCase().includes(lowerSearchTerm) ||
@@ -350,7 +388,16 @@ const ContactsPage = ({ contacts, companies, user }) => {
             
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Contacts ({filteredContacts.length})</h1>
-                <div className="flex gap-2">
+                {/* --- 3. WRAP BUTTONS AND ADD "DELETE ALL" --- */}
+                <div className="flex flex-wrap gap-2 justify-end">
+                    <Button 
+                        onClick={handleDeleteAllContacts}
+                        variant="danger"
+                        disabled={isImporting}
+                    >
+                        <Trash2 className="mr-2" size={16} />
+                        Delete All
+                    </Button>
                     <Button 
                         onClick={handleImportClick} 
                         variant="secondary"
@@ -382,7 +429,6 @@ const ContactsPage = ({ contacts, companies, user }) => {
                     type="text"
                     placeholder="Search contacts by name, company, or email..."
                     value={searchTerm}
-                    // --- 5. FIX THE TYPO (removed 'e.g.') ---
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
                 />
@@ -397,7 +443,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
                             key={contact.id} 
                             contact={contact} 
                             onEdit={handleOpenEditModal}
-                            onDelete={handleDeleteContact}
+                            onDelete={handleDeleteContact} // This now deletes one card
                         />
                     ))
                 }
