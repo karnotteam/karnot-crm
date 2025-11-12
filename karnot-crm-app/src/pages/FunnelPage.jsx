@@ -29,10 +29,11 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
         <Card className="p-4 mb-3 rounded-lg shadow border border-gray-200">
             <div className="flex justify-between items-start">
                 
-                {/* --- 2. MAKE THE CUSTOMER NAME A CLICKABLE BUTTON --- */}
+                {/* --- 2. MAKE THE CUSTOMER NAME CLICKABLE --- */}
+                {/* It now calls the onOpen function when clicked */}
                 <h4 
                     className="font-bold text-gray-800 cursor-pointer hover:text-orange-600"
-                    onClick={() => alert(`Clicked on: ${opp.customerName}`)}
+                    onClick={() => onOpen(opp)}
                 >
                     {opp.customerName}
                 </h4>
@@ -164,6 +165,8 @@ const FunnelPage = ({ opportunities, user, onOpen }) => {
     
     const STAGES = STAGE_ORDER;
 
+    // (All your existing functions like handleSaveOpportunity, etc. are here)
+    // ...
     const handleSaveOpportunity = async (newOppData) => {
         if (!user || !user.uid) {
             alert("Error: You are not logged in.");
@@ -172,7 +175,7 @@ const FunnelPage = ({ opportunities, user, onOpen }) => {
         try {
             const newOpp = {
                 ...newOppData,
-                stage: 'Lead',
+                stage: 'Lead', 
                 createdAt: serverTimestamp(), 
                 notes: [] 
             };
@@ -192,9 +195,9 @@ const FunnelPage = ({ opportunities, user, onOpen }) => {
         const oppRef = doc(db, "users", user.uid, "opportunities", editingOpportunity.id);
         try {
             await setDoc(oppRef, {
-                ...oppData,
+                ...oppData, 
                 lastModified: serverTimestamp() 
-            }, { merge: true });
+            }, { merge: true }); 
             
             console.log("Opportunity updated!");
             handleCloseModal(); 
@@ -228,9 +231,10 @@ const FunnelPage = ({ opportunities, user, onOpen }) => {
     };
 
     const handleUpdateOpportunityStage = async (oppId, newStage) => {
-        // ... (your existing code, no changes)
         if (!user || !user.uid) return alert("Error: User not logged in.");
+
         const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
+        
         let newProbability;
         switch (newStage) {
             case 'Lead': newProbability = 10; break;
@@ -242,6 +246,7 @@ const FunnelPage = ({ opportunities, user, onOpen }) => {
             case 'Closed-Lost': newProbability = 0; break;
             default: newProbability = 0;
         }
+
         try {
             await setDoc(oppRef, {
                 stage: newStage,
@@ -254,10 +259,10 @@ const FunnelPage = ({ opportunities, user, onOpen }) => {
             alert("Failed to update lead stage.");
         }
     };
-    
+
     const handleDeleteOpportunity = async (oppId) => {
-        // ... (your existing code, no changes)
         if (!user || !user.uid) return alert("Error: User not logged in.");
+
         if (window.confirm("Are you sure you want to permanently delete this Opportunity?")) {
             const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
             try {
@@ -271,19 +276,17 @@ const FunnelPage = ({ opportunities, user, onOpen }) => {
     };
 
     const getOppsByStage = (stage) => {
-        if (!opportunities) return [];
+        if (!opportunities) return []; 
         return opportunities.filter(opp => opp.stage === stage);
     };
 
     return (
         <div className="w-full">
-            {showModal && (
-                <NewOpportunityModal 
-                    onSave={handleSave} 
-                    onClose={handleCloseModal}
-                    opportunityToEdit={editingOpportunity} 
-                />
-            )}
+            {showModal && <NewOpportunityModal 
+                onSave={handleSave} 
+                onClose={handleCloseModal}
+                opportunityToEdit={editingOpportunity} 
+            />}
             
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Sales Funnel</h1>
