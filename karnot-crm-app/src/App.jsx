@@ -10,12 +10,10 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import QuotesListPage from './pages/QuotesListPage.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
-// --- 1. IMPORT THE NEW COMPANIES PAGE (with correct spelling) ---
 import CompaniesPage from './pages/CompaniesPage.jsx'; 
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
-// --- 2. IMPORT THE 'Building' ICON ---
 import { BarChart2, FileText, List, HardHat, LogOut, Building } from 'lucide-react'; 
 
 // --- Header Component ---
@@ -30,7 +28,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'}><HardHat className="mr-2" size={16} /> Funnel</Button>
                 <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'}><BarChart2 className="mr-2" size={16} /> Dashboard</Button>
                 
-                {/* --- 3. ADD THE NEW "COMPANIES" BUTTON --- */}
                 <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'}><Building className="mr-2" size={16} /> Companies</Button>
 
                 <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
@@ -51,7 +48,6 @@ export default function App() {
     // --- State from Firebase ---
     const [opportunities, setOpportunities] = useState([]);
     const [quotes, setQuotes] = useState([]);
-    // --- 4. ADD NEW STATE FOR COMPANIES ---
     const [companies, setCompanies] = useState([]); 
     const [loading, setLoading] = useState(true);
 
@@ -89,7 +85,7 @@ export default function App() {
                 setOpportunities(liveOpps);
             }, (error) => { console.error("Error syncing opportunities: ", error); });
             
-            // --- 5. SYNC COMPANIES ---
+            // 3. SYNC COMPANIES
             const companiesQuery = query(collection(db, "users", user.uid, "companies"));
             const unsubCompanies = onSnapshot(companiesQuery, (snapshot) => {
                 const liveCompanies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -99,7 +95,7 @@ export default function App() {
             return () => {
                 unsubQuotes();
                 unsubOpps();
-                unsubCompanies(); // <-- Don't forget to cleanup!
+                unsubCompanies(); 
             };
         }
     }, [user]); 
@@ -155,7 +151,6 @@ export default function App() {
         try {
             await setDoc(quoteRef, {
                 ...quoteData,
-                // Link the quote to the newly created/existing opportunity
                 opportunityId: currentOpportunityId, 
                 createdAt: quoteData.createdAt || serverTimestamp(), 
                 lastModified: serverTimestamp()
@@ -228,7 +223,7 @@ export default function App() {
         setActiveView('calculator');
     };
 
-    // --- Logic from your old app (THIS WAS THE MISSING CODE) ---
+    // --- Logic from your old app ---
     const nextQuoteNumber = useMemo(() => {
         if (quotes.length === 0) return 2501;
         const lastQuoteNum = quotes
@@ -259,7 +254,6 @@ export default function App() {
             
             <main className="container mx-auto p-4 md:p-8">
                 
-                {/* --- 6. ADD RENDER LOGIC FOR COMPANIES PAGE --- */}
                 {activeView === 'companies' && (
                     <CompaniesPage 
                         companies={companies}
@@ -282,6 +276,7 @@ export default function App() {
                         opportunities={opportunities} 
                         user={user}
                         onOpen={handleOpenOpportunity} 
+                        companies={companies} {/* <-- THIS IS THE ONLY CHANGE */}
                     />
                 )}
                 
