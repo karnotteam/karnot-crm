@@ -2,13 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Karnot Quoting CRM</title>
-    <!-- THIS SCRIPT IS REQUIRED FOR PDF GENERATION -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <title>Karnot CRM</title>
+    
+    <!-- 1. ADD THIS SCRIPT TAG FOR PAPAPARSE -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
   </head>
   <body>
     <div id="root"></div>
+    
+    <!-- 2. This is your existing script tag -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
