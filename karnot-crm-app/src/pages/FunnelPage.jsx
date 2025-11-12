@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { Plus, X, Edit, Trash2 } from 'lucide-react';
+import { Plus, X, Edit, Trash2, FileText } from 'lucide-react'; // --- 1. IMPORT 'FileText' ---
 import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
 const STAGE_ORDER = [
@@ -14,7 +14,6 @@ const STAGE_ORDER = [
     'Closed-Lost'
 ];
 
-// --- 1. ACCEPTS 'onOpen' PROP ---
 const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
     const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
     const nextStage = STAGE_ORDER[currentStageIndex + 1];
@@ -29,11 +28,8 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
         <Card className="p-4 mb-3 rounded-lg shadow border border-gray-200">
             <div className="flex justify-between items-start">
                 
-                {/* --- 2. MAKES NAME CLICKABLE --- */}
-                <h4 
-                    className="font-bold text-gray-800 cursor-pointer hover:text-orange-600"
-                    onClick={() => onOpen(opp)}
-                >
+                {/* --- 2. 'h4' IS NOW JUST TEXT AGAIN --- */}
+                <h4 className="font-bold text-gray-800">
                     {opp.customerName}
                 </h4>
 
@@ -65,8 +61,18 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
                 </span>
             </div>
 
+            {/* --- 3. ADDED NEW "VIEW DETAILS" BUTTON --- */}
+            <Button 
+                onClick={() => onOpen(opp)}
+                variant="secondary"
+                className="w-full text-xs py-1 mt-3" // Added margin-top
+            >
+                <FileText size={14} className="mr-2"/> View Details / Notes
+            </Button>
+
+            {/* "Move to" button (only shows if there's a next stage) */}
             {nextStage && opp.stage !== 'Closed-Won' && opp.stage !== 'Closed-Lost' && (
-                <div className="mt-3">
+                <div className="mt-2">
                     <Button 
                         onClick={handleMoveForward} 
                         variant="secondary" 
@@ -157,14 +163,12 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit }) => {
     );
 };
 
-// --- 3. ACCEPTS 'onOpen' PROP ---
 const FunnelPage = ({ opportunities, user, onOpen }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingOpportunity, setEditingOpportunity] = useState(null);
     
     const STAGES = STAGE_ORDER;
 
-    // (All your existing functions are here)
     const handleSaveOpportunity = async (newOppData) => {
         if (!user || !user.uid) {
             alert("Error: You are not logged in.");
@@ -318,7 +322,6 @@ const FunnelPage = ({ opportunities, user, onOpen }) => {
                                             onUpdate={handleUpdateOpportunityStage}
                                             onDelete={handleDeleteOpportunity}
                                             onEdit={handleOpenEditModal}
-                                            // --- 4. PASSES 'onOpen' TO THE CARD ---
                                             onOpen={onOpen}
                                         />
                                     ))
