@@ -84,11 +84,9 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
 };
 
 
-// --- 1. RECEIVE 'companies' PROP ---
 const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies }) => {
     const isEditMode = Boolean(opportunityToEdit);
     
-    // --- 2. 'customerName' state is now used for the dropdown ---
     const [customerName, setCustomerName] = useState('');
     const [project, setProject] = useState('');
     const [estimatedValue, setEstimatedValue] = useState(0);
@@ -105,8 +103,6 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies }) 
             setContactName(opportunityToEdit.contactName);
             setContactEmail(opportunityToEdit.contactEmail);
         } else {
-            // --- 3. SET DEFAULT DROPDOWN VALUE ---
-            // Set default customerName to the first company in the list, or empty
             setCustomerName(companies && companies.length > 0 ? companies[0].companyName : '');
             setProject('');
             setEstimatedValue(0);
@@ -114,7 +110,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies }) 
             setContactName('');
             setContactEmail('');
         }
-    }, [opportunityToEdit, isEditMode, companies]); // --- 4. ADD 'companies' to dependency array ---
+    }, [opportunityToEdit, isEditMode, companies]); 
 
     const handleSave = async () => {
         if (!customerName || !project || !contactName || !contactEmail) {
@@ -123,7 +119,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies }) 
         }
         
         const oppData = {
-            customerName, // This 'customerName' string is now from the dropdown
+            customerName, 
             project,
             estimatedValue: Number(estimatedValue),
             probability: Number(probability),
@@ -145,8 +141,6 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies }) 
                 </div>
                 <div className="space-y-4">
 
-                    {/* --- 5. THIS IS THE BIG CHANGE --- */}
-                    {/* Replaced the text <Input> with a <select> dropdown */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Customer/Client Name</label>
                         <select
@@ -155,11 +149,9 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies }) 
                             className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                             required
                         >
-                            {/* If no companies, show a default message */}
                             {!companies || companies.length === 0 ? (
                                 <option value="">Please add a company first</option>
                             ) : (
-                            // Map over your imported companies to create the options
                                 companies.map(company => (
                                     <option key={company.id} value={company.companyName}>
                                         {company.companyName}
@@ -168,10 +160,12 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies }) 
                             )}
                         </select>
                     </div>
-                    {/* --- END OF CHANGE --- */}
 
                     <Input label="Project Name" value={project} onChange={(e) => setProject(e.target.value)} placeholder="e.g., Laguna Plant - Cooling/Heat Recovery" required />
                     <Input label="Estimated Value ($)" type="number" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} />
+                    
+                    {/* --- THIS IS THE FIX --- */}
+                    {/* Removed the "e.g." from "e.g.target.value" */}
                     <Input label="Probability (%)" type="number" value={probability} onChange={(e) => setProbability(e.target.value)} />
 
                     <hr className="my-2"/>
@@ -190,7 +184,6 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies }) 
     );
 };
 
-// --- 6. RECEIVE 'companies' PROP ---
 const FunnelPage = ({ opportunities, user, onOpen, companies }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingOpportunity, setEditingOpportunity] = useState(null);
@@ -312,7 +305,6 @@ const FunnelPage = ({ opportunities, user, onOpen, companies }) => {
 
     return (
         <div className="w-full">
-            {/* --- 7. PASS 'companies' PROP TO THE MODAL --- */}
             {showModal && <NewOpportunityModal 
                 onSave={handleSave} 
                 onClose={handleCloseModal}
