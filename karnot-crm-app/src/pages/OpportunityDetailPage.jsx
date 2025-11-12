@@ -6,7 +6,11 @@ import {
     Mail, Phone, Hash, ArrowLeft, DollarSign, List, Calendar, 
     Edit, Plus, FileText 
 } from 'lucide-react';
-import { db } from '../data/firebase'; 
+
+// --- THIS IS THE FIX ---
+// Changed path from '../data/firebase' to '../firebase'
+import { db } from '../firebase'; 
+
 import { 
     collection, addDoc, serverTimestamp, 
     query, onSnapshot, orderBy 
@@ -148,7 +152,7 @@ const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote, user }
                                         <p className="text-gray-700">{note.text}</p>
                                         <p className="text-xs text-gray-400 text-right mt-2">
                                             {note.authorName} - {note.createdAt ? note.createdAt.toDate().toLocaleString() : 'Just now'}
-                                        </p> {/* <-- **** THIS IS THE FIX (was </d>) **** */}
+                                        </p> 
                                     </div>
                                 ))
                             ) : (
