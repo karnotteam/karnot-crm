@@ -32,7 +32,7 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
                 {/* --- 2. MAKE THE CUSTOMER NAME A CLICKABLE BUTTON --- */}
                 <h4 
                     className="font-bold text-gray-800 cursor-pointer hover:text-orange-600"
-                    onClick={() => onOpen(opp)}
+                    onClick={() => alert(`Clicked on: ${opp.customerName}`)}
                 >
                     {opp.customerName}
                 </h4>
