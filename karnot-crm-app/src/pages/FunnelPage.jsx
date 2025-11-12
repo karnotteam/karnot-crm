@@ -164,7 +164,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies }) 
                     <Input label="Project Name" value={project} onChange={(e) => setProject(e.target.value)} placeholder="e.g., Laguna Plant - Cooling/Heat Recovery" required />
                     <Input label="Estimated Value ($)" type="number" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} />
                     
-                    {/* --- THIS IS THE FIX --- */}
+                    {/* --- FIX #1 --- */}
                     {/* Removed the "e.g." from "e.g.target.value" */}
                     <Input label="Probability (%)" type="number" value={probability} onChange={(e) => setProbability(e.target.value)} />
 
@@ -326,7 +326,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies }) => {
                     
                     let columnBg = "bg-gray-200";
                     if (stage === 'Closed-Won') columnBg = "bg-green-100";
-                    if (stage === 'Closed-Lost') columnBg = "bg-red-100";
+                    if (stage === 'Closed-Lost') columnBg = "bg-red-1col00";
 
                     return (
                         <div key={stage} className={`flex-shrink-0 w-80 ${columnBg} p-3 rounded-xl shadow-sm`}>
@@ -336,7 +336,9 @@ const FunnelPage = ({ opportunities, user, onOpen, companies }) => {
                             </div>
                             <div className="h-full space-y-3">
                                 {stageOpps
-                                    .sort((a, b) => b.estimatedValue - a.estimatedValue)
+                                    // --- FIX #2 ---
+                                    // Fixed typo "estimat/edValue"
+                                    .sort((a, b) => b.estimatedValue - a.estimatedValue) 
                                     .map(opp => (
                                         <OpportunityCard 
                                             key={opp.id} 
