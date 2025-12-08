@@ -1,14 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db, storage } from '../firebase'; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { Camera, Save, AlertTriangle, CheckCircle, Settings, Thermometer, Zap, Droplets } from 'lucide-react';
+import { Camera, Save, AlertTriangle, CheckCircle, Settings, Thermometer, Zap, Droplets, UserCheck, Clipboard, Activity } from 'lucide-react';
 
 export default function CommissioningPage({ user, onBack }) {
     const [loading, setLoading] = useState(false);
-    const [activeSection, setActiveSection] = useState(1);
     
-    // Expanded State to match Manuals
+    // Expanded State to match Manuals & New Requirements
     const [formData, setFormData] = useState({
         // --- 1. Project Info ---
         customerName: '',
@@ -16,49 +15,67 @@ export default function CommissioningPage({ user, onBack }) {
         heatPumpSerial: '',
         tankSerial: '',
         
-        // --- 2. R290 Safety (Critical - iHEAT Manual Part 1) ---
-        ventilation: false,      // [cite: 245]
-        ignitionClearance: false, // [cite: 284]
-        drainsSealed: false,     // [cite: 1309] Propane > Air
+        // --- 2. Customer Handover & Set Points (Manual Part 1.2) ---
+        unitMode: 'Heating + Hot Water', // P06
+        fanMode: 'Eco',                  // P07
+        timeZonesSetup: false,           // New: Time Zones Set Up (Yes/No)
         
-        // --- 3. Mechanical & Hydraulic (iSTOR Manual) ---
-        filterMeshCheck: false,  // >60 Mesh 
-        magnesiumRod: false,     // Installed Front Fuselage 
-        safetyValveDrain: false, // Piped to floor drain [cite: 1759]
-        expansionTankPrecharge: '', // Bar
+        heatingSetPoint: '35',           // Target Flow Temp
+        coolingSetPoint: '20',           // Target Flow Temp
+        dhwSetPoint: '50',               // Hot Water Set Point
         
-        // --- 4. Electrical Check ---
-        supplyVoltage: '',       // V
-        rcdInstalled: false,     // Mandatory for Heater [cite: 1766]
-        cableSizeChecked: false, // 4mm or 6mm check [cite: 1477]
+        // --- 3. R290 Safety (Critical) ---
+        ventilation: false,      
+        ignitionClearance: false, 
+        drainsSealed: false,     
+        
+        // --- 4. Mechanical & Hydraulic ---
+        filterMeshCheck: false,  
+        magnesiumRod: false,     
+        safetyValveDrain: false, 
+        expansionTankPrecharge: '', 
+        
+        // --- 5. Electrical Check ---
+        supplyVoltage: '',       
+        rcdInstalled: false,     
+        cableSizeChecked: false, 
 
-        // --- 5. Engineer Settings (The "Brain" - iHEAT Part 3) ---
-        targetMode: 'Heating+DHW', // [cite: 97]
-        pumpMode: 'Normal',        // Normal/Demand/Interval 
-        
-        // SG Ready (Smart Grid) [cite: 826]
+        // --- 6. Engineer Settings ---
+        pumpMode: 'Normal',        
         sgReadyEnabled: false,
-        sgModeTested: 'None',      // Mode 1,2,3,4 tested?
-
-        // Anti-Legionella [cite: 902]
+        sgModeTested: 'None',      
         legionellaEnabled: false,
-        legionellaSetTemp: '65',   // Default 60-70
+        legionellaSetTemp: '65',   
+        zone2Enabled: false,       
+        solarEnabled: false,       
+        solarMaxTemp: '',          
 
-        // --- 6. iSTOR Specifics (G Parameters)  ---
-        zone2Enabled: false,       // G25 [cite: 1717]
-        solarEnabled: false,       // G26 [cite: 1722]
-        solarMaxTemp: '',          // G28 [cite: 1726]
-
-        // --- 7. Performance Readings ---
-        waterFlow: '',             // L/m
-        inletTemp: '',             // C
-        outletTemp: '',            // C
+        // --- 7. Performance Data (New Fields) ---
+        waterFlow: '',             // L/min
+        inletTemp: '',             // °C
+        outletTemp: '',            // °C
+        
+        heatOutputKw: '',          // kW (Thermal)
+        electricalInputKwe: '',    // kWe (Power)
+        cop: '',                   // CoP (Calculated or Manual)
         currentDraw: '',           // Amps
         
+        // --- 8. Notes ---
         notes: ''
     });
 
     const [photo, setPhoto] = useState(null);
+
+    // Auto-calculate COP when Inputs change
+    useEffect(() => {
+        if (formData.heatOutputKw && formData.electricalInputKwe) {
+            const heat = parseFloat(formData.heatOutputKw);
+            const elec = parseFloat(formData.electricalInputKwe);
+            if (elec > 0) {
+                setFormData(prev => ({ ...prev, cop: (heat / elec).toFixed(2) }));
+            }
+        }
+    }, [formData.heatOutputKw, formData.electricalInputKwe]);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -77,7 +94,6 @@ export default function CommissioningPage({ user, onBack }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // Safety Lock
         if (!formData.ventilation || !formData.drainsSealed || !formData.rcdInstalled) {
             alert("CRITICAL SAFETY: Ventilation, Floor Drains, and RCD checks are MANDATORY.");
             return;
@@ -109,7 +125,7 @@ export default function CommissioningPage({ user, onBack }) {
                 commissionDate: serverTimestamp()
             });
 
-            alert("Full Commissioning Report Saved!");
+            alert("Commissioning Report Saved Successfully!");
             onBack(); 
 
         } catch (error) {
@@ -122,7 +138,7 @@ export default function CommissioningPage({ user, onBack }) {
 
     // Helper for Section Headers
     const SectionHeader = ({ title, icon: Icon, step }) => (
-        <div className="flex items-center gap-2 border-b-2 border-orange-100 pb-2 mb-4 mt-6">
+        <div className="flex items-center gap-2 border-b-2 border-orange-100 pb-2 mb-4 mt-8">
             <div className="bg-orange-100 p-2 rounded-full text-orange-600">
                 <Icon size={20} />
             </div>
@@ -150,11 +166,53 @@ export default function CommissioningPage({ user, onBack }) {
                     <input placeholder="Tank Serial (Indoor)" name="tankSerial" onChange={handleChange} className="p-3 border rounded" />
                 </div>
 
-                {/* 2. R290 SAFETY */}
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md">
+                {/* 2. CUSTOMER HANDOVER & SET POINTS */}
+                <SectionHeader title="Handover Configuration (User Menu)" icon={UserCheck} step="2" />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Unit Mode</label>
+                        <select name="unitMode" onChange={handleChange} className="w-full p-2 border rounded">
+                            <option value="Heating + Hot Water">Heating + Hot Water</option>
+                            <option value="Heating">Heating Only</option>
+                            <option value="Cooling">Cooling Only</option>
+                            <option value="Hot Water">Hot Water Only</option>
+                            <option value="Cooling + Hot Water">Cooling + Hot Water</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Time Zones Set Up?</label>
+                        <div className="flex items-center gap-3 mt-2">
+                            <label className="flex items-center gap-1">
+                                <input type="radio" name="timeZonesSetup" value={true} onChange={() => setFormData({...formData, timeZonesSetup: true})} checked={formData.timeZonesSetup === true} /> Yes
+                            </label>
+                            <label className="flex items-center gap-1">
+                                <input type="radio" name="timeZonesSetup" value={false} onChange={() => setFormData({...formData, timeZonesSetup: false})} checked={formData.timeZonesSetup === false} /> No
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Set Points Row */}
+                    <div>
+                        <label className="block text-sm font-bold text-blue-800 mb-1">Hot Water Set Point (°C)</label>
+                        <input type="number" name="dhwSetPoint" placeholder="e.g. 50" onChange={handleChange} className="w-full p-2 border rounded border-blue-300" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-orange-700 mb-1">Heating Set Point (°C)</label>
+                        <input type="number" name="heatingSetPoint" placeholder="e.g. 35" onChange={handleChange} className="w-full p-2 border rounded border-orange-300" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-blue-600 mb-1">Cooling Set Point (°C)</label>
+                        <input type="number" name="coolingSetPoint" placeholder="e.g. 20" onChange={handleChange} className="w-full p-2 border rounded border-blue-300" />
+                    </div>
+                </div>
+
+                {/* 3. R290 SAFETY */}
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md mt-6">
                     <h3 className="font-bold text-red-700 flex items-center gap-2 mb-3">
                         <AlertTriangle size={18}/> 
-                        R290 Safety Compliance (Mandatory)
+                        3. R290 Safety Compliance (Mandatory)
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <label className="flex items-center space-x-2 text-sm font-semibold">
@@ -172,8 +230,8 @@ export default function CommissioningPage({ user, onBack }) {
                     </div>
                 </div>
 
-                {/* 3. MECHANICAL CHECKS */}
-                <SectionHeader title="Hydraulic & Mechanical" icon={Droplets} step="3" />
+                {/* 4. MECHANICAL CHECKS */}
+                <SectionHeader title="Hydraulic & Mechanical" icon={Droplets} step="4" />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <label className="p-3 border rounded cursor-pointer hover:bg-gray-50">
                         <span className="block text-sm font-bold text-gray-700 mb-1">Filter Mesh</span>
@@ -202,10 +260,9 @@ export default function CommissioningPage({ user, onBack }) {
                     </div>
                 </div>
 
-                {/* 4. SOFTWARE SETTINGS */}
-                <SectionHeader title="Controller Configuration" icon={Settings} step="4" />
+                {/* 5. CONTROLLER SETTINGS */}
+                <SectionHeader title="Engineer Configuration" icon={Settings} step="5" />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-gray-50 p-4 rounded-lg">
-                    
                     {/* Pump Logic */}
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Pump Logic (P03)</label>
@@ -215,7 +272,6 @@ export default function CommissioningPage({ user, onBack }) {
                             <option value="Interval">Interval (Timer)</option>
                         </select>
                     </div>
-
                     {/* SG Ready */}
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Smart Grid (SG Ready)</label>
@@ -223,15 +279,7 @@ export default function CommissioningPage({ user, onBack }) {
                             <input type="checkbox" name="sgReadyEnabled" onChange={handleChange} />
                             <span className="text-sm">Enabled</span>
                         </div>
-                        {formData.sgReadyEnabled && (
-                            <select name="sgModeTested" onChange={handleChange} className="w-full p-2 border rounded text-sm">
-                                <option value="None">No Signal Test</option>
-                                <option value="Mode 3">Mode 3 (SG+) Tested</option>
-                                <option value="Mode 4">Mode 4 (SG++) Tested</option>
-                            </select>
-                        )}
                     </div>
-
                     {/* Anti Legionella */}
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Anti-Legionella</label>
@@ -239,36 +287,29 @@ export default function CommissioningPage({ user, onBack }) {
                             <input type="checkbox" name="legionellaEnabled" onChange={handleChange} />
                             <span className="text-sm">Enabled</span>
                         </div>
-                        {formData.legionellaEnabled && (
-                            <input type="number" name="legionellaSetTemp" placeholder="Temp C" onChange={handleChange} className="w-full p-2 border rounded text-sm" />
-                        )}
-                    </div>
-
-                    {/* iSTOR Zone 2 */}
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">2nd Temp Zone (G25)</label>
-                        <div className="flex items-center gap-2">
-                            <input type="checkbox" name="zone2Enabled" onChange={handleChange} />
-                            <span className="text-sm">Enabled (Mixing Valve)</span>
-                        </div>
-                    </div>
-
-                    {/* iSTOR Solar */}
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Solar Thermal (G26)</label>
-                        <div className="flex items-center gap-2 mb-2">
-                            <input type="checkbox" name="solarEnabled" onChange={handleChange} />
-                            <span className="text-sm">Enabled</span>
-                        </div>
-                        {formData.solarEnabled && (
-                            <input type="number" name="solarMaxTemp" placeholder="Max Temp (G28)" onChange={handleChange} className="w-full p-2 border rounded text-sm" />
-                        )}
                     </div>
                 </div>
 
-                {/* 5. PERFORMANCE DATA */}
-                <SectionHeader title="Performance & Electrical" icon={Zap} step="5" />
+                {/* 6. PERFORMANCE & ELECTRICAL DATA */}
+                <SectionHeader title="Performance Data" icon={Activity} step="6" />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {/* Power Data */}
+                    <div className="col-span-2 md:col-span-4 grid grid-cols-3 gap-4 bg-orange-50 p-3 rounded mb-2">
+                        <div>
+                            <label className="block text-xs font-bold text-orange-800">Heat Output (kW)</label>
+                            <input type="number" step="0.1" name="heatOutputKw" onChange={handleChange} className="w-full p-2 border border-orange-300 rounded" placeholder="Output" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-orange-800">Elec. Input (kWe)</label>
+                            <input type="number" step="0.1" name="electricalInputKwe" onChange={handleChange} className="w-full p-2 border border-orange-300 rounded" placeholder="Input" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-orange-800">COP (Efficiency)</label>
+                            <input type="number" step="0.1" name="cop" value={formData.cop} onChange={handleChange} className="w-full p-2 border border-orange-300 rounded bg-white font-bold" placeholder="Auto-Calc" />
+                        </div>
+                    </div>
+
+                    {/* Sensor Data */}
                     <div>
                         <label className="text-xs font-bold text-gray-500">Inlet Temp (°C)</label>
                         <input type="number" name="inletTemp" onChange={handleChange} className="w-full p-2 border rounded" />
@@ -287,8 +328,21 @@ export default function CommissioningPage({ user, onBack }) {
                     </div>
                 </div>
 
-                {/* 6. PHOTO & SUBMIT */}
-                <div className="border-2 border-dashed border-gray-300 p-6 rounded-lg text-center bg-gray-50 hover:bg-gray-100 transition">
+                {/* 7. NOTES */}
+                <SectionHeader title="Engineer Notes & Handover" icon={Clipboard} step="7" />
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Observations / Actions Taken</label>
+                    <textarea 
+                        name="notes" 
+                        rows="4" 
+                        onChange={handleChange}
+                        placeholder="e.g., Client instructed on App usage. Frost protection explained. Pressure test passed at 3 bar."
+                        className="w-full p-3 border rounded shadow-inner"
+                    ></textarea>
+                </div>
+
+                {/* 8. PHOTO & SUBMIT */}
+                <div className="border-2 border-dashed border-gray-300 p-6 rounded-lg text-center bg-gray-50 hover:bg-gray-100 transition mt-6">
                     <label className="cursor-pointer block">
                         <Camera className="mx-auto text-gray-400 mb-2" size={32} />
                         <span className="text-gray-600 font-medium">Take Photo of Leak Test / Nameplate</span>
