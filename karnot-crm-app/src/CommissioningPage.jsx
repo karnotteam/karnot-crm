@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { db, storage } from '../firebase'; // Ensure storage is exported in firebase.js if using photos
+import { db, storage } from '../firebase'; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { Camera, Save, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Camera, AlertTriangle, CheckCircle } from 'lucide-react';
 
 export default function CommissioningPage({ user, onBack }) {
     const [loading, setLoading] = useState(false);
@@ -10,16 +10,13 @@ export default function CommissioningPage({ user, onBack }) {
         customerName: '',
         heatPumpSerial: '',
         tankSerial: '',
-        // Safety Booleans
         ventilation: false,
         ignition: false,
         drains: false,
         distances: false,
-        // Mechanical
         filterCheck: '',
         anodeCheck: false,
         safetyValve: false,
-        // Readings
         waterFlow: '',
         currentDraw: '',
         deltaT: '',
@@ -45,7 +42,6 @@ export default function CommissioningPage({ user, onBack }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // 1. R290 SAFETY LOCK
         if (!formData.ventilation || !formData.drains) {
             alert("CRITICAL SAFETY: You must verify Ventilation and Floor Drains for R290 units.");
             return;
@@ -56,14 +52,12 @@ export default function CommissioningPage({ user, onBack }) {
         try {
             let photoUrl = "";
 
-            // 2. Upload Photo if exists
             if (photo) {
                 const storageRef = ref(storage, `commissioning/${user.uid}/${Date.now()}_leakcheck.jpg`);
                 const snapshot = await uploadBytes(storageRef, photo);
                 photoUrl = await getDownloadURL(snapshot.ref);
             }
 
-            // 3. Save Data to Firestore
             await addDoc(collection(db, "users", user.uid, "commissioning_reports"), {
                 ...formData,
                 engineerId: user.uid,
@@ -74,7 +68,7 @@ export default function CommissioningPage({ user, onBack }) {
             });
 
             alert("Commissioning Report Saved Successfully!");
-            onBack(); // Go back to dashboard
+            onBack(); 
 
         } catch (error) {
             console.error("Error saving report:", error);
@@ -92,7 +86,6 @@ export default function CommissioningPage({ user, onBack }) {
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 
-                {/* Section 1: Unit Info */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Customer / Site Name</label>
@@ -104,7 +97,6 @@ export default function CommissioningPage({ user, onBack }) {
                     </div>
                 </div>
 
-                {/* Section 2: R290 Safety */}
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
                     <h3 className="font-bold text-red-700 flex items-center gap-2">
                         <AlertTriangle size={20}/> R290 Safety Protocols (Mandatory)
@@ -125,7 +117,6 @@ export default function CommissioningPage({ user, onBack }) {
                     </div>
                 </div>
 
-                {/* Section 3: Readings */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Water Flow (L/m)</label>
@@ -141,7 +132,6 @@ export default function CommissioningPage({ user, onBack }) {
                     </div>
                 </div>
 
-                {/* Section 4: Evidence Photo */}
                 <div className="border-2 border-dashed border-gray-300 p-4 rounded text-center">
                     <label className="cursor-pointer block">
                         <Camera className="mx-auto text-gray-400 mb-2" />
