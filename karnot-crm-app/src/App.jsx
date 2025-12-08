@@ -12,10 +12,12 @@ import QuoteCalculator from './components/QuoteCalculator.jsx';
 import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
 import CompaniesPage from './pages/CompaniesPage.jsx'; 
 import ContactsPage from './pages/ContactsPage.jsx';
+import CommissioningPage from './pages/CommissioningPage.jsx'; // <--- NEW IMPORT
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
-import { BarChart2, FileText, List, HardHat, LogOut, Building, Users } from 'lucide-react'; 
+// Added 'ClipboardCheck' to the imports below
+import { BarChart2, FileText, List, HardHat, LogOut, Building, Users, ClipboardCheck } from 'lucide-react'; 
 
 // --- Header Component ---
 const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( 
@@ -30,6 +32,13 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'}><BarChart2 className="mr-2" size={16} /> Dashboard</Button>
                 <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'}><Building className="mr-2" size={16} /> Companies</Button>
                 <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'}><Users className="mr-2" size={16} /> Contacts</Button>
+                
+                {/* --- NEW COMMISSIONING BUTTON --- */}
+                <Button onClick={() => setActiveView('commissioning')} variant={activeView === 'commissioning' ? 'primary' : 'secondary'}>
+                    <ClipboardCheck className="mr-2" size={16} /> Commissioning
+                </Button>
+                {/* ------------------------------- */}
+
                 <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
                 <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
                 <Button onClick={onLogout} variant="secondary"><LogOut className="mr-2" size={16} />Logout</Button>
@@ -135,7 +144,7 @@ export default function App() {
         }
     }, [user]); 
 
-    // --- (All handle... functions remain unchanged) ---
+    // --- Handlers ---
     const handleLogin = (email, password) => {
         signInWithEmailAndPassword(auth, email, password)
             .catch((error) => alert("Login Failed: " + error.message));
@@ -234,7 +243,6 @@ export default function App() {
         setSelectedOpportunity(null); 
         setActiveView('calculator');
     };
-    // --- (End of handle... functions) ---
 
     const nextQuoteNumber = useMemo(() => {
         if (quotes.length === 0) return 2501;
@@ -282,6 +290,14 @@ export default function App() {
                         user={user}
                     />
                 )}
+
+                {/* --- NEW COMMISSIONING PAGE RENDER --- */}
+                {activeView === 'commissioning' && (
+                    <CommissioningPage 
+                        user={user}
+                        onBack={() => setActiveView('dashboard')}
+                    />
+                )}
                 
                 {activeView === 'opportunityDetail' && (
                     <OpportunityDetailPage
@@ -299,7 +315,7 @@ export default function App() {
                         user={user}
                         onOpen={handleOpenOpportunity} 
                         companies={companies}
-                        contacts={contacts} // --- 1. PASS CONTACTS TO FUNNEL ---
+                        contacts={contacts} 
                     />
                 )}
                 
@@ -312,7 +328,7 @@ export default function App() {
                         key={quoteToEdit ? quoteToEdit.id : 'new'} 
                         initialData={quoteToEdit} 
                         companies={companies}
-                        contacts={contacts} // --- 2. PASS CONTACTS TO CALCULATOR ---
+                        contacts={contacts} 
                     />
                 )}
                 
