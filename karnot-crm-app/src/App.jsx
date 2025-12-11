@@ -292,9 +292,11 @@ export default function App() {
                 )}
 
                 {/* --- NEW COMMISSIONING PAGE RENDER --- */}
-                {activeView === 'commissioning' && (
+                {{activeView === 'commissioning' && (
                     <CommissioningPage 
                         user={user}
+                        companies={companies}  // <--- Pass CRM Data
+                        contacts={contacts}    // <--- Pass CRM Data
                         onBack={() => setActiveView('dashboard')}
                     />
                 )}
