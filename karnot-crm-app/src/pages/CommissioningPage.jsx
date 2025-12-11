@@ -18,7 +18,7 @@ export default function CommissioningPage({ user, onBack }) {
         // --- 2. Customer Handover & Set Points (Manual Part 1.2) ---
         unitMode: 'Heating + Hot Water', // P06
         fanMode: 'Eco',                  // P07
-        timeZonesSetup: false,           // New: Time Zones Set Up (Yes/No)
+        timeZonesSetup: false,           // Time Zone Schedule
         
         heatingSetPoint: '35',           // Target Flow Temp
         coolingSetPoint: '20',           // Target Flow Temp
@@ -40,24 +40,23 @@ export default function CommissioningPage({ user, onBack }) {
         rcdInstalled: false,     
         cableSizeChecked: false, 
 
-        // --- 6. Engineer Settings ---
-        pumpMode: 'Normal',        
-        sgReadyEnabled: false,
-        sgModeTested: 'None',      
-        legionellaEnabled: false,
-        legionellaSetTemp: '65',   
-        zone2Enabled: false,       
-        solarEnabled: false,       
-        solarMaxTemp: '',          
-
-        // --- 7. Performance Data (New Fields) ---
+        // --- 6. Engineer Settings (Deep Dive) ---
+        pumpMode: 'Normal',        // Normal, Demand, Interval
+        tempDiffRestart: '5',      // Hysteresis (Start)
+        tempDiffStop: '2',         // Hysteresis (Stop/Overshoot)
+        
+        electricHeaterLogic: 'Hot Water', // Heating, Hot Water, All, Disabled
+        heaterLocation: 'Tank',           // Tank or Pipe
+        
+        weatherCompEnabled: false, // Amb Temp Switch
+        
+        // --- 7. Performance Data ---
         waterFlow: '',             // L/min
         inletTemp: '',             // °C
         outletTemp: '',            // °C
-        
         heatOutputKw: '',          // kW (Thermal)
         electricalInputKwe: '',    // kWe (Power)
-        cop: '',                   // CoP (Calculated or Manual)
+        cop: '',                   // CoP (Calculated)
         currentDraw: '',           // Amps
         
         // --- 8. Notes ---
@@ -66,7 +65,7 @@ export default function CommissioningPage({ user, onBack }) {
 
     const [photo, setPhoto] = useState(null);
 
-    // Auto-calculate COP when Inputs change
+    // Auto-calculate COP
     useEffect(() => {
         if (formData.heatOutputKw && formData.electricalInputKwe) {
             const heat = parseFloat(formData.heatOutputKw);
@@ -166,10 +165,9 @@ export default function CommissioningPage({ user, onBack }) {
                     <input placeholder="Tank Serial (Indoor)" name="tankSerial" onChange={handleChange} className="p-3 border rounded" />
                 </div>
 
-                {/* 2. CUSTOMER HANDOVER & SET POINTS */}
-                <SectionHeader title="Handover Configuration (User Menu)" icon={UserCheck} step="2" />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
-                    
+                {/* 2. CUSTOMER HANDOVER */}
+                <SectionHeader title="Handover Configuration" icon={UserCheck} step="2" />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Unit Mode</label>
                         <select name="unitMode" onChange={handleChange} className="w-full p-2 border rounded">
@@ -177,43 +175,24 @@ export default function CommissioningPage({ user, onBack }) {
                             <option value="Heating">Heating Only</option>
                             <option value="Cooling">Cooling Only</option>
                             <option value="Hot Water">Hot Water Only</option>
-                            <option value="Cooling + Hot Water">Cooling + Hot Water</option>
                         </select>
                     </div>
-
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Time Zones Set Up?</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">DHW Setpoint (°C)</label>
+                        <input type="number" name="dhwSetPoint" placeholder="e.g. 50" onChange={handleChange} className="w-full p-2 border rounded" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Time Zones Set?</label>
                         <div className="flex items-center gap-3 mt-2">
-                            <label className="flex items-center gap-1">
-                                <input type="radio" name="timeZonesSetup" value={true} onChange={() => setFormData({...formData, timeZonesSetup: true})} checked={formData.timeZonesSetup === true} /> Yes
-                            </label>
-                            <label className="flex items-center gap-1">
-                                <input type="radio" name="timeZonesSetup" value={false} onChange={() => setFormData({...formData, timeZonesSetup: false})} checked={formData.timeZonesSetup === false} /> No
-                            </label>
+                            <label className="flex items-center gap-1"><input type="radio" name="timeZonesSetup" value={true} onChange={() => setFormData({...formData, timeZonesSetup: true})} /> Yes</label>
+                            <label className="flex items-center gap-1"><input type="radio" name="timeZonesSetup" value={false} onChange={() => setFormData({...formData, timeZonesSetup: false})} /> No</label>
                         </div>
-                    </div>
-
-                    {/* Set Points Row */}
-                    <div>
-                        <label className="block text-sm font-bold text-blue-800 mb-1">Hot Water Set Point (°C)</label>
-                        <input type="number" name="dhwSetPoint" placeholder="e.g. 50" onChange={handleChange} className="w-full p-2 border rounded border-blue-300" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-orange-700 mb-1">Heating Set Point (°C)</label>
-                        <input type="number" name="heatingSetPoint" placeholder="e.g. 35" onChange={handleChange} className="w-full p-2 border rounded border-orange-300" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-blue-600 mb-1">Cooling Set Point (°C)</label>
-                        <input type="number" name="coolingSetPoint" placeholder="e.g. 20" onChange={handleChange} className="w-full p-2 border rounded border-blue-300" />
                     </div>
                 </div>
 
                 {/* 3. R290 SAFETY */}
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md mt-6">
-                    <h3 className="font-bold text-red-700 flex items-center gap-2 mb-3">
-                        <AlertTriangle size={18}/> 
-                        3. R290 Safety Compliance (Mandatory)
-                    </h3>
+                    <h3 className="font-bold text-red-700 flex items-center gap-2 mb-3"><AlertTriangle size={18}/> 3. R290 Safety Compliance</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <label className="flex items-center space-x-2 text-sm font-semibold">
                             <input type="checkbox" name="ventilation" checked={formData.ventilation} onChange={handleChange} className="w-5 h-5 text-red-600 rounded" />
@@ -230,70 +209,73 @@ export default function CommissioningPage({ user, onBack }) {
                     </div>
                 </div>
 
-                {/* 4. MECHANICAL CHECKS */}
-                <SectionHeader title="Hydraulic & Mechanical" icon={Droplets} step="4" />
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <label className="p-3 border rounded cursor-pointer hover:bg-gray-50">
-                        <span className="block text-sm font-bold text-gray-700 mb-1">Filter Mesh</span>
-                        <div className="flex items-center gap-2">
-                            <input type="checkbox" name="filterMeshCheck" onChange={handleChange} /> 
-                            <span className="text-xs text-gray-500">{'>'}60 Mesh Clean</span>
-                        </div>
-                    </label>
-                    <label className="p-3 border rounded cursor-pointer hover:bg-gray-50">
-                        <span className="block text-sm font-bold text-gray-700 mb-1">Magnesium Rod</span>
-                        <div className="flex items-center gap-2">
-                            <input type="checkbox" name="magnesiumRod" onChange={handleChange} /> 
-                            <span className="text-xs text-gray-500">Verified Installed</span>
-                        </div>
-                    </label>
-                    <label className="p-3 border rounded cursor-pointer hover:bg-gray-50">
-                        <span className="block text-sm font-bold text-gray-700 mb-1">Safety Valve</span>
-                        <div className="flex items-center gap-2">
-                            <input type="checkbox" name="safetyValveDrain" onChange={handleChange} /> 
-                            <span className="text-xs text-gray-500">Piped to Drain</span>
-                        </div>
-                    </label>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700">Exp. Tank Pre-charge</label>
-                        <input type="number" name="expansionTankPrecharge" placeholder="Bar" onChange={handleChange} className="w-full mt-1 p-2 border rounded" />
-                    </div>
-                </div>
-
-                {/* 5. CONTROLLER SETTINGS */}
-                <SectionHeader title="Engineer Configuration" icon={Settings} step="5" />
+                {/* 4. ENGINEER SETTINGS (The "Brain") */}
+                <SectionHeader title="Controller Logic" icon={Settings} step="4" />
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-gray-50 p-4 rounded-lg">
-                    {/* Pump Logic */}
+                    {/* Pump */}
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Pump Logic (P03)</label>
                         <select name="pumpMode" onChange={handleChange} className="w-full p-2 border rounded">
                             <option value="Normal">Normal (Always On)</option>
-                            <option value="Demand">Demand (With Comp)</option>
+                            <option value="Demand">Demand (Smart)</option>
                             <option value="Interval">Interval (Timer)</option>
                         </select>
                     </div>
-                    {/* SG Ready */}
+                    {/* Hysteresis */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Smart Grid (SG Ready)</label>
-                        <div className="flex items-center gap-2 mb-2">
-                            <input type="checkbox" name="sgReadyEnabled" onChange={handleChange} />
-                            <span className="text-sm">Enabled</span>
-                        </div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Restart Delta (°C)</label>
+                        <input type="number" name="tempDiffRestart" placeholder="Default 5" onChange={handleChange} className="w-full p-2 border rounded" />
                     </div>
-                    {/* Anti Legionella */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Anti-Legionella</label>
-                        <div className="flex items-center gap-2 mb-2">
-                            <input type="checkbox" name="legionellaEnabled" onChange={handleChange} />
-                            <span className="text-sm">Enabled</span>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Overshoot Delta (°C)</label>
+                        <input type="number" name="tempDiffStop" placeholder="Default 2" onChange={handleChange} className="w-full p-2 border rounded" />
+                    </div>
+                    
+                    {/* Electric Heater */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Electric Heater Logic</label>
+                        <select name="electricHeaterLogic" onChange={handleChange} className="w-full p-2 border rounded">
+                            <option value="Hot Water">Hot Water Only</option>
+                            <option value="Heating">Heating Only</option>
+                            <option value="All">All (Pipe Heater)</option>
+                            <option value="Disabled">Disabled</option>
+                        </select>
+                    </div>
+                    
+                    {/* Weather Comp */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Weather Comp.</label>
+                        <div className="flex items-center gap-2 mt-2">
+                            <input type="checkbox" name="weatherCompEnabled" onChange={handleChange} /> 
+                            <span className="text-sm">Amb. Temp Switch</span>
                         </div>
                     </div>
                 </div>
 
-                {/* 6. PERFORMANCE & ELECTRICAL DATA */}
+                {/* 5. MECHANICAL CHECKS */}
+                <SectionHeader title="Mechanical Checks" icon={Droplets} step="5" />
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <label className="p-3 border rounded cursor-pointer hover:bg-gray-50">
+                        <span className="block text-sm font-bold text-gray-700 mb-1">Filter Mesh</span>
+                        <div className="flex items-center gap-2"><input type="checkbox" name="filterMeshCheck" onChange={handleChange} /> <span className="text-xs">{'>'}60 Mesh Clean</span></div>
+                    </label>
+                    <label className="p-3 border rounded cursor-pointer hover:bg-gray-50">
+                        <span className="block text-sm font-bold text-gray-700 mb-1">Magnesium Rod</span>
+                        <div className="flex items-center gap-2"><input type="checkbox" name="magnesiumRod" onChange={handleChange} /> <span className="text-xs">Installed</span></div>
+                    </label>
+                    <label className="p-3 border rounded cursor-pointer hover:bg-gray-50">
+                        <span className="block text-sm font-bold text-gray-700 mb-1">Safety Valve</span>
+                        <div className="flex items-center gap-2"><input type="checkbox" name="safetyValveDrain" onChange={handleChange} /> <span className="text-xs">Piped to Drain</span></div>
+                    </label>
+                    <label className="p-3 border rounded cursor-pointer hover:bg-gray-50">
+                        <span className="block text-sm font-bold text-gray-700 mb-1">RCD Breaker</span>
+                        <div className="flex items-center gap-2"><input type="checkbox" name="rcdInstalled" onChange={handleChange} /> <span className="text-xs">Tested OK</span></div>
+                    </label>
+                </div>
+
+                {/* 6. PERFORMANCE DATA */}
                 <SectionHeader title="Performance Data" icon={Activity} step="6" />
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {/* Power Data */}
                     <div className="col-span-2 md:col-span-4 grid grid-cols-3 gap-4 bg-orange-50 p-3 rounded mb-2">
                         <div>
                             <label className="block text-xs font-bold text-orange-800">Heat Output (kW)</label>
@@ -308,37 +290,17 @@ export default function CommissioningPage({ user, onBack }) {
                             <input type="number" step="0.1" name="cop" value={formData.cop} onChange={handleChange} className="w-full p-2 border border-orange-300 rounded bg-white font-bold" placeholder="Auto-Calc" />
                         </div>
                     </div>
-
-                    {/* Sensor Data */}
-                    <div>
-                        <label className="text-xs font-bold text-gray-500">Inlet Temp (°C)</label>
-                        <input type="number" name="inletTemp" onChange={handleChange} className="w-full p-2 border rounded" />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500">Outlet Temp (°C)</label>
-                        <input type="number" name="outletTemp" onChange={handleChange} className="w-full p-2 border rounded" />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500">Flow Rate (L/min)</label>
-                        <input type="number" name="waterFlow" onChange={handleChange} className="w-full p-2 border rounded" />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-gray-500">Current (Amps)</label>
-                        <input type="number" name="currentDraw" onChange={handleChange} className="w-full p-2 border rounded" />
-                    </div>
+                    <div><label className="text-xs font-bold text-gray-500">Inlet Temp (°C)</label><input type="number" name="inletTemp" onChange={handleChange} className="w-full p-2 border rounded" /></div>
+                    <div><label className="text-xs font-bold text-gray-500">Outlet Temp (°C)</label><input type="number" name="outletTemp" onChange={handleChange} className="w-full p-2 border rounded" /></div>
+                    <div><label className="text-xs font-bold text-gray-500">Flow Rate (L/min)</label><input type="number" name="waterFlow" onChange={handleChange} className="w-full p-2 border rounded" /></div>
+                    <div><label className="text-xs font-bold text-gray-500">Current (Amps)</label><input type="number" name="currentDraw" onChange={handleChange} className="w-full p-2 border rounded" /></div>
                 </div>
 
                 {/* 7. NOTES */}
                 <SectionHeader title="Engineer Notes & Handover" icon={Clipboard} step="7" />
                 <div>
                     <label className="block text-sm font-bold text-gray-700 mb-2">Observations / Actions Taken</label>
-                    <textarea 
-                        name="notes" 
-                        rows="4" 
-                        onChange={handleChange}
-                        placeholder="e.g., Client instructed on App usage. Frost protection explained. Pressure test passed at 3 bar."
-                        className="w-full p-3 border rounded shadow-inner"
-                    ></textarea>
+                    <textarea name="notes" rows="4" onChange={handleChange} placeholder="e.g., Client instructed on App usage. Frost protection explained. Pressure test passed at 3 bar." className="w-full p-3 border rounded shadow-inner"></textarea>
                 </div>
 
                 {/* 8. PHOTO & SUBMIT */}
