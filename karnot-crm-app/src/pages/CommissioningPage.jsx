@@ -204,7 +204,6 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                         body { background: white; -webkit-print-color-adjust: exact; }
                         .no-print { display: none !important; }
                         
-                        /* Force Compact Layout */
                         .print-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; }
                         .print-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
                         .print-text-xs { font-size: 8pt !important; line-height: 1.1; }
@@ -212,7 +211,6 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                         .print-header { display: flex !important; justify-content: space-between; align-items: center; border-bottom: 2px solid #ea580c; padding-bottom: 5px; margin-bottom: 10px; }
                         .print-logo { height: 30px; }
                         
-                        /* Hide bulky UI */
                         input, select, textarea { 
                             border: 1px solid #ccc; 
                             background: white !important; 
@@ -223,23 +221,24 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                         }
                         textarea { resize: none; }
                         
-                        /* Compact Sections */
                         h1 { font-size: 14pt !important; margin: 0 !important; }
                         h3 { margin-top: 5px !important; margin-bottom: 2px !important; }
                         .print-compact-row { display: flex; align-items: center; gap: 5px; }
                         .print-hide-bg { background: transparent !important; border: 1px solid #ddd !important; padding: 5px !important; }
                     }
 
-                    /* FORCE LIGHT MODE DROPDOWN */
-                    .force-light-select {
+                    /* --- DARK MODE FIX START --- */
+                    /* Force the browser to treat these inputs as 'Light Mode' elements */
+                    .force-light-select, select, input, textarea {
                         background-color: #ffffff !important;
                         color: #000000 !important;
-                        -webkit-text-fill-color: #000000 !important;
+                        color-scheme: light !important; 
                     }
-                    .force-light-select option {
+                    option {
                         background-color: #ffffff !important;
                         color: #000000 !important;
                     }
+                    /* --- DARK MODE FIX END --- */
                 `}
             </style>
 
