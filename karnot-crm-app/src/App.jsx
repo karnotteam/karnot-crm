@@ -16,7 +16,6 @@ import CommissioningPage from './pages/CommissioningPage.jsx'; // <--- NEW IMPOR
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
-// Added 'ClipboardCheck' to the imports below
 import { BarChart2, FileText, List, HardHat, LogOut, Building, Users, ClipboardCheck } from 'lucide-react'; 
 
 // --- Header Component ---
@@ -37,8 +36,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 <Button onClick={() => setActiveView('commissioning')} variant={activeView === 'commissioning' ? 'primary' : 'secondary'}>
                     <ClipboardCheck className="mr-2" size={16} /> Commissioning
                 </Button>
-                {/* ------------------------------- */}
-
+                
                 <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
                 <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
                 <Button onClick={onLogout} variant="secondary"><LogOut className="mr-2" size={16} />Logout</Button>
@@ -292,7 +290,7 @@ export default function App() {
                 )}
 
                 {/* --- NEW COMMISSIONING PAGE RENDER --- */}
-                {{activeView === 'commissioning' && (
+                {activeView === 'commissioning' && (
                     <CommissioningPage 
                         user={user}
                         companies={companies}  // <--- Pass CRM Data
