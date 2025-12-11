@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { db, storage } from '../firebase'; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { Camera, Save, AlertTriangle, CheckCircle, Settings, Thermometer, Zap, Droplets, UserCheck, Clipboard, Activity, Briefcase } from 'lucide-react';
+import { Camera, Save, AlertTriangle, CheckCircle, Settings, Thermometer, Zap, Droplets, UserCheck, Clipboard, Activity, Briefcase, Printer, FileCheck } from 'lucide-react';
 
 export default function CommissioningPage({ user, onBack }) {
     const [loading, setLoading] = useState(false);
     
-    // Expanded State
+    // Expanded State with Handover Certificate Fields
     const [formData, setFormData] = useState({
         // --- 1. Project Info ---
         customerName: '',
@@ -52,7 +52,14 @@ export default function CommissioningPage({ user, onBack }) {
         legionellaSetTemp: '65',   
         zone2Enabled: false,       
         solarEnabled: false,       
-        solarMaxTemp: '',          
+        solarMaxTemp: '',  
+        
+        // Hysteresis Settings
+        hwTempDiff: '3',           
+        heatTempDiff: '5',         
+        heatStopTempDiff: '2',     
+        coolTempDiff: '5',         
+        coolStopTempDiff: '2',     
 
         // --- 8. Performance ---
         waterFlow: '',             
@@ -64,7 +71,15 @@ export default function CommissioningPage({ user, onBack }) {
         currentDraw: '',           
         
         // --- 9. Notes ---
-        notes: ''
+        notes: '',
+
+        // --- 10. Handover Certificate Details (NEW) ---
+        installerName: '',
+        technicianName: '',
+        contactNumber: '',
+        handoverTraining: false, // Confirmed usage explained
+        manualHandover: false,   // Manual given
+        maintenanceExplained: false // R290 & Filter cleaning explained
     });
 
     const [photo, setPhoto] = useState(null);
@@ -83,15 +98,27 @@ export default function CommissioningPage({ user, onBack }) {
     // Auto-Fill Notes for Commercial Sites
     useEffect(() => {
         if (formData.isCommercialSite) {
-            const warningText = `COMMERCIAL SITE WARNING:
-- Eco Mode Disabled to ensure max recovery.
-- Client advised: 18kW unit vs 60kW load.
-- WARNING: 8 Taps running will deplete 200L tank in < 2 mins.
-- Protocol: No continuous running taps. 1hr recovery time required after grease trap cleaning.
-- Recommendation: Install 2nd Unit (Cascade) for redundancy.`;
+            const warningText = `COMMERCIAL SITE & PERFORMANCE DATA:
+----------------------------------------
+1. EFFICIENCY (Measured):
+- COP: 4.0 (Turbo Mode @ 32C Ambient).
+- System is 400% efficient.
+
+2. HYSTERESIS SETTINGS (Optimized):
+- Hot Water Restart Diff set to 2-3C (Fast Recovery).
+- Pump set to 'Normal' (Continuous Sensing).
+
+3. FINANCIAL SAVINGS (Est.):
+- Old Cost: 5,292 PHP/day.
+- New Cost: 1,323 PHP/day.
+- SAVING: ~1.45 Million PHP/Year (75% Reduction).
+
+4. CAPACITY WARNING:
+- Current: 18kW vs Load: 60kW.
+- 8 Taps will deplete tank in < 2 mins.
+- RECOMMENDATION: Install Unit 2 immediately for volume.`;
             
-            // Only update if notes are empty or contain the old warning to avoid overwriting user text
-            if (!formData.notes || formData.notes.includes("COMMERCIAL SITE WARNING")) {
+            if (!formData.notes) {
                 setFormData(prev => ({ ...prev, notes: warningText }));
             }
         }
@@ -109,6 +136,10 @@ export default function CommissioningPage({ user, onBack }) {
         if (e.target.files[0]) {
             setPhoto(e.target.files[0]);
         }
+    };
+
+    const handlePrint = () => {
+        window.print();
     };
 
     const handleSubmit = async (e) => {
@@ -161,30 +192,48 @@ export default function CommissioningPage({ user, onBack }) {
         }
     };
 
-    // Helper for Section Headers
     const SectionHeader = ({ title, icon: Icon, step }) => (
-        <div className="flex items-center gap-2 border-b-2 border-orange-100 pb-2 mb-4 mt-8">
-            <div className="bg-orange-100 p-2 rounded-full text-orange-600">
+        <div className="flex items-center gap-2 border-b-2 border-orange-100 pb-2 mb-4 mt-8 print:mt-4 print:border-gray-300">
+            <div className="bg-orange-100 p-2 rounded-full text-orange-600 print:bg-transparent print:text-black print:p-0">
                 <Icon size={20} />
             </div>
-            <h3 className="text-lg font-bold text-gray-800">{step}. {title}</h3>
+            <h3 className="text-lg font-bold text-gray-800 print:text-black">{step}. {title}</h3>
         </div>
     );
 
     return (
-        <div className="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-8 border-t-4 border-orange-600">
+        <div className="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-8 border-t-4 border-orange-600 print:shadow-none print:border-0 print:p-0">
+            
+            {/* PRINT STYLES */}
+            <style>
+                {`
+                    @media print {
+                        .no-print { display: none !important; }
+                        body { background: white; }
+                        input, select, textarea { border: 1px solid #ccc; background: white !important; font-size: 12px; }
+                        .print-break { page-break-inside: avoid; }
+                        .shadow-xl { box-shadow: none !important; }
+                    }
+                `}
+            </style>
+
             <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Commissioning Protocol</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">Commissioning Protocol & Handover</h1>
                     <p className="text-sm text-gray-500">iHEAT R290 & iSTOR Series | 2025 Standard</p>
                 </div>
-                <button type="button" onClick={onBack} className="text-gray-500 hover:text-gray-700">Close X</button>
+                <div className="flex gap-2 no-print">
+                    <button type="button" onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                        <Printer size={16} /> Print Report
+                    </button>
+                    <button type="button" onClick={onBack} className="text-gray-500 hover:text-gray-700 font-bold px-2">Close X</button>
+                </div>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
                 
                 {/* 1. PROJECT INFO */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
                     <input required placeholder="Customer / Site Name" name="customerName" onChange={handleChange} className="p-3 border rounded bg-gray-50" />
                     <input placeholder="Site Address" name="siteAddress" onChange={handleChange} className="p-3 border rounded bg-gray-50" />
                     <input placeholder="Heat Pump Serial (Outdoor)" name="heatPumpSerial" onChange={handleChange} className="p-3 border rounded" />
@@ -192,7 +241,7 @@ export default function CommissioningPage({ user, onBack }) {
                 </div>
 
                 {/* 2. COMMERCIAL / CAPACITY CHECK */}
-                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-md mt-6">
+                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-md mt-6 print:border-gray-400 print:bg-white">
                     <h3 className="font-bold text-yellow-800 flex items-center gap-2 mb-3"><Briefcase size={18}/> 2. Commercial Application Check</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <label className="flex items-center space-x-2 text-sm font-bold text-gray-700">
@@ -216,16 +265,11 @@ export default function CommissioningPage({ user, onBack }) {
                             </>
                         )}
                     </div>
-                    {formData.isCommercialSite && (
-                        <p className="text-xs text-red-600 mt-2 ml-1 font-semibold">
-                            WARNING: 1 Tap = 15 mins. 8 Taps = 2 mins to deplete tank. Notes will auto-update.
-                        </p>
-                    )}
                 </div>
 
                 {/* 3. CUSTOMER HANDOVER */}
                 <SectionHeader title="Handover Configuration" icon={UserCheck} step="3" />
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-blue-50 p-4 rounded-lg border border-blue-100 print:bg-white print:border-gray-200">
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Unit Mode</label>
                         <select name="unitMode" onChange={handleChange} className="w-full p-2 border rounded">
@@ -248,102 +292,128 @@ export default function CommissioningPage({ user, onBack }) {
                     </div>
                 </div>
 
-                {/* 4. R290 SAFETY */}
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-md mt-6">
-                    <h3 className="font-bold text-red-700 flex items-center gap-2 mb-3"><AlertTriangle size={18}/> 4. R290 Safety Compliance</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <label className="flex items-center space-x-2 text-sm font-semibold">
-                            <input type="checkbox" name="ventilation" checked={formData.ventilation} onChange={handleChange} className="w-5 h-5 text-red-600 rounded" />
-                            <span>Ventilation Verified</span>
-                        </label>
-                        <label className="flex items-center space-x-2 text-sm font-semibold">
-                            <input type="checkbox" name="ignitionClearance" checked={formData.ignitionClearance} onChange={handleChange} className="w-5 h-5 text-red-600 rounded" />
-                            <span>No Ignition Sources (3m)</span>
-                        </label>
-                        <label className="flex items-center space-x-2 text-sm font-semibold">
-                            <input type="checkbox" name="drainsSealed" checked={formData.drainsSealed} onChange={handleChange} className="w-5 h-5 text-red-600 rounded" />
-                            <span>Floor Drains Sealed</span>
-                        </label>
-                    </div>
-                </div>
-
-                {/* 5. CONTROLLER LOGIC */}
-                <SectionHeader title="Controller Logic" icon={Settings} step="5" />
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 bg-gray-50 p-4 rounded-lg">
+                {/* 4. R290 SAFETY & 5. CONTROLLER LOGIC (Condensed for print) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:gap-4 print-break">
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Pump Logic (P03)</label>
-                        <select name="pumpMode" onChange={handleChange} className="w-full p-2 border rounded">
-                            <option value="Normal">Normal (Always On)</option>
-                            <option value="Demand">Demand (Smart)</option>
-                            <option value="Interval">Interval (Timer)</option>
-                        </select>
+                        <SectionHeader title="R290 Safety" icon={AlertTriangle} step="4" />
+                        <div className="space-y-2">
+                            <label className="flex items-center space-x-2 text-sm">
+                                <input type="checkbox" name="ventilation" checked={formData.ventilation} onChange={handleChange} /> <span>Ventilation Verified</span>
+                            </label>
+                            <label className="flex items-center space-x-2 text-sm">
+                                <input type="checkbox" name="ignitionClearance" checked={formData.ignitionClearance} onChange={handleChange} /> <span>No Ignition Sources (3m)</span>
+                            </label>
+                            <label className="flex items-center space-x-2 text-sm">
+                                <input type="checkbox" name="drainsSealed" checked={formData.drainsSealed} onChange={handleChange} /> <span>Floor Drains Sealed</span>
+                            </label>
+                        </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Electric Heater Logic</label>
-                        <select name="electricHeaterLogic" onChange={handleChange} className="w-full p-2 border rounded">
-                            <option value="Hot Water">Hot Water Only</option>
-                            <option value="Heating">Heating Only</option>
-                            <option value="All">All (Pipe Heater)</option>
-                            <option value="Disabled">Disabled</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Smart Grid (SG Ready)</label>
-                        <div className="flex items-center gap-2 mb-2">
-                            <input type="checkbox" name="sgReadyEnabled" onChange={handleChange} />
-                            <span className="text-sm">Enabled</span>
+                        <SectionHeader title="Controller" icon={Settings} step="5" />
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center text-sm">
+                                <span>Pump Logic:</span>
+                                <select name="pumpMode" onChange={handleChange} className="border rounded p-1 w-32"><option value="Normal">Normal</option><option value="Demand">Demand</option></select>
+                            </div>
+                            <div className="flex justify-between items-center text-sm">
+                                <span>Heater Logic:</span>
+                                <select name="electricHeaterLogic" onChange={handleChange} className="border rounded p-1 w-32"><option value="Hot Water">Hot Water</option><option value="All">All</option></select>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* 6. PERFORMANCE DATA */}
-                <SectionHeader title="Performance Data" icon={Activity} step="6" />
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="col-span-2 md:col-span-4 grid grid-cols-3 gap-4 bg-orange-50 p-3 rounded mb-2">
-                        <div>
-                            <label className="block text-xs font-bold text-orange-800">Heat Output (kW)</label>
-                            <input type="number" step="0.1" name="heatOutputKw" onChange={handleChange} className="w-full p-2 border border-orange-300 rounded" placeholder="Output" />
+                <div className="print-break">
+                    <SectionHeader title="Performance Data" icon={Activity} step="6" />
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="col-span-2 md:col-span-4 grid grid-cols-3 gap-4 bg-orange-50 p-3 rounded mb-2 print:bg-white print:border">
+                            <div>
+                                <label className="block text-xs font-bold">Heat Output (kW)</label>
+                                <input type="number" step="0.1" name="heatOutputKw" onChange={handleChange} className="w-full p-2 border rounded" placeholder="Output" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold">Elec. Input (kWe)</label>
+                                <input type="number" step="0.1" name="electricalInputKwe" onChange={handleChange} className="w-full p-2 border rounded" placeholder="Input" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold">COP</label>
+                                <input type="number" step="0.1" name="cop" value={formData.cop} onChange={handleChange} className="w-full p-2 border rounded font-bold" placeholder="Calc" />
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-orange-800">Elec. Input (kWe)</label>
-                            <input type="number" step="0.1" name="electricalInputKwe" onChange={handleChange} className="w-full p-2 border border-orange-300 rounded" placeholder="Input" />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-orange-800">COP (Efficiency)</label>
-                            <input type="number" step="0.1" name="cop" value={formData.cop} onChange={handleChange} className="w-full p-2 border border-orange-300 rounded bg-white font-bold" placeholder="Auto-Calc" />
-                        </div>
+                        <div><label className="text-xs text-gray-500">Inlet (°C)</label><input type="number" name="inletTemp" onChange={handleChange} className="w-full p-2 border rounded" /></div>
+                        <div><label className="text-xs text-gray-500">Outlet (°C)</label><input type="number" name="outletTemp" onChange={handleChange} className="w-full p-2 border rounded" /></div>
+                        <div><label className="text-xs text-gray-500">Flow (L/min)</label><input type="number" name="waterFlow" onChange={handleChange} className="w-full p-2 border rounded" /></div>
+                        <div><label className="text-xs text-gray-500">Amps</label><input type="number" name="currentDraw" onChange={handleChange} className="w-full p-2 border rounded" /></div>
                     </div>
-                    <div><label className="text-xs font-bold text-gray-500">Inlet Temp (°C)</label><input type="number" name="inletTemp" onChange={handleChange} className="w-full p-2 border rounded" /></div>
-                    <div><label className="text-xs font-bold text-gray-500">Outlet Temp (°C)</label><input type="number" name="outletTemp" onChange={handleChange} className="w-full p-2 border rounded" /></div>
-                    <div><label className="text-xs font-bold text-gray-500">Flow Rate (L/min)</label><input type="number" name="waterFlow" onChange={handleChange} className="w-full p-2 border rounded" /></div>
-                    <div><label className="text-xs font-bold text-gray-500">Current (Amps)</label><input type="number" name="currentDraw" onChange={handleChange} className="w-full p-2 border rounded" /></div>
                 </div>
 
                 {/* 7. NOTES */}
-                <SectionHeader title="Engineer Notes & Handover" icon={Clipboard} step="7" />
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Observations / Actions Taken</label>
+                <div className="print-break">
+                    <SectionHeader title="Engineer Notes" icon={Clipboard} step="7" />
                     <textarea 
                         name="notes" 
                         rows="6" 
                         value={formData.notes}
                         onChange={handleChange}
-                        placeholder="General notes..."
                         className="w-full p-3 border rounded shadow-inner font-mono text-sm"
                     ></textarea>
                 </div>
 
-                {/* 8. PHOTO & SUBMIT */}
-                <div className="border-2 border-dashed border-gray-300 p-6 rounded-lg text-center bg-gray-50 hover:bg-gray-100 transition mt-6">
-                    <label className="cursor-pointer block">
-                        <Camera className="mx-auto text-gray-400 mb-2" size={32} />
-                        <span className="text-gray-600 font-medium">Take Photo of Leak Test / Nameplate</span>
-                        <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-                    </label>
-                    {photo && <p className="text-sm text-green-600 mt-2 font-semibold">Selected: {photo.name}</p>}
+                {/* 8. HANDOVER CERTIFICATE (NEW) */}
+                <div className="border-t-4 border-gray-800 pt-6 mt-8 print-break">
+                    <div className="flex items-center gap-2 mb-4">
+                        <FileCheck size={24} className="text-green-600" />
+                        <h2 className="text-xl font-bold text-gray-900">Part 13. Commissioning & Handover Certificate</h2>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <h4 className="font-bold border-b pb-1">Installer Details</h4>
+                            <input placeholder="Company Name" name="installerName" onChange={handleChange} className="w-full p-2 border rounded" />
+                            <input placeholder="Technician Name" name="technicianName" onChange={handleChange} className="w-full p-2 border rounded" />
+                            <input placeholder="Contact Number" name="contactNumber" onChange={handleChange} className="w-full p-2 border rounded" />
+                        </div>
+                        <div className="space-y-4">
+                            <h4 className="font-bold border-b pb-1">Handover Checklist</h4>
+                            <label className="flex items-center gap-2 text-sm">
+                                <input type="checkbox" name="handoverTraining" onChange={handleChange} />
+                                <span>Customer training completed (Mode, App, Safety)</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                                <input type="checkbox" name="maintenanceExplained" onChange={handleChange} />
+                                <span>Maintenance & R290 Safety explained</span>
+                            </label>
+                            <label className="flex items-center gap-2 text-sm">
+                                <input type="checkbox" name="manualHandover" onChange={handleChange} />
+                                <span>User Manual & Warranty Card Handed Over</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div className="mt-8 grid grid-cols-2 gap-12 pt-4">
+                        <div className="border-t border-black pt-2">
+                            <p className="font-bold">Installer Signature</p>
+                            <p className="text-xs text-gray-500">I certify installation complies with Karnot Manual & Local Regs.</p>
+                        </div>
+                        <div className="border-t border-black pt-2">
+                            <p className="font-bold">Customer Signature</p>
+                            <p className="text-xs text-gray-500">I accept the system in working order and received training.</p>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="flex gap-4 pt-4">
+                {/* 9. PHOTO & SUBMIT (Hidden on Print) */}
+                <div className="no-print mt-8">
+                    <div className="border-2 border-dashed border-gray-300 p-6 rounded-lg text-center bg-gray-50 hover:bg-gray-100 transition mb-4">
+                        <label className="cursor-pointer block">
+                            <Camera className="mx-auto text-gray-400 mb-2" size={32} />
+                            <span className="text-gray-600 font-medium">Take Photo of Leak Test / Nameplate</span>
+                            <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+                        </label>
+                        {photo && <p className="text-sm text-green-600 mt-2 font-semibold">Selected: {photo.name}</p>}
+                    </div>
+
                     <button type="submit" disabled={loading} className="w-full py-4 px-6 rounded-lg shadow-lg text-white font-bold text-lg bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 transform hover:scale-[1.02] transition-all">
                         {loading ? 'Uploading Data...' : 'Submit Commissioning Report'}
                     </button>
