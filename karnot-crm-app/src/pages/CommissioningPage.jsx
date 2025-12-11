@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, storage } from '../firebase'; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { KARNOT_LOGO_BASE_64 } from '../data/constants'; // Ensure this is imported for the print header
+import { KARNOT_LOGO_BASE_64 } from '../data/constants'; 
 import { Camera, Save, AlertTriangle, CheckCircle, Settings, Thermometer, Zap, Droplets, UserCheck, Clipboard, Activity, Briefcase, Printer, FileCheck, Building } from 'lucide-react';
 
 export default function CommissioningPage({ user, onBack, companies = [], contacts = [] }) {
@@ -113,24 +113,22 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
         }));
     };
 
-    {/* CRM Selector (Hidden on Print) */}
-                        <div className="no-print md:col-span-2">
-                            <label className="block text-sm font-bold text-orange-600 mb-1 flex items-center gap-2">
-                                <Building size={16}/> Select Customer from CRM
-                            </label>
-                            <select 
-                                onChange={handleCompanySelect} 
-                                className="w-full p-2 border border-orange-300 rounded bg-white text-black"
-                                style={{ backgroundColor: 'white', color: 'black' }} // Force override
-                            >
-                                <option value="" style={{ color: 'black' }}>-- Select Company --</option>
-                                {companies.map(c => (
-                                    <option key={c.id} value={c.id} style={{ color: 'black' }}>
-                                        {c.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+    // CRM Selection Handler
+    const handleCompanySelect = (e) => {
+        const selectedId = e.target.value;
+        const company = companies.find(c => c.id === selectedId);
+        if (company) {
+            // Find primary contact for this company
+            const contact = contacts.find(c => c.companyId === company.id) || {};
+            
+            setFormData(prev => ({
+                ...prev,
+                customerName: company.name,
+                siteAddress: company.address || prev.siteAddress, 
+                contactPerson: contact.name || ''
+            }));
+        }
+    };
 
     const handlePhotoChange = (e) => {
         if (e.target.files[0]) {
@@ -198,7 +196,7 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
     return (
         <div className="max-w-5xl mx-auto bg-white shadow-xl rounded-xl p-8 border-t-4 border-orange-600 print:shadow-none print:border-0 print:p-0 print:max-w-none print:w-full">
             
-            {/* A4 PRINT OPTIMIZATION STYLES */}
+            {/* A4 PRINT & DARK MODE FIX STYLES */}
             <style>
                 {`
                     @media print {
@@ -230,6 +228,17 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                         h3 { margin-top: 5px !important; margin-bottom: 2px !important; }
                         .print-compact-row { display: flex; align-items: center; gap: 5px; }
                         .print-hide-bg { background: transparent !important; border: 1px solid #ddd !important; padding: 5px !important; }
+                    }
+
+                    /* FORCE LIGHT MODE DROPDOWN */
+                    .force-light-select {
+                        background-color: #ffffff !important;
+                        color: #000000 !important;
+                        -webkit-text-fill-color: #000000 !important;
+                    }
+                    .force-light-select option {
+                        background-color: #ffffff !important;
+                        color: #000000 !important;
                     }
                 `}
             </style>
@@ -270,7 +279,10 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                             <label className="block text-sm font-bold text-orange-600 mb-1 flex items-center gap-2">
                                 <Building size={16}/> Select Customer from CRM
                             </label>
-                            <select onChange={handleCompanySelect} className="w-full p-2 border border-orange-300 rounded bg-orange-50">
+                            <select 
+                                onChange={handleCompanySelect} 
+                                className="w-full p-2 border border-orange-300 rounded force-light-select"
+                            >
                                 <option value="">-- Select Company --</option>
                                 {companies.map(c => (
                                     <option key={c.id} value={c.id}>{c.name}</option>
