@@ -278,15 +278,18 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                             <label className="block text-sm font-bold text-orange-600 mb-1 flex items-center gap-2">
                                 <Building size={16}/> Select Customer from CRM
                             </label>
+                            {/* --- FIXED DROPDOWN CODE STARTS HERE --- */}
                             <select 
                                 onChange={handleCompanySelect} 
-                                className="w-full p-2 border border-orange-300 rounded force-light-select"
+                                className="w-full p-2 border border-orange-300 rounded force-light-select bg-white text-gray-900"
+                                style={{ colorScheme: 'light' }}
                             >
-                                <option value="">-- Select Company --</option>
+                                <option value="" className="bg-white text-gray-900">-- Select Company --</option>
                                 {companies.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                    <option key={c.id} value={c.id} className="bg-white text-gray-900">{c.name}</option>
                                 ))}
                             </select>
+                            {/* --- FIXED DROPDOWN CODE ENDS HERE --- */}
                         </div>
 
                         <div>
