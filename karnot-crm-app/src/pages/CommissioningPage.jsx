@@ -113,22 +113,24 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
         }));
     };
 
-    // CRM Selection Handler
-    const handleCompanySelect = (e) => {
-        const selectedId = e.target.value;
-        const company = companies.find(c => c.id === selectedId);
-        if (company) {
-            // Find primary contact for this company
-            const contact = contacts.find(c => c.companyId === company.id) || {};
-            
-            setFormData(prev => ({
-                ...prev,
-                customerName: company.name,
-                siteAddress: company.address || prev.siteAddress, // Use existing if blank
-                contactPerson: contact.name || ''
-            }));
-        }
-    };
+    {/* CRM Selector (Hidden on Print) */}
+                        <div className="no-print md:col-span-2">
+                            <label className="block text-sm font-bold text-orange-600 mb-1 flex items-center gap-2">
+                                <Building size={16}/> Select Customer from CRM
+                            </label>
+                            <select 
+                                onChange={handleCompanySelect} 
+                                className="w-full p-2 border border-orange-300 rounded bg-white text-black"
+                                style={{ backgroundColor: 'white', color: 'black' }} // Force override
+                            >
+                                <option value="" style={{ color: 'black' }}>-- Select Company --</option>
+                                {companies.map(c => (
+                                    <option key={c.id} value={c.id} style={{ color: 'black' }}>
+                                        {c.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
 
     const handlePhotoChange = (e) => {
         if (e.target.files[0]) {
