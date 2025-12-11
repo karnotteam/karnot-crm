@@ -293,8 +293,8 @@ export default function App() {
                 {activeView === 'commissioning' && (
                     <CommissioningPage 
                         user={user}
-                        companies={companies}  // <--- Pass CRM Data
-                        contacts={contacts}    // <--- Pass CRM Data
+                        companies={companies} 
+                        contacts={contacts} 
                         onBack={() => setActiveView('dashboard')}
                     />
                 )}
