@@ -1,10 +1,9 @@
 import React, { useState, useRef, useMemo } from 'react'; 
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
-// --- 1. IMPORT 'ShieldCheck' icon ---
 import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, User, Mail, Phone, Briefcase, ShieldCheck } from 'lucide-react';
-// --- 2. IMPORT 'Checkbox' ---
 import { Card, Button, Input, Textarea, Checkbox } from '../data/constants.jsx'; 
+import Papa from 'papaparse'; // Ensure you have installed this: npm install papaparse
 
 // --- ContactModal Component ---
 const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
@@ -16,7 +15,6 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
     const [email, setEmail] = useState(contactToEdit?.email || '');
     const [phone, setPhone] = useState(contactToEdit?.phone || '');
     const [companyId, setCompanyId] = useState(contactToEdit?.companyId || (companies.length > 0 ? companies[0].id : ''));
-    // --- 3. ADD State for 'isVerified' ---
     const [isVerified, setIsVerified] = useState(contactToEdit?.isVerified || false);
 
     const handleSave = () => {
@@ -36,7 +34,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
             phone,
             companyId, 
             companyName,
-            isVerified, // --- 4. ADD 'isVerified' to saved data ---
+            isVerified, 
         };
         onSave(contactData);
     };
@@ -81,7 +79,6 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
                         </select>
                     </div>
 
-                    {/* --- 5. ADD 'Verified' Checkbox --- */}
                     <hr />
                     <Checkbox 
                         id="isVerifiedContact"
@@ -107,7 +104,6 @@ const ContactCard = ({ contact, onEdit, onDelete }) => {
         <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between">
             <div>
                 <div className="flex justify-between items-start">
-                    {/* --- 6. ADD 'Verified' Icon to Title --- */}
                     <div className="flex items-center gap-2">
                         <h4 className="font-bold text-lg text-gray-800">{contact.firstName} {contact.lastName}</h4>
                         {contact.isVerified && (
@@ -150,7 +146,6 @@ const ContactCard = ({ contact, onEdit, onDelete }) => {
 
 
 // --- Main Contacts Page Component ---
-// (The rest of this component is unchanged)
 const ContactsPage = ({ contacts, companies, user }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingContact, setEditingContact] = useState(null);
@@ -169,6 +164,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
             alert("Failed to save contact.");
         }
     };
+
     const handleUpdateContact = async (contactData) => {
         if (!editingContact || !editingContact.id) return;
         if (!user || !user.uid) return alert("Error: User not logged in.");
@@ -181,9 +177,9 @@ const ContactsPage = ({ contacts, companies, user }) => {
             alert("Failed to update contact.");
         }
     };
+
     const handleDeleteContact = async (contactId) => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
-        // This is the single-delete function, we keep the confirm here
         if (window.confirm("Are you sure you want to delete this contact?")) {
             const contactRef = doc(db, "users", user.uid, "contacts", contactId);
             try {
@@ -194,6 +190,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
             }
         }
     };
+
     const handleSave = (contactData) => {
         if (editingContact) {
             handleUpdateContact(contactData);
@@ -201,18 +198,22 @@ const ContactsPage = ({ contacts, companies, user }) => {
             handleSaveContact(contactData);
         }
     };
+
     const handleOpenNewModal = () => {
         setEditingContact(null);
         setShowModal(true);
     };
+
     const handleOpenEditModal = (contact) => {
         setEditingContact(contact);
         setShowModal(true);
     };
+
     const handleCloseModal = () => {
         setEditingContact(null);
         setShowModal(false);
     };
+
     const handleImportClick = () => {
         fileInputRef.current.click();
     };
@@ -266,6 +267,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
         return null;
     };
 
+    // --- UPDATED CSV IMPORT WITH DUPLICATE DETECTION ---
     const handleFileChange = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -284,6 +286,13 @@ const ContactsPage = ({ contacts, companies, user }) => {
                     return;
                 }
 
+                // 1. CREATE A "SET" OF EXISTING EMAILS (Fast Lookup for Duplicates)
+                const existingEmails = new Set(
+                    contacts
+                        .filter(c => c.email) // Ignore contacts with no email
+                        .map(c => c.email.toLowerCase().trim())
+                );
+
                 let headerRowIndex = -1;
                 for (let i = 0; i < Math.min(allRows.length, 10); i++) {
                     const row = allRows[i];
@@ -294,7 +303,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
                 }
 
                 if (headerRowIndex === -1) {
-                    alert("Error: Could not find a header row containing 'FirstName', 'LastName', 'EmailAddress', and 'Company'. Please check the file.");
+                    alert("Error: Could not find a header row containing 'FirstName', 'LastName', 'EmailAddress', and 'Company'.");
                     setIsImporting(false);
                     return;
                 }
@@ -316,16 +325,26 @@ const ContactsPage = ({ contacts, companies, user }) => {
                 
                 const batch = writeBatch(db);
                 const contactsRef = collection(db, "users", user.uid, "contacts");
+                
                 let importCount = 0;
+                let duplicateCount = 0; // Track how many we skip
                 let unmatchedCount = 0;
 
                 dataRows.forEach(row => {
                     const firstName = row[colFirstName] ? row[colFirstName].trim() : '';
                     const lastName = row[colLastName] ? row[colLastName].trim() : '';
                     const csvCompanyName = colCompany !== -1 ? (row[colCompany] || '').trim() : '';
+                    const email = colEmail !== -1 ? (row[colEmail] || '').trim() : ''; 
                     
                     const garbageText = "Certificate Number Salutation";
                     if (!firstName || !lastName || (csvCompanyName && csvCompanyName.includes(garbageText))) {
+                        return; 
+                    }
+
+                    // 2. CHECK FOR DUPLICATE EMAIL
+                    // If the email exists in our Set, skip it.
+                    if (email && existingEmails.has(email.toLowerCase())) {
+                        duplicateCount++;
                         return; 
                     }
 
@@ -336,11 +355,11 @@ const ContactsPage = ({ contacts, companies, user }) => {
                         firstName,
                         lastName,
                         jobTitle: jobTitle,
-                        email: colEmail !== -1 ? (row[colEmail] || '').trim() : '',
+                        email: email,
                         phone: '', 
                         companyId: companyMatch ? companyMatch.id : null,
                         companyName: companyMatch ? companyMatch.name : (csvCompanyName || 'N/A'),
-                        isVerified: false, // Default new imports to not verified
+                        isVerified: false, 
                         createdAt: serverTimestamp()
                     };
                     
@@ -350,12 +369,19 @@ const ContactsPage = ({ contacts, companies, user }) => {
                     
                     const docRef = doc(contactsRef); 
                     batch.set(docRef, contactData);
+                    
+                    // Add this new email to our "seen" set so we don't import duplicates found within the CSV itself
+                    if (email) existingEmails.add(email.toLowerCase());
                     importCount++;
                 });
 
                 try {
-                    await batch.commit();
-                    alert(`Successfully imported ${importCount} contacts! \n(${unmatchedCount} contacts had company names that could not be automatically matched.)`);
+                    if (importCount > 0) {
+                        await batch.commit();
+                        alert(`Success!\n- Imported: ${importCount} new contacts\n- Skipped: ${duplicateCount} duplicates (already exist)\n- Unmatched Companies: ${unmatchedCount}`);
+                    } else {
+                        alert(`No new contacts imported.\n- Skipped: ${duplicateCount} duplicates`);
+                    }
                 } catch (error) {
                     console.error("Error importing contacts: ", error);
                     alert("An error occurred during import. See console for details.");
