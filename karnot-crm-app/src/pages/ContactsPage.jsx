@@ -8,24 +8,17 @@ import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx';
 // --- 1. Helper: WhatsApp Link Generator ---
 const getWhatsAppLink = (phone) => {
     if (!phone) return null;
-    // Remove all non-numeric characters
     let cleanNumber = phone.replace(/\D/g, '');
-    
-    // Logic for Philippines (Default): If starts with '0', replace with '63'
     if (cleanNumber.startsWith('0')) {
         cleanNumber = '63' + cleanNumber.substring(1);
     }
-    
-    // If it doesn't start with 63 and is 10 digits, assume it needs 63
     if (!cleanNumber.startsWith('63') && cleanNumber.length === 10) {
         cleanNumber = '63' + cleanNumber;
     }
-
-    // SWITCHED TO FULL API DOMAIN TO FIX SSL ERRORS
     return `https://api.whatsapp.com/send?phone=${cleanNumber}`;
 };
 
-// --- 2. Stats Badge (Unchanged) ---
+// --- 2. Stats Badge ---
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return (
@@ -48,7 +41,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-// --- 3. Duplicate Resolver (Unchanged) ---
+// --- 3. Duplicate Resolver ---
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
 
@@ -74,7 +67,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
             }
         });
         setSelectedToDelete(newSet);
-        if(count > 0) alert(`Auto-selected ${count} newer duplicates. The oldest record in each group was kept safe.`);
+        if(count > 0) alert(`Auto-selected ${count} newer duplicates.`);
     };
 
     const handleResolve = () => {
@@ -94,7 +87,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
                     <button onClick={onClose}><X /></button>
                 </div>
                 <div className="bg-gray-50 p-3 rounded mb-4 flex justify-between items-center">
-                    <p className="text-sm text-gray-600">Select records to <span className="text-red-600 font-bold">DELETE</span>. Unchecked items stay safe.</p>
+                    <p className="text-sm text-gray-600">Select records to <span className="text-red-600 font-bold">DELETE</span>.</p>
                     <Button onClick={handleAutoSelect} variant="secondary" className="text-sm"><Wand2 size={14} className="mr-2 text-purple-600"/>Auto-Select All</Button>
                 </div>
                 <div className="overflow-y-auto flex-1 space-y-6 p-2">
@@ -130,7 +123,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 4. ContactModal Component (Updated with LinkedIn) ---
+// --- 4. ContactModal Component ---
 const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => {
     const isEditMode = Boolean(contactToEdit);
     
@@ -140,7 +133,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     const [jobTitle, setJobTitle] = useState(contactToEdit?.jobTitle || '');
     const [email, setEmail] = useState(contactToEdit?.email || '');
     const [phone, setPhone] = useState(contactToEdit?.phone || '');
-    const [linkedIn, setLinkedIn] = useState(contactToEdit?.linkedIn || ''); // <--- NEW LINKEDIN
+    const [linkedIn, setLinkedIn] = useState(contactToEdit?.linkedIn || '');
     const [companyId, setCompanyId] = useState(contactToEdit?.companyId || '');
     const [companyName, setCompanyName] = useState(contactToEdit?.companyName || ''); 
     
@@ -375,7 +368,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     );
 };
 
-// --- 5. ContactCard (Updated with Quick Actions) ---
+// --- 5. ContactCard (Unchanged) ---
 const ContactCard = ({ contact, onEdit, onDelete }) => {
     const lastActivity = contact.interactions && contact.interactions.length > 0 ? contact.interactions[0] : null;
     const whatsappLink = getWhatsAppLink(contact.phone);
@@ -515,22 +508,26 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
             complete: async (results) => {
                 const allRows = results.data;
                 let headerRowIndex = -1;
+                let isESCOFormat = false;
+
+                // 1. Detect Header Row & Format
                 for (let i = 0; i < Math.min(allRows.length, 10); i++) {
                     const row = allRows[i];
+                    if (row.includes("Name of Representative")) {
+                        headerRowIndex = i;
+                        isESCOFormat = true;
+                        break;
+                    }
                     if ((row.includes("FirstName") || row.includes("First Name")) && (row.includes("LastName") || row.includes("Last Name"))) {
                         headerRowIndex = i; break;
                     }
                 }
-                if (headerRowIndex === -1) { alert("Error: Could not find 'FirstName' and 'LastName' columns."); setIsImporting(false); return; }
+
+                if (headerRowIndex === -1) { alert("Error: Could not find header row."); setIsImporting(false); return; }
+                
                 const header = allRows[headerRowIndex];
                 const dataRows = allRows.slice(headerRowIndex + 1);
-                
                 const findCol = (options) => header.findIndex(h => options.includes(h.trim()));
-                const colFirstName = findCol(["FirstName", "First Name"]);
-                const colLastName = findCol(["LastName", "Last Name"]);
-                const colEmail = findCol(["EmailAddress", "Email", "Email Address"]);
-                const colCompany = findCol(["Company", "Organization", "Business"]); 
-                const colJobTitle = findCol(["Certificates", "Job Title", "Title", "Position"]); 
 
                 const batch = writeBatch(db);
                 const contactsRef = collection(db, "users", user.uid, "contacts");
@@ -538,30 +535,98 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
                 let duplicateCount = 0;
                 const existingNames = new Set(contacts.map(c => `${c.firstName} ${c.lastName}`.toLowerCase().trim()));
 
-                dataRows.forEach(row => {
-                    const firstName = row[colFirstName] ? row[colFirstName].trim() : '';
-                    const lastName = row[colLastName] ? row[colLastName].trim() : '';
-                    const email = colEmail !== -1 ? (row[colEmail] || '').trim() : '';
-                    const csvCompanyName = colCompany !== -1 ? (row[colCompany] || '').trim() : '';
-                    
-                    if (!firstName || !lastName || csvCompanyName.includes("Certificate Number")) return; 
-                    if (existingNames.has(`${firstName} ${lastName}`.toLowerCase())) { duplicateCount++; return; }
+                // --- ESCO IMPORT LOGIC ---
+                if (isESCOFormat) {
+                    const colComp = findCol(["Company Name"]);
+                    const colName = findCol(["Name of Representative"]);
+                    const colPos = findCol(["Position"]);
+                    const colEmail = findCol(["E-Mail Address", "Email Address"]);
 
-                    let companyMatch = null;
-                    if (companies.length) {
-                         const lowerC = csvCompanyName.toLowerCase().trim();
-                         companyMatch = companies.find(c => c.companyName.toLowerCase().trim() === lowerC) || companies.find(c => c.companyName.toLowerCase().includes(lowerC));
-                    }
+                    dataRows.forEach(row => {
+                        const rawNames = row[colName] ? row[colName].toString().split('/') : [];
+                        const rawPositions = row[colPos] ? row[colPos].toString().split('/') : [];
+                        const rawEmails = row[colEmail] ? row[colEmail].toString().split(/[\s/\n,]+/) : []; // Split by space, slash, newline
+                        const companyName = row[colComp] ? row[colComp].trim() : '';
 
-                    batch.set(doc(contactsRef), {
-                        firstName, lastName, jobTitle: colJobTitle !== -1 ? (row[colJobTitle] || '').trim() : '',
-                        email, phone: '', companyId: companyMatch ? companyMatch.id : null,
-                        companyName: companyMatch ? companyMatch.companyName : (csvCompanyName || 'N/A'),
-                        isVerified: false, isEmailed: false, isContacted: false, isVisited: false, notes: '', interactions: [],
-                        createdAt: serverTimestamp()
+                        // Clean up email list (remove empty strings)
+                        const validEmails = rawEmails.filter(e => e.includes('@'));
+
+                        rawNames.forEach((fullName, index) => {
+                            const cleanName = fullName.trim();
+                            if (!cleanName) return;
+
+                            // Split First/Last Name
+                            const nameParts = cleanName.split(' ');
+                            const lastName = nameParts.pop();
+                            const firstName = nameParts.join(' ');
+
+                            // Match Position & Email
+                            const position = rawPositions[index] ? rawPositions[index].trim() : (rawPositions[0] || ''); // Fallback to 1st position
+                            
+                            // Email Logic: If 3 people & 3 emails -> 1:1 match. If 3 people & 1 email -> Everyone gets it.
+                            let email = '';
+                            if (validEmails.length === rawNames.length) {
+                                email = validEmails[index];
+                            } else if (validEmails.length === 1) {
+                                email = validEmails[0]; 
+                            } else {
+                                email = validEmails[index] || '';
+                            }
+
+                            if (existingNames.has(`${firstName} ${lastName}`.toLowerCase())) { duplicateCount++; return; }
+
+                            // Company Link
+                            let companyMatch = null;
+                            if (companies.length && companyName) {
+                                 const lowerC = companyName.toLowerCase().trim();
+                                 companyMatch = companies.find(c => c.companyName.toLowerCase().trim() === lowerC) || companies.find(c => c.companyName.toLowerCase().includes(lowerC));
+                            }
+
+                            batch.set(doc(contactsRef), {
+                                firstName, lastName, jobTitle: position,
+                                email: email || '', phone: '', 
+                                companyId: companyMatch ? companyMatch.id : null,
+                                companyName: companyMatch ? companyMatch.companyName : (companyName || 'N/A'),
+                                isVerified: false, isEmailed: false, isContacted: false, isVisited: false, notes: 'Imported from ESCO List', interactions: [],
+                                createdAt: serverTimestamp()
+                            });
+                            importCount++;
+                        });
                     });
-                    importCount++;
-                });
+
+                } else {
+                    // --- STANDARD IMPORT LOGIC (OLD) ---
+                    const colFirstName = findCol(["FirstName", "First Name"]);
+                    const colLastName = findCol(["LastName", "Last Name"]);
+                    const colEmail = findCol(["EmailAddress", "Email", "Email Address"]);
+                    const colCompany = findCol(["Company", "Organization", "Business"]); 
+                    const colJobTitle = findCol(["Certificates", "Job Title", "Title", "Position"]); 
+
+                    dataRows.forEach(row => {
+                        const firstName = row[colFirstName] ? row[colFirstName].trim() : '';
+                        const lastName = row[colLastName] ? row[colLastName].trim() : '';
+                        const email = colEmail !== -1 ? (row[colEmail] || '').trim() : '';
+                        const csvCompanyName = colCompany !== -1 ? (row[colCompany] || '').trim() : '';
+                        
+                        if (!firstName || !lastName) return; 
+                        if (existingNames.has(`${firstName} ${lastName}`.toLowerCase())) { duplicateCount++; return; }
+
+                        let companyMatch = null;
+                        if (companies.length) {
+                             const lowerC = csvCompanyName.toLowerCase().trim();
+                             companyMatch = companies.find(c => c.companyName.toLowerCase().trim() === lowerC) || companies.find(c => c.companyName.toLowerCase().includes(lowerC));
+                        }
+
+                        batch.set(doc(contactsRef), {
+                            firstName, lastName, jobTitle: colJobTitle !== -1 ? (row[colJobTitle] || '').trim() : '',
+                            email, phone: '', companyId: companyMatch ? companyMatch.id : null,
+                            companyName: companyMatch ? companyMatch.companyName : (csvCompanyName || 'N/A'),
+                            isVerified: false, isEmailed: false, isContacted: false, isVisited: false, notes: '', interactions: [],
+                            createdAt: serverTimestamp()
+                        });
+                        importCount++;
+                    });
+                }
 
                 try { await batch.commit(); alert(`Import Complete!\n✅ Added: ${importCount}\n🚫 Skipped (Duplicates): ${duplicateCount}`); } 
                 catch (error) { console.error("Import Error: ", error); alert("An error occurred during import."); }
