@@ -322,7 +322,12 @@ export default function App() {
                     />
                 )}
                 
-                {activeView === 'dashboard' && <DashboardPage quotes={quotes} />}
+                {activeView === 'dashboard' && (
+    <DashboardPage 
+        quotes={quotes} 
+        user={user}  // <--- ADD THIS
+    />
+)}
                 
                 {activeView === 'calculator' && (
                     <QuoteCalculator 
