@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, MessageCircle } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, MessageCircle, Database } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
 // --- 1. Helper: WhatsApp Link Generator ---
@@ -15,6 +15,7 @@ const getWhatsAppLink = (phone) => {
     if (!cleanNumber.startsWith('63') && cleanNumber.length === 10) {
         cleanNumber = '63' + cleanNumber;
     }
+    // Using full API to avoid SSL/network blocking issues
     return `https://api.whatsapp.com/send?phone=${cleanNumber}`;
 };
 
@@ -87,7 +88,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
                     <button onClick={onClose}><X /></button>
                 </div>
                 <div className="bg-gray-50 p-3 rounded mb-4 flex justify-between items-center">
-                    <p className="text-sm text-gray-600">Select records to <span className="text-red-600 font-bold">DELETE</span>.</p>
+                    <p className="text-sm text-gray-600">Select records to <span className="text-red-600 font-bold">DELETE</span>. Unchecked items stay safe.</p>
                     <Button onClick={handleAutoSelect} variant="secondary" className="text-sm"><Wand2 size={14} className="mr-2 text-purple-600"/>Auto-Select All</Button>
                 </div>
                 <div className="overflow-y-auto flex-1 space-y-6 p-2">
@@ -446,7 +447,8 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
         const contacted = contacts.filter(c => c.isContacted).length;
         const visited = contacts.filter(c => c.isVisited).length;
         const emailed = contacts.filter(c => c.isEmailed).length;
-        return { total, contacted, visited, emailed };
+        const esco = contacts.filter(c => c.notes && c.notes.includes('ESCO')).length; // <--- NEW STAT
+        return { total, contacted, visited, emailed, esco };
     }, [contacts]);
 
     // --- Duplicate Logic ---
@@ -647,19 +649,22 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
          alert("All contacts deleted.");
     };
 
+    // --- UPDATED FILTER LOGIC ---
     const filteredContacts = useMemo(() => {
         const lowerSearchTerm = searchTerm.toLowerCase();
         let list = contacts;
         if (activeFilter === 'EMAILED') list = list.filter(c => c.isEmailed);
         if (activeFilter === 'CONTACTED') list = list.filter(c => c.isContacted);
         if (activeFilter === 'VISITED') list = list.filter(c => c.isVisited);
+        if (activeFilter === 'ESCO') list = list.filter(c => c.notes && c.notes.includes('ESCO')); // <--- NEW FILTER
         
         return list.filter(c => 
             c.firstName.toLowerCase().includes(lowerSearchTerm) || 
             c.lastName.toLowerCase().includes(lowerSearchTerm) ||
             (c.email && c.email.toLowerCase().includes(lowerSearchTerm)) ||
             (c.companyName && c.companyName.toLowerCase().includes(lowerSearchTerm)) ||
-            (c.jobTitle && c.jobTitle.toLowerCase().includes(lowerSearchTerm)) 
+            (c.jobTitle && c.jobTitle.toLowerCase().includes(lowerSearchTerm)) ||
+            (c.notes && c.notes.toLowerCase().includes(lowerSearchTerm)) // <--- SEARCH NOTES
         );
     }, [contacts, searchTerm, activeFilter]);
 
@@ -668,11 +673,12 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
             {showModal && <ContactModal onSave={handleSave} onClose={handleCloseModal} contactToEdit={editingContact} companies={companies} quotes={quotes} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                 <StatBadge icon={User} label="Total Contacts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
                 <StatBadge icon={Mail} label="Emailed" count={stats.emailed} total={stats.total} color="purple" active={activeFilter === 'EMAILED'} onClick={() => setActiveFilter(activeFilter === 'EMAILED' ? 'ALL' : 'EMAILED')} />
                 <StatBadge icon={Phone} label="Contacted" count={stats.contacted} total={stats.total} color="blue" active={activeFilter === 'CONTACTED'} onClick={() => setActiveFilter(activeFilter === 'CONTACTED' ? 'ALL' : 'CONTACTED')} />
                 <StatBadge icon={Building} label="Visited" count={stats.visited} total={stats.total} color="green" active={activeFilter === 'VISITED'} onClick={() => setActiveFilter(activeFilter === 'VISITED' ? 'ALL' : 'VISITED')} />
+                <StatBadge icon={Database} label="ESCO List" count={stats.esco} total={stats.total} color="orange" active={activeFilter === 'ESCO'} onClick={() => setActiveFilter(activeFilter === 'ESCO' ? 'ALL' : 'ESCO')} />
             </div>
 
             <div className="flex justify-between items-center mb-6">
