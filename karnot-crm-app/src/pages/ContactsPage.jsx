@@ -5,7 +5,7 @@ import Papa from 'papaparse';
 import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
-// --- 1. Stats Card Component ---
+// --- 1. Stats Card Component (Unchanged) ---
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return (
@@ -110,7 +110,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 3. ContactModal Component (Updated with Searchable Company) ---
+// --- 3. ContactModal (Unchanged) ---
 const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => {
     const isEditMode = Boolean(contactToEdit);
     
@@ -121,7 +121,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     const [email, setEmail] = useState(contactToEdit?.email || '');
     const [phone, setPhone] = useState(contactToEdit?.phone || '');
     const [companyId, setCompanyId] = useState(contactToEdit?.companyId || '');
-    const [companyName, setCompanyName] = useState(contactToEdit?.companyName || ''); // Display name for input
+    const [companyName, setCompanyName] = useState(contactToEdit?.companyName || ''); 
     
     // Activity Tracking
     const [isVerified, setIsVerified] = useState(contactToEdit?.isVerified || false);
@@ -144,14 +144,13 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
-    // Init search with existing company name
+    // Init search
     useEffect(() => {
         if (contactToEdit?.companyName) {
             setCompanySearch(contactToEdit.companyName);
         }
     }, [contactToEdit]);
 
-    // Handle click outside dropdown
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -162,7 +161,6 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Filter companies
     const filteredCompanies = useMemo(() => {
         if (!companies) return [];
         return companies.filter(c => c.companyName.toLowerCase().includes(companySearch.toLowerCase()));
@@ -177,12 +175,11 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
 
     const handleCompanySearchChange = (e) => {
         setCompanySearch(e.target.value);
-        setCompanyId(''); // Reset ID if typing manual change
+        setCompanyId(''); 
         setCompanyName(e.target.value);
         setIsCompanyDropdownOpen(true);
     };
 
-    // Interaction Logic
     const relevantQuotes = useMemo(() => {
         if (!quotes || !companyId) return [];
         const selectedCompany = companies.find(c => c.id === companyId);
@@ -214,7 +211,6 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
             alert('Please enter a first and last name.');
             return;
         }
-        // Ideally we enforce companyId, but if they typed a custom name we save that name
         const finalCompanyName = companyId ? companies.find(c => c.id === companyId)?.companyName : companySearch;
         
         const contactData = {
@@ -246,14 +242,14 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
                         <div className="relative">
                             <input 
                                 type="text" 
-                                className="block w-full px-3 py-2 pl-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                className="block w-full px-3 py-2.5 pl-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                                 value={companySearch}
                                 onChange={handleCompanySearchChange}
                                 onFocus={() => setIsCompanyDropdownOpen(true)}
                                 placeholder="Search Company..."
                             />
-                            <Search className="absolute left-3 top-2.5 text-gray-400" size={16}/>
-                            {companyId && <Check className="absolute right-3 top-2.5 text-green-500" size={16} title="Linked to Company DB"/>}
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}/>
+                            {companyId && <Check className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={16} title="Linked to Company DB"/>}
                         </div>
                         
                         {isCompanyDropdownOpen && (
@@ -402,7 +398,7 @@ const ContactCard = ({ contact, onEdit, onDelete }) => {
 };
 
 // --- Main Page Component ---
-const ContactsPage = ({ contacts, companies, user, quotes }) => { 
+const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingContact, setEditingContact] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -410,6 +406,14 @@ const ContactsPage = ({ contacts, companies, user, quotes }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState('ALL'); 
     
+    // --- AUTO-OPEN EDIT MODAL IF REQUESTED FROM APP.JSX ---
+    useEffect(() => {
+        if (initialContactToEdit) {
+            setEditingContact(initialContactToEdit);
+            setShowModal(true);
+        }
+    }, [initialContactToEdit]);
+
     // --- Stats Calculation ---
     const stats = useMemo(() => {
         const total = contacts.length;
