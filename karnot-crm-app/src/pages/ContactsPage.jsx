@@ -2,13 +2,11 @@ import React, { useState, useRef, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2 } from 'lucide-react';
 import { Card, Button, Input, Checkbox } from '../data/constants.jsx'; 
 
-// --- 1. Duplicate Resolver Modal ---
+// --- 1. Duplicate Resolver Modal (UPDATED) ---
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
-    // duplicates structure: [ { key: 'email@test.com', items: [contactA, contactB] }, ... ]
-    
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
 
     const toggleSelection = (id) => {
@@ -16,6 +14,31 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
         if (newSet.has(id)) newSet.delete(id);
         else newSet.add(id);
         setSelectedToDelete(newSet);
+    };
+
+    // --- NEW: Smart Select Feature ---
+    const handleAutoSelect = () => {
+        const newSet = new Set();
+        let count = 0;
+
+        duplicates.forEach(group => {
+            // Sort items by date created (Oldest first)
+            // If createdAt is missing, we treat it as very old (0)
+            const sortedItems = [...group.items].sort((a, b) => {
+                const timeA = a.createdAt?.seconds || 0;
+                const timeB = b.createdAt?.seconds || 0;
+                return timeA - timeB; // Ascending: Index 0 is oldest
+            });
+
+            // We keep Index 0 (Oldest), and select everything else (1 to end) for deletion
+            for (let i = 1; i < sortedItems.length; i++) {
+                newSet.add(sortedItems[i].id);
+                count++;
+            }
+        });
+
+        setSelectedToDelete(newSet);
+        if(count > 0) alert(`Auto-selected ${count} newer duplicates. The oldest record in each group was kept safe.`);
     };
 
     const handleResolve = () => {
@@ -35,13 +58,18 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
                     <button onClick={onClose}><X /></button>
                 </div>
                 
-                <div className="overflow-y-auto flex-1 space-y-6 p-2">
-                    <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded">
-                        We found contacts that share the same <strong>Email</strong> or <strong>Full Name</strong>. 
-                        Select the ones you want to <span className="text-red-600 font-bold">DELETE</span>. 
-                        Unselected contacts will remain safe.
+                {/* Controls Area */}
+                <div className="bg-gray-50 p-3 rounded mb-4 flex justify-between items-center">
+                    <p className="text-sm text-gray-600">
+                        Select records to <span className="text-red-600 font-bold">DELETE</span>. Unchecked items stay safe.
                     </p>
-
+                    <Button onClick={handleAutoSelect} variant="secondary" className="text-sm">
+                        <Wand2 size={14} className="mr-2 text-purple-600"/>
+                        Auto-Select All Duplicates (Keep Oldest)
+                    </Button>
+                </div>
+                
+                <div className="overflow-y-auto flex-1 space-y-6 p-2">
                     {duplicates.map((group, groupIndex) => (
                         <div key={groupIndex} className="border border-orange-200 rounded-lg overflow-hidden">
                             <div className="bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 flex justify-between">
