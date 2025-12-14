@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Eye, Plus, Trash2, Edit, Save, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check } from 'lucide-react';
 import { ALL_PRODUCTS, Card, Button, Input, Textarea, Checkbox, Section } from '../data/constants.jsx';
 
 const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, companies, contacts }) => {
@@ -19,14 +19,27 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     const [editingIndex, setEditingIndex] = useState(null);
     const [editingItem, setEditingItem] = useState(null);
 
+    // --- Searchable Dropdown State ---
+    const [companySearch, setCompanySearch] = useState('');
+    const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // Handle click outside to close dropdown
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsCompanyDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     useEffect(() => {
         const defaultCustomer = { 
-            name: companies && companies.length > 0 ? companies[0].companyName : '', 
-            number: '', 
-            tin: '', 
-            address: '', 
-            saleType: 'Export' 
+            name: '', number: '', tin: '', address: '', saleType: 'Export' 
         };
+        // Default commercial/doc values...
         const defaultCommercial = { shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 };
         const defaultDocControl = { quoteNumber: nextQuoteNumber, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' };
         const defaultCosting = { forexRate: 58.50, transportCost: 0, dutiesRate: 1, vatRate: 12, brokerFees: 0 };
@@ -34,16 +47,25 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
         if (initialData) {
             setCustomer({ ...defaultCustomer, ...initialData.customer });
+            setCompanySearch(initialData.customer?.name || ''); // Sync search bar
             setCommercial({ ...defaultCommercial, ...initialData.commercial });
             setDocControl({ ...defaultDocControl, ...initialData.docControl, quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber });
             setCosting({ ...defaultCosting, ...initialData.costing });
             setDocGeneration({ ...defaultDocGeneration, ...initialData.docGeneration });
-            
             setSelectedProducts(initialData.selectedProducts || {});
             setManualItems(initialData.manualItems || []);
             setOpportunityId(initialData.opportunityId || null);
         } else {
-            setCustomer(defaultCustomer);
+            // New Quote Defaults
+            if (companies && companies.length > 0) {
+                // Optional: Auto-select first company or leave blank. 
+                // Leaving blank is usually safer for a search bar experience.
+                setCustomer(defaultCustomer);
+                setCompanySearch('');
+            } else {
+                setCustomer(defaultCustomer);
+                setCompanySearch('');
+            }
             setCommercial(defaultCommercial);
             setDocControl({ ...defaultDocControl, quoteNumber: nextQuoteNumber });
             setCosting(defaultCosting);
@@ -52,7 +74,24 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             setManualItems([]);
             setOpportunityId(null);
         }
-    }, [initialData, nextQuoteNumber, companies]);
+    }, [initialData, nextQuoteNumber, companies]); // Ensure 'companies' dependency is handled if needed, though mostly static here
+
+    // Filter companies based on search
+    const filteredCompanies = useMemo(() => {
+        if (!companies) return [];
+        return companies.filter(c => c.companyName.toLowerCase().includes(companySearch.toLowerCase()));
+    }, [companies, companySearch]);
+
+    const handleSelectCompany = (company) => {
+        setCustomer(prev => ({
+            ...prev,
+            name: company.companyName,
+            address: company.address || prev.address,
+            // You can add logic here to pull other fields if you add them to the Company model later
+        }));
+        setCompanySearch(company.companyName);
+        setIsCompanyDropdownOpen(false);
+    };
 
     const handleInputChange = (setter, field, isNumber = false) => (e) => {
         const value = isNumber ? parseFloat(e.target.value) || 0 : e.target.value;
@@ -283,25 +322,53 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <Section title="1. Customer Details">
                     <div className="space-y-4">
-                        <div>
+                        {/* --- SEARCHABLE COMPANY DROPDOWN --- */}
+                        <div className="relative" ref={dropdownRef}>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Registered Name</label>
-                            <select
-                                value={customer.name}
-                                onChange={handleInputChange(setCustomer, 'name')}
-                                className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                                required
-                            >
-                                {!companies || companies.length === 0 ? (
-                                    <option value="">Please add a company first</option>
-                                ) : (
-                                    companies.map(company => (
-                                        <option key={company.id} value={company.companyName}>
-                                            {company.companyName}
-                                        </option>
-                                    ))
+                            <div className="relative">
+                                <input 
+                                    type="text" 
+                                    className="block w-full px-3 py-2 pl-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                    value={companySearch}
+                                    onChange={(e) => {
+                                        setCompanySearch(e.target.value);
+                                        setCustomer(prev => ({...prev, name: e.target.value})); // Allow manual type
+                                        setIsCompanyDropdownOpen(true);
+                                    }}
+                                    onFocus={() => setIsCompanyDropdownOpen(true)}
+                                    placeholder="Search or Type Company Name..."
+                                />
+                                <Search className="absolute left-3 top-2.5 text-gray-400" size={16}/>
+                                {customer.name && companies.find(c => c.companyName === customer.name) && (
+                                    <Check className="absolute right-3 top-2.5 text-green-500" size={16} title="Company Linked"/>
                                 )}
-                            </select>
+                            </div>
+                            
+                            {isCompanyDropdownOpen && (
+                                <div className="absolute z-50 w-full mt-1 bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
+                                    {filteredCompanies.length === 0 ? (
+                                        <div className="cursor-default select-none relative py-2 px-4 text-gray-700">
+                                            {companySearch ? "No matches. Continue typing to create new." : "Start typing to search..."}
+                                        </div>
+                                    ) : (
+                                        filteredCompanies.map((company) => (
+                                            <div
+                                                key={company.id}
+                                                className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-orange-50 text-gray-900 border-b border-gray-50 last:border-0"
+                                                onClick={() => handleSelectCompany(company)}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="block truncate font-medium">{company.companyName}</span>
+                                                    {company.isVerified && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Verified</span>}
+                                                </div>
+                                                {company.address && <span className="block truncate text-xs text-gray-500">{company.address}</span>}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
                         </div>
+
                         <Input label="Customer No." value={customer.number} onChange={handleInputChange(setCustomer, 'number')} />
                         <Input label="TIN" value={customer.tin} onChange={handleInputChange(setCustomer, 'tin')} />
                         <Textarea label="Business Address" rows="3" value={customer.address} onChange={handleInputChange(setCustomer, 'address')} />
