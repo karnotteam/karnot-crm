@@ -275,11 +275,12 @@ export default function App() {
             <main className="container mx-auto p-4 md:p-8">
                 
                 {activeView === 'companies' && (
-                    <CompaniesPage 
-                        companies={companies}
-                        user={user}
-                    />
-                )}
+    <CompaniesPage 
+        companies={companies}
+        quotes={quotes}  // <--- ADD THIS
+        user={user}
+    />
+)}
                 
                 {activeView === 'contacts' && (
                     <ContactsPage 
