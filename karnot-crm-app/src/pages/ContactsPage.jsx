@@ -6,7 +6,6 @@ import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, Shi
 import { Card, Button, Input, Checkbox } from '../data/constants.jsx'; 
 
 // --- 1. Duplicate Resolver Modal ---
-// This modal appears when the "Dedupe" scan finds conflicts
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     // duplicates structure: [ { key: 'email@test.com', items: [contactA, contactB] }, ... ]
     
