@@ -2,10 +2,33 @@ import React, { useState, useRef, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2 } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox } from '../data/constants.jsx'; 
 
-// --- 1. Duplicate Resolver Modal (Companies Version) ---
+// --- 1. Stats Badge ---
+const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
+    const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+    return (
+        <div 
+            onClick={onClick}
+            className={`cursor-pointer p-3 rounded-xl border transition-all duration-200 flex items-center justify-between gap-3
+                ${active ? `bg-${color}-100 border-${color}-500 ring-2 ring-${color}-400` : 'bg-white border-gray-200 hover:border-orange-300 hover:shadow-md'}
+            `}
+        >
+            <div className={`p-2 rounded-full bg-${color}-100 text-${color}-600`}>
+                <Icon size={20} />
+            </div>
+            <div className="text-right">
+                <p className="text-xs text-gray-500 font-bold uppercase">{label}</p>
+                <p className="text-xl font-bold text-gray-800">
+                    {count} <span className="text-xs text-gray-400 font-normal">({percentage}%)</span>
+                </p>
+            </div>
+        </div>
+    );
+};
+
+// --- 2. Duplicate Resolver ---
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
 
@@ -19,24 +42,19 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const handleAutoSelect = () => {
         const newSet = new Set();
         let count = 0;
-
         duplicates.forEach(group => {
-            // Sort by creation time (Keep the oldest)
             const sortedItems = [...group.items].sort((a, b) => {
                 const timeA = a.createdAt?.seconds || 0;
                 const timeB = b.createdAt?.seconds || 0;
                 return timeA - timeB; 
             });
-
-            // Keep index 0, delete the rest
             for (let i = 1; i < sortedItems.length; i++) {
                 newSet.add(sortedItems[i].id);
                 count++;
             }
         });
-
         setSelectedToDelete(newSet);
-        if(count > 0) alert(`Auto-selected ${count} newer duplicates. The oldest company record was kept safe.`);
+        if(count > 0) alert(`Auto-selected ${count} newer duplicates.`);
     };
 
     const handleResolve = () => {
@@ -50,106 +68,198 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
             <Card className="w-full max-w-3xl max-h-[80vh] flex flex-col">
                 <div className="flex justify-between items-center mb-4 border-b pb-2">
                     <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <AlertTriangle className="text-orange-500"/> 
-                        {duplicates.length} Duplicate Groups Found
+                        <AlertTriangle className="text-orange-500"/> {duplicates.length} Duplicate Groups
                     </h3>
                     <button onClick={onClose}><X /></button>
                 </div>
-                
                 <div className="bg-gray-50 p-3 rounded mb-4 flex justify-between items-center">
-                    <p className="text-sm text-gray-600">
-                        Select companies to <span className="text-red-600 font-bold">DELETE</span>. Unchecked items stay safe.
-                    </p>
-                    <Button onClick={handleAutoSelect} variant="secondary" className="text-sm">
-                        <Wand2 size={14} className="mr-2 text-purple-600"/>
-                        Auto-Select Duplicates
-                    </Button>
+                    <p className="text-sm text-gray-600">Select records to <span className="text-red-600 font-bold">DELETE</span>.</p>
+                    <Button onClick={handleAutoSelect} variant="secondary" className="text-sm"><Wand2 size={14} className="mr-2 text-purple-600"/>Auto-Select All</Button>
                 </div>
-                
                 <div className="overflow-y-auto flex-1 space-y-6 p-2">
                     {duplicates.map((group, groupIndex) => (
                         <div key={groupIndex} className="border border-orange-200 rounded-lg overflow-hidden">
                             <div className="bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 flex justify-between">
                                 <span>Conflict: {group.key}</span>
-                                <span className="text-xs uppercase tracking-wider bg-white px-2 py-0.5 rounded">Group {groupIndex + 1}</span>
+                                <span className="text-xs uppercase bg-white px-2 py-0.5 rounded">Group {groupIndex + 1}</span>
                             </div>
                             <div className="divide-y divide-gray-100">
                                 {group.items.map(company => (
                                     <div key={company.id} className={`flex items-center justify-between p-3 ${selectedToDelete.has(company.id) ? 'bg-red-50' : 'bg-white'}`}>
                                         <div className="flex items-center gap-3">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={selectedToDelete.has(company.id)} 
-                                                onChange={() => toggleSelection(company.id)}
-                                                className="w-5 h-5 text-red-600 rounded border-gray-300 focus:ring-red-500"
-                                            />
+                                            <input type="checkbox" checked={selectedToDelete.has(company.id)} onChange={() => toggleSelection(company.id)} className="w-5 h-5 text-red-600 rounded border-gray-300 focus:ring-red-500"/>
                                             <div>
                                                 <p className="font-bold text-gray-800">{company.companyName}</p>
-                                                <p className="text-xs text-gray-500">
-                                                    {company.industry || 'No Industry'} • {company.address || 'No Address'}
-                                                </p>
+                                                <p className="text-xs text-gray-500">{company.industry} • {company.address}</p>
                                             </div>
                                         </div>
-                                        {selectedToDelete.has(company.id) && <span className="text-xs font-bold text-red-600">Marked for Delete</span>}
+                                        {selectedToDelete.has(company.id) && <span className="text-xs font-bold text-red-600">Delete</span>}
                                     </div>
                                 ))}
                             </div>
                         </div>
                     ))}
                 </div>
-
                 <div className="mt-4 pt-4 border-t flex justify-end gap-2">
                     <Button onClick={onClose} variant="secondary">Cancel</Button>
-                    <Button onClick={handleResolve} variant="danger" disabled={selectedToDelete.size === 0}>
-                        <Trash2 className="mr-2" size={16}/> Delete Selected ({selectedToDelete.size})
-                    </Button>
+                    <Button onClick={handleResolve} variant="danger" disabled={selectedToDelete.size === 0}><Trash2 className="mr-2" size={16}/> Delete Selected ({selectedToDelete.size})</Button>
                 </div>
             </Card>
         </div>
     );
 };
 
-// --- CompanyModal (Unchanged) ---
-const CompanyModal = ({ onClose, onSave, companyToEdit }) => {
+// --- 3. CompanyModal (Updated with Interaction Log) ---
+const CompanyModal = ({ onClose, onSave, companyToEdit, quotes }) => {
     const isEditMode = Boolean(companyToEdit);
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
     const [industry, setIndustry] = useState(companyToEdit?.industry || '');
     const [address, setAddress] = useState(companyToEdit?.address || '');
+    
+    // Status
     const [isVerified, setIsVerified] = useState(companyToEdit?.isVerified || false);
+    const [isTarget, setIsTarget] = useState(companyToEdit?.isTarget || false); // New "Target Account" status
+    const [notes, setNotes] = useState(companyToEdit?.notes || '');
+
+    // Interactions
+    const [interactions, setInteractions] = useState(companyToEdit?.interactions || []);
+    const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
+    const [newLogType, setNewLogType] = useState('Visit');
+    const [newLogOutcome, setNewLogOutcome] = useState('');
+    const [selectedQuoteId, setSelectedQuoteId] = useState('');
+
+    // Filter relevant quotes
+    const relevantQuotes = useMemo(() => {
+        if (!quotes || !companyName) return [];
+        return quotes.filter(q => 
+            q.customer?.name?.toLowerCase().includes(companyName.toLowerCase()) || 
+            q.customer?.name?.toLowerCase() === companyName.toLowerCase()
+        );
+    }, [quotes, companyName]);
+
+    const handleAddInteraction = () => {
+        if (!newLogOutcome) return alert("Please enter details.");
+        
+        let linkedQuote = null;
+        if (selectedQuoteId) {
+            const q = relevantQuotes.find(rq => rq.id === selectedQuoteId);
+            if (q) linkedQuote = { id: q.id, total: q.finalSalesPrice || 0, status: q.status };
+        }
+
+        const newInteraction = {
+            id: Date.now(),
+            date: newLogDate,
+            type: newLogType,
+            outcome: newLogOutcome,
+            linkedQuote
+        };
+
+        setInteractions([newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date)));
+        setNewLogOutcome('');
+        setSelectedQuoteId('');
+    };
+
+    const handleDeleteInteraction = (id) => setInteractions(interactions.filter(i => i.id !== id));
 
     const handleSave = () => {
         if (!companyName) { alert('Please enter a company name.'); return; }
-        onSave({ companyName, website, industry, address, isVerified });
+        onSave({ 
+            companyName, website, industry, address, 
+            isVerified, isTarget, notes, interactions 
+        });
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 flex justify-center items-center p-4">
-            <Card className="w-full max-w-lg">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Company' : 'New Company'}</h3>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X /></button>
+            <Card className="w-full max-w-4xl max-h-[95vh] overflow-y-auto flex flex-col md:flex-row gap-6">
+                
+                {/* Left: Details */}
+                <div className="flex-1 space-y-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <h3 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Company' : 'New Company'}</h3>
+                        <button onClick={onClose} className="md:hidden text-gray-500"><X /></button>
+                    </div>
+                    <Input label="Company Name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} required />
+                    <Input label="Website" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="www.example.com" />
+                    <Input label="Industry" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="Food & Beverage" />
+                    <Textarea label="Address / Plant Location" rows="3" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    <Textarea label="General Notes" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    
+                    <div className="grid grid-cols-2 gap-4 mt-4 bg-gray-50 p-4 rounded-lg">
+                        <Checkbox id="isVerifiedComp" label="Verified Data" checked={isVerified} onChange={(e) => setIsVerified(e.target.checked)} />
+                        <Checkbox id="isTarget" label="Target Account" checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />
+                    </div>
                 </div>
-                <div className="space-y-4">
-                    <Input label="Company Name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="e.g., Nestlé Inc." required />
-                    <Input label="Website" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="e.g., www.nestle.com" />
-                    <Input label="Industry" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="e.g., Food & Beverage" />
-                    <Textarea label="Company Address" rows="3" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="e.g., 123 Main St, Metro Manila" />
-                    <hr />
-                    <Checkbox id="isVerified" label="Data Verified (Contact details are correct)" checked={isVerified} onChange={(e) => setIsVerified(e.target.checked)} />
-                </div>
-                <div className="mt-6 flex justify-end">
-                    <Button onClick={handleSave} variant="primary"><Plus className="mr-2" size={16} /> {isEditMode ? 'Update Company' : 'Save Company'}</Button>
+
+                {/* Right: Activity Log */}
+                <div className="flex-1 border-l border-gray-200 pl-0 md:pl-6 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-bold text-gray-700 flex items-center gap-2"><Clock size={18}/> Activity Log</h4>
+                        <button onClick={onClose} className="hidden md:block text-gray-500 hover:text-gray-800"><X /></button>
+                    </div>
+
+                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-4 space-y-2">
+                        <div className="flex gap-2">
+                            <Input type="date" value={newLogDate} onChange={e => setNewLogDate(e.target.value)} className="text-sm w-1/3" />
+                            <select value={newLogType} onChange={e => setNewLogType(e.target.value)} className="block w-2/3 px-2 py-2 bg-white border-gray-300 rounded-md shadow-sm text-sm">
+                                <option value="Visit">Site Visit</option>
+                                <option value="Call">Call</option>
+                                <option value="Email">Email</option>
+                                <option value="Note">Note</option>
+                            </select>
+                        </div>
+                        {relevantQuotes.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <LinkIcon size={14} className="text-gray-500"/>
+                                <select value={selectedQuoteId} onChange={(e) => setSelectedQuoteId(e.target.value)} className="block w-full px-2 py-1 bg-white border border-gray-300 rounded text-xs">
+                                    <option value="">-- Attach Quote (Optional) --</option>
+                                    {relevantQuotes.map(q => <option key={q.id} value={q.id}>{q.id} - ${q.finalSalesPrice?.toLocaleString()} ({q.status})</option>)}
+                                </select>
+                            </div>
+                        )}
+                        <div className="flex gap-2">
+                            <input type="text" value={newLogOutcome} onChange={e => setNewLogOutcome(e.target.value)} placeholder="Details..." className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                            <Button onClick={handleAddInteraction} variant="secondary" className="px-3"><Plus size={16}/></Button>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-2" style={{minHeight: '200px', maxHeight: '500px'}}>
+                        {interactions.map((log) => (
+                            <div key={log.id} className="bg-white border border-gray-200 p-3 rounded-lg shadow-sm group relative">
+                                <div className="flex justify-between items-start mb-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${log.type === 'Visit' ? 'bg-green-500' : 'bg-blue-500'}`}>{log.type}</span>
+                                        <span className="text-xs text-gray-500">{log.date}</span>
+                                    </div>
+                                    <button onClick={() => handleDeleteInteraction(log.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><X size={14}/></button>
+                                </div>
+                                <p className="text-sm text-gray-800">{log.outcome}</p>
+                                {log.linkedQuote && (
+                                    <div className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded p-1.5 w-fit">
+                                        <FileText size={14} className="text-blue-600"/>
+                                        <span className="text-xs font-semibold text-blue-800">{log.linkedQuote.id} (${log.linkedQuote.total?.toLocaleString()})</span>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                        {interactions.length === 0 && <p className="text-center text-gray-400 italic text-sm">No activity recorded.</p>}
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t flex justify-end">
+                        <Button onClick={handleSave} variant="primary"><Plus className="mr-2" size={16} /> Save Company</Button>
+                    </div>
                 </div>
             </Card>
         </div>
     );
 };
 
-// --- CompanyCard (Unchanged) ---
+// --- 4. CompanyCard (Updated) ---
 const CompanyCard = ({ company, onEdit, onDelete }) => {
+    const lastActivity = company.interactions && company.interactions.length > 0 ? company.interactions[0] : null;
     return (
-        <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between">
+        <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between h-full hover:border-orange-300 transition-colors">
             <div>
                 <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
@@ -161,23 +271,53 @@ const CompanyCard = ({ company, onEdit, onDelete }) => {
                         <Button onClick={() => onDelete(company.id)} variant="danger" className="p-1 h-auto w-auto"><Trash2 size={14}/></Button>
                     </div>
                 </div>
-                {company.industry && <p className="text-sm text-gray-600">{company.industry}</p>}
+                {company.industry && <p className="text-sm text-orange-600 mb-2">{company.industry}</p>}
+                
+                <div className="text-sm text-gray-500 flex items-start gap-1 mb-3">
+                    <MapPin size={14} className="flex-shrink-0 mt-0.5" />
+                    <p className="line-clamp-2">{company.address || 'No Address'}</p>
+                </div>
+
+                {/* Activity Preview */}
+                {lastActivity ? (
+                    <div className="mb-3 bg-blue-50 p-2 rounded border border-blue-100">
+                        <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs font-bold text-blue-800 flex items-center gap-1">
+                                {lastActivity.type === 'Visit' ? <Building size={10}/> : <Phone size={10}/>} {lastActivity.type}
+                            </span>
+                            <span className="text-[10px] text-gray-500">{lastActivity.date}</span>
+                        </div>
+                        <p className="text-xs text-gray-700 truncate">{lastActivity.outcome}</p>
+                    </div>
+                ) : (
+                    <div className="mb-3 p-2 text-xs text-gray-400 italic">No recent activity</div>
+                )}
             </div>
-            <div className="mt-2">
-                {company.address && <div className="text-sm text-gray-500 flex items-start gap-1 mt-2"><MapPin size={14} className="flex-shrink-0 mt-0.5" /><p>{company.address}</p></div>}
-                {company.website && <a href={company.website.startsWith('http') ? company.website : `//${company.website}`} target="_blank" rel="noopener noreferrer" className="text-sm text-orange-600 hover:underline flex items-center gap-1 mt-2"><Globe size={14} />{company.website}</a>}
+            
+            <div className="pt-3 border-t border-gray-100 flex justify-between text-xs text-gray-500">
+                {company.isTarget && <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold">Target Acct</span>}
+                {company.website && <a href={`//${company.website}`} target="_blank" rel="noreferrer" className="flex items-center hover:text-orange-600"><Globe size={12} className="mr-1"/> Website</a>}
             </div>
         </Card>
     );
 };
 
 // --- Main Companies Page ---
-const CompaniesPage = ({ companies, user }) => { 
+const CompaniesPage = ({ companies, user, quotes }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingCompany, setEditingCompany] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
     const fileInputRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [activeFilter, setActiveFilter] = useState('ALL');
+
+    const stats = useMemo(() => {
+        const total = companies.length;
+        const verified = companies.filter(c => c.isVerified).length;
+        const targets = companies.filter(c => c.isTarget).length;
+        const active = companies.filter(c => c.interactions && c.interactions.length > 0).length;
+        return { total, verified, targets, active };
+    }, [companies]);
 
     // --- Dedupe Logic ---
     const [showDuplicateModal, setShowDuplicateModal] = useState(false);
@@ -186,59 +326,38 @@ const CompaniesPage = ({ companies, user }) => {
     const handleScanForDuplicates = () => {
         const groups = {};
         companies.forEach(company => {
-            // Normalize name: lowercase and trim for comparison
             const key = company.companyName.toLowerCase().trim();
             if (!groups[key]) groups[key] = [];
             groups[key].push(company);
         });
-
-        const conflicts = Object.keys(groups)
-            .filter(key => groups[key].length > 1)
-            .map(key => ({ key, items: groups[key] }));
-
-        if (conflicts.length === 0) {
-            alert("No duplicate company names found!");
-        } else {
-            setDuplicateGroups(conflicts);
-            setShowDuplicateModal(true);
-        }
+        const conflicts = Object.keys(groups).filter(key => groups[key].length > 1).map(key => ({ key, items: groups[key] }));
+        if (conflicts.length === 0) alert("No duplicate company names found!");
+        else { setDuplicateGroups(conflicts); setShowDuplicateModal(true); }
     };
 
     const handleResolveDuplicates = async (idsToDelete) => {
         if (!user || !user.uid) return;
         try {
             const batch = writeBatch(db);
-            idsToDelete.forEach(id => {
-                const ref = doc(db, "users", user.uid, "companies", id);
-                batch.delete(ref);
-            });
+            idsToDelete.forEach(id => { batch.delete(doc(db, "users", user.uid, "companies", id)); });
             await batch.commit();
-            alert(`Successfully deleted ${idsToDelete.length} duplicates.`);
+            alert(`Deleted ${idsToDelete.length} duplicates.`);
             setShowDuplicateModal(false);
-        } catch (error) {
-            console.error("Error resolving duplicates:", error);
-            alert("Failed to delete duplicates.");
-        }
+        } catch (error) { console.error(error); alert("Failed to delete duplicates."); }
     };
 
     const handleSaveCompany = async (companyData) => {
         if (!user || !user.uid) return alert("Error: User not logged in.");
-        try {
-            await addDoc(collection(db, "users", user.uid, "companies"), { ...companyData, createdAt: serverTimestamp() });
-            handleCloseModal(); 
-        } catch (e) { console.error(e); alert("Failed to save company."); }
+        try { await addDoc(collection(db, "users", user.uid, "companies"), { ...companyData, createdAt: serverTimestamp() }); handleCloseModal(); } catch (e) { console.error(e); alert("Failed to save."); }
     };
 
     const handleUpdateCompany = async (companyData) => {
         if (!editingCompany) return;
-        try {
-            await setDoc(doc(db, "users", user.uid, "companies", editingCompany.id), { ...companyData, lastModified: serverTimestamp() }, { merge: true });
-            handleCloseModal(); 
-        } catch (e) { console.error(e); alert("Failed to update company."); }
+        try { await setDoc(doc(db, "users", user.uid, "companies", editingCompany.id), { ...companyData, lastModified: serverTimestamp() }, { merge: true }); handleCloseModal(); } catch (e) { console.error(e); alert("Failed to update."); }
     };
     
     const handleDeleteCompany = async (companyId) => {
-        if (window.confirm("Are you sure you want to permanently delete this company?")) {
+        if (window.confirm("Permanently delete this company?")) {
             try { await deleteDoc(doc(db, "users", user.uid, "companies", companyId)); } catch (e) { alert("Failed to delete."); }
         }
     };
@@ -253,48 +372,51 @@ const CompaniesPage = ({ companies, user }) => {
         const file = event.target.files[0];
         if (!file) return;
         setIsImporting(true);
-        
         Papa.parse(file, {
-            header: true, skipEmptyLines: true,
+            header: false, skipEmptyLines: true,
             complete: async (results) => {
-                const rows = results.data;
-                if (!rows.length || !rows[0].CompanyFinal) {
-                    alert("Error: Could not find 'CompanyFinal' column in CSV.");
-                    setIsImporting(false); return;
+                const allRows = results.data;
+                let headerRowIndex = -1;
+                for (let i = 0; i < Math.min(allRows.length, 10); i++) {
+                    const row = allRows[i];
+                    if (row.includes("Company") || row.includes("CompanyName") || row.includes("Company Name")) {
+                        headerRowIndex = i; break;
+                    }
                 }
+                if (headerRowIndex === -1) { alert("Error: Could not find 'Company' column."); setIsImporting(false); return; }
+                
+                const header = allRows[headerRowIndex];
+                const dataRows = allRows.slice(headerRowIndex + 1);
+                const findCol = (options) => header.findIndex(h => options.includes(h.trim()));
+                
+                const colName = findCol(["Company", "Company Name", "CompanyName", "CompanyFinal"]);
+                const colWeb = findCol(["Website", "Web", "WebsiteGuess"]);
+                const colInd = findCol(["Industry", "Sector"]);
+                const colAddr = findCol(["Address", "Location"]);
 
                 const batch = writeBatch(db);
                 const companiesRef = collection(db, "users", user.uid, "companies");
                 let importCount = 0;
                 let duplicateCount = 0;
-                
-                // Existing lookup set
                 const existingNames = new Set(companies.map(c => c.companyName.toLowerCase().trim()));
 
-                rows.forEach(row => {
-                    const companyName = row.CompanyFinal ? row.CompanyFinal.trim() : '';
-                    if (companyName) {
-                        // Skip if exists
-                        if (existingNames.has(companyName.toLowerCase())) {
-                            duplicateCount++;
-                            return;
-                        }
+                dataRows.forEach(row => {
+                    const name = colName !== -1 ? row[colName].trim() : '';
+                    if (!name) return;
+                    if (existingNames.has(name.toLowerCase())) { duplicateCount++; return; }
 
-                        const companyData = {
-                            companyName: companyName,
-                            website: row.WebsiteGuess || '',
-                            industry: '', address: row.Address || '', 
-                            isVerified: false, createdAt: serverTimestamp()
-                        };
-                        batch.set(doc(companiesRef), companyData);
-                        importCount++;
-                    }
+                    batch.set(doc(companiesRef), {
+                        companyName: name,
+                        website: colWeb !== -1 ? row[colWeb] : '',
+                        industry: colInd !== -1 ? row[colInd] : '',
+                        address: colAddr !== -1 ? row[colAddr] : '',
+                        isVerified: false, isTarget: false, notes: '', interactions: [],
+                        createdAt: serverTimestamp()
+                    });
+                    importCount++;
                 });
 
-                try {
-                    await batch.commit();
-                    alert(`Import Complete!\n✅ Added: ${importCount}\n🚫 Skipped (Duplicates): ${duplicateCount}`);
-                } catch (error) { console.error(error); alert("Import failed."); }
+                try { await batch.commit(); alert(`Import Complete!\n✅ Added: ${importCount}\n🚫 Skipped: ${duplicateCount}`); } catch (error) { console.error(error); alert("Import failed."); }
                 setIsImporting(false);
                 event.target.value = null;
             },
@@ -304,25 +426,34 @@ const CompaniesPage = ({ companies, user }) => {
 
     const filteredCompanies = useMemo(() => {
         const lowerSearchTerm = searchTerm.toLowerCase();
-        return companies.filter(c =>
-            c.companyName.toLowerCase().startsWith(lowerSearchTerm) ||
+        let list = companies;
+        if (activeFilter === 'VERIFIED') list = list.filter(c => c.isVerified);
+        if (activeFilter === 'TARGETS') list = list.filter(c => c.isTarget);
+        if (activeFilter === 'ACTIVE') list = list.filter(c => c.interactions && c.interactions.length > 0);
+
+        return list.filter(c =>
+            c.companyName.toLowerCase().includes(lowerSearchTerm) ||
             (c.industry && c.industry.toLowerCase().includes(lowerSearchTerm)) ||
             (c.address && c.address.toLowerCase().includes(lowerSearchTerm))
         );
-    }, [companies, searchTerm]); 
+    }, [companies, searchTerm, activeFilter]); 
 
     return (
         <div className="w-full">
-            {showModal && <CompanyModal onSave={handleSave} onClose={handleCloseModal} companyToEdit={editingCompany} />}
+            {showModal && <CompanyModal onSave={handleSave} onClose={handleCloseModal} companyToEdit={editingCompany} quotes={quotes} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
             
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <StatBadge icon={Building} label="Total Companies" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
+                <StatBadge icon={ShieldCheck} label="Verified" count={stats.verified} total={stats.total} color="green" active={activeFilter === 'VERIFIED'} onClick={() => setActiveFilter(activeFilter === 'VERIFIED' ? 'ALL' : 'VERIFIED')} />
+                <StatBadge icon={CheckSquare} label="Target Accts" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveFilter(activeFilter === 'TARGETS' ? 'ALL' : 'TARGETS')} />
+                <StatBadge icon={Clock} label="Active Logs" count={stats.active} total={stats.total} color="blue" active={activeFilter === 'ACTIVE'} onClick={() => setActiveFilter(activeFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')} />
+            </div>
+
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Companies ({filteredCompanies.length})</h1>
                 <div className="flex gap-2">
-                    {/* Dedupe Button */}
-                    <Button onClick={handleScanForDuplicates} variant="secondary" title="Find duplicate companies">
-                        <CheckSquare className="mr-2" size={16}/> Dedupe
-                    </Button>
+                    <Button onClick={handleScanForDuplicates} variant="secondary" title="Find duplicate companies"><CheckSquare className="mr-2" size={16}/> Dedupe</Button>
                     <Button onClick={handleImportClick} variant="secondary" disabled={isImporting}><Upload className="mr-2" size={16} /> {isImporting ? '...' : 'Import CSV'}</Button>
                     <Button onClick={handleOpenNewModal} variant="primary"><Plus className="mr-2" size={16} /> New Company</Button>
                 </div>
