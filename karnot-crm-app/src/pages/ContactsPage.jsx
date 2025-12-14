@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, MessageCircle, Database, Send } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, MessageCircle, Database, Send, Download } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
 // --- 1. Helper: WhatsApp Link Generator ---
@@ -376,7 +376,6 @@ const ContactCard = ({ contact, onEdit, onDelete, selected, onToggleSelect }) =>
     return (
         <Card className={`p-4 rounded-lg shadow border transition-colors relative ${selected ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-400' : 'border-gray-200 hover:border-orange-300'}`}>
             
-            {/* SELECTION CHECKBOX */}
             <div className="absolute top-4 left-4 z-10">
                 <input 
                     type="checkbox" 
@@ -386,7 +385,7 @@ const ContactCard = ({ contact, onEdit, onDelete, selected, onToggleSelect }) =>
                 />
             </div>
 
-            <div className="pl-8"> {/* Padding to avoid checkbox overlap */}
+            <div className="pl-8"> 
                 <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">
                         <h4 className="font-bold text-lg text-gray-800 leading-tight">{contact.firstName} {contact.lastName}</h4>
@@ -400,7 +399,6 @@ const ContactCard = ({ contact, onEdit, onDelete, selected, onToggleSelect }) =>
                 <p className="text-sm text-orange-600 font-medium mb-1">{contact.jobTitle || 'No Job Title'}</p>
                 <div className="text-sm text-gray-600 flex items-center gap-2 mb-3"><Building size={14} className="flex-shrink-0" /><span className="truncate">{contact.companyName}</span></div>
 
-                {/* --- QUICK ACTION BAR --- */}
                 <div className="flex gap-3 mb-3 border-t border-b border-gray-100 py-2 justify-center">
                     {contact.email && <a href={`mailto:${contact.email}`} className="text-gray-500 hover:text-orange-600" title="Email"><Mail size={18}/></a>}
                     {contact.phone && <a href={`tel:${contact.phone}`} className="text-gray-500 hover:text-blue-600" title="Call"><Phone size={18}/></a>}
@@ -417,6 +415,7 @@ const ContactCard = ({ contact, onEdit, onDelete, selected, onToggleSelect }) =>
                             <span className="text-[10px] text-gray-500">{lastActivity.date}</span>
                         </div>
                         <p className="text-xs text-gray-700 truncate">{lastActivity.outcome}</p>
+                        {lastActivity.linkedQuote && <div className="mt-1 text-[10px] text-blue-600 flex items-center gap-1"><LinkIcon size={10}/> Quote {lastActivity.linkedQuote.id}</div>}
                     </div>
                 ) : (
                     <div className="mb-3 p-2 text-xs text-gray-400 italic">No recent activity</div>
@@ -442,10 +441,8 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState('ALL'); 
     
-    // --- SELECTION STATE ---
     const [selectedIds, setSelectedIds] = useState(new Set());
 
-    // --- AUTO-OPEN EDIT MODAL ---
     useEffect(() => {
         if (initialContactToEdit) {
             setEditingContact(initialContactToEdit);
@@ -512,7 +509,7 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
     const handleCloseModal = () => { setEditingContact(null); setShowModal(false); };
     const handleImportClick = () => fileInputRef.current.click();
     
-    // --- BULK SELECTION HANDLERS ---
+    // --- BULK ACTION HANDLERS ---
     const toggleSelection = (id) => {
         const newSet = new Set(selectedIds);
         if (newSet.has(id)) newSet.delete(id);
@@ -521,11 +518,8 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
     };
 
     const handleSelectAll = () => {
-        // If current selection matches filtered list length, deselect all. Otherwise select all.
-        // NOTE: We only select what is VISIBLE in the filtered list
         const allVisibleIds = filteredContacts.map(c => c.id);
         const allSelected = allVisibleIds.every(id => selectedIds.has(id));
-
         if (allSelected) {
             setSelectedIds(new Set());
         } else {
@@ -533,36 +527,58 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
         }
     };
 
+    // 1. Email Action (For small groups)
     const handleBulkEmail = () => {
-        const emails = contacts
-            .filter(c => selectedIds.has(c.id) && c.email)
-            .map(c => c.email);
+        const emails = contacts.filter(c => selectedIds.has(c.id) && c.email).map(c => c.email);
+        if (emails.length === 0) return alert("No valid email addresses found.");
         
-        if (emails.length === 0) return alert("No valid email addresses found in selection.");
-        
-        // BCC to protect privacy
         const mailtoLink = `mailto:?bcc=${emails.join(',')}`;
-        
-        // Safety check for URL length (approx 2000 chars limit on some browsers)
         if (mailtoLink.length > 2000) {
-            if(!window.confirm("You selected many contacts. The email link might be too long for your mail app. Try selecting fewer contacts if it fails. Continue?")) return;
+            if(!window.confirm("That's a lot of emails! The link might break. Try exporting to CSV instead?")) return;
         }
-        
         window.location.href = mailtoLink;
     };
 
-    const handleBulkDelete = async () => {
-        if (!window.confirm(`Permanently delete ${selectedIds.size} contacts? This cannot be undone.`)) return;
+    // 2. Export CSV Action (For Mailchimp/Brevo)
+    const handleBulkExport = () => {
+        const selectedContacts = contacts.filter(c => selectedIds.has(c.id));
+        if (selectedContacts.length === 0) return;
+
+        const exportData = selectedContacts.map(c => ({
+            "First Name": c.firstName,
+            "Last Name": c.lastName,
+            "Email Address": c.email,
+            "Phone Number": c.phone,
+            "Company": c.companyName,
+            "Job Title": c.jobTitle,
+            "LinkedIn": c.linkedIn || '',
+            "Notes": c.notes || ''
+        }));
+
+        const csv = Papa.unparse(exportData);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
         
+        link.setAttribute("href", url);
+        link.setAttribute("download", `karnot_contacts_export_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    // 3. Delete Action
+    const handleBulkDelete = async () => {
+        if (!window.confirm(`Permanently delete ${selectedIds.size} contacts?`)) return;
         const batch = writeBatch(db);
         selectedIds.forEach(id => {
             const ref = doc(db, "users", user.uid, "contacts", id);
             batch.delete(ref);
         });
-
         try {
             await batch.commit();
-            setSelectedIds(new Set()); // Clear selection
+            setSelectedIds(new Set());
             alert("Contacts deleted.");
         } catch (error) {
             console.error(error);
@@ -577,7 +593,6 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
         Papa.parse(file, {
             header: false, skipEmptyLines: true,
             complete: async (results) => {
-                // ... (Import logic remains identical to previous version, ensuring ESCO support)
                 const allRows = results.data;
                 let headerRowIndex = -1;
                 let isESCOFormat = false;
@@ -709,7 +724,7 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
         if (activeFilter === 'EMAILED') list = list.filter(c => c.isEmailed);
         if (activeFilter === 'CONTACTED') list = list.filter(c => c.isContacted);
         if (activeFilter === 'VISITED') list = list.filter(c => c.isVisited);
-        if (activeFilter === 'ESCO') list = list.filter(c => c.notes && c.notes.includes('ESCO')); // <--- FILTER
+        if (activeFilter === 'ESCO') list = list.filter(c => c.notes && c.notes.includes('ESCO')); 
         
         return list.filter(c => 
             c.firstName.toLowerCase().includes(lowerSearchTerm) || 
@@ -717,12 +732,12 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
             (c.email && c.email.toLowerCase().includes(lowerSearchTerm)) ||
             (c.companyName && c.companyName.toLowerCase().includes(lowerSearchTerm)) ||
             (c.jobTitle && c.jobTitle.toLowerCase().includes(lowerSearchTerm)) ||
-            (c.notes && c.notes.toLowerCase().includes(lowerSearchTerm)) // <--- SEARCH NOTES
+            (c.notes && c.notes.toLowerCase().includes(lowerSearchTerm)) 
         );
     }, [contacts, searchTerm, activeFilter]);
 
     return (
-        <div className="w-full pb-20"> {/* Padding bottom for floating bar */}
+        <div className="w-full pb-20"> 
             {showModal && <ContactModal onSave={handleSave} onClose={handleCloseModal} contactToEdit={editingContact} companies={companies} quotes={quotes} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
 
@@ -742,7 +757,6 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
                         <span className="text-gray-400 font-normal text-base ml-2">({filteredContacts.length})</span>
                     </h2>
                     
-                    {/* SELECT ALL BUTTON */}
                     {filteredContacts.length > 0 && (
                         <button 
                             onClick={handleSelectAll}
@@ -764,7 +778,7 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" style={{ display: 'none' }} />
 
             <div className="mb-4 relative">
-                <Input type="text" placeholder="Search by Name, Company, Note (e.g. 'ESCO')..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+                <Input type="text" placeholder="Search by Name, Company, or Job Title (e.g. 'CEM')..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
 
@@ -782,16 +796,22 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
             </div>
             {contacts.length === 0 && <div className="text-center py-10"><User size={48} className="mx-auto text-gray-400"/><p>No contacts yet.</p></div>}
 
-            {/* FLOATING BULK ACTIONS BAR */}
             {selectedIds.size > 0 && (
                 <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-in fade-in slide-in-from-bottom-4">
                     <span className="font-bold text-sm">{selectedIds.size} Selected</span>
                     
                     <div className="h-4 w-px bg-gray-600"></div>
                     
+                    {/* Small Group Email */}
                     <button onClick={handleBulkEmail} className="flex items-center gap-2 hover:text-orange-400 transition-colors">
                         <Send size={18} />
-                        <span className="text-sm font-bold">Email</span>
+                        <span className="text-sm font-bold">Email App</span>
+                    </button>
+
+                    {/* Large Group Export */}
+                    <button onClick={handleBulkExport} className="flex items-center gap-2 hover:text-green-400 transition-colors">
+                        <Download size={18} />
+                        <span className="text-sm font-bold">Export CSV</span>
                     </button>
 
                     <button onClick={handleBulkDelete} className="flex items-center gap-2 hover:text-red-400 transition-colors">
