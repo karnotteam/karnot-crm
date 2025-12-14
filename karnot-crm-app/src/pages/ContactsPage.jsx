@@ -21,7 +21,8 @@ const getWhatsAppLink = (phone) => {
         cleanNumber = '63' + cleanNumber;
     }
 
-    return `https://wa.me/${cleanNumber}`;
+    // SWITCHED TO FULL API DOMAIN TO FIX SSL ERRORS
+    return `https://api.whatsapp.com/send?phone=${cleanNumber}`;
 };
 
 // --- 2. Stats Badge (Unchanged) ---
