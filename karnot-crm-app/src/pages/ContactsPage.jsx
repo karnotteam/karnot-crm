@@ -1,8 +1,8 @@
-import React, { useState, useRef, useMemo } from 'react'; 
+import React, { useState, useRef, useMemo, useEffect } from 'react'; 
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
 // --- 1. Stats Card Component ---
@@ -110,7 +110,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 3. ContactModal Component (Updated with Quote Linking) ---
+// --- 3. ContactModal Component (Updated with Searchable Company) ---
 const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => {
     const isEditMode = Boolean(contactToEdit);
     
@@ -120,7 +120,8 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     const [jobTitle, setJobTitle] = useState(contactToEdit?.jobTitle || '');
     const [email, setEmail] = useState(contactToEdit?.email || '');
     const [phone, setPhone] = useState(contactToEdit?.phone || '');
-    const [companyId, setCompanyId] = useState(contactToEdit?.companyId || (companies.length > 0 ? companies[0].id : ''));
+    const [companyId, setCompanyId] = useState(contactToEdit?.companyId || '');
+    const [companyName, setCompanyName] = useState(contactToEdit?.companyName || ''); // Display name for input
     
     // Activity Tracking
     const [isVerified, setIsVerified] = useState(contactToEdit?.isVerified || false);
@@ -131,82 +132,94 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     const [visitDate, setVisitDate] = useState(contactToEdit?.visitDate || '');
     const [notes, setNotes] = useState(contactToEdit?.notes || '');
 
-    // --- Interaction History State ---
+    // Interaction History
     const [interactions, setInteractions] = useState(contactToEdit?.interactions || []);
     const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
     const [newLogType, setNewLogType] = useState('Call');
     const [newLogOutcome, setNewLogOutcome] = useState('');
-    
-    // NEW: Quote Attachment State
     const [selectedQuoteId, setSelectedQuoteId] = useState('');
 
-    // Filter quotes relevant to this contact's company
+    // --- Searchable Company State ---
+    const [companySearch, setCompanySearch] = useState('');
+    const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // Init search with existing company name
+    useEffect(() => {
+        if (contactToEdit?.companyName) {
+            setCompanySearch(contactToEdit.companyName);
+        }
+    }, [contactToEdit]);
+
+    // Handle click outside dropdown
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsCompanyDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Filter companies
+    const filteredCompanies = useMemo(() => {
+        if (!companies) return [];
+        return companies.filter(c => c.companyName.toLowerCase().includes(companySearch.toLowerCase()));
+    }, [companies, companySearch]);
+
+    const handleSelectCompany = (company) => {
+        setCompanyId(company.id);
+        setCompanyName(company.companyName);
+        setCompanySearch(company.companyName);
+        setIsCompanyDropdownOpen(false);
+    };
+
+    const handleCompanySearchChange = (e) => {
+        setCompanySearch(e.target.value);
+        setCompanyId(''); // Reset ID if typing manual change
+        setCompanyName(e.target.value);
+        setIsCompanyDropdownOpen(true);
+    };
+
+    // Interaction Logic
     const relevantQuotes = useMemo(() => {
         if (!quotes || !companyId) return [];
-        // Find company name for current ID
         const selectedCompany = companies.find(c => c.id === companyId);
         if (!selectedCompany) return [];
-        
         const cName = selectedCompany.companyName.toLowerCase();
-        
-        return quotes.filter(q => 
-            q.customer?.name?.toLowerCase().includes(cName) || 
-            q.customer?.name?.toLowerCase() === cName
-        );
+        return quotes.filter(q => q.customer?.name?.toLowerCase() === cName || q.customer?.name?.toLowerCase().includes(cName));
     }, [quotes, companyId, companies]);
 
     const handleAddInteraction = () => {
-        if (!newLogOutcome) return alert("Please enter an outcome or note for this interaction.");
-        
-        // Prepare optional quote data
+        if (!newLogOutcome) return alert("Please enter an outcome or note.");
         let linkedQuote = null;
         if (selectedQuoteId) {
             const q = relevantQuotes.find(rq => rq.id === selectedQuoteId);
-            if (q) {
-                linkedQuote = {
-                    id: q.id,
-                    total: q.finalSalesPrice || 0,
-                    status: q.status
-                };
-            }
+            if (q) linkedQuote = { id: q.id, total: q.finalSalesPrice || 0, status: q.status };
         }
-
-        const newInteraction = {
-            id: Date.now(),
-            date: newLogDate,
-            type: newLogType,
-            outcome: newLogOutcome,
-            linkedQuote: linkedQuote // Attach the quote object
-        };
-
-        const updatedInteractions = [newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date));
-        setInteractions(updatedInteractions);
-
-        // Auto-update checkboxes
+        const newInteraction = { id: Date.now(), date: newLogDate, type: newLogType, outcome: newLogOutcome, linkedQuote };
+        setInteractions([newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date)));
         if (newLogType === 'Call') setIsContacted(true);
         if (newLogType === 'Visit') setIsVisited(true);
         if (newLogType === 'Email') setIsEmailed(true);
-
-        setNewLogOutcome(''); // Clear input
-        setSelectedQuoteId(''); // Clear selection
+        setNewLogOutcome('');
+        setSelectedQuoteId('');
     };
 
-    const handleDeleteInteraction = (id) => {
-        setInteractions(interactions.filter(i => i.id !== id));
-    };
+    const handleDeleteInteraction = (id) => setInteractions(interactions.filter(i => i.id !== id));
 
     const handleSave = () => {
-        if (!firstName || !lastName || !companyId) {
-            alert('Please enter a first name, last name, and select a company.');
+        if (!firstName || !lastName) {
+            alert('Please enter a first and last name.');
             return;
         }
-        const selectedCompany = companies.find(c => c.id === companyId);
-        const companyName = selectedCompany ? selectedCompany.companyName : 'Unknown';
-
+        // Ideally we enforce companyId, but if they typed a custom name we save that name
+        const finalCompanyName = companyId ? companies.find(c => c.id === companyId)?.companyName : companySearch;
+        
         const contactData = {
-            firstName, lastName, jobTitle, email, phone, companyId, companyName, 
-            isVerified, isEmailed, isContacted, isVisited, 
-            notes, interactions
+            firstName, lastName, jobTitle, email, phone, companyId, companyName: finalCompanyName, 
+            isVerified, isEmailed, isContacted, isVisited, notes, interactions
         };
         onSave(contactData);
     };
@@ -215,7 +228,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 flex justify-center items-center p-4">
             <Card className="w-full max-w-4xl max-h-[95vh] overflow-y-auto flex flex-col md:flex-row gap-6">
                 
-                {/* LEFT COLUMN: Contact Details */}
+                {/* LEFT: Contact Details */}
                 <div className="flex-1 space-y-4">
                      <div className="flex justify-between items-center mb-2">
                         <h3 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Contact' : 'New Contact'}</h3>
@@ -226,42 +239,68 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
                         <Input label="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
                         <Input label="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
                     </div>
-                    <div>
+
+                    {/* SEARCHABLE COMPANY INPUT */}
+                    <div className="relative" ref={dropdownRef}>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-                        <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm sm:text-sm" required>
-                            {!companies || companies.length === 0 ? <option value="">Please add a company first</option> : companies.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
-                        </select>
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                className="block w-full px-3 py-2 pl-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                value={companySearch}
+                                onChange={handleCompanySearchChange}
+                                onFocus={() => setIsCompanyDropdownOpen(true)}
+                                placeholder="Search Company..."
+                            />
+                            <Search className="absolute left-3 top-2.5 text-gray-400" size={16}/>
+                            {companyId && <Check className="absolute right-3 top-2.5 text-green-500" size={16} title="Linked to Company DB"/>}
+                        </div>
+                        
+                        {isCompanyDropdownOpen && (
+                            <div className="absolute z-50 w-full mt-1 bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
+                                {filteredCompanies.length === 0 ? (
+                                    <div className="py-2 px-4 text-gray-500 italic">No companies found.</div>
+                                ) : (
+                                    filteredCompanies.map((company) => (
+                                        <div
+                                            key={company.id}
+                                            className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-orange-50 text-gray-900 border-b border-gray-50 last:border-0"
+                                            onClick={() => handleSelectCompany(company)}
+                                        >
+                                            <span className="block truncate font-medium">{company.companyName}</span>
+                                            {company.address && <span className="block truncate text-xs text-gray-500">{company.address}</span>}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
                     </div>
+
                     <Input label="Job Title" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
                     <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                     <Input label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
                     
-                    <Textarea label="General Notes / Background" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    <Textarea label="General Notes" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} />
                     
                     <div className="grid grid-cols-2 gap-2 mt-4 p-4 bg-gray-50 rounded-lg">
-                        <Checkbox id="isVerified" label="Verified Data" checked={isVerified} onChange={(e) => setIsVerified(e.target.checked)} />
+                        <Checkbox id="isVerified" label="Verified" checked={isVerified} onChange={(e) => setIsVerified(e.target.checked)} />
                         <Checkbox id="isEmailed" label="Emailed" checked={isEmailed} onChange={(e) => setIsEmailed(e.target.checked)} />
                         <Checkbox id="isContacted" label="Call/Met" checked={isContacted} onChange={(e) => setIsContacted(e.target.checked)} />
-                        <Checkbox id="isVisited" label="Visited Site" checked={isVisited} onChange={(e) => setIsVisited(e.target.checked)} />
+                        <Checkbox id="isVisited" label="Visited" checked={isVisited} onChange={(e) => setIsVisited(e.target.checked)} />
                     </div>
                 </div>
 
-                {/* RIGHT COLUMN: Interaction Log */}
+                {/* RIGHT: Log */}
                 <div className="flex-1 border-l border-gray-200 pl-0 md:pl-6 flex flex-col">
                     <div className="flex justify-between items-center mb-4">
                         <h4 className="font-bold text-gray-700 flex items-center gap-2"><Clock size={18}/> Interaction Log</h4>
                         <button onClick={onClose} className="hidden md:block text-gray-500 hover:text-gray-800"><X /></button>
                     </div>
 
-                    {/* New Interaction Form */}
                     <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-4 space-y-2">
                         <div className="flex gap-2">
                             <Input type="date" value={newLogDate} onChange={e => setNewLogDate(e.target.value)} className="text-sm w-1/3" />
-                            <select 
-                                value={newLogType} 
-                                onChange={e => setNewLogType(e.target.value)}
-                                className="block w-2/3 px-2 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm"
-                            >
+                            <select value={newLogType} onChange={e => setNewLogType(e.target.value)} className="block w-2/3 px-2 py-2 bg-white border-gray-300 rounded-md shadow-sm text-sm">
                                 <option value="Call">Call</option>
                                 <option value="Visit">Visit</option>
                                 <option value="Email">Email</option>
@@ -270,70 +309,42 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
                             </select>
                         </div>
                         
-                        {/* Quote Linker */}
                         {relevantQuotes.length > 0 && (
                             <div className="flex items-center gap-2">
                                 <LinkIcon size={14} className="text-gray-500"/>
-                                <select 
-                                    value={selectedQuoteId}
-                                    onChange={(e) => setSelectedQuoteId(e.target.value)}
-                                    className="block w-full px-2 py-1 bg-white border border-gray-300 rounded text-xs"
-                                >
+                                <select value={selectedQuoteId} onChange={(e) => setSelectedQuoteId(e.target.value)} className="block w-full px-2 py-1 bg-white border border-gray-300 rounded text-xs">
                                     <option value="">-- Attach Quote (Optional) --</option>
-                                    {relevantQuotes.map(q => (
-                                        <option key={q.id} value={q.id}>
-                                            {q.id} - ${q.finalSalesPrice?.toLocaleString()} ({q.status})
-                                        </option>
-                                    ))}
+                                    {relevantQuotes.map(q => <option key={q.id} value={q.id}>{q.id} - ${q.finalSalesPrice?.toLocaleString()} ({q.status})</option>)}
                                 </select>
                             </div>
                         )}
 
                         <div className="flex gap-2">
-                            <input 
-                                type="text" 
-                                value={newLogOutcome} 
-                                onChange={e => setNewLogOutcome(e.target.value)}
-                                placeholder="Outcome / Details..."
-                                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-orange-500 focus:border-orange-500"
-                            />
+                            <input type="text" value={newLogOutcome} onChange={e => setNewLogOutcome(e.target.value)} placeholder="Outcome / Details..." className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm" />
                             <Button onClick={handleAddInteraction} variant="secondary" className="px-3"><Plus size={16}/></Button>
                         </div>
                     </div>
 
-                    {/* History List */}
                     <div className="flex-1 overflow-y-auto space-y-3 pr-2" style={{minHeight: '200px', maxHeight: '500px'}}>
-                        {interactions.length === 0 && <p className="text-gray-400 text-center text-sm py-4 italic">No interactions logged yet.</p>}
-                        
                         {interactions.map((log) => (
-                            <div key={log.id} className="relative bg-white border border-gray-200 p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow group">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded text-white 
-                                            ${log.type === 'Visit' ? 'bg-green-500' : 
-                                              log.type === 'Call' ? 'bg-blue-500' : 
-                                              log.type === 'Email' ? 'bg-purple-500' : 'bg-gray-500'}`}>
-                                            {log.type}
-                                        </span>
+                            <div key={log.id} className="bg-white border border-gray-200 p-3 rounded-lg shadow-sm group relative">
+                                <div className="flex justify-between items-start mb-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${log.type === 'Visit' ? 'bg-green-500' : log.type === 'Call' ? 'bg-blue-500' : 'bg-purple-500'}`}>{log.type}</span>
                                         <span className="text-xs text-gray-500">{log.date}</span>
                                     </div>
-                                    <button onClick={() => handleDeleteInteraction(log.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <X size={14}/>
-                                    </button>
+                                    <button onClick={() => handleDeleteInteraction(log.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><X size={14}/></button>
                                 </div>
-                                <p className="text-sm text-gray-800 leading-snug">{log.outcome}</p>
-                                
-                                {/* Linked Quote Badge */}
+                                <p className="text-sm text-gray-800">{log.outcome}</p>
                                 {log.linkedQuote && (
                                     <div className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded p-1.5 w-fit">
                                         <FileText size={14} className="text-blue-600"/>
-                                        <span className="text-xs font-semibold text-blue-800">
-                                            {log.linkedQuote.id} (${log.linkedQuote.total?.toLocaleString()})
-                                        </span>
+                                        <span className="text-xs font-semibold text-blue-800">{log.linkedQuote.id} (${log.linkedQuote.total?.toLocaleString()})</span>
                                     </div>
                                 )}
                             </div>
                         ))}
+                        {interactions.length === 0 && <p className="text-center text-gray-400 italic text-sm">No interactions logged yet.</p>}
                     </div>
 
                     <div className="mt-4 pt-4 border-t flex justify-end">
@@ -345,13 +356,9 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     );
 };
 
-// --- 4. ContactCard Component (Updated) ---
+// --- 4. ContactCard (Unchanged) ---
 const ContactCard = ({ contact, onEdit, onDelete }) => {
-    // Find latest activity
-    const lastActivity = contact.interactions && contact.interactions.length > 0 
-        ? contact.interactions[0] // Assuming sorted
-        : null;
-
+    const lastActivity = contact.interactions && contact.interactions.length > 0 ? contact.interactions[0] : null;
     return (
         <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between h-full hover:border-orange-300 transition-colors">
             <div>
@@ -366,49 +373,29 @@ const ContactCard = ({ contact, onEdit, onDelete }) => {
                 </div>
                 
                 <p className="text-sm text-orange-600 font-medium mb-1">{contact.jobTitle || 'No Job Title'}</p>
-                
-                <div className="text-sm text-gray-600 flex items-center gap-2 mb-3">
-                    <Building size={14} className="flex-shrink-0" />
-                    <span className="truncate">{contact.companyName}</span>
-                </div>
+                <div className="text-sm text-gray-600 flex items-center gap-2 mb-3"><Building size={14} className="flex-shrink-0" /><span className="truncate">{contact.companyName}</span></div>
 
-                {/* Last Activity Section */}
                 {lastActivity ? (
                     <div className="mb-3 bg-blue-50 p-2 rounded border border-blue-100">
                         <div className="flex justify-between items-center mb-1">
                             <span className="text-xs font-bold text-blue-800 flex items-center gap-1">
-                                {lastActivity.type === 'Visit' ? <Building size={10}/> : <Phone size={10}/>}
-                                {lastActivity.type}
+                                {lastActivity.type === 'Visit' ? <Building size={10}/> : <Phone size={10}/>} {lastActivity.type}
                             </span>
                             <span className="text-[10px] text-gray-500">{lastActivity.date}</span>
                         </div>
                         <p className="text-xs text-gray-700 truncate">{lastActivity.outcome}</p>
-                        {/* Quote indicator in card */}
-                        {lastActivity.linkedQuote && (
-                            <div className="mt-1 text-[10px] text-blue-600 flex items-center gap-1">
-                                <LinkIcon size={10}/> Quote {lastActivity.linkedQuote.id}
-                            </div>
-                        )}
+                        {lastActivity.linkedQuote && <div className="mt-1 text-[10px] text-blue-600 flex items-center gap-1"><LinkIcon size={10}/> Quote {lastActivity.linkedQuote.id}</div>}
                     </div>
                 ) : (
                     <div className="mb-3 p-2 text-xs text-gray-400 italic">No recent activity</div>
                 )}
             </div>
 
-            {/* Status Checkboxes Footer */}
             <div className="pt-3 border-t border-gray-100 grid grid-cols-4 gap-1 text-[10px] text-gray-500 text-center">
-                <div className={`p-1 rounded ${contact.isVerified ? 'bg-gray-100 text-green-700 font-bold' : ''}`}>
-                    <CheckSquare size={14} className={`mx-auto mb-1 ${contact.isVerified ? 'text-green-600' : 'text-gray-300'}`}/> Verified
-                </div>
-                <div className={`p-1 rounded ${contact.isEmailed ? 'bg-purple-50 text-purple-700 font-bold' : ''}`}>
-                    <Mail size={14} className={`mx-auto mb-1 ${contact.isEmailed ? 'text-purple-600' : 'text-gray-300'}`}/> Emailed
-                </div>
-                <div className={`p-1 rounded ${contact.isContacted ? 'bg-blue-50 text-blue-700 font-bold' : ''}`}>
-                    <Phone size={14} className={`mx-auto mb-1 ${contact.isContacted ? 'text-blue-600' : 'text-gray-300'}`}/> Call
-                </div>
-                <div className={`p-1 rounded ${contact.isVisited ? 'bg-green-50 text-green-700 font-bold' : ''}`}>
-                    <Building size={14} className={`mx-auto mb-1 ${contact.isVisited ? 'text-green-600' : 'text-gray-300'}`}/> Visit
-                </div>
+                <div className={`p-1 rounded ${contact.isVerified ? 'bg-gray-100 text-green-700 font-bold' : ''}`}><CheckSquare size={14} className={`mx-auto mb-1 ${contact.isVerified ? 'text-green-600' : 'text-gray-300'}`}/> Verified</div>
+                <div className={`p-1 rounded ${contact.isEmailed ? 'bg-purple-50 text-purple-700 font-bold' : ''}`}><Mail size={14} className={`mx-auto mb-1 ${contact.isEmailed ? 'text-purple-600' : 'text-gray-300'}`}/> Emailed</div>
+                <div className={`p-1 rounded ${contact.isContacted ? 'bg-blue-50 text-blue-700 font-bold' : ''}`}><Phone size={14} className={`mx-auto mb-1 ${contact.isContacted ? 'text-blue-600' : 'text-gray-300'}`}/> Call</div>
+                <div className={`p-1 rounded ${contact.isVisited ? 'bg-green-50 text-green-700 font-bold' : ''}`}><Building size={14} className={`mx-auto mb-1 ${contact.isVisited ? 'text-green-600' : 'text-gray-300'}`}/> Visit</div>
             </div>
         </Card>
     );
@@ -444,26 +431,19 @@ const ContactsPage = ({ contacts, companies, user, quotes }) => {
             groups[key].push(contact);
         });
         const conflicts = Object.keys(groups).filter(key => groups[key].length > 1).map(key => ({ key, items: groups[key] }));
-        if (conflicts.length === 0) {
-            alert("Great news! No duplicates found based on Email or Name.");
-        } else {
-            setDuplicateGroups(conflicts);
-            setShowDuplicateModal(true);
-        }
+        if (conflicts.length === 0) alert("Great news! No duplicates found.");
+        else { setDuplicateGroups(conflicts); setShowDuplicateModal(true); }
     };
 
     const handleResolveDuplicates = async (idsToDelete) => {
         if (!user || !user.uid) return;
         try {
             const batch = writeBatch(db);
-            idsToDelete.forEach(id => {
-                const ref = doc(db, "users", user.uid, "contacts", id);
-                batch.delete(ref);
-            });
+            idsToDelete.forEach(id => { batch.delete(doc(db, "users", user.uid, "contacts", id)); });
             await batch.commit();
             alert(`Successfully deleted ${idsToDelete.length} duplicates.`);
             setShowDuplicateModal(false);
-        } catch (error) { console.error("Error resolving duplicates:", error); alert("Failed to delete duplicates."); }
+        } catch (error) { console.error(error); alert("Failed to delete duplicates."); }
     };
 
     // --- Standard Handlers ---
@@ -519,7 +499,6 @@ const ContactsPage = ({ contacts, companies, user, quotes }) => {
                 const contactsRef = collection(db, "users", user.uid, "contacts");
                 let importCount = 0;
                 let duplicateCount = 0;
-                const existingEmails = new Set(contacts.map(c => c.email?.toLowerCase().trim()).filter(Boolean));
                 const existingNames = new Set(contacts.map(c => `${c.firstName} ${c.lastName}`.toLowerCase().trim()));
 
                 dataRows.forEach(row => {
@@ -529,7 +508,7 @@ const ContactsPage = ({ contacts, companies, user, quotes }) => {
                     const csvCompanyName = colCompany !== -1 ? (row[colCompany] || '').trim() : '';
                     
                     if (!firstName || !lastName || csvCompanyName.includes("Certificate Number")) return; 
-                    if ((email && existingEmails.has(email.toLowerCase())) || existingNames.has(`${firstName} ${lastName}`.toLowerCase())) { duplicateCount++; return; }
+                    if (existingNames.has(`${firstName} ${lastName}`.toLowerCase())) { duplicateCount++; return; }
 
                     let companyMatch = null;
                     if (companies.length) {
@@ -541,8 +520,7 @@ const ContactsPage = ({ contacts, companies, user, quotes }) => {
                         firstName, lastName, jobTitle: colJobTitle !== -1 ? (row[colJobTitle] || '').trim() : '',
                         email, phone: '', companyId: companyMatch ? companyMatch.id : null,
                         companyName: companyMatch ? companyMatch.companyName : (csvCompanyName || 'N/A'),
-                        isVerified: false, isEmailed: false, isContacted: false, isVisited: false, notes: '',
-                        interactions: [], 
+                        isVerified: false, isEmailed: false, isContacted: false, isVisited: false, notes: '', interactions: [],
                         createdAt: serverTimestamp()
                     });
                     importCount++;
@@ -570,13 +548,10 @@ const ContactsPage = ({ contacts, companies, user, quotes }) => {
     const filteredContacts = useMemo(() => {
         const lowerSearchTerm = searchTerm.toLowerCase();
         let list = contacts;
-        
-        // 1. Filter by Status
         if (activeFilter === 'EMAILED') list = list.filter(c => c.isEmailed);
         if (activeFilter === 'CONTACTED') list = list.filter(c => c.isContacted);
         if (activeFilter === 'VISITED') list = list.filter(c => c.isVisited);
         
-        // 2. Filter by Search
         return list.filter(c => 
             c.firstName.toLowerCase().includes(lowerSearchTerm) || 
             c.lastName.toLowerCase().includes(lowerSearchTerm) ||
@@ -591,24 +566,11 @@ const ContactsPage = ({ contacts, companies, user, quotes }) => {
             {showModal && <ContactModal onSave={handleSave} onClose={handleCloseModal} contactToEdit={editingContact} companies={companies} quotes={quotes} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
 
-            {/* --- Stats Row --- */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <StatBadge 
-                    icon={User} label="Total Contacts" count={stats.total} total={stats.total} color="gray" 
-                    active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')}
-                />
-                <StatBadge 
-                    icon={Mail} label="Emailed" count={stats.emailed} total={stats.total} color="purple" 
-                    active={activeFilter === 'EMAILED'} onClick={() => setActiveFilter(activeFilter === 'EMAILED' ? 'ALL' : 'EMAILED')}
-                />
-                <StatBadge 
-                    icon={Phone} label="Contacted" count={stats.contacted} total={stats.total} color="blue" 
-                    active={activeFilter === 'CONTACTED'} onClick={() => setActiveFilter(activeFilter === 'CONTACTED' ? 'ALL' : 'CONTACTED')}
-                />
-                <StatBadge 
-                    icon={Building} label="Visited" count={stats.visited} total={stats.total} color="green" 
-                    active={activeFilter === 'VISITED'} onClick={() => setActiveFilter(activeFilter === 'VISITED' ? 'ALL' : 'VISITED')}
-                />
+                <StatBadge icon={User} label="Total Contacts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
+                <StatBadge icon={Mail} label="Emailed" count={stats.emailed} total={stats.total} color="purple" active={activeFilter === 'EMAILED'} onClick={() => setActiveFilter(activeFilter === 'EMAILED' ? 'ALL' : 'EMAILED')} />
+                <StatBadge icon={Phone} label="Contacted" count={stats.contacted} total={stats.total} color="blue" active={activeFilter === 'CONTACTED'} onClick={() => setActiveFilter(activeFilter === 'CONTACTED' ? 'ALL' : 'CONTACTED')} />
+                <StatBadge icon={Building} label="Visited" count={stats.visited} total={stats.total} color="green" active={activeFilter === 'VISITED'} onClick={() => setActiveFilter(activeFilter === 'VISITED' ? 'ALL' : 'VISITED')} />
             </div>
 
             <div className="flex justify-between items-center mb-6">
