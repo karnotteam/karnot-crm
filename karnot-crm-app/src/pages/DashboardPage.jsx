@@ -1,236 +1,148 @@
 import React, { useMemo } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
-import { DollarSign, FileText, CheckCircle, XCircle, TrendingUp, AlertTriangle, Target, Globe } from 'lucide-react';
-import { Card, BOI_TARGETS_USD } from '../data/constants.jsx';
+import { DollarSign, Target, PieChart } from 'lucide-react';
+import { QUOTE_STATUSES, BOI_TARGETS_USD, Card, Section } from '../data/constants.jsx';
 
-// Helper to format currency
-const formatCurrency = (value) => 
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+// This is your Dashboard component, moved from App.jsx
+const DashboardPage = ({ quotes }) => {
+    // Helper to format large numbers
+    const formatLargeNumber = (num) => {
+        const number = num || 0;
+        // The dashboard uses PH pesos for targets, keeping this helper for that section
+        if (number >= 1e12) return `₱${(number / 1e12).toFixed(2)}T`;
+        if (number >= 1e9) return `₱${(number / 1e9).toFixed(2)}B`;
+        if (number >= 1e6) return `₱${(number / 1e6).toFixed(2)}M`;
+        return `₱${number.toLocaleString('en-US', {maximumFractionDigits: 0})}`;
+    };
 
-const DashboardPage = ({ quotes, user }) => {
-    
-    // --- 1. Calculate General Stats ---
     const stats = useMemo(() => {
-        const totalQuotes = quotes.length;
-        const totalValue = quotes.reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
+        const forexRate = 58.5; // Centralize forex rate for dashboard calculations
+        const approvedQuotes = quotes.filter(q => q.status === 'APPROVED');
+        const outstandingQuotes = quotes.filter(q => ['DRAFT', 'SENT'].includes(q.status));
         
-        const wonQuotes = quotes.filter(q => q.status === 'WON');
-        const wonValue = wonQuotes.reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
+        const ordersWonValue = approvedQuotes.reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
+        const outstandingValue = outstandingQuotes.reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
+        const totalMarginAmount = approvedQuotes.reduce((acc, q) => acc + (q.grossMarginAmount || 0), 0);
+        const avgMargin = ordersWonValue > 0 ? (totalMarginAmount / ordersWonValue) * 100 : 0;
         
-        const lostQuotes = quotes.filter(q => q.status === 'LOST');
-        const pipelineQuotes = quotes.filter(q => ['DRAFT', 'SENT', 'APPROVED'].includes(q.status));
-        const pipelineValue = pipelineQuotes.reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
+        const statusCounts = quotes.reduce((acc, q) => {
+            acc[q.status] = (acc[q.status] || 0) + 1;
+            return acc;
+        }, {});
+        
+        const salesByYear = approvedQuotes.reduce((acc, q) => {
+            const year = q.createdAt ? new Date(q.createdAt).getFullYear() : new Date().getFullYear();
+            // Calculation remains in PHP for BOI comparison below
+            const saleInPHP = (q.finalSalesPrice || 0) * (q.costing?.forexRate || forexRate);
+            acc[year] = (acc[year] || 0) + saleInPHP;
+            return acc;
+        }, {});
+        
+        const exportSales = approvedQuotes.filter(q => q.customer?.saleType === 'Export').reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
+        const domesticSales = approvedQuotes.filter(q => q.customer?.saleType === 'Domestic').reduce((acc, q) => acc + (q.finalSalesPrice || 0), 0);
+        const totalSales = exportSales + domesticSales;
+        const exportPercentage = totalSales > 0 ? (exportSales / totalSales) * 100 : 0;
 
-        return { totalQuotes, totalValue, wonQuotes, wonValue, lostQuotes, pipelineValue };
+        return { ordersWonValue, outstandingValue, avgMargin, statusCounts, salesByYear, exportSales, domesticSales, exportPercentage, forexRate };
     }, [quotes]);
 
-    // --- 2. Calculate BOI & Export Targets ---
-    const boiStats = useMemo(() => {
-        const wonItems = stats.wonQuotes;
-        
-        // Split Revenue by Sale Type
-        let exportRevenue = 0;
-        let domesticRevenue = 0;
+    const StatCard = ({ title, value, icon, color }) => (
+        <Card className="flex items-center">
+            <div className={`p-3 rounded-full mr-4 ${color}`}>{icon}</div>
+            <div><p className="text-gray-500 text-sm">{title}</p><p className="text-2xl font-bold">{value}</p></div>
+        </Card>
+    );
+    
+    const CircularProgress = ({ percentage, label }) => {
+        const radius = 50;
+        const circumference = 2 * Math.PI * radius;
+        const offset = circumference - (Math.min(100, Math.max(0, percentage)) / 100 * circumference);
+        return (
+            <div className="relative flex items-center justify-center w-32 h-32">
+                <svg className="w-full h-full" viewBox="0 0 120 120">
+                    <circle className="text-gray-200" strokeWidth="10" stroke="currentColor" fill="transparent" r={radius} cx="60" cy="60" />
+                    <circle className="text-orange-500 transition-all duration-500" strokeWidth="10" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" stroke="currentColor" fill="transparent" r={radius} cx="60" cy="60" style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }} />
+                </svg>
+                <span className="absolute text-xl font-bold">{label}</span>
+            </div>
+        );
+    };
 
-        wonItems.forEach(q => {
-            if (q.customer?.saleType === 'Export') {
-                exportRevenue += (q.finalSalesPrice || 0);
-            } else {
-                domesticRevenue += (q.finalSalesPrice || 0);
-            }
-        });
-
-        const totalWonRevenue = exportRevenue + domesticRevenue;
-        const exportPercentage = totalWonRevenue > 0 ? (exportRevenue / totalWonRevenue) * 100 : 0;
-        const isCompliant = exportPercentage >= 70;
-
-        // Financial Targets (Default to 2026)
-        const currentYear = 2026; 
-        const annualTarget = BOI_TARGETS_USD[currentYear] || 2000000;
-        const progressPercentage = Math.min((totalWonRevenue / annualTarget) * 100, 100);
-
-        return { 
-            exportRevenue, 
-            domesticRevenue, 
-            totalWonRevenue, 
-            exportPercentage, 
-            isCompliant,
-            annualTarget,
-            progressPercentage
-        };
-    }, [stats.wonQuotes]);
-
-    // --- 3. Chart Data Preparation ---
-    const pieData = [
-        { name: 'Export Sales', value: boiStats.exportRevenue, color: '#ea580c' }, // Orange
-        { name: 'Domestic Sales', value: boiStats.domesticRevenue, color: '#3b82f6' } // Blue
-    ];
-
-    const funnelData = [
-        { name: 'Won', value: stats.wonValue },
-        { name: 'Pipeline', value: stats.pipelineValue },
-        { name: 'Target Gap', value: Math.max(0, boiStats.annualTarget - (stats.wonValue + stats.pipelineValue)) }
-    ];
-
+    // FIX: The original structure failed here by closing the wrapping div prematurely.
     return (
-        <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-gray-800">Executive Dashboard</h2>
-
-            {/* --- TOP ROW: KPI CARDS --- */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card className="flex items-center gap-4 border-l-4 border-blue-500">
-                    <div className="p-3 bg-blue-100 rounded-full text-blue-600"><FileText size={24}/></div>
-                    <div>
-                        <p className="text-sm text-gray-500 font-bold uppercase">Total Pipeline</p>
-                        <p className="text-xl font-bold text-gray-800">{formatCurrency(stats.pipelineValue)}</p>
-                    </div>
-                </Card>
-                <Card className="flex items-center gap-4 border-l-4 border-green-500">
-                    <div className="p-3 bg-green-100 rounded-full text-green-600"><CheckCircle size={24}/></div>
-                    <div>
-                        <p className="text-sm text-gray-500 font-bold uppercase">Revenue Won</p>
-                        <p className="text-xl font-bold text-gray-800">{formatCurrency(stats.wonValue)}</p>
-                    </div>
-                </Card>
-                <Card className="flex items-center gap-4 border-l-4 border-orange-500">
-                    <div className="p-3 bg-orange-100 rounded-full text-orange-600"><Target size={24}/></div>
-                    <div>
-                        <p className="text-sm text-gray-500 font-bold uppercase">2026 Target</p>
-                        <p className="text-xl font-bold text-gray-800">{formatCurrency(boiStats.annualTarget)}</p>
-                    </div>
-                </Card>
-                <Card className={`flex items-center gap-4 border-l-4 ${boiStats.isCompliant ? 'border-green-500' : 'border-red-500'}`}>
-                    <div className={`p-3 rounded-full ${boiStats.isCompliant ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                        <Globe size={24}/>
-                    </div>
-                    <div>
-                        <p className="text-sm text-gray-500 font-bold uppercase">Export Ratio</p>
-                        <p className="text-xl font-bold text-gray-800">{boiStats.exportPercentage.toFixed(1)}% <span className="text-xs text-gray-400">/ 70%</span></p>
-                    </div>
-                </Card>
-            </div>
-
-            {/* --- MIDDLE ROW: BOI & TARGETS --- */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* 1. EXPORT COMPLIANCE (PIE CHART) */}
-                <Card>
-                    <div className="flex justify-between items-start mb-4">
-                        <div>
-                            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-                                <Globe className="text-orange-600"/> BOI Export Compliance
-                            </h3>
-                            <p className="text-sm text-gray-500">Target: 70% of Sales must be Export</p>
-                        </div>
-                        {boiStats.isCompliant ? (
-                            <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                                <CheckCircle size={12}/> Compliant
-                            </span>
-                        ) : (
-                            <span className="bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1">
-                                <AlertTriangle size={12}/> Action Needed
-                            </span>
-                        )}
-                    </div>
-
-                    <div className="h-64 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={pieData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {pieData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip formatter={(value) => formatCurrency(value)} />
-                                <Legend verticalAlign="bottom" height={36}/>
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                    <div className="text-center mt-2">
-                        <p className="text-sm font-medium text-gray-600">
-                            Current Export Share: <span className={`font-bold ${boiStats.isCompliant ? 'text-green-600' : 'text-red-600'}`}>{boiStats.exportPercentage.toFixed(1)}%</span>
-                        </p>
-                    </div>
-                </Card>
-
-                {/* 2. REVENUE TARGET PROGRESS */}
-                <Card>
-                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <TrendingUp className="text-blue-600"/> 2026 Financial Target
-                    </h3>
-                    
-                    <div className="space-y-6">
-                        {/* Progress Bar */}
-                        <div>
-                            <div className="flex justify-between text-sm font-medium text-gray-600 mb-1">
-                                <span>Progress</span>
-                                <span>{boiStats.progressPercentage.toFixed(1)}% of {formatCurrency(boiStats.annualTarget)}</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                                <div 
-                                    className="bg-green-500 h-4 rounded-full transition-all duration-1000 ease-out" 
-                                    style={{ width: `${boiStats.progressPercentage}%` }}
-                                ></div>
-                            </div>
-                        </div>
-
-                        {/* Breakdown */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
-                                <p className="text-xs text-gray-500 uppercase font-bold">Secured Revenue</p>
-                                <p className="text-xl font-bold text-green-600">{formatCurrency(boiStats.totalWonRevenue)}</p>
-                            </div>
-                            <div className="p-4 bg-gray-50 rounded-lg border border-gray-100">
-                                <p className="text-xs text-gray-500 uppercase font-bold">Remaining to Target</p>
-                                <p className="text-xl font-bold text-gray-400">
-                                    {formatCurrency(Math.max(0, boiStats.annualTarget - boiStats.totalWonRevenue))}
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="bg-blue-50 p-3 rounded text-sm text-blue-700 flex items-center gap-2">
-                            <Target size={16}/>
-                            <span>
-                                <strong>Pipeline Potential:</strong> You have {formatCurrency(stats.pipelineValue)} in active quotes. 
-                                Closing these would reach <strong>{(( (boiStats.totalWonRevenue + stats.pipelineValue) / boiStats.annualTarget ) * 100).toFixed(0)}%</strong> of target.
-                            </span>
-                        </div>
-                    </div>
-                </Card>
-            </div>
-
-            {/* --- BOTTOM ROW: REVENUE FORECAST (Stacked Bar) --- */}
-            <Card>
-                <h3 className="text-lg font-bold text-gray-800 mb-4">Revenue Forecast vs Target</h3>
-                <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                            layout="vertical"
-                            data={[
-                                { name: '2026 Progress', won: boiStats.totalWonRevenue, pipeline: stats.pipelineValue, gap: Math.max(0, boiStats.annualTarget - (boiStats.totalWonRevenue + stats.pipelineValue)) }
-                            ]}
-                            margin={{ top: 20, right: 30, left: 40, bottom: 5 }}
-                        >
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis type="number" tickFormatter={(val) => `$${val/1000}k`} />
-                            <YAxis type="category" dataKey="name" />
-                            <Tooltip formatter={(value) => formatCurrency(value)} />
-                            <Legend />
-                            <Bar dataKey="won" name="Won Deals" stackId="a" fill="#22c55e" />
-                            <Bar dataKey="pipeline" name="Active Pipeline" stackId="a" fill="#3b82f6" />
-                            <Bar dataKey="gap" name="Gap to Target" stackId="a" fill="#e5e7eb" />
-                        </BarChart>
-                    </ResponsiveContainer>
+        <div className="space-y-10">
+            <Section title="Sales Dashboard">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <StatCard 
+                        title="Orders Won (USD)" 
+                        // FIX 1: Display USD value
+                        value={`$${stats.ordersWonValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} 
+                        icon={<DollarSign className="text-white"/>} 
+                        color="bg-green-500" 
+                    />
+                    <StatCard 
+                        title="Outstanding Quotes (USD)" 
+                        // FIX 2: Display USD value
+                        value={`$${stats.outstandingValue.toLocaleString('en-US', {maximumFractionDigits:0})}`} 
+                        icon={<Target className="text-white"/>} 
+                        color="bg-blue-500" 
+                    />
+                    <StatCard 
+                        title="Avg. Margin (Won)" 
+                        value={`${stats.avgMargin.toFixed(2)}%`} // Keep percentage as is
+                        icon={<PieChart className="text-white"/>} 
+                        color="bg-yellow-500" 
+                    />
                 </div>
-            </Card>
+            
+                <Card className="mt-8">
+                    <h3 className="text-xl font-bold mb-4">Quotes by Status</h3>
+                    <div className="flex flex-wrap justify-around items-center gap-4">
+                        {Object.keys(QUOTE_STATUSES).map(statusKey => (
+                            <div key={statusKey} className="text-center">
+                                <p className="text-4xl font-bold">{stats.statusCounts[statusKey] || 0}</p>
+                                <span className={`px-3 py-1 text-sm font-semibold text-white rounded-full ${QUOTE_STATUSES[statusKey]?.color || 'bg-gray-400'}`}>{QUOTE_STATUSES[statusKey]?.text || statusKey}</span>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            </Section>
+            
+            <Section title="BOI Compliance Dashboard">
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <Card>
+                        <h3 className="text-xl font-bold mb-4">Sales Mix (Export vs. Domestic)</h3>
+                        <div className="w-full bg-blue-200 rounded-full h-8">
+                            <div className="bg-green-600 h-8 rounded-l-full text-center text-white font-bold leading-8" style={{ width: `${stats.exportPercentage}%` }}>
+                                {stats.exportPercentage > 15 && `Export ${stats.exportPercentage.toFixed(1)}%`}
+                            </div>
+                        </div>
+                         <div className="text-center mt-2 text-sm text-gray-600">
+                             BOI Target: 70% Export
+                         </div>
+                    </Card>
+                    <Card>
+                        <h3 className="text-xl font-bold mb-4">Annual Sales vs. BOI Target (PHP)</h3>
+                        <div className="flex flex-col md:flex-row justify-around items-center text-center gap-6">
+                            {/* FIX: Ensure keys exist in BOI_TARGETS_USD object before mapping */}
+                            {Object.keys(BOI_TARGETS_USD).map(year => {
+                                const sales = stats.salesByYear[year] || 0;
+                                const targetPHP = BOI_TARGETS_USD[year] * stats.forexRate;
+                                const percentage = targetPHP > 0 ? (sales / targetPHP) * 100 : 0;
+                                return (
+                                    <div key={year}>
+                                        <p className="font-bold text-lg">{year}</p>
+                                        <CircularProgress percentage={percentage} label={`${percentage.toFixed(1)}%`} />
+                                        <p className="text-sm mt-2">
+                                            <span className="font-semibold">Actual:</span> {formatLargeNumber(sales)}<br/>
+                                            <span className="text-gray-500">Target: {formatLargeNumber(targetPHP)}</span>
+                                        </p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </Card>
+                 </div>
+            </Section>
         </div>
     );
 };
