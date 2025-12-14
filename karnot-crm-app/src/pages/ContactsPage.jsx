@@ -123,46 +123,8 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 4. Import Settings Modal ---
-const ImportSettingsModal = ({ onClose, onProceed }) => {
-    const [note, setNote] = useState('Responded to Email Campaign');
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center p-4">
-            <Card className="w-full max-w-md">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <FileCheck className="text-orange-500"/> Response Settings
-                    </h3>
-                    <button onClick={onClose}><X /></button>
-                </div>
-                <div className="space-y-4">
-                    <p className="text-sm text-gray-600">Configure how the uploaded responses will appear in the contact's history.</p>
-                    <Input 
-                        label="Log Date" 
-                        type="date" 
-                        value={date} 
-                        onChange={(e) => setDate(e.target.value)} 
-                    />
-                    <Input 
-                        label="Activity Note / Title" 
-                        value={note} 
-                        onChange={(e) => setNote(e.target.value)} 
-                        placeholder="e.g., 'Replied to Xmas Promo'"
-                    />
-                    <div className="flex justify-end gap-2 mt-6">
-                        <Button onClick={onClose} variant="secondary">Cancel</Button>
-                        <Button onClick={() => onProceed(note, date)} variant="primary">Select CSV File</Button>
-                    </div>
-                </div>
-            </Card>
-        </div>
-    );
-};
-
-// --- 5. ContactModal Component ---
-const ContactModal = ({ onClose, onSave, contactToEdit, companies = [], quotes = [] }) => {
+// --- 4. ContactModal Component ---
+const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => {
     const isEditMode = Boolean(contactToEdit);
     
     // Core Data
@@ -406,7 +368,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies = [], quotes =
     );
 };
 
-// --- 6. ContactCard (Unchanged) ---
+// --- 5. ContactCard (Unchanged) ---
 const ContactCard = ({ contact, onEdit, onDelete, selected, onToggleSelect }) => {
     const lastActivity = contact.interactions && contact.interactions.length > 0 ? contact.interactions[0] : null;
     const whatsappLink = getWhatsAppLink(contact.phone);
@@ -470,20 +432,16 @@ const ContactCard = ({ contact, onEdit, onDelete, selected, onToggleSelect }) =>
 };
 
 // --- Main Page Component ---
-const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initialContactToEdit }) => { 
+const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingContact, setEditingContact] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
-    const [importMode, setImportMode] = useState('CREATE'); 
-    
-    // --- NEW: Custom Response Import Settings ---
-    const [showImportSettings, setShowImportSettings] = useState(false);
-    const [importConfig, setImportConfig] = useState({ note: '', date: '' });
-
+    const [importMode, setImportMode] = useState('CREATE'); // 'CREATE' or 'UPDATE'
     const fileInputRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState('ALL'); 
     
+    // --- SELECTION STATE ---
     const [selectedIds, setSelectedIds] = useState(new Set());
 
     useEffect(() => {
@@ -498,37 +456,65 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
         const contacted = contacts.filter(c => c.isContacted).length;
         const visited = contacts.filter(c => c.isVisited).length;
         const emailed = contacts.filter(c => c.isEmailed).length;
-        const esco = contacts.filter(c => c.notes && (c.notes || '').includes('ESCO')).length;
+        const esco = contacts.filter(c => c.notes && c.notes.includes('ESCO')).length;
         return { total, contacted, visited, emailed, esco };
     }, [contacts]);
 
-    // --- Handlers ---
-    const handleScanForDuplicates = () => { /* ... Unchanged ... */ };
-    const handleResolveDuplicates = async (idsToDelete) => { /* ... Unchanged ... */ };
-    const handleSaveContact = async (contactData) => { /* ... Unchanged ... */ };
-    const handleUpdateContact = async (contactData) => { /* ... Unchanged ... */ };
-    const handleDeleteContact = async (contactId) => { /* ... Unchanged ... */ };
+    // --- Duplicate Logic ---
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+    const [duplicateGroups, setDuplicateGroups] = useState([]);
+
+    const handleScanForDuplicates = () => {
+        const groups = {};
+        contacts.forEach(contact => {
+            let key = contact.email ? `Email: ${contact.email.toLowerCase().trim()}` : `Name: ${contact.firstName.toLowerCase().trim()} ${contact.lastName.toLowerCase().trim()}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(contact);
+        });
+        const conflicts = Object.keys(groups).filter(key => groups[key].length > 1).map(key => ({ key, items: groups[key] }));
+        if (conflicts.length === 0) alert("Great news! No duplicates found.");
+        else { setDuplicateGroups(conflicts); setShowDuplicateModal(true); }
+    };
+
+    const handleResolveDuplicates = async (idsToDelete) => {
+        if (!user || !user.uid) return;
+        try {
+            const batch = writeBatch(db);
+            idsToDelete.forEach(id => { batch.delete(doc(db, "users", user.uid, "contacts", id)); });
+            await batch.commit();
+            alert(`Successfully deleted ${idsToDelete.length} duplicates.`);
+            setShowDuplicateModal(false);
+        } catch (error) { console.error(error); alert("Failed to delete duplicates."); }
+    };
+
+    // --- Standard Handlers ---
+    const handleSaveContact = async (contactData) => {
+        if (!user || !user.uid) return alert("Error: User not logged in.");
+        try { await addDoc(collection(db, "users", user.uid, "contacts"), { ...contactData, createdAt: serverTimestamp() }); handleCloseModal(); } catch (e) { console.error(e); alert("Failed to save contact."); }
+    };
+
+    const handleUpdateContact = async (contactData) => {
+        if (!editingContact) return;
+        try { await setDoc(doc(db, "users", user.uid, "contacts", editingContact.id), { ...contactData, lastModified: serverTimestamp() }, { merge: true }); handleCloseModal(); } catch (e) { console.error(e); alert("Failed to update contact."); }
+    };
+    
+    const handleDeleteContact = async (contactId) => {
+        if (window.confirm("Are you sure you want to delete this contact?")) {
+            try { await deleteDoc(doc(db, "users", user.uid, "contacts", contactId)); } catch (e) { alert("Failed to delete."); }
+        }
+    };
+
     const handleSave = (data) => editingContact ? handleUpdateContact(data) : handleSaveContact(data);
     const handleOpenNewModal = () => { setEditingContact(null); setShowModal(true); };
     const handleOpenEditModal = (c) => { setEditingContact(c); setShowModal(true); };
     const handleCloseModal = () => { setEditingContact(null); setShowModal(false); };
-    
     const handleImportClick = () => {
         setImportMode('CREATE');
         fileInputRef.current.click();
     };
-
-    // --- OPEN SETTINGS MODAL FIRST ---
     const handleResponseImportClick = () => {
         setImportMode('UPDATE');
-        setShowImportSettings(true); 
-    };
-
-    // --- PROCEED AFTER MODAL ---
-    const handleProceedWithResponseImport = (note, date) => {
-        setImportConfig({ note, date });
-        setShowImportSettings(false);
-        fileInputRef.current.click(); 
+        fileInputRef.current.click();
     };
     
     // --- BULK ACTION HANDLERS ---
@@ -549,6 +535,7 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
         }
     };
 
+    // 1. Email Action (For small groups)
     const handleBulkEmail = () => {
         const emails = contacts.filter(c => selectedIds.has(c.id) && c.email).map(c => c.email);
         if (emails.length === 0) return alert("No valid email addresses found.");
@@ -560,6 +547,7 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
         window.location.href = mailtoLink;
     };
 
+    // 2. Export CSV Action (For Mailchimp/Brevo)
     const handleBulkExport = () => {
         const selectedContacts = contacts.filter(c => selectedIds.has(c.id));
         if (selectedContacts.length === 0) return;
@@ -588,6 +576,7 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
         document.body.removeChild(link);
     };
 
+    // 3. Delete Action
     const handleBulkDelete = async () => {
         if (!window.confirm(`Permanently delete ${selectedIds.size} contacts?`)) return;
         const batch = writeBatch(db);
@@ -610,7 +599,7 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
         if (!file) return;
         setIsImporting(true);
         Papa.parse(file, {
-            header: true,
+            header: true, // Use header row to find columns
             skipEmptyLines: true,
             complete: async (results) => {
                 const dataRows = results.data;
@@ -619,22 +608,22 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
                 // --- UPDATE MODE (RESPONSE IMPORT) ---
                 if (importMode === 'UPDATE') {
                     let updatedCount = 0;
-                    const logNote = importConfig.note || 'Responded to Email'; 
-                    const logDate = importConfig.date || new Date().toISOString().split('T')[0]; 
-
                     dataRows.forEach(row => {
+                        // Look for 'EMAIL' or 'Email'
                         const email = (row['EMAIL'] || row['Email'] || row['Email Address'])?.trim();
                         if (!email) return;
 
+                        // Find existing contact
                         const match = contacts.find(c => c.email && c.email.toLowerCase() === email.toLowerCase());
                         if (match) {
                             const ref = doc(db, "users", user.uid, "contacts", match.id);
                             
+                            // Prepare updated interaction log
                             const newInteraction = {
                                 id: Date.now(),
-                                date: logDate, 
+                                date: new Date().toISOString().split('T')[0],
                                 type: 'Email',
-                                outcome: logNote, 
+                                outcome: 'Responded to Mail Shot (Imported)',
                                 linkedQuote: null
                             };
                             const updatedInteractions = [newInteraction, ...(match.interactions || [])];
@@ -651,7 +640,7 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
 
                     try {
                         await batch.commit();
-                        alert(`Success! Updated ${updatedCount} contacts with "${logNote}".`);
+                        alert(`Success! Updated ${updatedCount} contacts with "Responded" status.`);
                     } catch (error) {
                         console.error("Update Error:", error);
                         alert("Failed to update contacts.");
@@ -661,18 +650,19 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
                     return;
                 }
 
-                // ... (Create mode logic unchanged) ...
                 // --- CREATE MODE (STANDARD IMPORT) ---
+                // Logic to handle different CSV formats (Standard vs ESCO)
+                // Note: PapaParse header:true gives us an array of objects directly
                 let importCount = 0;
                 let duplicateCount = 0;
                 const existingNames = new Set(contacts.map(c => `${c.firstName} ${c.lastName}`.toLowerCase().trim()));
                 const contactsRef = collection(db, "users", user.uid, "contacts");
 
+                // Detect Format based on keys
                 const firstRow = dataRows[0] || {};
                 const isESCO = 'Name of Representative' in firstRow;
 
                 if (isESCO) {
-                    // (Same ESCO logic as before)
                     dataRows.forEach(row => {
                         const rawNames = row['Name of Representative'] ? row['Name of Representative'].split('/') : [];
                         const rawPositions = row['Position'] ? row['Position'].split('/') : [];
@@ -713,7 +703,7 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
                         });
                     });
                 } else {
-                    // (Same Standard logic as before)
+                    // Standard Import
                     dataRows.forEach(row => {
                         const firstName = (row['FirstName'] || row['First Name'] || '').trim();
                         const lastName = (row['LastName'] || row['Last Name'] || '').trim();
@@ -766,7 +756,7 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
         if (activeFilter === 'EMAILED') list = list.filter(c => c.isEmailed);
         if (activeFilter === 'CONTACTED') list = list.filter(c => c.isContacted);
         if (activeFilter === 'VISITED') list = list.filter(c => c.isVisited);
-        if (activeFilter === 'ESCO') list = list.filter(c => c.notes && (c.notes || '').includes('ESCO')); 
+        if (activeFilter === 'ESCO') list = list.filter(c => c.notes && c.notes.includes('ESCO')); 
         
         return list.filter(c => 
             c.firstName.toLowerCase().includes(lowerSearchTerm) || 
@@ -782,9 +772,6 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
         <div className="w-full pb-20"> 
             {showModal && <ContactModal onSave={handleSave} onClose={handleCloseModal} contactToEdit={editingContact} companies={companies} quotes={quotes} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
-            
-            {/* NEW: Import Settings Modal */}
-            {showImportSettings && <ImportSettingsModal onClose={() => setShowImportSettings(false)} onProceed={handleProceedWithResponseImport} />}
 
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                 <StatBadge icon={User} label="Total Contacts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
@@ -848,11 +835,13 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
                     
                     <div className="h-4 w-px bg-gray-600"></div>
                     
+                    {/* Small Group Email */}
                     <button onClick={handleBulkEmail} className="flex items-center gap-2 hover:text-orange-400 transition-colors">
                         <Send size={18} />
                         <span className="text-sm font-bold">Email App</span>
                     </button>
 
+                    {/* Large Group Export */}
                     <button onClick={handleBulkExport} className="flex items-center gap-2 hover:text-green-400 transition-colors">
                         <Download size={18} />
                         <span className="text-sm font-bold">Export CSV</span>
