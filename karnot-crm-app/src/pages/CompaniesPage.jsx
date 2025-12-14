@@ -124,7 +124,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
 };
 
 // --- 4. CompanyModal (Updated Logic) ---
-const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commissioningReports, onOpenQuote, onOpenReport }) => {
+const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commissioningReports, onOpenQuote, onOpenReport, onEditContact }) => {
     const isEditMode = Boolean(companyToEdit);
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
@@ -350,7 +350,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
                     ) : (
                         // --- DATA TAB ---
                         <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                            {/* CONTACTS */}
+                            {/* CONTACTS - NOW WITH EDIT BUTTON */}
                             <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
                                 <h5 className="font-bold text-gray-700 text-sm mb-2 flex items-center gap-2"><Users size={14}/> Contacts ({companyContacts.length})</h5>
                                 {companyContacts.length === 0 ? <p className="text-xs text-gray-400">None found.</p> : (
@@ -360,7 +360,10 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
                                                 <p className="text-sm font-bold">{c.firstName} {c.lastName}</p>
                                                 <p className="text-xs text-gray-500">{c.jobTitle}</p>
                                             </div>
-                                            {c.phone && <a href={`tel:${c.phone}`} className="text-blue-600 text-xs hover:underline">{c.phone}</a>}
+                                            <div className="flex gap-2 items-center">
+                                                {c.phone && <a href={`tel:${c.phone}`} className="text-blue-600 text-xs hover:underline">{c.phone}</a>}
+                                                <Button onClick={() => onEditContact(c)} variant="secondary" className="px-2 py-1 h-auto text-xs"><Edit size={12}/></Button>
+                                            </div>
                                         </div>
                                     ))
                                 )}
@@ -382,14 +385,14 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
                                 )}
                             </div>
 
-                            {/* COMMISSIONING - CLICK TO EDIT */}
+                            {/* COMMISSIONING */}
                             <div className="bg-green-50 rounded-lg p-2 border border-green-200">
                                 <h5 className="font-bold text-green-800 text-sm mb-2 flex items-center gap-2"><ClipboardCheck size={14}/> Reports ({relevantReports.length})</h5>
                                 {relevantReports.length === 0 ? <p className="text-xs text-green-400">None found.</p> : (
                                     relevantReports.map(r => (
                                         <div 
                                             key={r.id} 
-                                            onClick={() => onOpenReport(r)} // <--- TRIGGER EDIT
+                                            onClick={() => onOpenReport(r)} 
                                             className="bg-white p-2 rounded border border-green-100 mb-1 cursor-pointer hover:bg-green-100 hover:border-green-300 transition-colors"
                                         >
                                             <div className="flex justify-between">
@@ -420,7 +423,6 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
 const CompanyCard = ({ company, onEdit, onDelete, userLocation }) => {
     const lastActivity = company.interactions && company.interactions.length > 0 ? company.interactions[0] : null;
     
-    // Calculate distance if both exist
     let distance = null;
     if (userLocation && company.latitude && company.longitude) {
         distance = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, company.latitude, company.longitude).toFixed(1);
@@ -477,7 +479,7 @@ const CompanyCard = ({ company, onEdit, onDelete, userLocation }) => {
 };
 
 // --- Main Companies Page ---
-const CompaniesPage = ({ companies, user, quotes, contacts, commissioningReports, onOpenQuote, onOpenReport }) => { 
+const CompaniesPage = ({ companies, user, quotes, contacts, commissioningReports, onOpenQuote, onOpenReport, onEditContact }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingCompany, setEditingCompany] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -656,7 +658,7 @@ const CompaniesPage = ({ companies, user, quotes, contacts, commissioningReports
 
     return (
         <div className="w-full">
-            {showModal && <CompanyModal onSave={handleSave} onClose={handleCloseModal} companyToEdit={editingCompany} quotes={quotes} contacts={contacts} commissioningReports={commissioningReports} onOpenQuote={onOpenQuote} onOpenReport={onOpenReport} />}
+            {showModal && <CompanyModal onSave={handleSave} onClose={handleCloseModal} companyToEdit={editingCompany} quotes={quotes} contacts={contacts} commissioningReports={commissioningReports} onOpenQuote={onOpenQuote} onOpenReport={onOpenReport} onEditContact={onEditContact} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
