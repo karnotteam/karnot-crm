@@ -1,8 +1,8 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react'; 
 import { db } from '../firebase'; 
-import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs, updateDoc } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, MessageCircle, Database, Send, Download, FileCheck, Settings } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, MessageCircle, Database, Send, Download, FileCheck } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
 // --- 1. Helper: WhatsApp Link Generator ---
@@ -123,7 +123,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 4. Import Settings Modal (NEW) ---
+// --- 4. Import Settings Modal ---
 const ImportSettingsModal = ({ onClose, onProceed }) => {
     const [note, setNote] = useState('Responded to Email Campaign');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -162,7 +162,7 @@ const ImportSettingsModal = ({ onClose, onProceed }) => {
 };
 
 // --- 5. ContactModal Component ---
-const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => {
+const ContactModal = ({ onClose, onSave, contactToEdit, companies = [], quotes = [] }) => {
     const isEditMode = Boolean(contactToEdit);
     
     // Core Data
@@ -470,7 +470,7 @@ const ContactCard = ({ contact, onEdit, onDelete, selected, onToggleSelect }) =>
 };
 
 // --- Main Page Component ---
-const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit }) => { 
+const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initialContactToEdit }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingContact, setEditingContact] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -498,7 +498,7 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
         const contacted = contacts.filter(c => c.isContacted).length;
         const visited = contacts.filter(c => c.isVisited).length;
         const emailed = contacts.filter(c => c.isEmailed).length;
-        const esco = contacts.filter(c => c.notes && c.notes.includes('ESCO')).length;
+        const esco = contacts.filter(c => c.notes && (c.notes || '').includes('ESCO')).length;
         return { total, contacted, visited, emailed, esco };
     }, [contacts]);
 
@@ -521,14 +521,14 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
     // --- OPEN SETTINGS MODAL FIRST ---
     const handleResponseImportClick = () => {
         setImportMode('UPDATE');
-        setShowImportSettings(true); // Open Modal
+        setShowImportSettings(true); 
     };
 
     // --- PROCEED AFTER MODAL ---
     const handleProceedWithResponseImport = (note, date) => {
         setImportConfig({ note, date });
         setShowImportSettings(false);
-        fileInputRef.current.click(); // Trigger actual file input
+        fileInputRef.current.click(); 
     };
     
     // --- BULK ACTION HANDLERS ---
@@ -540,7 +540,6 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
     };
 
     const handleSelectAll = () => {
-        // ... (Unchanged)
         const allVisibleIds = filteredContacts.map(c => c.id);
         const allSelected = allVisibleIds.every(id => selectedIds.has(id));
         if (allSelected) {
@@ -620,8 +619,8 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
                 // --- UPDATE MODE (RESPONSE IMPORT) ---
                 if (importMode === 'UPDATE') {
                     let updatedCount = 0;
-                    const logNote = importConfig.note || 'Responded to Email'; // Use Custom Note
-                    const logDate = importConfig.date || new Date().toISOString().split('T')[0]; // Use Custom Date
+                    const logNote = importConfig.note || 'Responded to Email'; 
+                    const logDate = importConfig.date || new Date().toISOString().split('T')[0]; 
 
                     dataRows.forEach(row => {
                         const email = (row['EMAIL'] || row['Email'] || row['Email Address'])?.trim();
@@ -633,9 +632,9 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
                             
                             const newInteraction = {
                                 id: Date.now(),
-                                date: logDate, // CUSTOM DATE
+                                date: logDate, 
                                 type: 'Email',
-                                outcome: logNote, // CUSTOM NOTE
+                                outcome: logNote, 
                                 linkedQuote: null
                             };
                             const updatedInteractions = [newInteraction, ...(match.interactions || [])];
@@ -751,15 +750,23 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
         });
     };
 
-    // ... (Filter Logic and DeleteAll unchanged) ...
-    const handleDeleteAllContacts = async () => { /* ... Unchanged ... */ };
+    const handleDeleteAllContacts = async () => {
+         if (!window.confirm("WARNING: Delete ALL contacts? This cannot be undone.")) return;
+         const q = query(collection(db, "users", user.uid, "contacts"));
+         const snapshot = await getDocs(q);
+         const batch = writeBatch(db);
+         snapshot.forEach(doc => batch.delete(doc.ref));
+         await batch.commit();
+         alert("All contacts deleted.");
+    };
+
     const filteredContacts = useMemo(() => {
         const lowerSearchTerm = searchTerm.toLowerCase();
         let list = contacts;
         if (activeFilter === 'EMAILED') list = list.filter(c => c.isEmailed);
         if (activeFilter === 'CONTACTED') list = list.filter(c => c.isContacted);
         if (activeFilter === 'VISITED') list = list.filter(c => c.isVisited);
-        if (activeFilter === 'ESCO') list = list.filter(c => c.notes && c.notes.includes('ESCO')); 
+        if (activeFilter === 'ESCO') list = list.filter(c => c.notes && (c.notes || '').includes('ESCO')); 
         
         return list.filter(c => 
             c.firstName.toLowerCase().includes(lowerSearchTerm) || 
