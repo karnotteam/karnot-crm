@@ -82,8 +82,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     // Filter contacts based on selected company
     const companyContacts = useMemo(() => {
         if (!customer.name || !contacts) return [];
-        // Match contacts where companyName matches the current customer name
-        // (If you linked via ID, use that, but name matching works for now based on your structure)
         return contacts.filter(c => c.companyName === customer.name);
     }, [contacts, customer.name]);
 
@@ -92,7 +90,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             ...prev,
             name: company.companyName,
             address: company.address || prev.address,
-            // Reset contact when company changes
             contactId: '', contactName: '', contactEmail: ''
         }));
         setCompanySearch(company.companyName);
@@ -369,9 +366,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                     onFocus={() => setIsCompanyDropdownOpen(true)}
                                     placeholder="Search or Type Company Name..."
                                 />
-                                <Search className="absolute left-3 top-2.5 text-gray-400" size={16}/>
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}/>
                                 {customer.name && companies.find(c => c.companyName === customer.name) && (
-                                    <Check className="absolute right-3 top-2.5 text-green-500" size={16} title="Company Linked"/>
+                                    <Check className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={16} title="Company Linked"/>
                                 )}
                             </div>
                             
@@ -415,7 +412,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                             <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.jobTitle})</option>
                                         ))}
                                     </select>
-                                    <User className="absolute left-3 top-2.5 text-gray-400" size={16}/>
+                                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}/>
                                 </div>
                             </div>
                         )}
