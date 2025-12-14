@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { db, storage } from '../firebase'; 
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, serverTimestamp, doc, setDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { KARNOT_LOGO_BASE_64 } from '../data/constants'; 
-import { Camera, Printer, Building, Search, Check, User } from 'lucide-react';
+import { Camera, Printer, Building, Search, Check, User, Save, ArrowLeft } from 'lucide-react';
 
-export default function CommissioningPage({ user, onBack, companies = [], contacts = [] }) {
+export default function CommissioningPage({ user, onBack, companies = [], contacts = [], initialData = null }) {
     const [loading, setLoading] = useState(false);
     
     // --- Searchable Company State ---
@@ -13,28 +13,11 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
     const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
-    // Handle click outside dropdown
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setIsCompanyDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    // Filter companies
-    const filteredCompanies = useMemo(() => {
-        if (!companies) return [];
-        return companies.filter(c => c.companyName.toLowerCase().includes(companySearch.toLowerCase()));
-    }, [companies, companySearch]);
-
-    // Expanded State
-    const [formData, setFormData] = useState({
+    // Initial Form State
+    const defaultFormData = {
         // --- 1. Project Info ---
         customerName: '',
-        companyId: '', // To link in DB
+        companyId: '',
         siteAddress: '',
         contactPerson: '',
         contactId: '',
@@ -103,9 +86,37 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
         handoverTraining: false, 
         manualHandover: false,   
         maintenanceExplained: false 
-    });
+    };
 
+    const [formData, setFormData] = useState(defaultFormData);
     const [photo, setPhoto] = useState(null);
+    const [existingPhotoUrl, setExistingPhotoUrl] = useState(null);
+
+    // --- POPULATE FOR EDITING ---
+    useEffect(() => {
+        if (initialData) {
+            setFormData(prev => ({ ...prev, ...initialData }));
+            setCompanySearch(initialData.customerName || '');
+            setExistingPhotoUrl(initialData.leakCheckPhoto || null);
+        }
+    }, [initialData]);
+
+    // Handle click outside dropdown
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsCompanyDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Filter companies
+    const filteredCompanies = useMemo(() => {
+        if (!companies) return [];
+        return companies.filter(c => c.companyName.toLowerCase().includes(companySearch.toLowerCase()));
+    }, [companies, companySearch]);
 
     // Filter contacts based on selected company
     const companyContacts = useMemo(() => {
@@ -198,7 +209,9 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
         setLoading(true);
 
         try {
-            let photoUrl = "No Photo";
+            let photoUrl = existingPhotoUrl || "No Photo";
+            
+            // Upload new photo if selected
             if (photo) {
                 const storageRef = ref(storage, `commissioning/${user.uid}/${Date.now()}_leakcheck.jpg`);
                 const snapshot = await uploadBytes(storageRef, photo);
@@ -209,17 +222,30 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                 ? Math.abs(parseFloat(formData.outletTemp) - parseFloat(formData.inletTemp)).toFixed(1) 
                 : 'N/A';
 
-            await addDoc(collection(db, "users", user.uid, "commissioning_reports"), {
+            const finalReportData = {
                 ...formData,
                 calculatedDeltaT: deltaT,
                 engineerId: user.uid,
                 engineerEmail: user.email,
                 leakCheckPhoto: photoUrl,
                 status: 'Commissioned',
-                commissionDate: serverTimestamp()
-            });
+                lastModified: serverTimestamp()
+            };
 
-            alert("Report Saved!");
+            // Check if Editing existing or Creating new
+            if (initialData && initialData.id) {
+                // UPDATE
+                await setDoc(doc(db, "users", user.uid, "commissioning_reports", initialData.id), finalReportData, { merge: true });
+                alert("Report Updated Successfully!");
+            } else {
+                // CREATE NEW
+                await addDoc(collection(db, "users", user.uid, "commissioning_reports"), {
+                    ...finalReportData,
+                    commissionDate: serverTimestamp()
+                });
+                alert("New Report Saved!");
+            }
+
             onBack(); 
 
         } catch (error) {
@@ -296,13 +322,16 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900 print:text-xl">Commissioning Protocol</h1>
                         <p className="text-sm text-gray-500 print:text-xs">iHEAT R290 & iSTOR Series | 2025 Standard</p>
+                        {initialData && <p className="text-xs text-orange-600 no-print font-bold">EDITING REPORT {initialData.id}</p>}
                     </div>
                 </div>
                 <div className="flex gap-2 no-print">
                     <button type="button" onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
                         <Printer size={16} /> Print Cert
                     </button>
-                    <button type="button" onClick={onBack} className="text-gray-500 px-2 font-bold">Close X</button>
+                    <button type="button" onClick={onBack} className="text-gray-500 px-2 font-bold flex items-center gap-1">
+                        <ArrowLeft size={16}/> Back
+                    </button>
                 </div>
                 {/* Print Date */}
                 <div className="hidden print:block text-right text-xs">
@@ -388,11 +417,11 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
 
                         <div>
                             <label className="text-xs font-bold text-gray-500">Heat Pump Serial</label>
-                            <input name="heatPumpSerial" onChange={handleChange} className="w-full p-2 border rounded" />
+                            <input name="heatPumpSerial" value={formData.heatPumpSerial} onChange={handleChange} className="w-full p-2 border rounded" />
                         </div>
                         <div>
                             <label className="text-xs font-bold text-gray-500">Tank Serial</label>
-                            <input name="tankSerial" onChange={handleChange} className="w-full p-2 border rounded" />
+                            <input name="tankSerial" value={formData.tankSerial} onChange={handleChange} className="w-full p-2 border rounded" />
                         </div>
                     </div>
                 </div>
@@ -418,10 +447,10 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                     <div className="print-compact-section">
                         <h3 className="font-bold text-gray-800 mb-2">3. Handover Setpoints</h3>
                         <div className="grid grid-cols-2 gap-2 print:print-cols-4">
-                            <div><label className="text-xs font-bold">Mode</label><select name="unitMode" onChange={handleChange} className="w-full p-1 border rounded text-xs"><option>Heating+DHW</option><option>Cooling</option></select></div>
-                            <div><label className="text-xs font-bold">DHW °C</label><input type="number" name="dhwSetPoint" className="w-full p-1 border rounded" /></div>
-                            <div><label className="text-xs font-bold">Heat °C</label><input type="number" name="heatingSetPoint" className="w-full p-1 border rounded" /></div>
-                            <div className="flex items-center"><label className="text-xs"><input type="checkbox" name="timeZonesSetup" /> Timer Set?</label></div>
+                            <div><label className="text-xs font-bold">Mode</label><select name="unitMode" value={formData.unitMode} onChange={handleChange} className="w-full p-1 border rounded text-xs"><option>Heating+DHW</option><option>Cooling</option></select></div>
+                            <div><label className="text-xs font-bold">DHW °C</label><input type="number" name="dhwSetPoint" value={formData.dhwSetPoint} onChange={handleChange} className="w-full p-1 border rounded" /></div>
+                            <div><label className="text-xs font-bold">Heat °C</label><input type="number" name="heatingSetPoint" value={formData.heatingSetPoint} onChange={handleChange} className="w-full p-1 border rounded" /></div>
+                            <div className="flex items-center"><label className="text-xs"><input type="checkbox" name="timeZonesSetup" checked={formData.timeZonesSetup} onChange={handleChange} /> Timer Set?</label></div>
                         </div>
                     </div>
 
@@ -429,9 +458,9 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                     <div className="print-compact-section">
                         <h3 className="font-bold text-red-700 mb-2 print:text-black">4. R290 Safety Checks</h3>
                         <div className="grid grid-cols-1 gap-2 print:print-cols-3">
-                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="ventilation" onChange={handleChange}/> Ventilation OK</label>
-                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="ignitionClearance" onChange={handleChange}/> No Sparks (3m)</label>
-                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="drainsSealed" onChange={handleChange}/> Drains Sealed</label>
+                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="ventilation" checked={formData.ventilation} onChange={handleChange}/> Ventilation OK</label>
+                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="ignitionClearance" checked={formData.ignitionClearance} onChange={handleChange}/> No Sparks (3m)</label>
+                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="drainsSealed" checked={formData.drainsSealed} onChange={handleChange}/> Drains Sealed</label>
                         </div>
                     </div>
                 </div>
@@ -442,10 +471,10 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                     <div className="print-compact-section">
                         <h3 className="font-bold text-gray-800 mb-2">5. Mechanical & Elec</h3>
                         <div className="grid grid-cols-2 gap-2">
-                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="filterMeshCheck" onChange={handleChange}/> Filter Clean</label>
-                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="magnesiumRod" onChange={handleChange}/> Anode OK</label>
-                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="safetyValveDrain" onChange={handleChange}/> Safety Drain</label>
-                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="rcdInstalled" onChange={handleChange}/> RCD Tested</label>
+                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="filterMeshCheck" checked={formData.filterMeshCheck} onChange={handleChange}/> Filter Clean</label>
+                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="magnesiumRod" checked={formData.magnesiumRod} onChange={handleChange}/> Anode OK</label>
+                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="safetyValveDrain" checked={formData.safetyValveDrain} onChange={handleChange}/> Safety Drain</label>
+                            <label className="flex items-center gap-1 text-xs"><input type="checkbox" name="rcdInstalled" checked={formData.rcdInstalled} onChange={handleChange}/> RCD Tested</label>
                         </div>
                     </div>
 
@@ -453,10 +482,10 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                     <div className="print-compact-section">
                         <h3 className="font-bold text-gray-800 mb-2">6. Controller Logic</h3>
                         <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="flex justify-between items-center"><span>Pump:</span> <select name="pumpMode" onChange={handleChange} className="border p-0 w-16"><option>Normal</option><option>Demand</option></select></div>
-                            <div className="flex justify-between items-center"><span>Heater:</span> <select name="electricHeaterLogic" onChange={handleChange} className="border p-0 w-16"><option>Hot Water</option><option>All</option></select></div>
-                            <div className="flex justify-between items-center"><span>DHW Diff:</span> <input name="hwTempDiff" className="w-12 border text-center" placeholder="3"/></div>
-                            <div className="flex justify-between items-center"><span>Legionella:</span> <input type="checkbox" name="legionellaEnabled" /></div>
+                            <div className="flex justify-between items-center"><span>Pump:</span> <select name="pumpMode" value={formData.pumpMode} onChange={handleChange} className="border p-0 w-16"><option>Normal</option><option>Demand</option></select></div>
+                            <div className="flex justify-between items-center"><span>Heater:</span> <select name="electricHeaterLogic" value={formData.electricHeaterLogic} onChange={handleChange} className="border p-0 w-16"><option>Hot Water</option><option>All</option></select></div>
+                            <div className="flex justify-between items-center"><span>DHW Diff:</span> <input name="hwTempDiff" value={formData.hwTempDiff} onChange={handleChange} className="w-12 border text-center" placeholder="3"/></div>
+                            <div className="flex justify-between items-center"><span>Legionella:</span> <input type="checkbox" name="legionellaEnabled" checked={formData.legionellaEnabled} onChange={handleChange} /></div>
                         </div>
                     </div>
                 </div>
@@ -465,12 +494,12 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                 <div className="bg-orange-50 p-4 rounded print:bg-white print:p-0 print-compact-section">
                     <h3 className="font-bold text-gray-800 mb-2">7. Performance Validation</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 print:print-cols-4 print:gap-2">
-                        <div><label className="text-xs font-bold">Output (kW)</label><input name="heatOutputKw" onChange={handleChange} className="w-full p-1 border rounded" /></div>
-                        <div><label className="text-xs font-bold">Input (kW)</label><input name="electricalInputKwe" onChange={handleChange} className="w-full p-1 border rounded" /></div>
+                        <div><label className="text-xs font-bold">Output (kW)</label><input name="heatOutputKw" value={formData.heatOutputKw} onChange={handleChange} className="w-full p-1 border rounded" /></div>
+                        <div><label className="text-xs font-bold">Input (kW)</label><input name="electricalInputKwe" value={formData.electricalInputKwe} onChange={handleChange} className="w-full p-1 border rounded" /></div>
                         <div><label className="text-xs font-bold">COP</label><input name="cop" value={formData.cop} className="w-full p-1 border rounded font-bold bg-white" readOnly /></div>
-                        <div><label className="text-xs text-gray-500">Inlet °C</label><input name="inletTemp" onChange={handleChange} className="w-full p-1 border rounded" /></div>
-                        <div><label className="text-xs text-gray-500">Outlet °C</label><input name="outletTemp" onChange={handleChange} className="w-full p-1 border rounded" /></div>
-                        <div><label className="text-xs text-gray-500">Flow L/m</label><input name="waterFlow" onChange={handleChange} className="w-full p-1 border rounded" /></div>
+                        <div><label className="text-xs text-gray-500">Inlet °C</label><input name="inletTemp" value={formData.inletTemp} onChange={handleChange} className="w-full p-1 border rounded" /></div>
+                        <div><label className="text-xs text-gray-500">Outlet °C</label><input name="outletTemp" value={formData.outletTemp} onChange={handleChange} className="w-full p-1 border rounded" /></div>
+                        <div><label className="text-xs text-gray-500">Flow L/m</label><input name="waterFlow" value={formData.waterFlow} onChange={handleChange} className="w-full p-1 border rounded" /></div>
                     </div>
                 </div>
 
@@ -493,14 +522,14 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 print:grid-cols-2 print:gap-4">
                         <div className="space-y-2 print:space-y-1">
                             <h4 className="font-bold text-sm border-b">Installer Details</h4>
-                            <input placeholder="Company Name" name="installerName" onChange={handleChange} className="w-full p-1 border rounded" />
-                            <input placeholder="Technician Name" name="technicianName" onChange={handleChange} className="w-full p-1 border rounded" />
+                            <input placeholder="Company Name" name="installerName" value={formData.installerName} onChange={handleChange} className="w-full p-1 border rounded" />
+                            <input placeholder="Technician Name" name="technicianName" value={formData.technicianName} onChange={handleChange} className="w-full p-1 border rounded" />
                         </div>
                         <div className="space-y-1">
                             <h4 className="font-bold text-sm border-b">Checklist</h4>
-                            <label className="flex items-center gap-2 text-xs"><input type="checkbox" name="handoverTraining" /> Customer training completed</label>
-                            <label className="flex items-center gap-2 text-xs"><input type="checkbox" name="maintenanceExplained" /> Maintenance & R290 Safety explained</label>
-                            <label className="flex items-center gap-2 text-xs"><input type="checkbox" name="manualHandover" /> Manuals Handed Over</label>
+                            <label className="flex items-center gap-2 text-xs"><input type="checkbox" name="handoverTraining" checked={formData.handoverTraining} onChange={handleChange} /> Customer training completed</label>
+                            <label className="flex items-center gap-2 text-xs"><input type="checkbox" name="maintenanceExplained" checked={formData.maintenanceExplained} onChange={handleChange} /> Maintenance & R290 Safety explained</label>
+                            <label className="flex items-center gap-2 text-xs"><input type="checkbox" name="manualHandover" checked={formData.manualHandover} onChange={handleChange} /> Manuals Handed Over</label>
                         </div>
                     </div>
 
@@ -521,10 +550,11 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                             <Camera className="mx-auto mb-1" /> Upload Leak Check Photo
                             <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
                         </label>
-                        {photo && <p className="text-xs text-green-600">Attached</p>}
+                        {existingPhotoUrl && <p className="text-xs text-blue-600 mt-2">Current Photo Exists</p>}
+                        {photo && <p className="text-xs text-green-600 mt-2">New Photo Selected</p>}
                     </div>
-                    <button type="submit" disabled={loading} className="w-full py-3 bg-orange-600 text-white font-bold rounded shadow hover:bg-orange-700">
-                        {loading ? 'Saving...' : 'Submit to CRM'}
+                    <button type="submit" disabled={loading} className="w-full py-3 bg-orange-600 text-white font-bold rounded shadow hover:bg-orange-700 flex items-center justify-center gap-2">
+                        {loading ? 'Saving...' : <><Save size={18}/> {initialData ? 'Update Report' : 'Submit Report'}</>}
                     </button>
                 </div>
 
