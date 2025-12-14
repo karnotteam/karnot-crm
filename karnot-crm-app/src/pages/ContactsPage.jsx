@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, MessageCircle, Database } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, MessageCircle, Database, Send } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
 // --- 1. Helper: WhatsApp Link Generator ---
@@ -15,7 +15,6 @@ const getWhatsAppLink = (phone) => {
     if (!cleanNumber.startsWith('63') && cleanNumber.length === 10) {
         cleanNumber = '63' + cleanNumber;
     }
-    // Using full API to avoid SSL/network blocking issues
     return `https://api.whatsapp.com/send?phone=${cleanNumber}`;
 };
 
@@ -369,14 +368,25 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     );
 };
 
-// --- 5. ContactCard (Unchanged) ---
-const ContactCard = ({ contact, onEdit, onDelete }) => {
+// --- 5. ContactCard (Updated with Checkbox) ---
+const ContactCard = ({ contact, onEdit, onDelete, selected, onToggleSelect }) => {
     const lastActivity = contact.interactions && contact.interactions.length > 0 ? contact.interactions[0] : null;
     const whatsappLink = getWhatsAppLink(contact.phone);
 
     return (
-        <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between h-full hover:border-orange-300 transition-colors">
-            <div>
+        <Card className={`p-4 rounded-lg shadow border transition-colors relative ${selected ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-400' : 'border-gray-200 hover:border-orange-300'}`}>
+            
+            {/* SELECTION CHECKBOX */}
+            <div className="absolute top-4 left-4 z-10">
+                <input 
+                    type="checkbox" 
+                    checked={selected} 
+                    onChange={() => onToggleSelect(contact.id)}
+                    className="w-5 h-5 text-orange-600 rounded border-gray-300 focus:ring-orange-500 cursor-pointer"
+                />
+            </div>
+
+            <div className="pl-8"> {/* Padding to avoid checkbox overlap */}
                 <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">
                         <h4 className="font-bold text-lg text-gray-800 leading-tight">{contact.firstName} {contact.lastName}</h4>
@@ -407,7 +417,6 @@ const ContactCard = ({ contact, onEdit, onDelete }) => {
                             <span className="text-[10px] text-gray-500">{lastActivity.date}</span>
                         </div>
                         <p className="text-xs text-gray-700 truncate">{lastActivity.outcome}</p>
-                        {lastActivity.linkedQuote && <div className="mt-1 text-[10px] text-blue-600 flex items-center gap-1"><LinkIcon size={10}/> Quote {lastActivity.linkedQuote.id}</div>}
                     </div>
                 ) : (
                     <div className="mb-3 p-2 text-xs text-gray-400 italic">No recent activity</div>
@@ -433,7 +442,10 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState('ALL'); 
     
-    // --- AUTO-OPEN EDIT MODAL IF REQUESTED FROM APP.JSX ---
+    // --- SELECTION STATE ---
+    const [selectedIds, setSelectedIds] = useState(new Set());
+
+    // --- AUTO-OPEN EDIT MODAL ---
     useEffect(() => {
         if (initialContactToEdit) {
             setEditingContact(initialContactToEdit);
@@ -441,13 +453,12 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
         }
     }, [initialContactToEdit]);
 
-    // --- Stats Calculation ---
     const stats = useMemo(() => {
         const total = contacts.length;
         const contacted = contacts.filter(c => c.isContacted).length;
         const visited = contacts.filter(c => c.isVisited).length;
         const emailed = contacts.filter(c => c.isEmailed).length;
-        const esco = contacts.filter(c => c.notes && c.notes.includes('ESCO')).length; // <--- NEW STAT
+        const esco = contacts.filter(c => c.notes && c.notes.includes('ESCO')).length;
         return { total, contacted, visited, emailed, esco };
     }, [contacts]);
 
@@ -501,6 +512,64 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
     const handleCloseModal = () => { setEditingContact(null); setShowModal(false); };
     const handleImportClick = () => fileInputRef.current.click();
     
+    // --- BULK SELECTION HANDLERS ---
+    const toggleSelection = (id) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedIds(newSet);
+    };
+
+    const handleSelectAll = () => {
+        // If current selection matches filtered list length, deselect all. Otherwise select all.
+        // NOTE: We only select what is VISIBLE in the filtered list
+        const allVisibleIds = filteredContacts.map(c => c.id);
+        const allSelected = allVisibleIds.every(id => selectedIds.has(id));
+
+        if (allSelected) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(allVisibleIds));
+        }
+    };
+
+    const handleBulkEmail = () => {
+        const emails = contacts
+            .filter(c => selectedIds.has(c.id) && c.email)
+            .map(c => c.email);
+        
+        if (emails.length === 0) return alert("No valid email addresses found in selection.");
+        
+        // BCC to protect privacy
+        const mailtoLink = `mailto:?bcc=${emails.join(',')}`;
+        
+        // Safety check for URL length (approx 2000 chars limit on some browsers)
+        if (mailtoLink.length > 2000) {
+            if(!window.confirm("You selected many contacts. The email link might be too long for your mail app. Try selecting fewer contacts if it fails. Continue?")) return;
+        }
+        
+        window.location.href = mailtoLink;
+    };
+
+    const handleBulkDelete = async () => {
+        if (!window.confirm(`Permanently delete ${selectedIds.size} contacts? This cannot be undone.`)) return;
+        
+        const batch = writeBatch(db);
+        selectedIds.forEach(id => {
+            const ref = doc(db, "users", user.uid, "contacts", id);
+            batch.delete(ref);
+        });
+
+        try {
+            await batch.commit();
+            setSelectedIds(new Set()); // Clear selection
+            alert("Contacts deleted.");
+        } catch (error) {
+            console.error(error);
+            alert("Failed to delete.");
+        }
+    };
+
     const handleFileChange = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -508,11 +577,11 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
         Papa.parse(file, {
             header: false, skipEmptyLines: true,
             complete: async (results) => {
+                // ... (Import logic remains identical to previous version, ensuring ESCO support)
                 const allRows = results.data;
                 let headerRowIndex = -1;
                 let isESCOFormat = false;
 
-                // 1. Detect Header Row & Format
                 for (let i = 0; i < Math.min(allRows.length, 10); i++) {
                     const row = allRows[i];
                     if (row.includes("Name of Representative")) {
@@ -537,7 +606,6 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
                 let duplicateCount = 0;
                 const existingNames = new Set(contacts.map(c => `${c.firstName} ${c.lastName}`.toLowerCase().trim()));
 
-                // --- ESCO IMPORT LOGIC ---
                 if (isESCOFormat) {
                     const colComp = findCol(["Company Name"]);
                     const colName = findCol(["Name of Representative"]);
@@ -547,37 +615,25 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
                     dataRows.forEach(row => {
                         const rawNames = row[colName] ? row[colName].toString().split('/') : [];
                         const rawPositions = row[colPos] ? row[colPos].toString().split('/') : [];
-                        const rawEmails = row[colEmail] ? row[colEmail].toString().split(/[\s/\n,]+/) : []; // Split by space, slash, newline
+                        const rawEmails = row[colEmail] ? row[colEmail].toString().split(/[\s/\n,]+/) : [];
                         const companyName = row[colComp] ? row[colComp].trim() : '';
-
-                        // Clean up email list (remove empty strings)
                         const validEmails = rawEmails.filter(e => e.includes('@'));
 
                         rawNames.forEach((fullName, index) => {
                             const cleanName = fullName.trim();
                             if (!cleanName) return;
-
-                            // Split First/Last Name
                             const nameParts = cleanName.split(' ');
                             const lastName = nameParts.pop();
                             const firstName = nameParts.join(' ');
-
-                            // Match Position & Email
-                            const position = rawPositions[index] ? rawPositions[index].trim() : (rawPositions[0] || ''); // Fallback to 1st position
+                            const position = rawPositions[index] ? rawPositions[index].trim() : (rawPositions[0] || '');
                             
-                            // Email Logic: If 3 people & 3 emails -> 1:1 match. If 3 people & 1 email -> Everyone gets it.
                             let email = '';
-                            if (validEmails.length === rawNames.length) {
-                                email = validEmails[index];
-                            } else if (validEmails.length === 1) {
-                                email = validEmails[0]; 
-                            } else {
-                                email = validEmails[index] || '';
-                            }
+                            if (validEmails.length === rawNames.length) email = validEmails[index];
+                            else if (validEmails.length === 1) email = validEmails[0]; 
+                            else email = validEmails[index] || '';
 
                             if (existingNames.has(`${firstName} ${lastName}`.toLowerCase())) { duplicateCount++; return; }
 
-                            // Company Link
                             let companyMatch = null;
                             if (companies.length && companyName) {
                                  const lowerC = companyName.toLowerCase().trim();
@@ -595,9 +651,7 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
                             importCount++;
                         });
                     });
-
                 } else {
-                    // --- STANDARD IMPORT LOGIC (OLD) ---
                     const colFirstName = findCol(["FirstName", "First Name"]);
                     const colLastName = findCol(["LastName", "Last Name"]);
                     const colEmail = findCol(["EmailAddress", "Email", "Email Address"]);
@@ -649,14 +703,13 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
          alert("All contacts deleted.");
     };
 
-    // --- UPDATED FILTER LOGIC ---
     const filteredContacts = useMemo(() => {
         const lowerSearchTerm = searchTerm.toLowerCase();
         let list = contacts;
         if (activeFilter === 'EMAILED') list = list.filter(c => c.isEmailed);
         if (activeFilter === 'CONTACTED') list = list.filter(c => c.isContacted);
         if (activeFilter === 'VISITED') list = list.filter(c => c.isVisited);
-        if (activeFilter === 'ESCO') list = list.filter(c => c.notes && c.notes.includes('ESCO')); // <--- NEW FILTER
+        if (activeFilter === 'ESCO') list = list.filter(c => c.notes && c.notes.includes('ESCO')); // <--- FILTER
         
         return list.filter(c => 
             c.firstName.toLowerCase().includes(lowerSearchTerm) || 
@@ -669,7 +722,7 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
     }, [contacts, searchTerm, activeFilter]);
 
     return (
-        <div className="w-full">
+        <div className="w-full pb-20"> {/* Padding bottom for floating bar */}
             {showModal && <ContactModal onSave={handleSave} onClose={handleCloseModal} contactToEdit={editingContact} companies={companies} quotes={quotes} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
 
@@ -681,33 +734,76 @@ const ContactsPage = ({ contacts, companies, user, quotes, initialContactToEdit 
                 <StatBadge icon={Database} label="ESCO List" count={stats.esco} total={stats.total} color="orange" active={activeFilter === 'ESCO'} onClick={() => setActiveFilter(activeFilter === 'ESCO' ? 'ALL' : 'ESCO')} />
             </div>
 
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                    {activeFilter !== 'ALL' && <Filter size={20} className="text-orange-600"/>}
-                    {activeFilter === 'ALL' ? 'All Contacts' : `${activeFilter.charAt(0) + activeFilter.slice(1).toLowerCase()} List`}
-                    <span className="text-gray-400 font-normal text-base ml-2">({filteredContacts.length})</span>
-                </h2>
-                <div className="flex gap-2">
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 whitespace-nowrap">
+                        {activeFilter !== 'ALL' && <Filter size={20} className="text-orange-600"/>}
+                        {activeFilter === 'ALL' ? 'All Contacts' : `${activeFilter.charAt(0) + activeFilter.slice(1).toLowerCase()} List`}
+                        <span className="text-gray-400 font-normal text-base ml-2">({filteredContacts.length})</span>
+                    </h2>
+                    
+                    {/* SELECT ALL BUTTON */}
+                    {filteredContacts.length > 0 && (
+                        <button 
+                            onClick={handleSelectAll}
+                            className="text-xs font-bold text-orange-600 hover:text-orange-800 underline"
+                        >
+                            {selectedIds.size === filteredContacts.length ? 'Deselect All' : 'Select All'}
+                        </button>
+                    )}
+                </div>
+
+                <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
                     <Button onClick={handleScanForDuplicates} variant="secondary" title="Find duplicate contacts"><CheckSquare className="mr-2" size={16}/> Dedupe</Button>
-                    <Button onClick={handleDeleteAllContacts} variant="danger">Delete All</Button>
-                    <Button onClick={handleImportClick} variant="secondary" disabled={isImporting}><Upload className="mr-2" size={16} /> {isImporting ? '...' : 'Import CSV'}</Button>
-                    <Button onClick={handleOpenNewModal} variant="primary"><Plus className="mr-2" size={16} /> New Contact</Button>
+                    <Button onClick={handleDeleteAllContacts} variant="danger">Reset</Button>
+                    <Button onClick={handleImportClick} variant="secondary" disabled={isImporting}><Upload className="mr-2" size={16} /> Import</Button>
+                    <Button onClick={handleOpenNewModal} variant="primary"><Plus className="mr-2" size={16} /> New</Button>
                 </div>
             </div>
 
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" style={{ display: 'none' }} />
 
             <div className="mb-4 relative">
-                <Input type="text" placeholder="Search by Name, Company, or Job Title (e.g. 'CEM')..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+                <Input type="text" placeholder="Search by Name, Company, Note (e.g. 'ESCO')..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredContacts.sort((a, b) => a.lastName.localeCompare(b.lastName)).map(contact => (
-                    <ContactCard key={contact.id} contact={contact} onEdit={handleOpenEditModal} onDelete={handleDeleteContact} />
+                    <ContactCard 
+                        key={contact.id} 
+                        contact={contact} 
+                        onEdit={handleOpenEditModal} 
+                        onDelete={handleDeleteContact} 
+                        selected={selectedIds.has(contact.id)}
+                        onToggleSelect={toggleSelection}
+                    />
                 ))}
             </div>
             {contacts.length === 0 && <div className="text-center py-10"><User size={48} className="mx-auto text-gray-400"/><p>No contacts yet.</p></div>}
+
+            {/* FLOATING BULK ACTIONS BAR */}
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-in fade-in slide-in-from-bottom-4">
+                    <span className="font-bold text-sm">{selectedIds.size} Selected</span>
+                    
+                    <div className="h-4 w-px bg-gray-600"></div>
+                    
+                    <button onClick={handleBulkEmail} className="flex items-center gap-2 hover:text-orange-400 transition-colors">
+                        <Send size={18} />
+                        <span className="text-sm font-bold">Email</span>
+                    </button>
+
+                    <button onClick={handleBulkDelete} className="flex items-center gap-2 hover:text-red-400 transition-colors">
+                        <Trash2 size={18} />
+                        <span className="text-sm font-bold">Delete</span>
+                    </button>
+
+                    <button onClick={() => setSelectedIds(new Set())} className="ml-2 text-gray-400 hover:text-white">
+                        <X size={18}/>
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
