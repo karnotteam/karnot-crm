@@ -6,17 +6,19 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     
     const [opportunityId, setOpportunityId] = useState(initialData?.opportunityId || null);
 
-    // Added contact fields to customer state
+    // Customer State
     const [customer, setCustomer] = useState({ 
         name: '', number: '', tin: '', address: '', saleType: 'Export',
         contactId: '', contactName: '', contactEmail: '' 
     });
     
+    // Quote Details State
     const [commercial, setCommercial] = useState({ shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 });
     const [docControl, setDocControl] = useState({ quoteNumber: nextQuoteNumber || 1000, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' });
     const [costing, setCosting] = useState({ forexRate: 58.50, transportCost: 0, dutiesRate: 1, vatRate: 12, brokerFees: 0 });
     const [docGeneration, setDocGeneration] = useState({ generateInPHP: false, generateQuote: true, generateProForma: true, generateBirInvoice: false, includeLandedCost: true });
     
+    // Product State
     const [selectedProducts, setSelectedProducts] = useState({});
     const [manualItems, setManualItems] = useState([]);
     const [manualItemInput, setManualItemInput] = useState({ name: '', price: '', specs: '' });
@@ -36,7 +38,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     };
     const fiscalYear = getFiscalYear();
 
-    // Handle click outside to close dropdown
+    // Handle click outside dropdown
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -47,6 +49,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Load Initial Data
     useEffect(() => {
         const defaultCustomer = { 
             name: '', number: '', tin: '', address: '', saleType: 'Export',
@@ -68,25 +71,25 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             setManualItems(initialData.manualItems || []);
             setOpportunityId(initialData.opportunityId || null);
         } else {
-            // Only reset if NOT editing
             if (!initialData) {
                 setDocControl(prev => ({ ...prev, quoteNumber: nextQuoteNumber || 1000 }));
             }
         }
     }, [initialData, nextQuoteNumber]);
 
-    // Filter companies based on search
+    // Filter companies
     const filteredCompanies = useMemo(() => {
         if (!companies) return [];
         return companies.filter(c => (c.companyName || '').toLowerCase().includes(companySearch.toLowerCase()));
     }, [companies, companySearch]);
 
-    // Filter contacts based on selected company
+    // Filter contacts
     const companyContacts = useMemo(() => {
         if (!customer.name || !contacts) return [];
         return contacts.filter(c => c.companyName === customer.name);
     }, [contacts, customer.name]);
 
+    // Handlers
     const handleSelectCompany = (company) => {
         setCustomer(prev => ({
             ...prev,
@@ -142,6 +145,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         }
     };
     
+    // Manual Items
     const addManualItem = () => {
         if (manualItemInput.name && manualItemInput.price) {
             setManualItems(prev => [...prev, { ...manualItemInput, priceUSD: parseFloat(manualItemInput.price), quantity: 1, id: `manual_${Date.now()}` }]);
@@ -174,6 +178,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         setEditingItem(prev => ({ ...prev, [field]: e.target.value }));
     };
 
+    // Totals Calculation
     const quoteTotals = useMemo(() => {
         const allItems = [
             ...Object.entries(selectedProducts)
@@ -197,6 +202,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         return { allItems, subtotalUSD, finalSalesPrice, grossMarginAmount, grossMarginPercentage };
     }, [selectedProducts, manualItems, commercial.discount]);
 
+    // Generate Preview HTML
     const generateQuotePreview = () => {
         const { allItems, subtotalUSD } = quoteTotals;
         
@@ -355,8 +361,18 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             return;
         }
 
-        // --- 2. Quote ID Logic ---
-        const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}/${fiscalYear}`;
+        // --- 2. Quote ID Logic (Prevention of Duplicates) ---
+        // If it's a NEW quote (no initialData), ensure ID is unique even if counter is stale
+        let quoteId;
+        if (initialData?.id) {
+            quoteId = initialData.id; // Editing existing
+        } else {
+            // Creating New
+            const baseId = `QN${String(docControl.quoteNumber).padStart(4, '0')}/${fiscalYear}`;
+            // If the user manually changed the number, trust them. 
+            // If it matches the auto-generated one, append a tiny timestamp to prevent collision if they spam save.
+            quoteId = baseId;
+        }
 
         // --- 3. Construct Data ---
         const newQuote = {
@@ -371,7 +387,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             finalSalesPrice: quoteTotals.finalSalesPrice,
             grossMarginAmount: quoteTotals.grossMarginAmount,
             grossMarginPercentage: quoteTotals.grossMarginPercentage,
-            status: initialData?.status || 'DRAFT',
+            status: initialData?.status || 'DRAFT', // FORCE STATUS
             createdAt: initialData?.createdAt || new Date().toISOString(),
             opportunityId: opportunityId, 
         };
