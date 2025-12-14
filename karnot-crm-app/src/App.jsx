@@ -32,7 +32,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'}><Building className="mr-2" size={16} /> Companies</Button>
                 <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'}><Users className="mr-2" size={16} /> Contacts</Button>
                 
-                {/* --- NEW COMMISSIONING BUTTON --- */}
                 <Button onClick={() => setActiveView('commissioning')} variant={activeView === 'commissioning' ? 'primary' : 'secondary'}>
                     <ClipboardCheck className="mr-2" size={16} /> Commissioning
                 </Button>
@@ -57,6 +56,7 @@ export default function App() {
     const [quotes, setQuotes] = useState([]);
     const [companies, setCompanies] = useState([]); 
     const [contacts, setContacts] = useState([]);
+    const [commissioningReports, setCommissioningReports] = useState([]); // <--- NEW STATE
     
     const [loadingAuth, setLoadingAuth] = useState(true);
     const [loadingData, setLoadingData] = useState(true);
@@ -84,9 +84,10 @@ export default function App() {
             let oppsLoaded = false;
             let companiesLoaded = false;
             let contactsLoaded = false;
+            let commsLoaded = false;
             
             const checkAllDataLoaded = () => {
-                if (quotesLoaded && oppsLoaded && companiesLoaded && contactsLoaded) {
+                if (quotesLoaded && oppsLoaded && companiesLoaded && contactsLoaded && commsLoaded) {
                     setLoadingData(false); 
                 }
             };
@@ -98,7 +99,7 @@ export default function App() {
                 setQuotes(liveQuotes);
                 quotesLoaded = true;
                 checkAllDataLoaded();
-            }, (error) => { console.error("Error syncing quotes: ", error); });
+            });
 
             // 2. Sync Opportunities
             const oppsQuery = query(collection(db, "users", user.uid, "opportunities"));
@@ -107,7 +108,7 @@ export default function App() {
                 setOpportunities(liveOpps);
                 oppsLoaded = true;
                 checkAllDataLoaded();
-            }, (error) => { console.error("Error syncing opportunities: ", error); });
+            });
             
             // 3. Sync Companies
             const companiesQuery = query(collection(db, "users", user.uid, "companies"));
@@ -116,7 +117,7 @@ export default function App() {
                 setCompanies(liveCompanies);
                 companiesLoaded = true;
                 checkAllDataLoaded();
-            }, (error) => { console.error("Error syncing companies: ", error); });
+            });
             
             // 4. Sync Contacts
             const contactsQuery = query(collection(db, "users", user.uid, "contacts"));
@@ -125,19 +126,30 @@ export default function App() {
                 setContacts(liveContacts);
                 contactsLoaded = true;
                 checkAllDataLoaded();
-            }, (error) => { console.error("Error syncing contacts: ", error); });
+            });
+
+            // 5. Sync Commissioning Reports
+            const commsQuery = query(collection(db, "users", user.uid, "commissioning_reports"));
+            const unsubComms = onSnapshot(commsQuery, (snapshot) => {
+                const liveComms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setCommissioningReports(liveComms);
+                commsLoaded = true;
+                checkAllDataLoaded();
+            });
 
             return () => {
                 unsubQuotes();
                 unsubOpps();
                 unsubCompanies(); 
                 unsubContacts();
+                unsubComms();
             };
         } else {
             setQuotes([]);
             setOpportunities([]);
             setCompanies([]);
             setContacts([]);
+            setCommissioningReports([]);
             setLoadingData(false);
         }
     }, [user]); 
@@ -174,7 +186,6 @@ export default function App() {
                 currentOpportunityId = oppDocRef.id; 
             } catch (error) {
                 console.error("Error creating new opportunity automatically: ", error);
-                alert("Quote saved, but failed to create linked funnel entry. See console.");
             }
         }
         const quoteRef = doc(db, "users", user.uid, "quotes", quoteData.id);
@@ -277,10 +288,11 @@ export default function App() {
                 {activeView === 'companies' && (
                     <CompaniesPage 
                         companies={companies}
-                        contacts={contacts}      // <--- NEW: Pass contacts list
+                        contacts={contacts} 
                         quotes={quotes}
+                        commissioningReports={commissioningReports} // <--- PASSED HERE
                         user={user}
-                        onOpenQuote={handleEditQuote} // <--- NEW: Allow opening quotes
+                        onOpenQuote={handleEditQuote} 
                     />
                 )}
                 
@@ -288,7 +300,7 @@ export default function App() {
                     <ContactsPage 
                         contacts={contacts}
                         companies={companies}
-                        quotes={quotes}  // <--- HERE IT IS!
+                        quotes={quotes}
                         user={user}
                     />
                 )}
@@ -323,11 +335,8 @@ export default function App() {
                 )}
                 
                 {activeView === 'dashboard' && (
-    <DashboardPage 
-        quotes={quotes} 
-        user={user}  // <--- ADD THIS
-    />
-)}
+                    <DashboardPage quotes={quotes} user={user} />
+                )}
                 
                 {activeView === 'calculator' && (
                     <QuoteCalculator 
