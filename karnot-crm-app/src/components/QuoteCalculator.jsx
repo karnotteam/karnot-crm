@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check, User } from 'lucide-react';
 import { ALL_PRODUCTS, Card, Button, Input, Textarea, Checkbox, Section } from '../data/constants.jsx';
 
-const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, companies, contacts }) => {
+const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, companies = [], contacts = [] }) => {
     
     const [opportunityId, setOpportunityId] = useState(initialData?.opportunityId || null);
 
@@ -13,7 +13,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     });
     
     const [commercial, setCommercial] = useState({ shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 });
-    const [docControl, setDocControl] = useState({ quoteNumber: nextQuoteNumber, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' });
+    const [docControl, setDocControl] = useState({ quoteNumber: nextQuoteNumber || 1000, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' });
     const [costing, setCosting] = useState({ forexRate: 58.50, transportCost: 0, dutiesRate: 1, vatRate: 12, brokerFees: 0 });
     const [docGeneration, setDocGeneration] = useState({ generateInPHP: false, generateQuote: true, generateProForma: true, generateBirInvoice: false, includeLandedCost: true });
     
@@ -53,7 +53,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             contactId: '', contactName: '', contactEmail: ''
         };
         const defaultCommercial = { shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 };
-        const defaultDocControl = { quoteNumber: nextQuoteNumber, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' };
+        const defaultDocControl = { quoteNumber: nextQuoteNumber || 1000, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' };
         const defaultCosting = { forexRate: 58.50, transportCost: 0, dutiesRate: 1, vatRate: 12, brokerFees: 0 };
         const defaultDocGeneration = { generateInPHP: false, generateQuote: true, generateProForma: true, generateBirInvoice: false, includeLandedCost: true };
 
@@ -61,29 +61,24 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             setCustomer({ ...defaultCustomer, ...initialData.customer });
             setCompanySearch(initialData.customer?.name || ''); 
             setCommercial({ ...defaultCommercial, ...initialData.commercial });
-            setDocControl({ ...defaultDocControl, ...initialData.docControl, quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber });
+            setDocControl({ ...defaultDocControl, ...initialData.docControl, quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber || 1000 });
             setCosting({ ...defaultCosting, ...initialData.costing });
             setDocGeneration({ ...defaultDocGeneration, ...initialData.docGeneration });
             setSelectedProducts(initialData.selectedProducts || {});
             setManualItems(initialData.manualItems || []);
             setOpportunityId(initialData.opportunityId || null);
         } else {
-            setCustomer(defaultCustomer);
-            setCompanySearch('');
-            setCommercial(defaultCommercial);
-            setDocControl({ ...defaultDocControl, quoteNumber: nextQuoteNumber });
-            setCosting(defaultCosting);
-            setDocGeneration(defaultDocGeneration);
-            setSelectedProducts({});
-            setManualItems([]);
-            setOpportunityId(null);
+            // Only reset if NOT editing
+            if (!initialData) {
+                setDocControl(prev => ({ ...prev, quoteNumber: nextQuoteNumber || 1000 }));
+            }
         }
-    }, [initialData, nextQuoteNumber, companies]);
+    }, [initialData, nextQuoteNumber]);
 
     // Filter companies based on search
     const filteredCompanies = useMemo(() => {
         if (!companies) return [];
-        return companies.filter(c => c.companyName.toLowerCase().includes(companySearch.toLowerCase()));
+        return companies.filter(c => (c.companyName || '').toLowerCase().includes(companySearch.toLowerCase()));
     }, [companies, companySearch]);
 
     // Filter contacts based on selected company
@@ -349,13 +344,21 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     };
     
     const handleSave = () => {
+        // --- 1. Validation ---
         if (!customer.name) {
-            alert("Please enter a customer name.");
+            alert("Error: Please select a customer first.");
             return;
         }
-        
+
+        if (!onSaveQuote) {
+            alert("System Error: 'onSaveQuote' function is missing. Please refresh.");
+            return;
+        }
+
+        // --- 2. Quote ID Logic ---
         const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}/${fiscalYear}`;
 
+        // --- 3. Construct Data ---
         const newQuote = {
             id: quoteId,
             customer,
@@ -372,7 +375,17 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             createdAt: initialData?.createdAt || new Date().toISOString(),
             opportunityId: opportunityId, 
         };
-        onSaveQuote(newQuote);
+
+        // --- 4. DEBUGGING ---
+        console.log("Saving Quote Data:", newQuote);
+
+        // --- 5. EXECUTE SAVE ---
+        try {
+            onSaveQuote(newQuote);
+        } catch (error) {
+            console.error("Save Failed:", error);
+            alert("Failed to save quote. Check console for details.");
+        }
     };
 
     const productCategories = useMemo(() => {
@@ -415,9 +428,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                             {isCompanyDropdownOpen && (
                                 <div className="absolute z-50 w-full mt-1 bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
                                     {filteredCompanies.length === 0 ? (
-                                        <div className="cursor-default select-none relative py-2 px-4 text-gray-700">
-                                            {companySearch ? "No matches. Continue typing to create new." : "Start typing to search..."}
-                                        </div>
+                                        <div className="py-2 px-4 text-gray-500 italic">No companies found.</div>
                                     ) : (
                                         filteredCompanies.map((company) => (
                                             <div
@@ -560,7 +571,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             
             <div className="flex justify-end items-center mt-12 border-t pt-6 gap-4">
                 <Button onClick={generateQuotePreview} variant="secondary"><Eye className="mr-2"/>Preview Quote</Button>
-                <Button onClick={handleSave} variant="success"><Plus className="mr-2"/>{initialData ? 'Update Quote in CRM' : 'Save Quote to CRM'}</Button>
+                <Button onClick={handleSave} variant="success"><Save className="mr-2"/>{initialData ? 'Update Quote' : 'Save Quote'}</Button>
             </div>
         </Card>
     );
