@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, ChevronRight } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
 // --- 1. Stats Card Component ---
@@ -110,8 +110,8 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 3. ContactModal Component (Updated with Interaction Log) ---
-const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
+// --- 3. ContactModal Component (Updated with Quote Linking) ---
+const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => {
     const isEditMode = Boolean(contactToEdit);
     
     // Core Data
@@ -122,38 +122,73 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
     const [phone, setPhone] = useState(contactToEdit?.phone || '');
     const [companyId, setCompanyId] = useState(contactToEdit?.companyId || (companies.length > 0 ? companies[0].id : ''));
     
-    // Checkboxes (Still useful for filters)
+    // Activity Tracking
     const [isVerified, setIsVerified] = useState(contactToEdit?.isVerified || false);
     const [isEmailed, setIsEmailed] = useState(contactToEdit?.isEmailed || false);
     const [isContacted, setIsContacted] = useState(contactToEdit?.isContacted || false);
+    const [contactDate, setContactDate] = useState(contactToEdit?.contactDate || '');
     const [isVisited, setIsVisited] = useState(contactToEdit?.isVisited || false);
-    const [notes, setNotes] = useState(contactToEdit?.notes || ''); // General Notes
+    const [visitDate, setVisitDate] = useState(contactToEdit?.visitDate || '');
+    const [notes, setNotes] = useState(contactToEdit?.notes || '');
 
     // --- Interaction History State ---
     const [interactions, setInteractions] = useState(contactToEdit?.interactions || []);
     const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
     const [newLogType, setNewLogType] = useState('Call');
     const [newLogOutcome, setNewLogOutcome] = useState('');
+    
+    // NEW: Quote Attachment State
+    const [selectedQuoteId, setSelectedQuoteId] = useState('');
+
+    // Filter quotes relevant to this contact's company
+    const relevantQuotes = useMemo(() => {
+        if (!quotes || !companyId) return [];
+        // Find company name for current ID
+        const selectedCompany = companies.find(c => c.id === companyId);
+        if (!selectedCompany) return [];
+        
+        const cName = selectedCompany.companyName.toLowerCase();
+        
+        return quotes.filter(q => 
+            q.customer?.name?.toLowerCase().includes(cName) || 
+            q.customer?.name?.toLowerCase() === cName
+        );
+    }, [quotes, companyId, companies]);
 
     const handleAddInteraction = () => {
         if (!newLogOutcome) return alert("Please enter an outcome or note for this interaction.");
         
+        // Prepare optional quote data
+        let linkedQuote = null;
+        if (selectedQuoteId) {
+            const q = relevantQuotes.find(rq => rq.id === selectedQuoteId);
+            if (q) {
+                linkedQuote = {
+                    id: q.id,
+                    total: q.finalSalesPrice || 0,
+                    status: q.status
+                };
+            }
+        }
+
         const newInteraction = {
             id: Date.now(),
             date: newLogDate,
             type: newLogType,
-            outcome: newLogOutcome
+            outcome: newLogOutcome,
+            linkedQuote: linkedQuote // Attach the quote object
         };
 
         const updatedInteractions = [newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date));
         setInteractions(updatedInteractions);
 
-        // Auto-update checkboxes based on activity type
+        // Auto-update checkboxes
         if (newLogType === 'Call') setIsContacted(true);
         if (newLogType === 'Visit') setIsVisited(true);
         if (newLogType === 'Email') setIsEmailed(true);
 
         setNewLogOutcome(''); // Clear input
+        setSelectedQuoteId(''); // Clear selection
     };
 
     const handleDeleteInteraction = (id) => {
@@ -171,8 +206,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
         const contactData = {
             firstName, lastName, jobTitle, email, phone, companyId, companyName, 
             isVerified, isEmailed, isContacted, isVisited, 
-            notes, 
-            interactions // Save the array
+            notes, interactions
         };
         onSave(contactData);
     };
@@ -220,13 +254,13 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
                     </div>
 
                     {/* New Interaction Form */}
-                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-4">
-                        <div className="flex gap-2 mb-2">
-                            <Input type="date" value={newLogDate} onChange={e => setNewLogDate(e.target.value)} className="text-sm" />
+                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-4 space-y-2">
+                        <div className="flex gap-2">
+                            <Input type="date" value={newLogDate} onChange={e => setNewLogDate(e.target.value)} className="text-sm w-1/3" />
                             <select 
                                 value={newLogType} 
                                 onChange={e => setNewLogType(e.target.value)}
-                                className="block w-1/3 px-2 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm"
+                                className="block w-2/3 px-2 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm"
                             >
                                 <option value="Call">Call</option>
                                 <option value="Visit">Visit</option>
@@ -235,12 +269,32 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
                                 <option value="Note">Note</option>
                             </select>
                         </div>
+                        
+                        {/* Quote Linker */}
+                        {relevantQuotes.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <LinkIcon size={14} className="text-gray-500"/>
+                                <select 
+                                    value={selectedQuoteId}
+                                    onChange={(e) => setSelectedQuoteId(e.target.value)}
+                                    className="block w-full px-2 py-1 bg-white border border-gray-300 rounded text-xs"
+                                >
+                                    <option value="">-- Attach Quote (Optional) --</option>
+                                    {relevantQuotes.map(q => (
+                                        <option key={q.id} value={q.id}>
+                                            {q.id} - ${q.finalSalesPrice?.toLocaleString()} ({q.status})
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
                         <div className="flex gap-2">
                             <input 
                                 type="text" 
                                 value={newLogOutcome} 
                                 onChange={e => setNewLogOutcome(e.target.value)}
-                                placeholder="Outcome / Details (e.g. Sent brochure, interested in quote...)"
+                                placeholder="Outcome / Details..."
                                 className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-orange-500 focus:border-orange-500"
                             />
                             <Button onClick={handleAddInteraction} variant="secondary" className="px-3"><Plus size={16}/></Button>
@@ -268,6 +322,16 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
                                     </button>
                                 </div>
                                 <p className="text-sm text-gray-800 leading-snug">{log.outcome}</p>
+                                
+                                {/* Linked Quote Badge */}
+                                {log.linkedQuote && (
+                                    <div className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded p-1.5 w-fit">
+                                        <FileText size={14} className="text-blue-600"/>
+                                        <span className="text-xs font-semibold text-blue-800">
+                                            {log.linkedQuote.id} (${log.linkedQuote.total?.toLocaleString()})
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -281,7 +345,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
     );
 };
 
-// --- 4. ContactCard Component (Updated with Last Activity) ---
+// --- 4. ContactCard Component (Updated) ---
 const ContactCard = ({ contact, onEdit, onDelete }) => {
     // Find latest activity
     const lastActivity = contact.interactions && contact.interactions.length > 0 
@@ -319,6 +383,12 @@ const ContactCard = ({ contact, onEdit, onDelete }) => {
                             <span className="text-[10px] text-gray-500">{lastActivity.date}</span>
                         </div>
                         <p className="text-xs text-gray-700 truncate">{lastActivity.outcome}</p>
+                        {/* Quote indicator in card */}
+                        {lastActivity.linkedQuote && (
+                            <div className="mt-1 text-[10px] text-blue-600 flex items-center gap-1">
+                                <LinkIcon size={10}/> Quote {lastActivity.linkedQuote.id}
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="mb-3 p-2 text-xs text-gray-400 italic">No recent activity</div>
@@ -345,7 +415,7 @@ const ContactCard = ({ contact, onEdit, onDelete }) => {
 };
 
 // --- Main Page Component ---
-const ContactsPage = ({ contacts, companies, user }) => { 
+const ContactsPage = ({ contacts, companies, user, quotes }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingContact, setEditingContact] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -472,7 +542,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
                         email, phone: '', companyId: companyMatch ? companyMatch.id : null,
                         companyName: companyMatch ? companyMatch.companyName : (csvCompanyName || 'N/A'),
                         isVerified: false, isEmailed: false, isContacted: false, isVisited: false, notes: '',
-                        interactions: [], // Init empty array
+                        interactions: [], 
                         createdAt: serverTimestamp()
                     });
                     importCount++;
@@ -518,7 +588,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
 
     return (
         <div className="w-full">
-            {showModal && <ContactModal onSave={handleSave} onClose={handleCloseModal} contactToEdit={editingContact} companies={companies} />}
+            {showModal && <ContactModal onSave={handleSave} onClose={handleCloseModal} contactToEdit={editingContact} companies={companies} quotes={quotes} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
 
             {/* --- Stats Row --- */}
