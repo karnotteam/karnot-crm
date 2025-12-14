@@ -49,6 +49,7 @@ export default function App() {
     const [user, setUser] = useState(null); 
     const [activeView, setActiveView] = useState('funnel');
     const [quoteToEdit, setQuoteToEdit] = useState(null);
+    const [reportToEdit, setReportToEdit] = useState(null); // <--- NEW: Track which report to edit
     const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
     
     // --- State from Firebase ---
@@ -56,7 +57,7 @@ export default function App() {
     const [quotes, setQuotes] = useState([]);
     const [companies, setCompanies] = useState([]); 
     const [contacts, setContacts] = useState([]);
-    const [commissioningReports, setCommissioningReports] = useState([]); // <--- NEW STATE
+    const [commissioningReports, setCommissioningReports] = useState([]); 
     
     const [loadingAuth, setLoadingAuth] = useState(true);
     const [loadingData, setLoadingData] = useState(true);
@@ -227,6 +228,10 @@ export default function App() {
         setQuoteToEdit(quote);
         setActiveView('calculator');
     };
+    const handleEditReport = (report) => {
+        setReportToEdit(report);
+        setActiveView('commissioning');
+    };
     const handleOpenOpportunity = (opp) => {
         setSelectedOpportunity(opp);
         setActiveView('opportunityDetail'); 
@@ -252,6 +257,10 @@ export default function App() {
         setSelectedOpportunity(null); 
         setActiveView('calculator');
     };
+    const handleNewCommissioning = () => {
+        setReportToEdit(null); // Clear previous edit state
+        setActiveView('commissioning');
+    }
 
     const nextQuoteNumber = useMemo(() => {
         if (quotes.length === 0) return 2501;
@@ -290,9 +299,10 @@ export default function App() {
                         companies={companies}
                         contacts={contacts} 
                         quotes={quotes}
-                        commissioningReports={commissioningReports} // <--- PASSED HERE
+                        commissioningReports={commissioningReports}
                         user={user}
                         onOpenQuote={handleEditQuote} 
+                        onOpenReport={handleEditReport} // <--- NEW PROP
                     />
                 )}
                 
@@ -310,6 +320,7 @@ export default function App() {
                         user={user}
                         companies={companies} 
                         contacts={contacts} 
+                        initialData={reportToEdit} // <--- Pass the report data
                         onBack={() => setActiveView('dashboard')}
                     />
                 )}
