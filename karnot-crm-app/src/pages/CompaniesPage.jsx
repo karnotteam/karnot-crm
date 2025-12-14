@@ -2,27 +2,24 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Users, User, ArrowRight, Navigation } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Users, User, ArrowRight, Navigation, ClipboardCheck } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox } from '../data/constants.jsx'; 
 
 // --- 1. Helper: Haversine Distance Formula (km) ---
 const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Radius of the earth in km
+    const R = 6371; 
     const dLat = deg2rad(lat2 - lat1);  
     const dLon = deg2rad(lon2 - lon1); 
     const a = 
         Math.sin(dLat/2) * Math.sin(dLat/2) +
         Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2); 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-    const d = R * c; // Distance in km
-    return d;
+    return R * c; 
 }
 
-const deg2rad = (deg) => {
-    return deg * (Math.PI/180)
-}
+const deg2rad = (deg) => deg * (Math.PI/180);
 
-// --- 2. Stats Badge (Unchanged) ---
+// --- 2. Stats Badge ---
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return (
@@ -45,7 +42,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-// --- 3. Duplicate Resolver (Unchanged) ---
+// --- 3. Duplicate Resolver ---
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
 
@@ -126,17 +123,18 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 4. CompanyModal (Updated with Location Capture) ---
-const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpenQuote }) => {
+// --- 4. CompanyModal (Updated Logic) ---
+const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commissioningReports, onOpenQuote }) => {
     const isEditMode = Boolean(companyToEdit);
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
     const [industry, setIndustry] = useState(companyToEdit?.industry || '');
     const [address, setAddress] = useState(companyToEdit?.address || '');
+    const [activeTab, setActiveTab] = useState('ACTIVITY'); // ACTIVITY, DATA
     
-    // GPS Coordinates
-    const [latitude, setLatitude] = useState(companyToEdit?.latitude || null);
-    const [longitude, setLongitude] = useState(companyToEdit?.longitude || null);
+    // Editable GPS
+    const [latitude, setLatitude] = useState(companyToEdit?.latitude || '');
+    const [longitude, setLongitude] = useState(companyToEdit?.longitude || '');
     
     // Status
     const [isVerified, setIsVerified] = useState(companyToEdit?.isVerified || false);
@@ -150,20 +148,35 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
     const [newLogOutcome, setNewLogOutcome] = useState('');
     const [selectedQuoteId, setSelectedQuoteId] = useState('');
 
+    // --- SMART MATCHING LOGIC ---
+    const targetName = companyToEdit ? companyToEdit.companyName.toLowerCase().trim() : companyName.toLowerCase().trim();
+    const targetId = companyToEdit?.id;
+
     const companyContacts = useMemo(() => {
-        if (!contacts || !companyToEdit?.id) return [];
-        return contacts.filter(c => c.companyId === companyToEdit.id);
-    }, [contacts, companyToEdit]);
+        if (!contacts) return [];
+        return contacts.filter(c => 
+            c.companyId === targetId || 
+            (c.companyName && c.companyName.toLowerCase().trim() === targetName)
+        );
+    }, [contacts, targetName, targetId]);
 
     const relevantQuotes = useMemo(() => {
-        if (!quotes || !companyName) return [];
+        if (!quotes) return [];
         return quotes.filter(q => 
-            q.customer?.name?.toLowerCase().includes(companyName.toLowerCase()) || 
-            q.customer?.name?.toLowerCase() === companyName.toLowerCase()
+            q.customer?.name?.toLowerCase().includes(targetName) || 
+            q.customer?.name?.toLowerCase() === targetName
         );
-    }, [quotes, companyName]);
+    }, [quotes, targetName]);
 
-    // --- GPS Handler ---
+    const relevantReports = useMemo(() => {
+        if (!commissioningReports) return [];
+        return commissioningReports.filter(r => 
+            r.companyId === targetId ||
+            (r.customerName && r.customerName.toLowerCase().includes(targetName))
+        );
+    }, [commissioningReports, targetName, targetId]);
+
+    // GPS Handler
     const handleGetLocation = () => {
         if (!navigator.geolocation) {
             alert("Geolocation is not supported by your browser");
@@ -173,7 +186,6 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
             (position) => {
                 setLatitude(position.coords.latitude);
                 setLongitude(position.coords.longitude);
-                alert("Location captured! 📍");
             },
             (error) => {
                 alert("Unable to retrieve your location. Ensure GPS is on.");
@@ -219,7 +231,8 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
         onSave({ 
             companyName, website, industry, address, 
             isVerified, isTarget, notes, interactions,
-            latitude, longitude // Save coords
+            latitude: latitude ? parseFloat(latitude) : null, 
+            longitude: longitude ? parseFloat(longitude) : null
         });
     };
 
@@ -242,15 +255,16 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
                     
                     <Textarea label="Address / Plant Location" rows="2" value={address} onChange={(e) => setAddress(e.target.value)} />
                     
-                    {/* LOCATION CAPTURE */}
-                    <div className="flex items-center gap-4 bg-gray-50 p-2 rounded border">
-                        <Button onClick={handleGetLocation} variant="secondary" className="text-xs">
-                            <MapPin size={14} className="mr-1"/> 
-                            {latitude ? 'Update GPS' : 'Capture GPS'}
+                    {/* EDITABLE LOCATION */}
+                    <div className="bg-gray-50 p-3 rounded border border-gray-200">
+                        <label className="block text-xs font-bold text-gray-600 mb-1">GPS Coordinates</label>
+                        <div className="flex gap-2 mb-2">
+                            <Input placeholder="Lat" value={latitude} onChange={(e) => setLatitude(e.target.value)} className="text-xs"/>
+                            <Input placeholder="Long" value={longitude} onChange={(e) => setLongitude(e.target.value)} className="text-xs"/>
+                        </div>
+                        <Button onClick={handleGetLocation} variant="secondary" className="w-full text-xs py-1">
+                            <MapPin size={14} className="mr-1"/> Capture Current Location
                         </Button>
-                        <span className="text-xs text-gray-500">
-                            {latitude ? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}` : 'No location set'}
-                        </span>
                     </div>
 
                     <Textarea label="General Notes" rows="2" value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -259,90 +273,132 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
                         <Checkbox id="isVerifiedComp" label="Verified Data" checked={isVerified} onChange={(e) => setIsVerified(e.target.checked)} />
                         <Checkbox id="isTarget" label="Target Account" checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />
                     </div>
+                </div>
 
-                    {isEditMode && (
-                        <div className="mt-4">
-                            <h4 className="font-bold text-gray-700 flex items-center gap-2 mb-2">
-                                <Users size={18}/> People at this Company ({companyContacts.length})
-                            </h4>
-                            <div className="bg-blue-50 rounded-lg p-2 border border-blue-100 max-h-40 overflow-y-auto space-y-2">
-                                {companyContacts.length === 0 ? (
-                                    <p className="text-xs text-gray-500 italic text-center p-2">No contacts linked yet.</p>
-                                ) : (
-                                    companyContacts.map(contact => (
-                                        <div key={contact.id} className="flex justify-between items-center bg-white p-2 rounded shadow-sm">
+                {/* Right: Tabs (Activity / Data) */}
+                <div className="flex-1 border-l border-gray-200 pl-0 md:pl-6 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => setActiveTab('ACTIVITY')}
+                                className={`px-3 py-1 rounded text-sm font-bold ${activeTab === 'ACTIVITY' ? 'bg-orange-100 text-orange-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                            >
+                                Activity Log
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('DATA')}
+                                className={`px-3 py-1 rounded text-sm font-bold ${activeTab === 'DATA' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}
+                            >
+                                Linked Data ({companyContacts.length + relevantQuotes.length + relevantReports.length})
+                            </button>
+                        </div>
+                        <button onClick={onClose} className="hidden md:block text-gray-500 hover:text-gray-800"><X /></button>
+                    </div>
+
+                    {activeTab === 'ACTIVITY' ? (
+                        <>
+                            <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-4 space-y-2">
+                                <div className="flex gap-2">
+                                    <Input type="date" value={newLogDate} onChange={e => setNewLogDate(e.target.value)} className="text-sm w-1/3" />
+                                    <select value={newLogType} onChange={e => setNewLogType(e.target.value)} className="block w-2/3 px-2 py-2 bg-white border-gray-300 rounded-md shadow-sm text-sm">
+                                        <option value="Visit">Site Visit</option>
+                                        <option value="Call">Call</option>
+                                        <option value="Email">Email</option>
+                                        <option value="Note">Note</option>
+                                    </select>
+                                </div>
+                                {relevantQuotes.length > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <LinkIcon size={14} className="text-gray-500"/>
+                                        <select value={selectedQuoteId} onChange={(e) => setSelectedQuoteId(e.target.value)} className="block w-full px-2 py-1 bg-white border border-gray-300 rounded text-xs">
+                                            <option value="">-- Attach Quote (Optional) --</option>
+                                            {relevantQuotes.map(q => <option key={q.id} value={q.id}>{q.id} - ${q.finalSalesPrice?.toLocaleString()} ({q.status})</option>)}
+                                        </select>
+                                    </div>
+                                )}
+                                <div className="flex gap-2">
+                                    <input type="text" value={newLogOutcome} onChange={e => setNewLogOutcome(e.target.value)} placeholder="Details..." className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                                    <Button onClick={handleAddInteraction} variant="secondary" className="px-3"><Plus size={16}/></Button>
+                                </div>
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto space-y-3 pr-2" style={{minHeight: '200px', maxHeight: '500px'}}>
+                                {interactions.map((log) => (
+                                    <div key={log.id} className="bg-white border border-gray-200 p-3 rounded-lg shadow-sm group relative">
+                                        <div className="flex justify-between items-start mb-1">
                                             <div className="flex items-center gap-2">
-                                                <div className="bg-gray-200 p-1 rounded-full"><User size={12}/></div>
-                                                <div>
-                                                    <p className="text-sm font-bold text-gray-800">{contact.firstName} {contact.lastName}</p>
-                                                    <p className="text-[10px] text-gray-500">{contact.jobTitle || 'No Title'}</p>
-                                                </div>
+                                                <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${log.type === 'Visit' ? 'bg-green-500' : 'bg-blue-500'}`}>{log.type}</span>
+                                                <span className="text-xs text-gray-500">{log.date}</span>
                                             </div>
-                                            {contact.phone && <span className="text-[10px] text-gray-400">{contact.phone}</span>}
+                                            <button onClick={() => handleDeleteInteraction(log.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><X size={14}/></button>
+                                        </div>
+                                        <p className="text-sm text-gray-800">{log.outcome}</p>
+                                        {log.linkedQuote && (
+                                            <div 
+                                                onClick={() => handleQuoteClick(log.linkedQuote.id)}
+                                                className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded p-1.5 w-fit cursor-pointer hover:bg-blue-100 hover:border-blue-300 transition-colors"
+                                            >
+                                                <FileText size={14} className="text-blue-600"/>
+                                                <span className="text-xs font-semibold text-blue-800">{log.linkedQuote.id} (${log.linkedQuote.total?.toLocaleString()})</span>
+                                                <ArrowRight size={12} className="text-blue-400"/>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        // --- DATA TAB ---
+                        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                            {/* CONTACTS */}
+                            <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
+                                <h5 className="font-bold text-gray-700 text-sm mb-2 flex items-center gap-2"><Users size={14}/> Contacts ({companyContacts.length})</h5>
+                                {companyContacts.length === 0 ? <p className="text-xs text-gray-400">None found.</p> : (
+                                    companyContacts.map(c => (
+                                        <div key={c.id} className="bg-white p-2 rounded border border-gray-100 mb-1 flex justify-between items-center">
+                                            <div>
+                                                <p className="text-sm font-bold">{c.firstName} {c.lastName}</p>
+                                                <p className="text-xs text-gray-500">{c.jobTitle}</p>
+                                            </div>
+                                            {c.phone && <a href={`tel:${c.phone}`} className="text-blue-600 text-xs hover:underline">{c.phone}</a>}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* QUOTES */}
+                            <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
+                                <h5 className="font-bold text-blue-800 text-sm mb-2 flex items-center gap-2"><FileText size={14}/> Quotes ({relevantQuotes.length})</h5>
+                                {relevantQuotes.length === 0 ? <p className="text-xs text-blue-400">None found.</p> : (
+                                    relevantQuotes.map(q => (
+                                        <div key={q.id} onClick={() => handleQuoteClick(q.id)} className="bg-white p-2 rounded border border-blue-100 mb-1 cursor-pointer hover:bg-blue-50">
+                                            <div className="flex justify-between">
+                                                <span className="text-xs font-bold text-blue-700">{q.id}</span>
+                                                <span className="text-xs text-gray-500">{new Date(q.createdAt?.seconds ? q.createdAt.seconds*1000 : q.createdAt).toLocaleDateString()}</span>
+                                            </div>
+                                            <p className="text-sm font-bold">₱{q.finalSalesPrice?.toLocaleString()}</p>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* COMMISSIONING */}
+                            <div className="bg-green-50 rounded-lg p-2 border border-green-200">
+                                <h5 className="font-bold text-green-800 text-sm mb-2 flex items-center gap-2"><ClipboardCheck size={14}/> Reports ({relevantReports.length})</h5>
+                                {relevantReports.length === 0 ? <p className="text-xs text-green-400">None found.</p> : (
+                                    relevantReports.map(r => (
+                                        <div key={r.id} className="bg-white p-2 rounded border border-green-100 mb-1">
+                                            <div className="flex justify-between">
+                                                <span className="text-xs font-bold text-green-700">{r.heatPumpSerial || 'Unknown Unit'}</span>
+                                                <span className="text-xs text-gray-500">{new Date(r.commissionDate?.seconds ? r.commissionDate.seconds*1000 : r.commissionDate).toLocaleDateString()}</span>
+                                            </div>
+                                            <p className="text-xs text-gray-600">COP: {r.cop} | {r.unitMode}</p>
                                         </div>
                                     ))
                                 )}
                             </div>
                         </div>
                     )}
-                </div>
-
-                {/* Right: Activity Log */}
-                <div className="flex-1 border-l border-gray-200 pl-0 md:pl-6 flex flex-col">
-                    <div className="flex justify-between items-center mb-4">
-                        <h4 className="font-bold text-gray-700 flex items-center gap-2"><Clock size={18}/> Activity Log</h4>
-                        <button onClick={onClose} className="hidden md:block text-gray-500 hover:text-gray-800"><X /></button>
-                    </div>
-
-                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-4 space-y-2">
-                        <div className="flex gap-2">
-                            <Input type="date" value={newLogDate} onChange={e => setNewLogDate(e.target.value)} className="text-sm w-1/3" />
-                            <select value={newLogType} onChange={e => setNewLogType(e.target.value)} className="block w-2/3 px-2 py-2 bg-white border-gray-300 rounded-md shadow-sm text-sm">
-                                <option value="Visit">Site Visit</option>
-                                <option value="Call">Call</option>
-                                <option value="Email">Email</option>
-                                <option value="Note">Note</option>
-                            </select>
-                        </div>
-                        {relevantQuotes.length > 0 && (
-                            <div className="flex items-center gap-2">
-                                <LinkIcon size={14} className="text-gray-500"/>
-                                <select value={selectedQuoteId} onChange={(e) => setSelectedQuoteId(e.target.value)} className="block w-full px-2 py-1 bg-white border border-gray-300 rounded text-xs">
-                                    <option value="">-- Attach Quote (Optional) --</option>
-                                    {relevantQuotes.map(q => <option key={q.id} value={q.id}>{q.id} - ${q.finalSalesPrice?.toLocaleString()} ({q.status})</option>)}
-                                </select>
-                            </div>
-                        )}
-                        <div className="flex gap-2">
-                            <input type="text" value={newLogOutcome} onChange={e => setNewLogOutcome(e.target.value)} placeholder="Details..." className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm" />
-                            <Button onClick={handleAddInteraction} variant="secondary" className="px-3"><Plus size={16}/></Button>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto space-y-3 pr-2" style={{minHeight: '200px', maxHeight: '500px'}}>
-                        {interactions.map((log) => (
-                            <div key={log.id} className="bg-white border border-gray-200 p-3 rounded-lg shadow-sm group relative">
-                                <div className="flex justify-between items-start mb-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${log.type === 'Visit' ? 'bg-green-500' : 'bg-blue-500'}`}>{log.type}</span>
-                                        <span className="text-xs text-gray-500">{log.date}</span>
-                                    </div>
-                                    <button onClick={() => handleDeleteInteraction(log.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><X size={14}/></button>
-                                </div>
-                                <p className="text-sm text-gray-800">{log.outcome}</p>
-                                {log.linkedQuote && (
-                                    <div 
-                                        onClick={() => handleQuoteClick(log.linkedQuote.id)}
-                                        className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded p-1.5 w-fit cursor-pointer hover:bg-blue-100 hover:border-blue-300 transition-colors"
-                                    >
-                                        <FileText size={14} className="text-blue-600"/>
-                                        <span className="text-xs font-semibold text-blue-800">{log.linkedQuote.id} (${log.linkedQuote.total?.toLocaleString()})</span>
-                                        <ArrowRight size={12} className="text-blue-400"/>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
 
                     <div className="mt-4 pt-4 border-t flex justify-end">
                         <Button onClick={handleSave} variant="primary"><Plus className="mr-2" size={16} /> Save Company</Button>
@@ -414,7 +470,7 @@ const CompanyCard = ({ company, onEdit, onDelete, userLocation }) => {
 };
 
 // --- Main Companies Page ---
-const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => { 
+const CompaniesPage = ({ companies, user, quotes, contacts, commissioningReports, onOpenQuote }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingCompany, setEditingCompany] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -460,7 +516,7 @@ const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => {
         } catch (error) { console.error(error); alert("Failed to delete duplicates."); }
     };
 
-    // --- Nearby Filter Logic ---
+    // --- Nearby Filter Logic (20km Radius) ---
     const handleNearMe = () => {
         if (activeFilter === 'NEARBY') {
             setActiveFilter('ALL');
@@ -573,16 +629,15 @@ const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => {
         if (activeFilter === 'TARGETS') list = list.filter(c => c.isTarget);
         if (activeFilter === 'ACTIVE') list = list.filter(c => c.interactions && c.interactions.length > 0);
         
-        // --- NEARBY FILTER ---
+        // --- NEARBY FILTER (20km Limit) ---
         if (activeFilter === 'NEARBY' && userLocation) {
-            // 1. Filter out companies with no GPS
-            list = list.filter(c => c.latitude && c.longitude);
-            // 2. Sort by distance
-            list.sort((a, b) => {
-                const distA = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, a.latitude, a.longitude);
-                const distB = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, b.latitude, b.longitude);
-                return distA - distB;
-            });
+            const withDistance = list
+                .filter(c => c.latitude && c.longitude)
+                .map(c => ({
+                    ...c,
+                    distance: getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude)
+                }));
+            list = withDistance.filter(c => c.distance <= 20).sort((a, b) => a.distance - b.distance);
         }
 
         return list.filter(c =>
@@ -594,12 +649,12 @@ const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => {
 
     return (
         <div className="w-full">
-            {showModal && <CompanyModal onSave={handleSave} onClose={handleCloseModal} companyToEdit={editingCompany} quotes={quotes} contacts={contacts} onOpenQuote={onOpenQuote} />}
+            {showModal && <CompanyModal onSave={handleSave} onClose={handleCloseModal} companyToEdit={editingCompany} quotes={quotes} contacts={contacts} commissioningReports={commissioningReports} onOpenQuote={onOpenQuote} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <StatBadge icon={Building} label="Total Companies" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
-                <StatBadge icon={Navigation} label="Near Me" count={filteredCompanies.length} total={stats.total} color="orange" active={activeFilter === 'NEARBY'} onClick={handleNearMe} />
+                <StatBadge icon={Navigation} label="Near Me (20km)" count={filteredCompanies.length} total={stats.total} color="orange" active={activeFilter === 'NEARBY'} onClick={handleNearMe} />
                 <StatBadge icon={CheckSquare} label="Target Accts" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveFilter(activeFilter === 'TARGETS' ? 'ALL' : 'TARGETS')} />
                 <StatBadge icon={Clock} label="Active Logs" count={stats.active} total={stats.total} color="blue" active={activeFilter === 'ACTIVE'} onClick={() => setActiveFilter(activeFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')} />
             </div>
@@ -627,7 +682,7 @@ const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => {
                         company={company} 
                         onEdit={handleOpenEditModal} 
                         onDelete={handleDeleteCompany} 
-                        userLocation={userLocation} // Pass location to card
+                        userLocation={userLocation} 
                     />
                 ))}
             </div>
