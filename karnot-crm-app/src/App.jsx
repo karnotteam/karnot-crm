@@ -12,7 +12,7 @@ import QuoteCalculator from './components/QuoteCalculator.jsx';
 import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
 import CompaniesPage from './pages/CompaniesPage.jsx'; 
 import ContactsPage from './pages/ContactsPage.jsx';
-import CommissioningPage from './pages/CommissioningPage.jsx'; // <--- NEW IMPORT
+import CommissioningPage from './pages/CommissioningPage.jsx'; 
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
@@ -285,11 +285,11 @@ export default function App() {
                     <ContactsPage 
                         contacts={contacts}
                         companies={companies}
+                        quotes={quotes}  // <--- HERE IT IS!
                         user={user}
                     />
                 )}
 
-                {/* --- NEW COMMISSIONING PAGE RENDER --- */}
                 {activeView === 'commissioning' && (
                     <CommissioningPage 
                         user={user}
