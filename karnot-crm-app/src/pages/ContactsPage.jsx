@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, ChevronRight } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
 // --- 1. Stats Card Component ---
@@ -110,7 +110,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 3. ContactModal Component (Updated with Emailed) ---
+// --- 3. ContactModal Component (Updated with Interaction Log) ---
 const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
     const isEditMode = Boolean(contactToEdit);
     
@@ -122,14 +122,43 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
     const [phone, setPhone] = useState(contactToEdit?.phone || '');
     const [companyId, setCompanyId] = useState(contactToEdit?.companyId || (companies.length > 0 ? companies[0].id : ''));
     
-    // Activity Tracking
+    // Checkboxes (Still useful for filters)
     const [isVerified, setIsVerified] = useState(contactToEdit?.isVerified || false);
     const [isEmailed, setIsEmailed] = useState(contactToEdit?.isEmailed || false);
     const [isContacted, setIsContacted] = useState(contactToEdit?.isContacted || false);
-    const [contactDate, setContactDate] = useState(contactToEdit?.contactDate || '');
     const [isVisited, setIsVisited] = useState(contactToEdit?.isVisited || false);
-    const [visitDate, setVisitDate] = useState(contactToEdit?.visitDate || '');
-    const [notes, setNotes] = useState(contactToEdit?.notes || '');
+    const [notes, setNotes] = useState(contactToEdit?.notes || ''); // General Notes
+
+    // --- Interaction History State ---
+    const [interactions, setInteractions] = useState(contactToEdit?.interactions || []);
+    const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
+    const [newLogType, setNewLogType] = useState('Call');
+    const [newLogOutcome, setNewLogOutcome] = useState('');
+
+    const handleAddInteraction = () => {
+        if (!newLogOutcome) return alert("Please enter an outcome or note for this interaction.");
+        
+        const newInteraction = {
+            id: Date.now(),
+            date: newLogDate,
+            type: newLogType,
+            outcome: newLogOutcome
+        };
+
+        const updatedInteractions = [newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+        setInteractions(updatedInteractions);
+
+        // Auto-update checkboxes based on activity type
+        if (newLogType === 'Call') setIsContacted(true);
+        if (newLogType === 'Visit') setIsVisited(true);
+        if (newLogType === 'Email') setIsEmailed(true);
+
+        setNewLogOutcome(''); // Clear input
+    };
+
+    const handleDeleteInteraction = (id) => {
+        setInteractions(interactions.filter(i => i.id !== id));
+    };
 
     const handleSave = () => {
         if (!firstName || !lastName || !companyId) {
@@ -141,123 +170,179 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies }) => {
 
         const contactData = {
             firstName, lastName, jobTitle, email, phone, companyId, companyName, 
-            isVerified, isEmailed, isContacted, contactDate, isVisited, visitDate, notes
+            isVerified, isEmailed, isContacted, isVisited, 
+            notes, 
+            interactions // Save the array
         };
         onSave(contactData);
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 flex justify-center items-center p-4">
-            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Contact' : 'New Contact'}</h3>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X /></button>
-                </div>
-                <div className="space-y-6">
-                    {/* Section 1: Basic Info */}
-                    <div className="space-y-4">
-                        <div className="flex gap-4">
-                            <Input label="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="e.g., Jane" required />
-                            <Input label="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="e.g., Doe" required />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-                                <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm" required>
-                                    {!companies || companies.length === 0 ? <option value="">Please add a company first</option> : companies.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
-                                </select>
-                            </div>
-                            <Input label="Job Title" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="e.g., Sales Manager" />
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane.doe@company.com" />
-                            <Input label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+63 917 123 4567" />
-                        </div>
+            <Card className="w-full max-w-4xl max-h-[95vh] overflow-y-auto flex flex-col md:flex-row gap-6">
+                
+                {/* LEFT COLUMN: Contact Details */}
+                <div className="flex-1 space-y-4">
+                     <div className="flex justify-between items-center mb-2">
+                        <h3 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Contact' : 'New Contact'}</h3>
+                        <button onClick={onClose} className="md:hidden text-gray-500"><X /></button>
                     </div>
 
-                    <hr className="border-gray-200" />
-
-                    {/* Section 2: Activity Tracking */}
+                    <div className="flex gap-4">
+                        <Input label="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
+                        <Input label="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
+                    </div>
                     <div>
-                        <h4 className="font-bold text-gray-700 mb-3 flex items-center gap-2"><Calendar size={18}/> Activity Tracking</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                            <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
-                                <Checkbox id="isVerified" label="Verified" checked={isVerified} onChange={(e) => setIsVerified(e.target.checked)} />
-                            </div>
-                            <div className="bg-purple-50 p-2 rounded-lg border border-purple-200">
-                                <Checkbox id="isEmailed" label="Emailed" checked={isEmailed} onChange={(e) => setIsEmailed(e.target.checked)} />
-                            </div>
-                            <div className="bg-blue-50 p-2 rounded-lg border border-blue-200">
-                                <Checkbox id="isContacted" label="Call/Met" checked={isContacted} onChange={(e) => setIsContacted(e.target.checked)} />
-                                {isContacted && <Input type="date" value={contactDate} onChange={(e) => setContactDate(e.target.value)} className="text-xs mt-1" />}
-                            </div>
-                            <div className="bg-green-50 p-2 rounded-lg border border-green-200">
-                                <Checkbox id="isVisited" label="Visited" checked={isVisited} onChange={(e) => setIsVisited(e.target.checked)} />
-                                {isVisited && <Input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} className="text-xs mt-1" />}
-                            </div>
-                        </div>
-                        <Textarea label="Notes" rows="4" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes..." />
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+                        <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm sm:text-sm" required>
+                            {!companies || companies.length === 0 ? <option value="">Please add a company first</option> : companies.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
+                        </select>
+                    </div>
+                    <Input label="Job Title" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
+                    <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    <Input label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                    
+                    <Textarea label="General Notes / Background" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    
+                    <div className="grid grid-cols-2 gap-2 mt-4 p-4 bg-gray-50 rounded-lg">
+                        <Checkbox id="isVerified" label="Verified Data" checked={isVerified} onChange={(e) => setIsVerified(e.target.checked)} />
+                        <Checkbox id="isEmailed" label="Emailed" checked={isEmailed} onChange={(e) => setIsEmailed(e.target.checked)} />
+                        <Checkbox id="isContacted" label="Call/Met" checked={isContacted} onChange={(e) => setIsContacted(e.target.checked)} />
+                        <Checkbox id="isVisited" label="Visited Site" checked={isVisited} onChange={(e) => setIsVisited(e.target.checked)} />
                     </div>
                 </div>
-                <div className="mt-6 flex justify-end">
-                    <Button onClick={handleSave} variant="primary"><Plus className="mr-2" size={16} /> {isEditMode ? 'Update Contact' : 'Save Contact'}</Button>
+
+                {/* RIGHT COLUMN: Interaction Log */}
+                <div className="flex-1 border-l border-gray-200 pl-0 md:pl-6 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-bold text-gray-700 flex items-center gap-2"><Clock size={18}/> Interaction Log</h4>
+                        <button onClick={onClose} className="hidden md:block text-gray-500 hover:text-gray-800"><X /></button>
+                    </div>
+
+                    {/* New Interaction Form */}
+                    <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-4">
+                        <div className="flex gap-2 mb-2">
+                            <Input type="date" value={newLogDate} onChange={e => setNewLogDate(e.target.value)} className="text-sm" />
+                            <select 
+                                value={newLogType} 
+                                onChange={e => setNewLogType(e.target.value)}
+                                className="block w-1/3 px-2 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm"
+                            >
+                                <option value="Call">Call</option>
+                                <option value="Visit">Visit</option>
+                                <option value="Email">Email</option>
+                                <option value="Event">Event</option>
+                                <option value="Note">Note</option>
+                            </select>
+                        </div>
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={newLogOutcome} 
+                                onChange={e => setNewLogOutcome(e.target.value)}
+                                placeholder="Outcome / Details (e.g. Sent brochure, interested in quote...)"
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-orange-500 focus:border-orange-500"
+                            />
+                            <Button onClick={handleAddInteraction} variant="secondary" className="px-3"><Plus size={16}/></Button>
+                        </div>
+                    </div>
+
+                    {/* History List */}
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-2" style={{minHeight: '200px', maxHeight: '500px'}}>
+                        {interactions.length === 0 && <p className="text-gray-400 text-center text-sm py-4 italic">No interactions logged yet.</p>}
+                        
+                        {interactions.map((log) => (
+                            <div key={log.id} className="relative bg-white border border-gray-200 p-3 rounded-lg shadow-sm hover:shadow-md transition-shadow group">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded text-white 
+                                            ${log.type === 'Visit' ? 'bg-green-500' : 
+                                              log.type === 'Call' ? 'bg-blue-500' : 
+                                              log.type === 'Email' ? 'bg-purple-500' : 'bg-gray-500'}`}>
+                                            {log.type}
+                                        </span>
+                                        <span className="text-xs text-gray-500">{log.date}</span>
+                                    </div>
+                                    <button onClick={() => handleDeleteInteraction(log.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <X size={14}/>
+                                    </button>
+                                </div>
+                                <p className="text-sm text-gray-800 leading-snug">{log.outcome}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="mt-4 pt-4 border-t flex justify-end">
+                        <Button onClick={handleSave} variant="primary" className="w-full md:w-auto"><Plus className="mr-2" size={16} /> Save Changes</Button>
+                    </div>
                 </div>
             </Card>
         </div>
     );
 };
 
-// --- 4. ContactCard Component (Updated with new badge) ---
-const ContactCard = ({ contact, onEdit, onDelete }) => (
-    <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between h-full">
-        <div>
-            <div className="flex justify-between items-start mb-2">
-                <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-lg text-gray-800 leading-tight">{contact.firstName} {contact.lastName}</h4>
+// --- 4. ContactCard Component (Updated with Last Activity) ---
+const ContactCard = ({ contact, onEdit, onDelete }) => {
+    // Find latest activity
+    const lastActivity = contact.interactions && contact.interactions.length > 0 
+        ? contact.interactions[0] // Assuming sorted
+        : null;
+
+    return (
+        <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between h-full hover:border-orange-300 transition-colors">
+            <div>
+                <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-lg text-gray-800 leading-tight">{contact.firstName} {contact.lastName}</h4>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                        <Button onClick={() => onEdit(contact)} variant="secondary" className="p-1 h-auto w-auto"><Edit size={14}/></Button>
+                        <Button onClick={() => onDelete(contact.id)} variant="danger" className="p-1 h-auto w-auto"><Trash2 size={14}/></Button>
+                    </div>
                 </div>
-                <div className="flex gap-1 flex-shrink-0">
-                    <Button onClick={() => onEdit(contact)} variant="secondary" className="p-1 h-auto w-auto"><Edit size={14}/></Button>
-                    <Button onClick={() => onDelete(contact.id)} variant="danger" className="p-1 h-auto w-auto"><Trash2 size={14}/></Button>
+                
+                <p className="text-sm text-orange-600 font-medium mb-1">{contact.jobTitle || 'No Job Title'}</p>
+                
+                <div className="text-sm text-gray-600 flex items-center gap-2 mb-3">
+                    <Building size={14} className="flex-shrink-0" />
+                    <span className="truncate">{contact.companyName}</span>
                 </div>
-            </div>
-            
-            <p className="text-sm text-orange-600 font-medium mb-1">{contact.jobTitle || 'No Job Title'}</p>
-            
-            <div className="text-sm text-gray-600 flex items-center gap-2 mb-3">
-                <Building size={14} className="flex-shrink-0" />
-                <span className="truncate">{contact.companyName}</span>
+
+                {/* Last Activity Section */}
+                {lastActivity ? (
+                    <div className="mb-3 bg-blue-50 p-2 rounded border border-blue-100">
+                        <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs font-bold text-blue-800 flex items-center gap-1">
+                                {lastActivity.type === 'Visit' ? <Building size={10}/> : <Phone size={10}/>}
+                                {lastActivity.type}
+                            </span>
+                            <span className="text-[10px] text-gray-500">{lastActivity.date}</span>
+                        </div>
+                        <p className="text-xs text-gray-700 truncate">{lastActivity.outcome}</p>
+                    </div>
+                ) : (
+                    <div className="mb-3 p-2 text-xs text-gray-400 italic">No recent activity</div>
+                )}
             </div>
 
-            <div className="space-y-1 mb-4">
-                {contact.email && <div className="text-sm text-gray-500 flex items-center gap-2"><Mail size={14} className="flex-shrink-0" /><a href={`mailto:${contact.email}`} className="hover:underline truncate">{contact.email}</a></div>}
-                {contact.phone && <div className="text-sm text-gray-500 flex items-center gap-2"><Phone size={14} className="flex-shrink-0" /><span>{contact.phone}</span></div>}
-            </div>
-            
-            {contact.notes && (
-                <div className="mb-3 bg-yellow-50 p-2 rounded text-xs text-gray-600 italic border border-yellow-100">
-                    <MessageSquare size={12} className="inline mr-1 mb-0.5"/>
-                    "{contact.notes.length > 50 ? contact.notes.substring(0, 50) + '...' : contact.notes}"
+            {/* Status Checkboxes Footer */}
+            <div className="pt-3 border-t border-gray-100 grid grid-cols-4 gap-1 text-[10px] text-gray-500 text-center">
+                <div className={`p-1 rounded ${contact.isVerified ? 'bg-gray-100 text-green-700 font-bold' : ''}`}>
+                    <CheckSquare size={14} className={`mx-auto mb-1 ${contact.isVerified ? 'text-green-600' : 'text-gray-300'}`}/> Verified
                 </div>
-            )}
-        </div>
-
-        {/* Status Checkboxes Footer */}
-        <div className="pt-3 border-t border-gray-100 grid grid-cols-4 gap-1 text-[10px] text-gray-500 text-center">
-            <div className={`p-1 rounded ${contact.isVerified ? 'bg-gray-100 text-green-700 font-bold' : ''}`}>
-                <CheckSquare size={14} className={`mx-auto mb-1 ${contact.isVerified ? 'text-green-600' : 'text-gray-300'}`}/> Verified
+                <div className={`p-1 rounded ${contact.isEmailed ? 'bg-purple-50 text-purple-700 font-bold' : ''}`}>
+                    <Mail size={14} className={`mx-auto mb-1 ${contact.isEmailed ? 'text-purple-600' : 'text-gray-300'}`}/> Emailed
+                </div>
+                <div className={`p-1 rounded ${contact.isContacted ? 'bg-blue-50 text-blue-700 font-bold' : ''}`}>
+                    <Phone size={14} className={`mx-auto mb-1 ${contact.isContacted ? 'text-blue-600' : 'text-gray-300'}`}/> Call
+                </div>
+                <div className={`p-1 rounded ${contact.isVisited ? 'bg-green-50 text-green-700 font-bold' : ''}`}>
+                    <Building size={14} className={`mx-auto mb-1 ${contact.isVisited ? 'text-green-600' : 'text-gray-300'}`}/> Visit
+                </div>
             </div>
-            <div className={`p-1 rounded ${contact.isEmailed ? 'bg-purple-50 text-purple-700 font-bold' : ''}`}>
-                <Mail size={14} className={`mx-auto mb-1 ${contact.isEmailed ? 'text-purple-600' : 'text-gray-300'}`}/> Emailed
-            </div>
-            <div className={`p-1 rounded ${contact.isContacted ? 'bg-blue-50 text-blue-700 font-bold' : ''}`}>
-                <Phone size={14} className={`mx-auto mb-1 ${contact.isContacted ? 'text-blue-600' : 'text-gray-300'}`}/> Call
-            </div>
-            <div className={`p-1 rounded ${contact.isVisited ? 'bg-green-50 text-green-700 font-bold' : ''}`}>
-                <Building size={14} className={`mx-auto mb-1 ${contact.isVisited ? 'text-green-600' : 'text-gray-300'}`}/> Visit
-            </div>
-        </div>
-    </Card>
-);
+        </Card>
+    );
+};
 
 // --- Main Page Component ---
 const ContactsPage = ({ contacts, companies, user }) => { 
@@ -266,7 +351,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
     const [isImporting, setIsImporting] = useState(false);
     const fileInputRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeFilter, setActiveFilter] = useState('ALL'); // 'ALL', 'EMAILED', 'CONTACTED', 'VISITED'
+    const [activeFilter, setActiveFilter] = useState('ALL'); 
     
     // --- Stats Calculation ---
     const stats = useMemo(() => {
@@ -387,6 +472,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
                         email, phone: '', companyId: companyMatch ? companyMatch.id : null,
                         companyName: companyMatch ? companyMatch.companyName : (csvCompanyName || 'N/A'),
                         isVerified: false, isEmailed: false, isContacted: false, isVisited: false, notes: '',
+                        interactions: [], // Init empty array
                         createdAt: serverTimestamp()
                     });
                     importCount++;
@@ -425,7 +511,8 @@ const ContactsPage = ({ contacts, companies, user }) => {
             c.firstName.toLowerCase().includes(lowerSearchTerm) || 
             c.lastName.toLowerCase().includes(lowerSearchTerm) ||
             (c.email && c.email.toLowerCase().includes(lowerSearchTerm)) ||
-            (c.companyName && c.companyName.toLowerCase().includes(lowerSearchTerm))
+            (c.companyName && c.companyName.toLowerCase().includes(lowerSearchTerm)) ||
+            (c.jobTitle && c.jobTitle.toLowerCase().includes(lowerSearchTerm)) 
         );
     }, [contacts, searchTerm, activeFilter]);
 
@@ -471,7 +558,7 @@ const ContactsPage = ({ contacts, companies, user }) => {
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" style={{ display: 'none' }} />
 
             <div className="mb-4 relative">
-                <Input type="text" placeholder="Search contacts..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+                <Input type="text" placeholder="Search by Name, Company, or Job Title (e.g. 'CEM')..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
 
