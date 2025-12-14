@@ -2,10 +2,29 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, MessageCircle } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
-// --- 1. Stats Card Component (Unchanged) ---
+// --- 1. Helper: WhatsApp Link Generator ---
+const getWhatsAppLink = (phone) => {
+    if (!phone) return null;
+    // Remove all non-numeric characters
+    let cleanNumber = phone.replace(/\D/g, '');
+    
+    // Logic for Philippines (Default): If starts with '0', replace with '63'
+    if (cleanNumber.startsWith('0')) {
+        cleanNumber = '63' + cleanNumber.substring(1);
+    }
+    
+    // If it doesn't start with 63 and is 10 digits, assume it needs 63
+    if (!cleanNumber.startsWith('63') && cleanNumber.length === 10) {
+        cleanNumber = '63' + cleanNumber;
+    }
+
+    return `https://wa.me/${cleanNumber}`;
+};
+
+// --- 2. Stats Badge (Unchanged) ---
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return (
@@ -28,7 +47,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-// --- 2. Duplicate Resolver (Unchanged) ---
+// --- 3. Duplicate Resolver (Unchanged) ---
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
 
@@ -110,7 +129,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 3. ContactModal (Unchanged) ---
+// --- 4. ContactModal Component (Updated with LinkedIn) ---
 const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => {
     const isEditMode = Boolean(contactToEdit);
     
@@ -120,6 +139,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     const [jobTitle, setJobTitle] = useState(contactToEdit?.jobTitle || '');
     const [email, setEmail] = useState(contactToEdit?.email || '');
     const [phone, setPhone] = useState(contactToEdit?.phone || '');
+    const [linkedIn, setLinkedIn] = useState(contactToEdit?.linkedIn || ''); // <--- NEW LINKEDIN
     const [companyId, setCompanyId] = useState(contactToEdit?.companyId || '');
     const [companyName, setCompanyName] = useState(contactToEdit?.companyName || ''); 
     
@@ -144,7 +164,6 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
-    // Init search
     useEffect(() => {
         if (contactToEdit?.companyName) {
             setCompanySearch(contactToEdit.companyName);
@@ -214,7 +233,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
         const finalCompanyName = companyId ? companies.find(c => c.id === companyId)?.companyName : companySearch;
         
         const contactData = {
-            firstName, lastName, jobTitle, email, phone, companyId, companyName: finalCompanyName, 
+            firstName, lastName, jobTitle, email, phone, linkedIn, companyId, companyName: finalCompanyName, 
             isVerified, isEmailed, isContacted, isVisited, notes, interactions
         };
         onSave(contactData);
@@ -274,7 +293,10 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
 
                     <Input label="Job Title" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
                     <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                    <Input label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input label="Phone (Mobile)" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0917..." />
+                        <Input label="LinkedIn URL" type="url" value={linkedIn} onChange={(e) => setLinkedIn(e.target.value)} placeholder="https://linkedin.com/in/..." />
+                    </div>
                     
                     <Textarea label="General Notes" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} />
                     
@@ -352,9 +374,11 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     );
 };
 
-// --- 4. ContactCard (Unchanged) ---
+// --- 5. ContactCard (Updated with Quick Actions) ---
 const ContactCard = ({ contact, onEdit, onDelete }) => {
     const lastActivity = contact.interactions && contact.interactions.length > 0 ? contact.interactions[0] : null;
+    const whatsappLink = getWhatsAppLink(contact.phone);
+
     return (
         <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between h-full hover:border-orange-300 transition-colors">
             <div>
@@ -370,6 +394,14 @@ const ContactCard = ({ contact, onEdit, onDelete }) => {
                 
                 <p className="text-sm text-orange-600 font-medium mb-1">{contact.jobTitle || 'No Job Title'}</p>
                 <div className="text-sm text-gray-600 flex items-center gap-2 mb-3"><Building size={14} className="flex-shrink-0" /><span className="truncate">{contact.companyName}</span></div>
+
+                {/* --- QUICK ACTION BAR --- */}
+                <div className="flex gap-3 mb-3 border-t border-b border-gray-100 py-2 justify-center">
+                    {contact.email && <a href={`mailto:${contact.email}`} className="text-gray-500 hover:text-orange-600" title="Email"><Mail size={18}/></a>}
+                    {contact.phone && <a href={`tel:${contact.phone}`} className="text-gray-500 hover:text-blue-600" title="Call"><Phone size={18}/></a>}
+                    {whatsappLink && <a href={whatsappLink} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-green-600" title="WhatsApp"><MessageCircle size={18}/></a>}
+                    {contact.linkedIn && <a href={contact.linkedIn} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-blue-800" title="LinkedIn"><Linkedin size={18}/></a>}
+                </div>
 
                 {lastActivity ? (
                     <div className="mb-3 bg-blue-50 p-2 rounded border border-blue-100">
