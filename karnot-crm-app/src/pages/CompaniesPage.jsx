@@ -1,11 +1,28 @@
-import React, { useState, useRef, useMemo } from 'react'; 
+import React, { useState, useRef, useMemo, useEffect } from 'react'; 
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Users, User, ArrowRight } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Users, User, ArrowRight, Navigation } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox } from '../data/constants.jsx'; 
 
-// --- 1. Stats Badge (Unchanged) ---
+// --- 1. Helper: Haversine Distance Formula (km) ---
+const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);  
+    const dLon = deg2rad(lon2 - lon1); 
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2); 
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    const d = R * c; // Distance in km
+    return d;
+}
+
+const deg2rad = (deg) => {
+    return deg * (Math.PI/180)
+}
+
+// --- 2. Stats Badge (Unchanged) ---
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return (
@@ -28,7 +45,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-// --- 2. Duplicate Resolver (Unchanged) ---
+// --- 3. Duplicate Resolver (Unchanged) ---
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
 
@@ -109,13 +126,17 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 3. CompanyModal (Updated with Contacts & Open Quote) ---
+// --- 4. CompanyModal (Updated with Location Capture) ---
 const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpenQuote }) => {
     const isEditMode = Boolean(companyToEdit);
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
     const [industry, setIndustry] = useState(companyToEdit?.industry || '');
     const [address, setAddress] = useState(companyToEdit?.address || '');
+    
+    // GPS Coordinates
+    const [latitude, setLatitude] = useState(companyToEdit?.latitude || null);
+    const [longitude, setLongitude] = useState(companyToEdit?.longitude || null);
     
     // Status
     const [isVerified, setIsVerified] = useState(companyToEdit?.isVerified || false);
@@ -129,13 +150,11 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
     const [newLogOutcome, setNewLogOutcome] = useState('');
     const [selectedQuoteId, setSelectedQuoteId] = useState('');
 
-    // --- NEW: Filter Contacts associated with this Company ---
     const companyContacts = useMemo(() => {
         if (!contacts || !companyToEdit?.id) return [];
         return contacts.filter(c => c.companyId === companyToEdit.id);
     }, [contacts, companyToEdit]);
 
-    // Filter relevant quotes
     const relevantQuotes = useMemo(() => {
         if (!quotes || !companyName) return [];
         return quotes.filter(q => 
@@ -143,6 +162,24 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
             q.customer?.name?.toLowerCase() === companyName.toLowerCase()
         );
     }, [quotes, companyName]);
+
+    // --- GPS Handler ---
+    const handleGetLocation = () => {
+        if (!navigator.geolocation) {
+            alert("Geolocation is not supported by your browser");
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setLatitude(position.coords.latitude);
+                setLongitude(position.coords.longitude);
+                alert("Location captured! 📍");
+            },
+            (error) => {
+                alert("Unable to retrieve your location. Ensure GPS is on.");
+            }
+        );
+    };
 
     const handleAddInteraction = () => {
         if (!newLogOutcome) return alert("Please enter details.");
@@ -168,11 +205,10 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
 
     const handleDeleteInteraction = (id) => setInteractions(interactions.filter(i => i.id !== id));
 
-    // --- NEW: Handle Quote Click ---
     const handleQuoteClick = (quoteId) => {
         const fullQuote = quotes.find(q => q.id === quoteId);
         if (fullQuote && onOpenQuote) {
-            onOpenQuote(fullQuote); // This calls the function passed from App.jsx
+            onOpenQuote(fullQuote); 
         } else {
             alert("Could not find full quote details.");
         }
@@ -182,7 +218,8 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
         if (!companyName) { alert('Please enter a company name.'); return; }
         onSave({ 
             companyName, website, industry, address, 
-            isVerified, isTarget, notes, interactions 
+            isVerified, isTarget, notes, interactions,
+            latitude, longitude // Save coords
         });
     };
 
@@ -204,6 +241,18 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
                     </div>
                     
                     <Textarea label="Address / Plant Location" rows="2" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    
+                    {/* LOCATION CAPTURE */}
+                    <div className="flex items-center gap-4 bg-gray-50 p-2 rounded border">
+                        <Button onClick={handleGetLocation} variant="secondary" className="text-xs">
+                            <MapPin size={14} className="mr-1"/> 
+                            {latitude ? 'Update GPS' : 'Capture GPS'}
+                        </Button>
+                        <span className="text-xs text-gray-500">
+                            {latitude ? `${latitude.toFixed(5)}, ${longitude.toFixed(5)}` : 'No location set'}
+                        </span>
+                    </div>
+
                     <Textarea label="General Notes" rows="2" value={notes} onChange={(e) => setNotes(e.target.value)} />
                     
                     <div className="grid grid-cols-2 gap-4 mt-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
@@ -211,7 +260,6 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
                         <Checkbox id="isTarget" label="Target Account" checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />
                     </div>
 
-                    {/* --- NEW SECTION: Associated Contacts --- */}
                     {isEditMode && (
                         <div className="mt-4">
                             <h4 className="font-bold text-gray-700 flex items-center gap-2 mb-2">
@@ -282,13 +330,10 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
                                     <button onClick={() => handleDeleteInteraction(log.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><X size={14}/></button>
                                 </div>
                                 <p className="text-sm text-gray-800">{log.outcome}</p>
-                                
-                                {/* --- UPDATED: Clickable Quote Badge --- */}
                                 {log.linkedQuote && (
                                     <div 
                                         onClick={() => handleQuoteClick(log.linkedQuote.id)}
                                         className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded p-1.5 w-fit cursor-pointer hover:bg-blue-100 hover:border-blue-300 transition-colors"
-                                        title="Click to Open Quote"
                                     >
                                         <FileText size={14} className="text-blue-600"/>
                                         <span className="text-xs font-semibold text-blue-800">{log.linkedQuote.id} (${log.linkedQuote.total?.toLocaleString()})</span>
@@ -297,7 +342,6 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
                                 )}
                             </div>
                         ))}
-                        {interactions.length === 0 && <p className="text-center text-gray-400 italic text-sm">No activity recorded.</p>}
                     </div>
 
                     <div className="mt-4 pt-4 border-t flex justify-end">
@@ -309,9 +353,16 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpen
     );
 };
 
-// --- 4. CompanyCard (Unchanged) ---
-const CompanyCard = ({ company, onEdit, onDelete }) => {
+// --- 5. CompanyCard (Updated with Distance) ---
+const CompanyCard = ({ company, onEdit, onDelete, userLocation }) => {
     const lastActivity = company.interactions && company.interactions.length > 0 ? company.interactions[0] : null;
+    
+    // Calculate distance if both exist
+    let distance = null;
+    if (userLocation && company.latitude && company.longitude) {
+        distance = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, company.latitude, company.longitude).toFixed(1);
+    }
+
     return (
         <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between h-full hover:border-orange-300 transition-colors">
             <div>
@@ -329,7 +380,14 @@ const CompanyCard = ({ company, onEdit, onDelete }) => {
                 
                 <div className="text-sm text-gray-500 flex items-start gap-1 mb-3">
                     <MapPin size={14} className="flex-shrink-0 mt-0.5" />
-                    <p className="line-clamp-2">{company.address || 'No Address'}</p>
+                    <div>
+                        <p className="line-clamp-2">{company.address || 'No Address'}</p>
+                        {distance && (
+                            <span className="text-xs font-bold text-green-600 bg-green-50 px-1.5 py-0.5 rounded mt-1 inline-block">
+                                📍 {distance} km away
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {lastActivity ? (
@@ -363,6 +421,9 @@ const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => {
     const fileInputRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState('ALL');
+    
+    // User GPS State
+    const [userLocation, setUserLocation] = useState(null);
 
     const stats = useMemo(() => {
         const total = companies.length;
@@ -397,6 +458,33 @@ const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => {
             alert(`Deleted ${idsToDelete.length} duplicates.`);
             setShowDuplicateModal(false);
         } catch (error) { console.error(error); alert("Failed to delete duplicates."); }
+    };
+
+    // --- Nearby Filter Logic ---
+    const handleNearMe = () => {
+        if (activeFilter === 'NEARBY') {
+            setActiveFilter('ALL');
+            setUserLocation(null);
+            return;
+        }
+
+        if (!navigator.geolocation) {
+            alert("Geolocation is not supported by your browser");
+            return;
+        }
+        
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setUserLocation({
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude
+                });
+                setActiveFilter('NEARBY');
+            },
+            (error) => {
+                alert("Unable to retrieve location. Please allow GPS access.");
+            }
+        );
     };
 
     const handleSaveCompany = async (companyData) => {
@@ -479,17 +567,30 @@ const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => {
 
     const filteredCompanies = useMemo(() => {
         const lowerSearchTerm = searchTerm.toLowerCase();
-        let list = companies;
+        let list = [...companies]; // Copy array to sort safely
+
         if (activeFilter === 'VERIFIED') list = list.filter(c => c.isVerified);
         if (activeFilter === 'TARGETS') list = list.filter(c => c.isTarget);
         if (activeFilter === 'ACTIVE') list = list.filter(c => c.interactions && c.interactions.length > 0);
+        
+        // --- NEARBY FILTER ---
+        if (activeFilter === 'NEARBY' && userLocation) {
+            // 1. Filter out companies with no GPS
+            list = list.filter(c => c.latitude && c.longitude);
+            // 2. Sort by distance
+            list.sort((a, b) => {
+                const distA = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, a.latitude, a.longitude);
+                const distB = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, b.latitude, b.longitude);
+                return distA - distB;
+            });
+        }
 
         return list.filter(c =>
             c.companyName.toLowerCase().includes(lowerSearchTerm) ||
             (c.industry && c.industry.toLowerCase().includes(lowerSearchTerm)) ||
             (c.address && c.address.toLowerCase().includes(lowerSearchTerm))
         );
-    }, [companies, searchTerm, activeFilter]); 
+    }, [companies, searchTerm, activeFilter, userLocation]); 
 
     return (
         <div className="w-full">
@@ -498,7 +599,7 @@ const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => {
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <StatBadge icon={Building} label="Total Companies" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
-                <StatBadge icon={ShieldCheck} label="Verified" count={stats.verified} total={stats.total} color="green" active={activeFilter === 'VERIFIED'} onClick={() => setActiveFilter(activeFilter === 'VERIFIED' ? 'ALL' : 'VERIFIED')} />
+                <StatBadge icon={Navigation} label="Near Me" count={filteredCompanies.length} total={stats.total} color="orange" active={activeFilter === 'NEARBY'} onClick={handleNearMe} />
                 <StatBadge icon={CheckSquare} label="Target Accts" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveFilter(activeFilter === 'TARGETS' ? 'ALL' : 'TARGETS')} />
                 <StatBadge icon={Clock} label="Active Logs" count={stats.active} total={stats.total} color="blue" active={activeFilter === 'ACTIVE'} onClick={() => setActiveFilter(activeFilter === 'ACTIVE' ? 'ALL' : 'ACTIVE')} />
             </div>
@@ -520,8 +621,14 @@ const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredCompanies.sort((a, b) => a.companyName.localeCompare(b.companyName)).map(company => (
-                    <CompanyCard key={company.id} company={company} onEdit={handleOpenEditModal} onDelete={handleDeleteCompany} />
+                {filteredCompanies.map(company => (
+                    <CompanyCard 
+                        key={company.id} 
+                        company={company} 
+                        onEdit={handleOpenEditModal} 
+                        onDelete={handleDeleteCompany} 
+                        userLocation={userLocation} // Pass location to card
+                    />
                 ))}
             </div>
             {companies.length === 0 && <div className="text-center py-10"><Building size={48} className="mx-auto text-gray-400"/><p>No companies found.</p></div>}
