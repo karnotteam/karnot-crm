@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List, Send, CheckCircle, XCircle, BarChart2, DollarSign, Target, PieChart, Edit, Eye, Save, X } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List, Send, CheckCircle, XCircle, BarChart2, DollarSign, Target, PieChart, Edit, Eye, Save, X, Loader2 } from 'lucide-react';
 
 export const ALL_PRODUCTS = [
     // =================================================================================
@@ -89,15 +89,13 @@ export const BOI_TARGETS_USD = {
 // A reliable SVG Base64 logo (Orange background, White Text)
 export const KARNOT_LOGO_BASE_64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCAyMDAgNjAiPjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iNjAiIGZpbGw9IiNlYTU4MGMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiPktBUk5PVDwvdGV4dD48L3N2Zz4=";
 
-// ... keep the rest of your file (ALL_PRODUCTS, Button, etc.) exactly the same;
-
 export const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-2xl shadow-lg p-6 md:p-8 ${className}`}>
     {children}
   </div>
 );
 
-export const Button = ({ children, onClick, variant = 'primary', className = '', ...props }) => {
+export const Button = ({ children, onClick, variant = 'primary', className = '', disabled, ...props }) => {
     const baseClasses = 'px-4 py-2 rounded-lg font-semibold flex items-center justify-center transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
     const variants = {
         primary: 'bg-orange-600 text-white hover:bg-orange-700 focus:ring-orange-500',
@@ -105,20 +103,36 @@ export const Button = ({ children, onClick, variant = 'primary', className = '',
         danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
         success: 'bg-green-600 text-white hover:bg-green-700 focus:ring-green-500',
     };
-    return <button className={`${baseClasses} ${variants[variant]} ${className}`} onClick={onClick} {...props}>{children}</button>;
+    return <button className={`${baseClasses} ${variants[variant]} ${className}`} onClick={onClick} disabled={disabled} {...props}>
+        {disabled && <Loader2 className="animate-spin mr-2" size={16} />}
+        {children}
+    </button>;
 };
 
+// --- UPDATED: Inputs with Spell Check ---
 export const Input = ({ label, id, ...props }) => (
     <div className="w-full">
         {label && <label htmlFor={id} className="block text-sm font-medium text-gray-600 mb-1">{label}</label>}
-        <input id={id} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500" {...props} />
+        <input 
+            id={id} 
+            spellCheck={true}
+            lang="en"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500" 
+            {...props} 
+        />
     </div>
 );
 
 export const Textarea = ({ label, id, ...props }) => (
     <div>
         <label htmlFor={id} className="block text-sm font-medium text-gray-600 mb-1">{label}</label>
-        <textarea id={id} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500" {...props} />
+        <textarea 
+            id={id} 
+            spellCheck={true}
+            lang="en"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500" 
+            {...props} 
+        />
     </div>
 );
 
