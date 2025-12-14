@@ -124,7 +124,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
 };
 
 // --- 4. CompanyModal (Updated Logic) ---
-const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commissioningReports, onOpenQuote }) => {
+const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commissioningReports, onOpenQuote, onOpenReport }) => {
     const isEditMode = Boolean(companyToEdit);
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
@@ -382,17 +382,24 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
                                 )}
                             </div>
 
-                            {/* COMMISSIONING */}
+                            {/* COMMISSIONING - CLICK TO EDIT */}
                             <div className="bg-green-50 rounded-lg p-2 border border-green-200">
                                 <h5 className="font-bold text-green-800 text-sm mb-2 flex items-center gap-2"><ClipboardCheck size={14}/> Reports ({relevantReports.length})</h5>
                                 {relevantReports.length === 0 ? <p className="text-xs text-green-400">None found.</p> : (
                                     relevantReports.map(r => (
-                                        <div key={r.id} className="bg-white p-2 rounded border border-green-100 mb-1">
+                                        <div 
+                                            key={r.id} 
+                                            onClick={() => onOpenReport(r)} // <--- TRIGGER EDIT
+                                            className="bg-white p-2 rounded border border-green-100 mb-1 cursor-pointer hover:bg-green-100 hover:border-green-300 transition-colors"
+                                        >
                                             <div className="flex justify-between">
                                                 <span className="text-xs font-bold text-green-700">{r.heatPumpSerial || 'Unknown Unit'}</span>
                                                 <span className="text-xs text-gray-500">{new Date(r.commissionDate?.seconds ? r.commissionDate.seconds*1000 : r.commissionDate).toLocaleDateString()}</span>
                                             </div>
                                             <p className="text-xs text-gray-600">COP: {r.cop} | {r.unitMode}</p>
+                                            <div className="flex justify-end mt-1">
+                                                <span className="text-[10px] text-green-600 flex items-center gap-1 font-bold">Edit <ArrowRight size={10}/></span>
+                                            </div>
                                         </div>
                                     ))
                                 )}
@@ -409,7 +416,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
     );
 };
 
-// --- 5. CompanyCard (Updated with Distance) ---
+// --- 5. CompanyCard (Unchanged) ---
 const CompanyCard = ({ company, onEdit, onDelete, userLocation }) => {
     const lastActivity = company.interactions && company.interactions.length > 0 ? company.interactions[0] : null;
     
@@ -470,7 +477,7 @@ const CompanyCard = ({ company, onEdit, onDelete, userLocation }) => {
 };
 
 // --- Main Companies Page ---
-const CompaniesPage = ({ companies, user, quotes, contacts, commissioningReports, onOpenQuote }) => { 
+const CompaniesPage = ({ companies, user, quotes, contacts, commissioningReports, onOpenQuote, onOpenReport }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingCompany, setEditingCompany] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -649,7 +656,7 @@ const CompaniesPage = ({ companies, user, quotes, contacts, commissioningReports
 
     return (
         <div className="w-full">
-            {showModal && <CompanyModal onSave={handleSave} onClose={handleCloseModal} companyToEdit={editingCompany} quotes={quotes} contacts={contacts} commissioningReports={commissioningReports} onOpenQuote={onOpenQuote} />}
+            {showModal && <CompanyModal onSave={handleSave} onClose={handleCloseModal} companyToEdit={editingCompany} quotes={quotes} contacts={contacts} commissioningReports={commissioningReports} onOpenQuote={onOpenQuote} onOpenReport={onOpenReport} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
