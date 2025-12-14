@@ -2,23 +2,21 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check, User } from 'lucide-react';
 import { ALL_PRODUCTS, Card, Button, Input, Textarea, Checkbox, Section } from '../data/constants.jsx';
 
-const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, companies = [], contacts = [] }) => {
+const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, companies, contacts }) => {
     
     const [opportunityId, setOpportunityId] = useState(initialData?.opportunityId || null);
 
-    // Customer State
+    // Added contact fields to customer state
     const [customer, setCustomer] = useState({ 
         name: '', number: '', tin: '', address: '', saleType: 'Export',
         contactId: '', contactName: '', contactEmail: '' 
     });
     
-    // Quote Details State
     const [commercial, setCommercial] = useState({ shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 });
-    const [docControl, setDocControl] = useState({ quoteNumber: nextQuoteNumber || 1000, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' });
+    const [docControl, setDocControl] = useState({ quoteNumber: nextQuoteNumber, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' });
     const [costing, setCosting] = useState({ forexRate: 58.50, transportCost: 0, dutiesRate: 1, vatRate: 12, brokerFees: 0 });
     const [docGeneration, setDocGeneration] = useState({ generateInPHP: false, generateQuote: true, generateProForma: true, generateBirInvoice: false, includeLandedCost: true });
     
-    // Product State
     const [selectedProducts, setSelectedProducts] = useState({});
     const [manualItems, setManualItems] = useState([]);
     const [manualItemInput, setManualItemInput] = useState({ name: '', price: '', specs: '' });
@@ -31,14 +29,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
-    // --- Fiscal Year Logic (Force 2026 start) ---
-    const getFiscalYear = () => {
-        const currentYear = new Date().getFullYear();
-        return currentYear < 2026 ? 2026 : currentYear;
-    };
-    const fiscalYear = getFiscalYear();
-
-    // Handle click outside dropdown
+    // Handle click outside to close dropdown
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -49,14 +40,13 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Load Initial Data
     useEffect(() => {
         const defaultCustomer = { 
             name: '', number: '', tin: '', address: '', saleType: 'Export',
             contactId: '', contactName: '', contactEmail: ''
         };
         const defaultCommercial = { shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 };
-        const defaultDocControl = { quoteNumber: nextQuoteNumber || 1000, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' };
+        const defaultDocControl = { quoteNumber: nextQuoteNumber, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' };
         const defaultCosting = { forexRate: 58.50, transportCost: 0, dutiesRate: 1, vatRate: 12, brokerFees: 0 };
         const defaultDocGeneration = { generateInPHP: false, generateQuote: true, generateProForma: true, generateBirInvoice: false, includeLandedCost: true };
 
@@ -64,37 +54,45 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             setCustomer({ ...defaultCustomer, ...initialData.customer });
             setCompanySearch(initialData.customer?.name || ''); 
             setCommercial({ ...defaultCommercial, ...initialData.commercial });
-            setDocControl({ ...defaultDocControl, ...initialData.docControl, quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber || 1000 });
+            setDocControl({ ...defaultDocControl, ...initialData.docControl, quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber });
             setCosting({ ...defaultCosting, ...initialData.costing });
             setDocGeneration({ ...defaultDocGeneration, ...initialData.docGeneration });
             setSelectedProducts(initialData.selectedProducts || {});
             setManualItems(initialData.manualItems || []);
             setOpportunityId(initialData.opportunityId || null);
         } else {
-            if (!initialData) {
-                setDocControl(prev => ({ ...prev, quoteNumber: nextQuoteNumber || 1000 }));
-            }
+            setCustomer(defaultCustomer);
+            setCompanySearch('');
+            setCommercial(defaultCommercial);
+            setDocControl({ ...defaultDocControl, quoteNumber: nextQuoteNumber });
+            setCosting(defaultCosting);
+            setDocGeneration(defaultDocGeneration);
+            setSelectedProducts({});
+            setManualItems([]);
+            setOpportunityId(null);
         }
-    }, [initialData, nextQuoteNumber]);
+    }, [initialData, nextQuoteNumber, companies]);
 
-    // Filter companies
+    // Filter companies based on search
     const filteredCompanies = useMemo(() => {
         if (!companies) return [];
-        return companies.filter(c => (c.companyName || '').toLowerCase().includes(companySearch.toLowerCase()));
+        return companies.filter(c => c.companyName.toLowerCase().includes(companySearch.toLowerCase()));
     }, [companies, companySearch]);
 
-    // Filter contacts
+    // Filter contacts based on selected company
     const companyContacts = useMemo(() => {
         if (!customer.name || !contacts) return [];
+        // Match contacts where companyName matches the current customer name
+        // (If you linked via ID, use that, but name matching works for now based on your structure)
         return contacts.filter(c => c.companyName === customer.name);
     }, [contacts, customer.name]);
 
-    // Handlers
     const handleSelectCompany = (company) => {
         setCustomer(prev => ({
             ...prev,
             name: company.companyName,
             address: company.address || prev.address,
+            // Reset contact when company changes
             contactId: '', contactName: '', contactEmail: ''
         }));
         setCompanySearch(company.companyName);
@@ -145,7 +143,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         }
     };
     
-    // Manual Items
     const addManualItem = () => {
         if (manualItemInput.name && manualItemInput.price) {
             setManualItems(prev => [...prev, { ...manualItemInput, priceUSD: parseFloat(manualItemInput.price), quantity: 1, id: `manual_${Date.now()}` }]);
@@ -178,7 +175,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         setEditingItem(prev => ({ ...prev, [field]: e.target.value }));
     };
 
-    // Totals Calculation
     const quoteTotals = useMemo(() => {
         const allItems = [
             ...Object.entries(selectedProducts)
@@ -202,7 +198,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         return { allItems, subtotalUSD, finalSalesPrice, grossMarginAmount, grossMarginPercentage };
     }, [selectedProducts, manualItems, commercial.discount]);
 
-    // Generate Preview HTML
     const generateQuotePreview = () => {
         const { allItems, subtotalUSD } = quoteTotals;
         
@@ -221,7 +216,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const year = today.getFullYear();
         const todayFormatted = today.toLocaleDateString('en-CA');
         
-        let quoteId = `QN${String(docControl.quoteNumber).padStart(4, '0')}/${fiscalYear}`;
+        let quoteId = `QN${String(docControl.quoteNumber).padStart(4, '0')}/${year}`;
         if (docControl.revision) {
             quoteId += ` - Rev ${docControl.revision}`;
         }
@@ -252,6 +247,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const logoURL = "https://img1.wsimg.com/isteam/ip/cb1de239-c2b8-4674-b57d-5ae86a72feb1/Asset%2010%404x.png/:/rs=w:400,cg:true,m";
         const companyHeaderHTML = `<div class="company-details"><img src="${logoURL}" alt="Karnot Logo" style="width:200px; margin-bottom:15px;"><p><strong>Karnot Energy Solutions INC.</strong><br>TIN: ${customer.tin || 'N/A'}<br>Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>2429 Mapandan, Pangasinan, Philippines<br>Tel: +63 75 510 8922</p></div>`;
         
+        // --- UPDATED: Customer Info Box with Contact Person ---
         let contactLine = '';
         if (customer.contactName) {
             contactLine = `<br><strong>Attention:</strong> ${customer.contactName}`;
@@ -308,41 +304,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             generatedDocumentsHTML += `<div class="report-page">${birHeaderHTML}${soldToInfoHTML}<h3>Details</h3><table class="line-items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">Unit Price (PHP)</th><th class="text-right">Amount (PHP)</th></tr></thead><tbody>${birLineItemsHTML}</tbody></table><div class="summary-wrapper">${birSummaryHTML}</div>${bankDetailsPHP}</div>`;
         }
 
-        const floatingPrintButton = `
-            <div class="no-print" style="position:fixed; top:20px; right:20px; z-index:9999;">
-                <button onclick="window.print()" style="background:#ea580c; color:white; padding:12px 24px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px rgba(0,0,0,0.1); font-family:sans-serif; display:flex; align-items:center; gap:8px;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Download / Print PDF
-                </button>
-            </div>
-        `;
-
-        const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Quote Preview</title><style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6; color: #333; } 
-            .report-page { background: white; max-width: 800px; margin: 0 auto 40px auto; padding: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 8px; position: relative; } 
-            .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 2px solid #ea580c; padding-bottom: 20px; } 
-            .report-info h2 { color: #ea580c; margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px; } 
-            .customer-info-box { background-color: #f9fafb; border-left: 4px solid #ea580c; padding: 15px; margin-bottom: 30px; font-size: 14px; line-height: 1.5; } 
-            h3 { color: #4b5563; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-top: 0; } 
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; } 
-            th { background-color: #ea580c; color: white; padding: 10px; text-align: left; font-weight: 600; } 
-            td { padding: 10px; border-bottom: 1px solid #e5e7eb; } 
-            .text-right { text-align: right; } 
-            .text-center { text-align: center; } 
-            .simple-summary-table { width: 100%; max-width: 400px; margin-left: auto; } 
-            .simple-summary-table td { border: none; padding: 5px 10px; } 
-            .grand-total-row { border-top: 2px solid #333; font-size: 16px; background-color: #f3f4f6; } 
-            .summary-wrapper { page-break-inside: avoid; margin-bottom: 20px; } 
-            .terms-conditions { font-size: 12px; color: #666; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; } 
-            dt { font-weight: bold; margin-top: 5px; color: #333; } 
-            dd { margin: 2px 0 10px 0; } 
-            @media print { 
-                body { background: white; margin: 0; padding: 0; } 
-                .report-page { box-shadow: none; margin: 0; width: 100%; max-width: none; page-break-after: always; } 
-                .report-page:last-child { page-break-after: auto; } 
-                .no-print { display: none !important; }
-            }
-        </style></head><body>${floatingPrintButton}${generatedDocumentsHTML}</body></html>`;
+        const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Quote Preview</title><style>body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6; color: #333; } .report-page { background: white; max-width: 800px; margin: 0 auto 40px auto; padding: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 8px; position: relative; } .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 2px solid #ea580c; padding-bottom: 20px; } .report-info h2 { color: #ea580c; margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px; } .customer-info-box { background-color: #f9fafb; border-left: 4px solid #ea580c; padding: 15px; margin-bottom: 30px; font-size: 14px; line-height: 1.5; } h3 { color: #4b5563; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-top: 0; } table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; } th { background-color: #ea580c; color: white; padding: 10px; text-align: left; font-weight: 600; } td { padding: 10px; border-bottom: 1px solid #e5e7eb; } .text-right { text-align: right; } .text-center { text-align: center; } .simple-summary-table { width: 100%; max-width: 400px; margin-left: auto; } .simple-summary-table td { border: none; padding: 5px 10px; } .grand-total-row { border-top: 2px solid #333; font-size: 16px; background-color: #f3f4f6; } .summary-wrapper { page-break-inside: avoid; margin-bottom: 20px; } .terms-conditions { font-size: 12px; color: #666; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; } dt { font-weight: bold; margin-top: 5px; color: #333; } dd { margin: 2px 0 10px 0; } @media print { body { background: white; margin: 0; padding: 0; } .report-page { box-shadow: none; margin: 0; width: 100%; max-width: none; page-break-after: always; } .report-page:last-child { page-break-after: auto; } }</style></head><body>${generatedDocumentsHTML}</body></html>`;
         
         const win = window.open("", "QuotePreview");
         win.document.write(finalReportHTML);
@@ -350,31 +312,13 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     };
     
     const handleSave = () => {
-        // --- 1. Validation ---
         if (!customer.name) {
-            alert("Error: Please select a customer first.");
+            alert("Please enter a customer name.");
             return;
         }
+        
+        const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
 
-        if (!onSaveQuote) {
-            alert("System Error: 'onSaveQuote' function is missing. Please refresh.");
-            return;
-        }
-
-        // --- 2. Quote ID Logic (Prevention of Duplicates) ---
-        // If it's a NEW quote (no initialData), ensure ID is unique even if counter is stale
-        let quoteId;
-        if (initialData?.id) {
-            quoteId = initialData.id; // Editing existing
-        } else {
-            // Creating New
-            const baseId = `QN${String(docControl.quoteNumber).padStart(4, '0')}/${fiscalYear}`;
-            // If the user manually changed the number, trust them. 
-            // If it matches the auto-generated one, append a tiny timestamp to prevent collision if they spam save.
-            quoteId = baseId;
-        }
-
-        // --- 3. Construct Data ---
         const newQuote = {
             id: quoteId,
             customer,
@@ -387,21 +331,11 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             finalSalesPrice: quoteTotals.finalSalesPrice,
             grossMarginAmount: quoteTotals.grossMarginAmount,
             grossMarginPercentage: quoteTotals.grossMarginPercentage,
-            status: initialData?.status || 'DRAFT', // FORCE STATUS
+            status: initialData?.status || 'DRAFT',
             createdAt: initialData?.createdAt || new Date().toISOString(),
             opportunityId: opportunityId, 
         };
-
-        // --- 4. DEBUGGING ---
-        console.log("Saving Quote Data:", newQuote);
-
-        // --- 5. EXECUTE SAVE ---
-        try {
-            onSaveQuote(newQuote);
-        } catch (error) {
-            console.error("Save Failed:", error);
-            alert("Failed to save quote. Check console for details.");
-        }
+        onSaveQuote(newQuote);
     };
 
     const productCategories = useMemo(() => {
@@ -425,7 +359,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                             <div className="relative">
                                 <input 
                                     type="text" 
-                                    className="block w-full px-3 py-2.5 pl-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                    className="block w-full px-3 py-2 pl-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                                     value={companySearch}
                                     onChange={(e) => {
                                         setCompanySearch(e.target.value);
@@ -435,16 +369,18 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                     onFocus={() => setIsCompanyDropdownOpen(true)}
                                     placeholder="Search or Type Company Name..."
                                 />
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}/>
+                                <Search className="absolute left-3 top-2.5 text-gray-400" size={16}/>
                                 {customer.name && companies.find(c => c.companyName === customer.name) && (
-                                    <Check className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={16} title="Company Linked"/>
+                                    <Check className="absolute right-3 top-2.5 text-green-500" size={16} title="Company Linked"/>
                                 )}
                             </div>
                             
                             {isCompanyDropdownOpen && (
                                 <div className="absolute z-50 w-full mt-1 bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
                                     {filteredCompanies.length === 0 ? (
-                                        <div className="py-2 px-4 text-gray-500 italic">No companies found.</div>
+                                        <div className="cursor-default select-none relative py-2 px-4 text-gray-700">
+                                            {companySearch ? "No matches. Continue typing to create new." : "Start typing to search..."}
+                                        </div>
                                     ) : (
                                         filteredCompanies.map((company) => (
                                             <div
@@ -479,7 +415,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                             <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.jobTitle})</option>
                                         ))}
                                     </select>
-                                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}/>
+                                    <User className="absolute left-3 top-2.5 text-gray-400" size={16}/>
                                 </div>
                             </div>
                         )}
@@ -587,7 +523,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             
             <div className="flex justify-end items-center mt-12 border-t pt-6 gap-4">
                 <Button onClick={generateQuotePreview} variant="secondary"><Eye className="mr-2"/>Preview Quote</Button>
-                <Button onClick={handleSave} variant="success"><Save className="mr-2"/>{initialData ? 'Update Quote' : 'Save Quote'}</Button>
+                <Button onClick={handleSave} variant="success"><Plus className="mr-2"/>{initialData ? 'Update Quote in CRM' : 'Save Quote to CRM'}</Button>
             </div>
         </Card>
     );
