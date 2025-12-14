@@ -2,10 +2,10 @@ import React, { useState, useRef, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Users, User, ArrowRight } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox } from '../data/constants.jsx'; 
 
-// --- 1. Stats Badge ---
+// --- 1. Stats Badge (Unchanged) ---
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return (
@@ -28,7 +28,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-// --- 2. Duplicate Resolver ---
+// --- 2. Duplicate Resolver (Unchanged) ---
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
 
@@ -109,8 +109,8 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 3. CompanyModal (Updated with Interaction Log) ---
-const CompanyModal = ({ onClose, onSave, companyToEdit, quotes }) => {
+// --- 3. CompanyModal (Updated with Contacts & Open Quote) ---
+const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, onOpenQuote }) => {
     const isEditMode = Boolean(companyToEdit);
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
@@ -119,7 +119,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes }) => {
     
     // Status
     const [isVerified, setIsVerified] = useState(companyToEdit?.isVerified || false);
-    const [isTarget, setIsTarget] = useState(companyToEdit?.isTarget || false); // New "Target Account" status
+    const [isTarget, setIsTarget] = useState(companyToEdit?.isTarget || false);
     const [notes, setNotes] = useState(companyToEdit?.notes || '');
 
     // Interactions
@@ -128,6 +128,12 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes }) => {
     const [newLogType, setNewLogType] = useState('Visit');
     const [newLogOutcome, setNewLogOutcome] = useState('');
     const [selectedQuoteId, setSelectedQuoteId] = useState('');
+
+    // --- NEW: Filter Contacts associated with this Company ---
+    const companyContacts = useMemo(() => {
+        if (!contacts || !companyToEdit?.id) return [];
+        return contacts.filter(c => c.companyId === companyToEdit.id);
+    }, [contacts, companyToEdit]);
 
     // Filter relevant quotes
     const relevantQuotes = useMemo(() => {
@@ -162,6 +168,16 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes }) => {
 
     const handleDeleteInteraction = (id) => setInteractions(interactions.filter(i => i.id !== id));
 
+    // --- NEW: Handle Quote Click ---
+    const handleQuoteClick = (quoteId) => {
+        const fullQuote = quotes.find(q => q.id === quoteId);
+        if (fullQuote && onOpenQuote) {
+            onOpenQuote(fullQuote); // This calls the function passed from App.jsx
+        } else {
+            alert("Could not find full quote details.");
+        }
+    };
+
     const handleSave = () => {
         if (!companyName) { alert('Please enter a company name.'); return; }
         onSave({ 
@@ -172,7 +188,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes }) => {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 flex justify-center items-center p-4">
-            <Card className="w-full max-w-4xl max-h-[95vh] overflow-y-auto flex flex-col md:flex-row gap-6">
+            <Card className="w-full max-w-5xl max-h-[95vh] overflow-y-auto flex flex-col md:flex-row gap-6">
                 
                 {/* Left: Details */}
                 <div className="flex-1 space-y-4">
@@ -181,15 +197,46 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes }) => {
                         <button onClick={onClose} className="md:hidden text-gray-500"><X /></button>
                     </div>
                     <Input label="Company Name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} required />
-                    <Input label="Website" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="www.example.com" />
-                    <Input label="Industry" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="Food & Beverage" />
-                    <Textarea label="Address / Plant Location" rows="3" value={address} onChange={(e) => setAddress(e.target.value)} />
-                    <Textarea label="General Notes" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} />
                     
-                    <div className="grid grid-cols-2 gap-4 mt-4 bg-gray-50 p-4 rounded-lg">
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input label="Website" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="www.example.com" />
+                        <Input label="Industry" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="Food & Beverage" />
+                    </div>
+                    
+                    <Textarea label="Address / Plant Location" rows="2" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    <Textarea label="General Notes" rows="2" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    
+                    <div className="grid grid-cols-2 gap-4 mt-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
                         <Checkbox id="isVerifiedComp" label="Verified Data" checked={isVerified} onChange={(e) => setIsVerified(e.target.checked)} />
                         <Checkbox id="isTarget" label="Target Account" checked={isTarget} onChange={(e) => setIsTarget(e.target.checked)} />
                     </div>
+
+                    {/* --- NEW SECTION: Associated Contacts --- */}
+                    {isEditMode && (
+                        <div className="mt-4">
+                            <h4 className="font-bold text-gray-700 flex items-center gap-2 mb-2">
+                                <Users size={18}/> People at this Company ({companyContacts.length})
+                            </h4>
+                            <div className="bg-blue-50 rounded-lg p-2 border border-blue-100 max-h-40 overflow-y-auto space-y-2">
+                                {companyContacts.length === 0 ? (
+                                    <p className="text-xs text-gray-500 italic text-center p-2">No contacts linked yet.</p>
+                                ) : (
+                                    companyContacts.map(contact => (
+                                        <div key={contact.id} className="flex justify-between items-center bg-white p-2 rounded shadow-sm">
+                                            <div className="flex items-center gap-2">
+                                                <div className="bg-gray-200 p-1 rounded-full"><User size={12}/></div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-gray-800">{contact.firstName} {contact.lastName}</p>
+                                                    <p className="text-[10px] text-gray-500">{contact.jobTitle || 'No Title'}</p>
+                                                </div>
+                                            </div>
+                                            {contact.phone && <span className="text-[10px] text-gray-400">{contact.phone}</span>}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Right: Activity Log */}
@@ -235,10 +282,17 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes }) => {
                                     <button onClick={() => handleDeleteInteraction(log.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><X size={14}/></button>
                                 </div>
                                 <p className="text-sm text-gray-800">{log.outcome}</p>
+                                
+                                {/* --- UPDATED: Clickable Quote Badge --- */}
                                 {log.linkedQuote && (
-                                    <div className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded p-1.5 w-fit">
+                                    <div 
+                                        onClick={() => handleQuoteClick(log.linkedQuote.id)}
+                                        className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded p-1.5 w-fit cursor-pointer hover:bg-blue-100 hover:border-blue-300 transition-colors"
+                                        title="Click to Open Quote"
+                                    >
                                         <FileText size={14} className="text-blue-600"/>
                                         <span className="text-xs font-semibold text-blue-800">{log.linkedQuote.id} (${log.linkedQuote.total?.toLocaleString()})</span>
+                                        <ArrowRight size={12} className="text-blue-400"/>
                                     </div>
                                 )}
                             </div>
@@ -255,7 +309,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes }) => {
     );
 };
 
-// --- 4. CompanyCard (Updated) ---
+// --- 4. CompanyCard (Unchanged) ---
 const CompanyCard = ({ company, onEdit, onDelete }) => {
     const lastActivity = company.interactions && company.interactions.length > 0 ? company.interactions[0] : null;
     return (
@@ -278,7 +332,6 @@ const CompanyCard = ({ company, onEdit, onDelete }) => {
                     <p className="line-clamp-2">{company.address || 'No Address'}</p>
                 </div>
 
-                {/* Activity Preview */}
                 {lastActivity ? (
                     <div className="mb-3 bg-blue-50 p-2 rounded border border-blue-100">
                         <div className="flex justify-between items-center mb-1">
@@ -303,7 +356,7 @@ const CompanyCard = ({ company, onEdit, onDelete }) => {
 };
 
 // --- Main Companies Page ---
-const CompaniesPage = ({ companies, user, quotes }) => { 
+const CompaniesPage = ({ companies, user, quotes, contacts, onOpenQuote }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingCompany, setEditingCompany] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
@@ -440,7 +493,7 @@ const CompaniesPage = ({ companies, user, quotes }) => {
 
     return (
         <div className="w-full">
-            {showModal && <CompanyModal onSave={handleSave} onClose={handleCloseModal} companyToEdit={editingCompany} quotes={quotes} />}
+            {showModal && <CompanyModal onSave={handleSave} onClose={handleCloseModal} companyToEdit={editingCompany} quotes={quotes} contacts={contacts} onOpenQuote={onOpenQuote} />}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
