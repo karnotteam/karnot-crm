@@ -1,19 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { db, storage } from '../firebase'; 
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { KARNOT_LOGO_BASE_64 } from '../data/constants'; 
-import { Camera, Printer, Building } from 'lucide-react';
+import { Camera, Printer, Building, Search, Check, User } from 'lucide-react';
 
 export default function CommissioningPage({ user, onBack, companies = [], contacts = [] }) {
     const [loading, setLoading] = useState(false);
     
+    // --- Searchable Company State ---
+    const [companySearch, setCompanySearch] = useState('');
+    const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // Handle click outside dropdown
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsCompanyDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Filter companies
+    const filteredCompanies = useMemo(() => {
+        if (!companies) return [];
+        return companies.filter(c => c.companyName.toLowerCase().includes(companySearch.toLowerCase()));
+    }, [companies, companySearch]);
+
     // Expanded State
     const [formData, setFormData] = useState({
         // --- 1. Project Info ---
         customerName: '',
+        companyId: '', // To link in DB
         siteAddress: '',
         contactPerson: '',
+        contactId: '',
         heatPumpSerial: '',
         tankSerial: '',
         
@@ -83,6 +107,12 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
 
     const [photo, setPhoto] = useState(null);
 
+    // Filter contacts based on selected company
+    const companyContacts = useMemo(() => {
+        if (!formData.companyId || !contacts) return [];
+        return contacts.filter(c => c.companyId === formData.companyId);
+    }, [contacts, formData.companyId]);
+
     // Auto-calculate COP
     useEffect(() => {
         if (formData.heatOutputKw && formData.electricalInputKwe) {
@@ -113,18 +143,37 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
         }));
     };
 
-    // CRM Selection Handler
-    const handleCompanySelect = (e) => {
-        const selectedId = e.target.value;
-        const company = companies.find(c => c.id === selectedId);
-        if (company) {
-            const contact = contacts.find(c => c.companyId === company.id) || {};
+    // CRM Selection Handlers
+    const handleSelectCompany = (company) => {
+        setFormData(prev => ({
+            ...prev,
+            customerName: company.companyName,
+            companyId: company.id,
+            siteAddress: company.address || prev.siteAddress,
+            contactPerson: '', // Reset contact when company changes
+            contactId: ''
+        }));
+        setCompanySearch(company.companyName);
+        setIsCompanyDropdownOpen(false);
+    };
+
+    const handleCompanySearchChange = (e) => {
+        setCompanySearch(e.target.value);
+        setFormData(prev => ({ ...prev, customerName: e.target.value, companyId: '' })); // Manual entry
+        setIsCompanyDropdownOpen(true);
+    };
+
+    const handleSelectContact = (e) => {
+        const contactId = e.target.value;
+        const contact = contacts.find(c => c.id === contactId);
+        if (contact) {
             setFormData(prev => ({
                 ...prev,
-                customerName: company.name,
-                siteAddress: company.address || prev.siteAddress, 
-                contactPerson: contact.name || ''
+                contactPerson: `${contact.firstName} ${contact.lastName}`,
+                contactId: contact.id
             }));
+        } else {
+            setFormData(prev => ({ ...prev, contactPerson: '', contactId: '' }));
         }
     };
 
@@ -267,20 +316,43 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                 {/* 1. PROJECT INFO */}
                 <div className="bg-gray-50 p-4 rounded-lg print:bg-white print:p-0 print-compact-section">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 print:gap-2">
-                        {/* CRM Selector */}
-                        <div className="no-print md:col-span-2">
+                        
+                        {/* SEARCHABLE COMPANY INPUT */}
+                        <div className="no-print md:col-span-2 relative" ref={dropdownRef}>
                             <label className="block text-sm font-bold text-orange-600 mb-1 flex items-center gap-2">
-                                <Building size={16}/> Select Customer from CRM
+                                <Search size={16}/> Find Customer (CRM)
                             </label>
-                            <select 
-                                onChange={handleCompanySelect} 
-                                className="w-full p-2 border border-orange-300 rounded"
-                            >
-                                <option value="">-- Select Company --</option>
-                                {companies.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                            </select>
+                            <div className="relative">
+                                <input 
+                                    type="text" 
+                                    className="block w-full px-3 py-2.5 pl-10 bg-white border border-orange-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                    value={companySearch}
+                                    onChange={handleCompanySearchChange}
+                                    onFocus={() => setIsCompanyDropdownOpen(true)}
+                                    placeholder="Type to search company..."
+                                />
+                                <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}/>
+                                {formData.companyId && <Check className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={16} title="Linked to Database"/>}
+                            </div>
+                            
+                            {isCompanyDropdownOpen && (
+                                <div className="absolute z-50 w-full mt-1 bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
+                                    {filteredCompanies.length === 0 ? (
+                                        <div className="py-2 px-4 text-gray-500 italic">No companies found.</div>
+                                    ) : (
+                                        filteredCompanies.map((company) => (
+                                            <div
+                                                key={company.id}
+                                                className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-orange-50 text-gray-900 border-b border-gray-50 last:border-0"
+                                                onClick={() => handleSelectCompany(company)}
+                                            >
+                                                <span className="block truncate font-medium">{company.companyName}</span>
+                                                {company.address && <span className="block truncate text-xs text-gray-500">{company.address}</span>}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         <div>
@@ -291,6 +363,29 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                             <label className="text-xs font-bold text-gray-500">Site Address</label>
                             <input name="siteAddress" value={formData.siteAddress} onChange={handleChange} className="w-full p-2 border rounded" />
                         </div>
+                        
+                        {/* AUTO-FILL CONTACTS */}
+                        <div>
+                            <label className="text-xs font-bold text-gray-500">Contact Person</label>
+                            {companyContacts.length > 0 ? (
+                                <div className="relative">
+                                    <select 
+                                        value={formData.contactId} 
+                                        onChange={handleSelectContact} 
+                                        className="w-full p-2 pl-8 border rounded text-sm bg-white"
+                                    >
+                                        <option value="">-- Select Contact --</option>
+                                        {companyContacts.map(c => (
+                                            <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                                        ))}
+                                    </select>
+                                    <User className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={14}/>
+                                </div>
+                            ) : (
+                                <input name="contactPerson" value={formData.contactPerson} onChange={handleChange} className="w-full p-2 border rounded" placeholder="Enter Name" />
+                            )}
+                        </div>
+
                         <div>
                             <label className="text-xs font-bold text-gray-500">Heat Pump Serial</label>
                             <input name="heatPumpSerial" onChange={handleChange} className="w-full p-2 border rounded" />
@@ -298,10 +393,6 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
                         <div>
                             <label className="text-xs font-bold text-gray-500">Tank Serial</label>
                             <input name="tankSerial" onChange={handleChange} className="w-full p-2 border rounded" />
-                        </div>
-                        <div className="print:col-span-2">
-                            <label className="text-xs font-bold text-gray-500">Contact Person</label>
-                            <input name="contactPerson" value={formData.contactPerson} onChange={handleChange} className="w-full p-2 border rounded" />
                         </div>
                     </div>
                 </div>
@@ -440,4 +531,4 @@ export default function CommissioningPage({ user, onBack, companies = [], contac
             </form>
         </div>
     );
-}
+};
