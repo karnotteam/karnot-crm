@@ -217,10 +217,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const formatUSD = (num) => `$${num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
         const today = new Date();
+        const year = today.getFullYear();
         const todayFormatted = today.toLocaleDateString('en-CA');
         
-        // --- UPDATED ID FORMAT LOGIC ---
-        // Format: QN{0000}/{Year} - Rev {A}
         let quoteId = `QN${String(docControl.quoteNumber).padStart(4, '0')}/${fiscalYear}`;
         if (docControl.revision) {
             quoteId += ` - Rev ${docControl.revision}`;
@@ -308,7 +307,41 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             generatedDocumentsHTML += `<div class="report-page">${birHeaderHTML}${soldToInfoHTML}<h3>Details</h3><table class="line-items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">Unit Price (PHP)</th><th class="text-right">Amount (PHP)</th></tr></thead><tbody>${birLineItemsHTML}</tbody></table><div class="summary-wrapper">${birSummaryHTML}</div>${bankDetailsPHP}</div>`;
         }
 
-        const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Quote Preview</title><style>body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6; color: #333; } .report-page { background: white; max-width: 800px; margin: 0 auto 40px auto; padding: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 8px; position: relative; } .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 2px solid #ea580c; padding-bottom: 20px; } .report-info h2 { color: #ea580c; margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px; } .customer-info-box { background-color: #f9fafb; border-left: 4px solid #ea580c; padding: 15px; margin-bottom: 30px; font-size: 14px; line-height: 1.5; } h3 { color: #4b5563; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-top: 0; } table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; } th { background-color: #ea580c; color: white; padding: 10px; text-align: left; font-weight: 600; } td { padding: 10px; border-bottom: 1px solid #e5e7eb; } .text-right { text-align: right; } .text-center { text-align: center; } .simple-summary-table { width: 100%; max-width: 400px; margin-left: auto; } .simple-summary-table td { border: none; padding: 5px 10px; } .grand-total-row { border-top: 2px solid #333; font-size: 16px; background-color: #f3f4f6; } .summary-wrapper { page-break-inside: avoid; margin-bottom: 20px; } .terms-conditions { font-size: 12px; color: #666; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; } dt { font-weight: bold; margin-top: 5px; color: #333; } dd { margin: 2px 0 10px 0; } @media print { body { background: white; margin: 0; padding: 0; } .report-page { box-shadow: none; margin: 0; width: 100%; max-width: none; page-break-after: always; } .report-page:last-child { page-break-after: auto; } }</style></head><body>${generatedDocumentsHTML}</body></html>`;
+        const floatingPrintButton = `
+            <div class="no-print" style="position:fixed; top:20px; right:20px; z-index:9999;">
+                <button onclick="window.print()" style="background:#ea580c; color:white; padding:12px 24px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; box-shadow:0 4px 6px rgba(0,0,0,0.1); font-family:sans-serif; display:flex; align-items:center; gap:8px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Download / Print PDF
+                </button>
+            </div>
+        `;
+
+        const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Quote Preview</title><style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6; color: #333; } 
+            .report-page { background: white; max-width: 800px; margin: 0 auto 40px auto; padding: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 8px; position: relative; } 
+            .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 2px solid #ea580c; padding-bottom: 20px; } 
+            .report-info h2 { color: #ea580c; margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px; } 
+            .customer-info-box { background-color: #f9fafb; border-left: 4px solid #ea580c; padding: 15px; margin-bottom: 30px; font-size: 14px; line-height: 1.5; } 
+            h3 { color: #4b5563; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-top: 0; } 
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; } 
+            th { background-color: #ea580c; color: white; padding: 10px; text-align: left; font-weight: 600; } 
+            td { padding: 10px; border-bottom: 1px solid #e5e7eb; } 
+            .text-right { text-align: right; } 
+            .text-center { text-align: center; } 
+            .simple-summary-table { width: 100%; max-width: 400px; margin-left: auto; } 
+            .simple-summary-table td { border: none; padding: 5px 10px; } 
+            .grand-total-row { border-top: 2px solid #333; font-size: 16px; background-color: #f3f4f6; } 
+            .summary-wrapper { page-break-inside: avoid; margin-bottom: 20px; } 
+            .terms-conditions { font-size: 12px; color: #666; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; } 
+            dt { font-weight: bold; margin-top: 5px; color: #333; } 
+            dd { margin: 2px 0 10px 0; } 
+            @media print { 
+                body { background: white; margin: 0; padding: 0; } 
+                .report-page { box-shadow: none; margin: 0; width: 100%; max-width: none; page-break-after: always; } 
+                .report-page:last-child { page-break-after: auto; } 
+                .no-print { display: none !important; }
+            }
+        </style></head><body>${floatingPrintButton}${generatedDocumentsHTML}</body></html>`;
         
         const win = window.open("", "QuotePreview");
         win.document.write(finalReportHTML);
@@ -321,7 +354,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             return;
         }
         
-        // --- UPDATED SAVE ID FORMAT ---
         const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}/${fiscalYear}`;
 
         const newQuote = {
