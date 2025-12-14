@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Users, User, ArrowRight, Navigation, ClipboardCheck } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Users, User, ArrowRight, Navigation, ClipboardCheck, Linkedin } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox } from '../data/constants.jsx'; 
 
 // --- 1. Helper: Haversine Distance Formula (km) ---
@@ -130,6 +130,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
     const [website, setWebsite] = useState(companyToEdit?.website || '');
     const [industry, setIndustry] = useState(companyToEdit?.industry || '');
     const [address, setAddress] = useState(companyToEdit?.address || '');
+    const [linkedIn, setLinkedIn] = useState(companyToEdit?.linkedIn || ''); // <--- NEW LINKEDIN
     const [activeTab, setActiveTab] = useState('ACTIVITY'); // ACTIVITY, DATA
     
     // Editable GPS
@@ -229,7 +230,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
     const handleSave = () => {
         if (!companyName) { alert('Please enter a company name.'); return; }
         onSave({ 
-            companyName, website, industry, address, 
+            companyName, website, industry, address, linkedIn,
             isVerified, isTarget, notes, interactions,
             latitude: latitude ? parseFloat(latitude) : null, 
             longitude: longitude ? parseFloat(longitude) : null
@@ -266,6 +267,8 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
                             <MapPin size={14} className="mr-1"/> Capture Current Location
                         </Button>
                     </div>
+
+                    <Input label="LinkedIn URL" value={linkedIn} onChange={(e) => setLinkedIn(e.target.value)} placeholder="https://linkedin.com/company/..." />
 
                     <Textarea label="General Notes" rows="2" value={notes} onChange={(e) => setNotes(e.target.value)} />
                     
@@ -385,14 +388,14 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
                                 )}
                             </div>
 
-                            {/* COMMISSIONING */}
+                            {/* COMMISSIONING - CLICK TO EDIT */}
                             <div className="bg-green-50 rounded-lg p-2 border border-green-200">
                                 <h5 className="font-bold text-green-800 text-sm mb-2 flex items-center gap-2"><ClipboardCheck size={14}/> Reports ({relevantReports.length})</h5>
                                 {relevantReports.length === 0 ? <p className="text-xs text-green-400">None found.</p> : (
                                     relevantReports.map(r => (
                                         <div 
                                             key={r.id} 
-                                            onClick={() => onOpenReport(r)} 
+                                            onClick={() => onOpenReport(r)} // <--- TRIGGER EDIT
                                             className="bg-white p-2 rounded border border-green-100 mb-1 cursor-pointer hover:bg-green-100 hover:border-green-300 transition-colors"
                                         >
                                             <div className="flex justify-between">
@@ -419,10 +422,11 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
     );
 };
 
-// --- 5. CompanyCard (Unchanged) ---
+// --- 5. CompanyCard (Updated with Distance) ---
 const CompanyCard = ({ company, onEdit, onDelete, userLocation }) => {
     const lastActivity = company.interactions && company.interactions.length > 0 ? company.interactions[0] : null;
     
+    // Calculate distance if both exist
     let distance = null;
     if (userLocation && company.latitude && company.longitude) {
         distance = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, company.latitude, company.longitude).toFixed(1);
@@ -470,9 +474,15 @@ const CompanyCard = ({ company, onEdit, onDelete, userLocation }) => {
                 )}
             </div>
             
-            <div className="pt-3 border-t border-gray-100 flex justify-between text-xs text-gray-500">
-                {company.isTarget && <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold">Target Acct</span>}
-                {company.website && <a href={`//${company.website}`} target="_blank" rel="noreferrer" className="flex items-center hover:text-orange-600"><Globe size={12} className="mr-1"/> Website</a>}
+            {/* Quick Actions Row */}
+            <div className="pt-3 border-t border-gray-100 flex justify-between text-xs text-gray-500 items-center">
+                <div className="flex gap-2">
+                    {company.isTarget && <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold">Target Acct</span>}
+                </div>
+                <div className="flex gap-2 text-gray-400">
+                    {company.website && <a href={`//${company.website}`} target="_blank" rel="noreferrer" className="hover:text-orange-600" title="Website"><Globe size={14}/></a>}
+                    {company.linkedIn && <a href={company.linkedIn} target="_blank" rel="noreferrer" className="hover:text-blue-800" title="LinkedIn"><Linkedin size={14}/></a>}
+                </div>
             </div>
         </Card>
     );
