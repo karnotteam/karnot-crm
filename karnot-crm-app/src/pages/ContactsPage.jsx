@@ -2,7 +2,8 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs, updateDoc } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, Database, Send, Download, FileCheck } from 'lucide-react';
+// FIX 1: Added MessageCircle to imports below
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, MessageCircle, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, Database, Send, Download, FileCheck } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
 // --- 1. Helper: WhatsApp Link Generator ---
@@ -476,6 +477,10 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
     const [isImporting, setIsImporting] = useState(false);
     const [importMode, setImportMode] = useState('CREATE'); 
     
+    // FIX 2: Define missing duplicate logic state variables
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+    const [duplicateGroups, setDuplicateGroups] = useState([]);
+
     // --- NEW: Custom Response Import Settings ---
     const [showImportSettings, setShowImportSettings] = useState(false);
     const [importConfig, setImportConfig] = useState({ note: '', date: '' });
@@ -506,11 +511,84 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
     }, [contacts]);
 
     // --- Handlers ---
-    const handleScanForDuplicates = () => { /* ... Unchanged ... */ };
-    const handleResolveDuplicates = async (idsToDelete) => { /* ... Unchanged ... */ };
-    const handleSaveContact = async (contactData) => { /* ... Unchanged ... */ };
-    const handleUpdateContact = async (contactData) => { /* ... Unchanged ... */ };
-    const handleDeleteContact = async (contactId) => { /* ... Unchanged ... */ };
+    const handleScanForDuplicates = () => { 
+        // Simple client-side duplicate check (Name based)
+        const groups = {};
+        contacts.forEach(c => {
+            const key = `${c.firstName} ${c.lastName}`.toLowerCase().trim();
+            if(!groups[key]) groups[key] = [];
+            groups[key].push(c);
+        });
+        
+        const conflicts = Object.keys(groups)
+            .filter(key => groups[key].length > 1)
+            .map(key => ({ key, items: groups[key] }));
+
+        if(conflicts.length > 0) {
+            setDuplicateGroups(conflicts);
+            setShowDuplicateModal(true);
+        } else {
+            alert("No duplicates found based on Full Name.");
+        }
+    };
+    
+    const handleResolveDuplicates = async (idsToDelete) => { 
+        if(!user) return;
+        const batch = writeBatch(db);
+        idsToDelete.forEach(id => {
+            const ref = doc(db, "users", user.uid, "contacts", id);
+            batch.delete(ref);
+        });
+        try {
+            await batch.commit();
+            setShowDuplicateModal(false);
+            setDuplicateGroups([]);
+            alert("Duplicates resolved.");
+        } catch(err) {
+            console.error(err);
+            alert("Error deleting duplicates.");
+        }
+    };
+
+    const handleSaveContact = async (contactData) => { 
+        if(!user) return;
+        try {
+            await addDoc(collection(db, "users", user.uid, "contacts"), {
+                ...contactData,
+                createdAt: serverTimestamp()
+            });
+            setShowModal(false);
+        } catch(err) {
+            console.error(err);
+            alert("Error saving contact.");
+        }
+    };
+
+    const handleUpdateContact = async (contactData) => { 
+        if(!user || !editingContact) return;
+        try {
+            const ref = doc(db, "users", user.uid, "contacts", editingContact.id);
+            await updateDoc(ref, {
+                ...contactData,
+                lastModified: serverTimestamp()
+            });
+            setShowModal(false);
+            setEditingContact(null);
+        } catch(err) {
+            console.error(err);
+            alert("Error updating contact.");
+        }
+    };
+
+    const handleDeleteContact = async (contactId) => { 
+        if(!user || !confirm("Delete this contact?")) return;
+        try {
+            await deleteDoc(doc(db, "users", user.uid, "contacts", contactId));
+        } catch(err) {
+            console.error(err);
+        }
+    };
+
     const handleSave = (data) => editingContact ? handleUpdateContact(data) : handleSaveContact(data);
     const handleOpenNewModal = () => { setEditingContact(null); setShowModal(true); };
     const handleOpenEditModal = (c) => { setEditingContact(c); setShowModal(true); };
