@@ -275,12 +275,14 @@ export default function App() {
             <main className="container mx-auto p-4 md:p-8">
                 
                 {activeView === 'companies' && (
-    <CompaniesPage 
-        companies={companies}
-        quotes={quotes}  // <--- ADD THIS
-        user={user}
-    />
-)}
+                    <CompaniesPage 
+                        companies={companies}
+                        contacts={contacts}      // <--- NEW: Pass contacts list
+                        quotes={quotes}
+                        user={user}
+                        onOpenQuote={handleEditQuote} // <--- NEW: Allow opening quotes
+                    />
+                )}
                 
                 {activeView === 'contacts' && (
                     <ContactsPage 
