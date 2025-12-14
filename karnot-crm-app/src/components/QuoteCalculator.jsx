@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check } from 'lucide-react';
+import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check, User } from 'lucide-react';
 import { ALL_PRODUCTS, Card, Button, Input, Textarea, Checkbox, Section } from '../data/constants.jsx';
 
 const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, companies, contacts }) => {
     
     const [opportunityId, setOpportunityId] = useState(initialData?.opportunityId || null);
 
-    const [customer, setCustomer] = useState({ name: '', number: '', tin: '', address: '', saleType: 'Export' });
+    // Added contact fields to customer state
+    const [customer, setCustomer] = useState({ 
+        name: '', number: '', tin: '', address: '', saleType: 'Export',
+        contactId: '', contactName: '', contactEmail: '' 
+    });
+    
     const [commercial, setCommercial] = useState({ shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 });
     const [docControl, setDocControl] = useState({ quoteNumber: nextQuoteNumber, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' });
     const [costing, setCosting] = useState({ forexRate: 58.50, transportCost: 0, dutiesRate: 1, vatRate: 12, brokerFees: 0 });
@@ -37,9 +42,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
     useEffect(() => {
         const defaultCustomer = { 
-            name: '', number: '', tin: '', address: '', saleType: 'Export' 
+            name: '', number: '', tin: '', address: '', saleType: 'Export',
+            contactId: '', contactName: '', contactEmail: ''
         };
-        // Default commercial/doc values...
         const defaultCommercial = { shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 };
         const defaultDocControl = { quoteNumber: nextQuoteNumber, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' };
         const defaultCosting = { forexRate: 58.50, transportCost: 0, dutiesRate: 1, vatRate: 12, brokerFees: 0 };
@@ -47,7 +52,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
         if (initialData) {
             setCustomer({ ...defaultCustomer, ...initialData.customer });
-            setCompanySearch(initialData.customer?.name || ''); // Sync search bar
+            setCompanySearch(initialData.customer?.name || ''); 
             setCommercial({ ...defaultCommercial, ...initialData.commercial });
             setDocControl({ ...defaultDocControl, ...initialData.docControl, quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber });
             setCosting({ ...defaultCosting, ...initialData.costing });
@@ -56,16 +61,8 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             setManualItems(initialData.manualItems || []);
             setOpportunityId(initialData.opportunityId || null);
         } else {
-            // New Quote Defaults
-            if (companies && companies.length > 0) {
-                // Optional: Auto-select first company or leave blank. 
-                // Leaving blank is usually safer for a search bar experience.
-                setCustomer(defaultCustomer);
-                setCompanySearch('');
-            } else {
-                setCustomer(defaultCustomer);
-                setCompanySearch('');
-            }
+            setCustomer(defaultCustomer);
+            setCompanySearch('');
             setCommercial(defaultCommercial);
             setDocControl({ ...defaultDocControl, quoteNumber: nextQuoteNumber });
             setCosting(defaultCosting);
@@ -74,7 +71,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             setManualItems([]);
             setOpportunityId(null);
         }
-    }, [initialData, nextQuoteNumber, companies]); // Ensure 'companies' dependency is handled if needed, though mostly static here
+    }, [initialData, nextQuoteNumber, companies]);
 
     // Filter companies based on search
     const filteredCompanies = useMemo(() => {
@@ -82,15 +79,42 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         return companies.filter(c => c.companyName.toLowerCase().includes(companySearch.toLowerCase()));
     }, [companies, companySearch]);
 
+    // Filter contacts based on selected company
+    const companyContacts = useMemo(() => {
+        if (!customer.name || !contacts) return [];
+        // Match contacts where companyName matches the current customer name
+        // (If you linked via ID, use that, but name matching works for now based on your structure)
+        return contacts.filter(c => c.companyName === customer.name);
+    }, [contacts, customer.name]);
+
     const handleSelectCompany = (company) => {
         setCustomer(prev => ({
             ...prev,
             name: company.companyName,
             address: company.address || prev.address,
-            // You can add logic here to pull other fields if you add them to the Company model later
+            // Reset contact when company changes
+            contactId: '', contactName: '', contactEmail: ''
         }));
         setCompanySearch(company.companyName);
         setIsCompanyDropdownOpen(false);
+    };
+
+    const handleSelectContact = (e) => {
+        const selectedContactId = e.target.value;
+        const contact = contacts.find(c => c.id === selectedContactId);
+        if (contact) {
+            setCustomer(prev => ({
+                ...prev,
+                contactId: contact.id,
+                contactName: `${contact.firstName} ${contact.lastName}`,
+                contactEmail: contact.email
+            }));
+        } else {
+            setCustomer(prev => ({
+                ...prev,
+                contactId: '', contactName: '', contactEmail: ''
+            }));
+        }
     };
 
     const handleInputChange = (setter, field, isNumber = false) => (e) => {
@@ -222,9 +246,16 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
         const logoURL = "https://img1.wsimg.com/isteam/ip/cb1de239-c2b8-4674-b57d-5ae86a72feb1/Asset%2010%404x.png/:/rs=w:400,cg:true,m";
         const companyHeaderHTML = `<div class="company-details"><img src="${logoURL}" alt="Karnot Logo" style="width:200px; margin-bottom:15px;"><p><strong>Karnot Energy Solutions INC.</strong><br>TIN: ${customer.tin || 'N/A'}<br>Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>2429 Mapandan, Pangasinan, Philippines<br>Tel: +63 75 510 8922</p></div>`;
-        const customerInfoHTML = `<div class="customer-info-box"><strong>Quote For:</strong><br>Customer No.: ${customer.number || "N/A"}<br>${customer.name || "N/A"}<br>${customer.address.replace(/\n/g, "<br>") || "N/A"}</div>`;
-        const billToInfoHTML = `<div class="customer-info-box"><strong>Bill To:</strong><br>Customer No.: ${customer.number || "N/A"}<br>${customer.name || "N/A"}<br>${customer.address.replace(/\n/g, "<br>") || "N/A"}</div>`;
-        const soldToInfoHTML = `<div class="customer-info-box"><strong>SOLD TO:</strong><br><strong>Customer No.:</strong> ${customer.number || "N/A"}<br><strong>Registered Name:</strong> ${customer.name || "N/A"}<br><strong>TIN:</strong> ${customer.tin || "N/A"}<br><strong>Business Address:</strong> ${customer.address.replace(/\n/g, "<br>") || "N/A"}</div>`;
+        
+        // --- UPDATED: Customer Info Box with Contact Person ---
+        let contactLine = '';
+        if (customer.contactName) {
+            contactLine = `<br><strong>Attention:</strong> ${customer.contactName}`;
+        }
+
+        const customerInfoHTML = `<div class="customer-info-box"><strong>Quote For:</strong><br>Customer No.: ${customer.number || "N/A"}<br>${customer.name || "N/A"}${contactLine}<br>${customer.address.replace(/\n/g, "<br>") || "N/A"}</div>`;
+        const billToInfoHTML = `<div class="customer-info-box"><strong>Bill To:</strong><br>Customer No.: ${customer.number || "N/A"}<br>${customer.name || "N/A"}${contactLine}<br>${customer.address.replace(/\n/g, "<br>") || "N/A"}</div>`;
+        const soldToInfoHTML = `<div class="customer-info-box"><strong>SOLD TO:</strong><br><strong>Customer No.:</strong> ${customer.number || "N/A"}<br><strong>Registered Name:</strong> ${customer.name || "N/A"}<br><strong>TIN:</strong> ${customer.tin || "N/A"}<br><strong>Business Address:</strong> ${customer.address.replace(/\n/g, "<br>") || "N/A"}${contactLine}</div>`;
 
         let generatedDocumentsHTML = '';
         let landedCostHTML = '';
@@ -332,7 +363,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                     value={companySearch}
                                     onChange={(e) => {
                                         setCompanySearch(e.target.value);
-                                        setCustomer(prev => ({...prev, name: e.target.value})); // Allow manual type
+                                        setCustomer(prev => ({...prev, name: e.target.value})); 
                                         setIsCompanyDropdownOpen(true);
                                     }}
                                     onFocus={() => setIsCompanyDropdownOpen(true)}
@@ -368,6 +399,26 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                 </div>
                             )}
                         </div>
+
+                        {/* --- NEW: CONTACT PERSON DROPDOWN --- */}
+                        {customer.name && companyContacts.length > 0 && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Attention To (Contact)</label>
+                                <div className="relative">
+                                    <select 
+                                        value={customer.contactId} 
+                                        onChange={handleSelectContact} 
+                                        className="block w-full pl-10 pr-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                    >
+                                        <option value="">-- Select Contact Person --</option>
+                                        {companyContacts.map(c => (
+                                            <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.jobTitle})</option>
+                                        ))}
+                                    </select>
+                                    <User className="absolute left-3 top-2.5 text-gray-400" size={16}/>
+                                </div>
+                            </div>
+                        )}
 
                         <Input label="Customer No." value={customer.number} onChange={handleInputChange(setCustomer, 'number')} />
                         <Input label="TIN" value={customer.tin} onChange={handleInputChange(setCustomer, 'tin')} />
