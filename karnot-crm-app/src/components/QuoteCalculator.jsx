@@ -29,6 +29,13 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
+    // --- Fiscal Year Logic (Force 2026 start) ---
+    const getFiscalYear = () => {
+        const currentYear = new Date().getFullYear();
+        return currentYear < 2026 ? 2026 : currentYear;
+    };
+    const fiscalYear = getFiscalYear();
+
     // Handle click outside to close dropdown
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -210,10 +217,11 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const formatUSD = (num) => `$${num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
         const today = new Date();
-        const year = today.getFullYear();
         const todayFormatted = today.toLocaleDateString('en-CA');
         
-        let quoteId = `QN${String(docControl.quoteNumber).padStart(4, '0')}/${year}`;
+        // --- UPDATED ID FORMAT LOGIC ---
+        // Format: QN{0000}/{Year} - Rev {A}
+        let quoteId = `QN${String(docControl.quoteNumber).padStart(4, '0')}/${fiscalYear}`;
         if (docControl.revision) {
             quoteId += ` - Rev ${docControl.revision}`;
         }
@@ -244,7 +252,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const logoURL = "https://img1.wsimg.com/isteam/ip/cb1de239-c2b8-4674-b57d-5ae86a72feb1/Asset%2010%404x.png/:/rs=w:400,cg:true,m";
         const companyHeaderHTML = `<div class="company-details"><img src="${logoURL}" alt="Karnot Logo" style="width:200px; margin-bottom:15px;"><p><strong>Karnot Energy Solutions INC.</strong><br>TIN: ${customer.tin || 'N/A'}<br>Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>2429 Mapandan, Pangasinan, Philippines<br>Tel: +63 75 510 8922</p></div>`;
         
-        // --- UPDATED: Customer Info Box with Contact Person ---
         let contactLine = '';
         if (customer.contactName) {
             contactLine = `<br><strong>Attention:</strong> ${customer.contactName}`;
@@ -314,7 +321,8 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             return;
         }
         
-        const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
+        // --- UPDATED SAVE ID FORMAT ---
+        const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}/${fiscalYear}`;
 
         const newQuote = {
             id: quoteId,
@@ -356,7 +364,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                             <div className="relative">
                                 <input 
                                     type="text" 
-                                    className="block w-full px-3 py-2 pl-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
+                                    className="block w-full px-3 py-2.5 pl-10 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                                     value={companySearch}
                                     onChange={(e) => {
                                         setCompanySearch(e.target.value);
