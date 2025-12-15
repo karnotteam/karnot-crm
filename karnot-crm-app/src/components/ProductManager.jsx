@@ -14,50 +14,25 @@ const ProductManager = ({ user }) => {
     
     // --- FINALIZED STATE SCHEMA ---
     const [formData, setFormData] = useState({
-        id: '',
-        name: '',
-        category: 'Heat Pump',
-        costPriceUSD: 0,
-        salesPriceUSD: 0,
-        specs: '',
+        id: '', name: '', category: 'Heat Pump', costPriceUSD: 0, salesPriceUSD: 0, specs: '',
         
         // Performance
-        kW_DHW_Nominal: 0,
-        COP_DHW: 3.8,
-        kW_Cooling_Nominal: 0,
-        Cooling_EER_Range: '', 
-
-        // Operation & Compliance
-        Rated_Power_Input: 0, 
+        kW_DHW_Nominal: 0, COP_DHW: 3.8, kW_Cooling_Nominal: 0, Cooling_EER_Range: '', 
         SCOP_DHW_Avg: 3.51, 
-        Max_Running_Current: 0, 
-        Sound_Power_Level: 0, 
-        Outdoor_Air_Temp_Range: '', 
-        Power_Supply: '', 
-        Recommended_Breaker: '',
+
+        // Electrical & Operation
+        Rated_Power_Input: 0, Max_Running_Current: 0, Sound_Power_Level: 0, 
+        Outdoor_Air_Temp_Range: '', Power_Supply: '380/420 V-50/60 Hz-3 ph', Recommended_Breaker: '',
         
         // Refrigeration & Connections
-        Refrigerant: 'R290', 
-        Refrigerant_Charge: '150g', 
-        Rated_Water_Pressure: '0.7 MPa', 
-        Evaporating_Temp_Nominal: '', 
-        Ambient_Temp_Nominal: '', 
-        Suction_Connection: '', 
-        Liquid_Connection: '', 
-        Suitable_Compressor: '', 
-        Type_of_Oil: '', 
-        Receiver_Volume: '', 
-        Fan_Details: '', 
-        Air_Flow: '', 
-        Certificates: '', 
-        
-        // Sizing & Logistics
-        max_temp_c: 75,
-        isReversible: true,
-        Unit_Dimensions: '', 
-        Net_Weight: 0, 
-        Gross_Weight: 0, 
-        Order_Reference: '',
+        Refrigerant: 'R290', Refrigerant_Charge: '150g', Rated_Water_Pressure: '0.7 MPa', 
+        Evaporating_Temp_Nominal: '', Ambient_Temp_Nominal: '', Suction_Connection: '', 
+        Liquid_Connection: '', Suitable_Compressor: '', Type_of_Oil: '', Receiver_Volume: '', 
+        Fan_Details: '', Air_Flow: '', Certificates: '',
+
+        // Logistics & Sizing
+        max_temp_c: 75, isReversible: true,
+        Unit_Dimensions: '', Net_Weight: 0, Gross_Weight: 0, Order_Reference: '',
     });
 
     useEffect(() => {
@@ -74,24 +49,24 @@ const ProductManager = ({ user }) => {
     const handleEdit = (product) => {
         setIsEditing(true);
         setEditId(product.id);
-        // Load all fields, defaulting to 0 or '' if not present in DB
-        setFormData({
-            ...formData,
+        // Load all fields, ensuring missing ones default gracefully
+        setFormData(prev => ({
+            ...prev,
             ...product,
-            // Ensure numbers are handled:
-            costPriceUSD: product.costPriceUSD || 0,
-            salesPriceUSD: product.salesPriceUSD || 0,
-            kW_DHW_Nominal: product.kW_DHW_Nominal || 0,
-            kW_Cooling_Nominal: product.kW_Cooling_Nominal || 0,
-            COP_DHW: product.COP_DHW || 3.8,
-            max_temp_c: product.max_temp_c || 75,
-            Rated_Power_Input: product.Rated_Power_Input || 0,
-            SCOP_DHW_Avg: product.SCOP_DHW_Avg || 3.51,
-            Max_Running_Current: product.Max_Running_Current || 0,
-            Sound_Power_Level: product.Sound_Power_Level || 0,
-            Net_Weight: product.Net_Weight || 0,
-            Gross_Weight: product.Gross_Weight || 0,
-        });
+            // Ensure numbers are handled from the database (they might be stored as strings if imported)
+            costPriceUSD: parseFloat(product.costPriceUSD) || 0,
+            salesPriceUSD: parseFloat(product.salesPriceUSD) || 0,
+            kW_DHW_Nominal: parseFloat(product.kW_DHW_Nominal) || 0,
+            kW_Cooling_Nominal: parseFloat(product.kW_Cooling_Nominal) || 0,
+            COP_DHW: parseFloat(product.COP_DHW) || 3.8,
+            max_temp_c: parseFloat(product.max_temp_c) || 75,
+            Rated_Power_Input: parseFloat(product.Rated_Power_Input) || 0,
+            SCOP_DHW_Avg: parseFloat(product.SCOP_DHW_Avg) || 3.51,
+            Max_Running_Current: parseFloat(product.Max_Running_Current) || 0,
+            Sound_Power_Level: parseFloat(product.Sound_Power_Level) || 0,
+            Net_Weight: parseFloat(product.Net_Weight) || 0,
+            Gross_Weight: parseFloat(product.Gross_Weight) || 0,
+        }));
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -122,24 +97,55 @@ const ProductManager = ({ user }) => {
         try {
             const safeId = formData.id.replace(/\s+/g, '_').toLowerCase();
             
+            // --- EXPLICITLY DEFINE ALL FIELDS FOR SAVE (This fixes the data saving issue) ---
             const productData = {
-                ...formData,
                 id: safeId,
-                // Ensure number fields are parsed correctly
+                name: formData.name || '',
+                category: formData.category || 'Heat Pump',
+                specs: formData.specs || '',
+                isReversible: Boolean(formData.isReversible),
+                lastModified: serverTimestamp(),
+                
+                // CORE FINANCIALS (PARSED)
                 costPriceUSD: parseFloat(formData.costPriceUSD) || 0,
                 salesPriceUSD: parseFloat(formData.salesPriceUSD) || 0,
+                
+                // PERFORMANCE (PARSED)
                 kW_DHW_Nominal: parseFloat(formData.kW_DHW_Nominal) || 0,
-                kW_Cooling_Nominal: parseFloat(formData.kW_Cooling_Nominal) || 0,
                 COP_DHW: parseFloat(formData.COP_DHW) || 3.0,
-                max_temp_c: parseFloat(formData.max_temp_c) || 60,
-                Rated_Power_Input: parseFloat(formData.Rated_Power_Input) || 0,
+                kW_Cooling_Nominal: parseFloat(formData.kW_Cooling_Nominal) || 0,
+                Cooling_EER_Range: formData.Cooling_EER_Range || '', 
                 SCOP_DHW_Avg: parseFloat(formData.SCOP_DHW_Avg) || 3.0,
+                max_temp_c: parseFloat(formData.max_temp_c) || 60,
+
+                // ELECTRICAL & OPERATION (PARSED WHERE NECESSARY)
+                Rated_Power_Input: parseFloat(formData.Rated_Power_Input) || 0,
                 Max_Running_Current: parseFloat(formData.Max_Running_Current) || 0,
                 Sound_Power_Level: parseFloat(formData.Sound_Power_Level) || 0,
+                Outdoor_Air_Temp_Range: formData.Outdoor_Air_Temp_Range || '', 
+                Power_Supply: formData.Power_Supply || '', 
+                Recommended_Breaker: formData.Recommended_Breaker || '',
+                
+                // REFRIGERATION & CONNECTIONS (STRING)
+                Refrigerant: formData.Refrigerant || '', 
+                Refrigerant_Charge: formData.Refrigerant_Charge || '', 
+                Rated_Water_Pressure: formData.Rated_Water_Pressure || '', 
+                Evaporating_Temp_Nominal: formData.Evaporating_Temp_Nominal || '',
+                Ambient_Temp_Nominal: formData.Ambient_Temp_Nominal || '',
+                Suction_Connection: formData.Suction_Connection || '',
+                Liquid_Connection: formData.Liquid_Connection || '',
+                Suitable_Compressor: formData.Suitable_Compressor || '',
+                Type_of_Oil: formData.Type_of_Oil || '',
+                Receiver_Volume: formData.Receiver_Volume || '',
+                Fan_Details: formData.Fan_Details || '',
+                Air_Flow: formData.Air_Flow || '',
+                Certificates: formData.Certificates || '',
+
+                // LOGISTICS (PARSED WHERE NECESSARY)
+                Unit_Dimensions: formData.Unit_Dimensions || '',
                 Net_Weight: parseFloat(formData.Net_Weight) || 0,
                 Gross_Weight: parseFloat(formData.Gross_Weight) || 0,
-                isReversible: Boolean(formData.isReversible),
-                lastModified: serverTimestamp()
+                Order_Reference: formData.Order_Reference || '',
             };
 
             await setDoc(doc(db, "users", user.uid, "products", safeId), productData, { merge: true });
@@ -153,7 +159,6 @@ const ProductManager = ({ user }) => {
         }
     };
     
-    // --- RESTORED DELETE FUNCTION ---
     const handleDelete = async (id) => {
         if (window.confirm("Are you sure you want to delete this product? This cannot be undone.")) {
             try {
@@ -164,7 +169,6 @@ const ProductManager = ({ user }) => {
             }
         }
     };
-    // --- END RESTORED DELETE FUNCTION ---
     
     const handleInputChange = (field) => (e) => {
         setFormData(prev => ({ ...prev, [field]: e.target.value }));
@@ -194,7 +198,7 @@ const ProductManager = ({ user }) => {
                 )}
             </div>
 
-            {/* --- EDITOR FORM --- (Kept the same) */}
+            {/* --- EDITOR FORM --- */}
             {isEditing && (
                 <Card className="bg-orange-50 border-orange-200 mb-6">
                     <h4 className="font-bold text-lg mb-4 text-orange-800">{editId ? 'Edit Product' : 'New Product'}</h4>
@@ -234,7 +238,7 @@ const ProductManager = ({ user }) => {
                         </div>
                     </div>
 
-                    {/* --- 3. REFRIGERATION & CONNECTIONS --- */}
+                    {/* --- 3. REFRIGERATION & CONNECTIONS (NEW BLOCK) --- */}
                     <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
                         <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Plug size={16}/> Refrigeration & Piping Details</h5>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
