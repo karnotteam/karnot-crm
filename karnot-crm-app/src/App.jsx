@@ -13,10 +13,11 @@ import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
 import CompaniesPage from './pages/CompaniesPage.jsx'; 
 import ContactsPage from './pages/ContactsPage.jsx';
 import CommissioningPage from './pages/CommissioningPage.jsx'; 
+import AdminPage from './pages/AdminPage.jsx'; // <--- NEW IMPORT
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
-import { BarChart2, FileText, List, HardHat, LogOut, Building, Users, ClipboardCheck } from 'lucide-react'; 
+import { BarChart2, FileText, List, HardHat, LogOut, Building, Users, ClipboardCheck, Settings } from 'lucide-react'; 
 
 // --- Header Component ---
 const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( 
@@ -38,6 +39,12 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 
                 <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
                 <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
+                
+                {/* NEW ADMIN BUTTON */}
+                <Button onClick={() => setActiveView('admin')} variant={activeView === 'admin' ? 'primary' : 'secondary'} title="Admin / Settings">
+                    <Settings size={16} />
+                </Button>
+
                 <Button onClick={onLogout} variant="secondary"><LogOut className="mr-2" size={16} />Logout</Button>
             </nav>
         </div>
@@ -52,7 +59,7 @@ export default function App() {
     // Navigation State
     const [quoteToEdit, setQuoteToEdit] = useState(null);
     const [reportToEdit, setReportToEdit] = useState(null); 
-    const [contactToEdit, setContactToEdit] = useState(null); // <--- NEW: Track contact to edit
+    const [contactToEdit, setContactToEdit] = useState(null); 
     const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
     
     // --- State from Firebase ---
@@ -238,8 +245,8 @@ export default function App() {
         setActiveView('commissioning');
     };
     const handleEditContact = (contact) => {
-        setContactToEdit(contact); // Set the specific contact
-        setActiveView('contacts'); // Switch page
+        setContactToEdit(contact); 
+        setActiveView('contacts'); 
     };
     
     const handleOpenOpportunity = (opp) => {
@@ -309,7 +316,7 @@ export default function App() {
                         user={user}
                         onOpenQuote={handleEditQuote} 
                         onOpenReport={handleEditReport} 
-                        onEditContact={handleEditContact} // <--- NEW PROP
+                        onEditContact={handleEditContact}
                     />
                 )}
                 
@@ -319,7 +326,7 @@ export default function App() {
                         companies={companies}
                         quotes={quotes}
                         user={user}
-                        initialContactToEdit={contactToEdit} // <--- Pass the contact to edit
+                        initialContactToEdit={contactToEdit}
                     />
                 )}
 
@@ -375,6 +382,11 @@ export default function App() {
                         onDeleteQuote={handleDeleteQuote} 
                         onEditQuote={handleEditQuote} 
                     />
+                )}
+
+                {/* --- NEW ADMIN PAGE VIEW --- */}
+                {activeView === 'admin' && (
+                    <AdminPage user={user} />
                 )}
 
             </main>
