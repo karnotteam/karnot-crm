@@ -2,8 +2,8 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Users, User, ArrowRight, Navigation, ClipboardCheck, Linkedin } from 'lucide-react';
-import { Card, Button, Input, Textarea, Checkbox } from '../data/constants.jsx'; 
+import { Plus, X, Edit, Trash2, Building, Globe, Upload, Search, MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, Square, Filter, Clock, FileText, Link as LinkIcon, Users, User, ArrowRight, Navigation, ClipboardCheck, Linkedin, Tag } from 'lucide-react';
+import { Card, Button, Input, Textarea, Checkbox, PRICING_TIERS } from '../data/constants.jsx'; // <--- Added PRICING_TIERS
 
 // --- 1. Helper: Haversine Distance Formula (km) ---
 const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
@@ -130,7 +130,11 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
     const [website, setWebsite] = useState(companyToEdit?.website || '');
     const [industry, setIndustry] = useState(companyToEdit?.industry || '');
     const [address, setAddress] = useState(companyToEdit?.address || '');
-    const [linkedIn, setLinkedIn] = useState(companyToEdit?.linkedIn || ''); // <--- NEW LINKEDIN
+    const [linkedIn, setLinkedIn] = useState(companyToEdit?.linkedIn || '');
+    
+    // --- NEW: Pricing Tier State ---
+    const [tier, setTier] = useState(companyToEdit?.tier || 'STANDARD');
+
     const [activeTab, setActiveTab] = useState('ACTIVITY'); // ACTIVITY, DATA
     
     // Editable GPS
@@ -230,7 +234,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
     const handleSave = () => {
         if (!companyName) { alert('Please enter a company name.'); return; }
         onSave({ 
-            companyName, website, industry, address, linkedIn,
+            companyName, website, industry, address, linkedIn, tier, // Added Tier
             isVerified, isTarget, notes, interactions,
             latitude: latitude ? parseFloat(latitude) : null, 
             longitude: longitude ? parseFloat(longitude) : null
@@ -249,6 +253,22 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
                     </div>
                     <Input label="Company Name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} required />
                     
+                    {/* --- NEW: PRICING TIER DROPDOWN --- */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Pricing Tier (Discount Level)</label>
+                        <select 
+                            value={tier} 
+                            onChange={e => setTier(e.target.value)}
+                            className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500"
+                        >
+                            {Object.entries(PRICING_TIERS).map(([key, t]) => (
+                                <option key={key} value={key}>
+                                    {t.label} ({t.discount}% Off)
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <Input label="Website" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="www.example.com" />
                         <Input label="Industry" value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="Food & Beverage" />
@@ -353,7 +373,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
                     ) : (
                         // --- DATA TAB ---
                         <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                            {/* CONTACTS - NOW WITH EDIT BUTTON */}
+                            {/* CONTACTS */}
                             <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
                                 <h5 className="font-bold text-gray-700 text-sm mb-2 flex items-center gap-2"><Users size={14}/> Contacts ({companyContacts.length})</h5>
                                 {companyContacts.length === 0 ? <p className="text-xs text-gray-400">None found.</p> : (
@@ -388,14 +408,14 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes, contacts, commis
                                 )}
                             </div>
 
-                            {/* COMMISSIONING - CLICK TO EDIT */}
+                            {/* COMMISSIONING */}
                             <div className="bg-green-50 rounded-lg p-2 border border-green-200">
                                 <h5 className="font-bold text-green-800 text-sm mb-2 flex items-center gap-2"><ClipboardCheck size={14}/> Reports ({relevantReports.length})</h5>
                                 {relevantReports.length === 0 ? <p className="text-xs text-green-400">None found.</p> : (
                                     relevantReports.map(r => (
                                         <div 
                                             key={r.id} 
-                                            onClick={() => onOpenReport(r)} // <--- TRIGGER EDIT
+                                            onClick={() => onOpenReport(r)} 
                                             className="bg-white p-2 rounded border border-green-100 mb-1 cursor-pointer hover:bg-green-100 hover:border-green-300 transition-colors"
                                         >
                                             <div className="flex justify-between">
@@ -431,9 +451,12 @@ const CompanyCard = ({ company, onEdit, onDelete, userLocation }) => {
     if (userLocation && company.latitude && company.longitude) {
         distance = getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, company.latitude, company.longitude).toFixed(1);
     }
+    
+    // Get Tier Badge Logic
+    const tierInfo = PRICING_TIERS[company.tier || 'STANDARD'];
 
     return (
-        <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between h-full hover:border-orange-300 transition-colors">
+        <Card className="p-4 rounded-lg shadow border border-gray-200 flex flex-col justify-between h-full hover:border-orange-300 transition-colors relative">
             <div>
                 <div className="flex justify-between items-start">
                     <div className="flex items-center gap-2">
@@ -445,7 +468,14 @@ const CompanyCard = ({ company, onEdit, onDelete, userLocation }) => {
                         <Button onClick={() => onDelete(company.id)} variant="danger" className="p-1 h-auto w-auto"><Trash2 size={14}/></Button>
                     </div>
                 </div>
-                {company.industry && <p className="text-sm text-orange-600 mb-2">{company.industry}</p>}
+                {company.industry && <p className="text-sm text-orange-600 mb-1">{company.industry}</p>}
+                
+                {/* --- NEW: TIER BADGE --- */}
+                {tierInfo && tierInfo.discount > 0 && (
+                     <div className={`text-xs font-bold inline-block px-2 py-0.5 rounded-full mb-2 bg-${tierInfo.color}-100 text-${tierInfo.color}-800`}>
+                        {tierInfo.label} ({tierInfo.discount}% Off)
+                     </div>
+                )}
                 
                 <div className="text-sm text-gray-500 flex items-start gap-1 mb-3">
                     <MapPin size={14} className="flex-shrink-0 mt-0.5" />
@@ -627,6 +657,7 @@ const CompaniesPage = ({ companies, user, quotes, contacts, commissioningReports
                         industry: colInd !== -1 ? row[colInd] : '',
                         address: colAddr !== -1 ? row[colAddr] : '',
                         isVerified: false, isTarget: false, notes: '', interactions: [],
+                        tier: 'STANDARD', // Default tier for imports
                         createdAt: serverTimestamp()
                     });
                     importCount++;
@@ -662,7 +693,8 @@ const CompaniesPage = ({ companies, user, quotes, contacts, commissioningReports
         return list.filter(c =>
             c.companyName.toLowerCase().includes(lowerSearchTerm) ||
             (c.industry && c.industry.toLowerCase().includes(lowerSearchTerm)) ||
-            (c.address && c.address.toLowerCase().includes(lowerSearchTerm))
+            (c.address && c.address.toLowerCase().includes(lowerSearchTerm)) ||
+            (c.tier && c.tier.toLowerCase().includes(lowerSearchTerm)) // <--- SEARCH BY TIER ADDED
         );
     }, [companies, searchTerm, activeFilter, userLocation]); 
 
@@ -690,7 +722,7 @@ const CompaniesPage = ({ companies, user, quotes, contacts, commissioningReports
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" style={{ display: 'none' }} />
 
             <div className="mb-4 relative">
-                <Input type="text" placeholder="Search companies..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+                <Input type="text" placeholder="Search companies, address, or Pricing Tier (e.g. 'VIP', 'Dealer')..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
 
