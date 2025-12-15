@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check, User } from 'lucide-react';
-import { Card, Button, Input, Textarea, Checkbox, Section, PRICING_TIERS } from '../data/constants.jsx'; // Added PRICING_TIERS
+import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check, User, Handshake } from 'lucide-react';
+import { Card, Button, Input, Textarea, Checkbox, Section, PRICING_TIERS } from '../data/constants.jsx';
 
 // --- FIREBASE IMPORTS ---
 import { db } from '../firebase';
@@ -9,16 +9,16 @@ import { getAuth } from "firebase/auth";
 
 const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, companies, contacts }) => {
     
-    // --- 1. NEW: STATE FOR LIVE PRODUCTS ---
+    // --- 1. STATE FOR LIVE PRODUCTS ---
     const [dbProducts, setDbProducts] = useState([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
 
     const [opportunityId, setOpportunityId] = useState(initialData?.opportunityId || null);
 
-    // Added contact fields to customer state
+    // Added 'tier' to customer state
     const [customer, setCustomer] = useState({ 
         name: '', number: '', tin: '', address: '', saleType: 'Export',
-        contactId: '', contactName: '', contactEmail: '' 
+        contactId: '', contactName: '', contactEmail: '', tier: 'STANDARD' 
     });
     
     const [commercial, setCommercial] = useState({ shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 });
@@ -38,7 +38,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
-    // --- 2. NEW: FETCH PRODUCTS FROM FIREBASE ---
+    // --- 2. FETCH PRODUCTS FROM FIREBASE ---
     useEffect(() => {
         const fetchProducts = async () => {
             const auth = getAuth();
@@ -49,7 +49,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                 const querySnapshot = await getDocs(collection(db, "users", user.uid, "products"));
                 const products = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 
-                // Sort by category then name
                 products.sort((a, b) => {
                     if (a.category === b.category) {
                         return a.name.localeCompare(b.name);
@@ -68,7 +67,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         fetchProducts();
     }, []);
 
-    // Handle click outside to close dropdown
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -82,7 +80,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     useEffect(() => {
         const defaultCustomer = { 
             name: '', number: '', tin: '', address: '', saleType: 'Export',
-            contactId: '', contactName: '', contactEmail: ''
+            contactId: '', contactName: '', contactEmail: '', tier: 'STANDARD'
         };
         const defaultCommercial = { shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 };
         const defaultDocControl = { quoteNumber: nextQuoteNumber, revision: 'A', paymentTerms: 'Full payment is required upon order confirmation.' };
@@ -112,41 +110,47 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         }
     }, [initialData, nextQuoteNumber, companies]);
 
-    // Filter companies based on search
     const filteredCompanies = useMemo(() => {
         if (!companies) return [];
         return companies.filter(c => c.companyName.toLowerCase().includes(companySearch.toLowerCase()));
     }, [companies, companySearch]);
 
-    // Filter contacts based on selected company
     const companyContacts = useMemo(() => {
         if (!customer.name || !contacts) return [];
         return contacts.filter(c => c.companyName === customer.name);
     }, [contacts, customer.name]);
 
     const handleSelectCompany = (company) => {
-        // 1. Determine the Discount based on Company Tier
-        let autoDiscount = 0;
-        if (company.tier && PRICING_TIERS[company.tier]) {
-            autoDiscount = PRICING_TIERS[company.tier].discount;
-        }
+        // 1. Detect Tier
+        const detectedTier = company.tier && PRICING_TIERS[company.tier] ? company.tier : 'STANDARD';
+        const tierDiscount = PRICING_TIERS[detectedTier].discount;
 
-        // 2. Update Customer Details
+        // 2. Set Customer
         setCustomer(prev => ({
             ...prev,
             name: company.companyName,
             address: company.address || prev.address,
-            contactId: '', contactName: '', contactEmail: ''
+            contactId: '', contactName: '', contactEmail: '',
+            tier: detectedTier 
         }));
         setCompanySearch(company.companyName);
         setIsCompanyDropdownOpen(false);
 
-        // 3. Auto-Apply the Commercial Terms
+        // 3. Set Commercial Terms
         setCommercial(prev => ({
             ...prev,
-            discount: autoDiscount, // <--- Auto-Apply Discount
-            shippingTerms: company.tier === 'EXPORT' ? 'FOB' : prev.shippingTerms 
+            discount: tierDiscount,
+            shippingTerms: detectedTier === 'EXPORT' ? 'FOB' : prev.shippingTerms 
         }));
+    };
+
+    // --- NEW: Handle Manual Tier Change ---
+    const handleTierChange = (e) => {
+        const newTier = e.target.value;
+        const newDiscount = PRICING_TIERS[newTier] ? PRICING_TIERS[newTier].discount : 0;
+        
+        setCustomer(prev => ({ ...prev, tier: newTier }));
+        setCommercial(prev => ({ ...prev, discount: newDiscount }));
     };
 
     const handleSelectContact = (e) => {
@@ -225,12 +229,11 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         setEditingItem(prev => ({ ...prev, [field]: e.target.value }));
     };
 
-    // --- 3. UPDATED: USE DB PRODUCTS FOR CALCULATIONS ---
     const quoteTotals = useMemo(() => {
         const allItems = [
             ...Object.entries(selectedProducts)
                 .map(([id, quantity]) => {
-                    const product = dbProducts.find(p => p.id === id); // Look up in DB list
+                    const product = dbProducts.find(p => p.id === id); 
                     if (!product) return null; 
                     return { ...product, quantity };
                 })
@@ -247,7 +250,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const grossMarginPercentage = finalSalesPrice > 0 ? (grossMarginAmount / finalSalesPrice) * 100 : 0;
         
         return { allItems, subtotalUSD, finalSalesPrice, grossMarginAmount, grossMarginPercentage };
-    }, [selectedProducts, manualItems, commercial.discount, dbProducts]); // Add dbProducts dependency
+    }, [selectedProducts, manualItems, commercial.discount, dbProducts]);
 
     const generateQuotePreview = () => {
         const { allItems, subtotalUSD } = quoteTotals;
@@ -298,7 +301,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const logoURL = "https://img1.wsimg.com/isteam/ip/cb1de239-c2b8-4674-b57d-5ae86a72feb1/Asset%2010%404x.png/:/rs=w:400,cg:true,m";
         const companyHeaderHTML = `<div class="company-details"><img src="${logoURL}" alt="Karnot Logo" style="width:200px; margin-bottom:15px;"><p><strong>Karnot Energy Solutions INC.</strong><br>TIN: ${customer.tin || 'N/A'}<br>Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>2429 Mapandan, Pangasinan, Philippines<br>Tel: +63 75 510 8922</p></div>`;
         
-        // --- UPDATED: Customer Info Box with Contact Person ---
         let contactLine = '';
         if (customer.contactName) {
             contactLine = `<br><strong>Attention:</strong> ${customer.contactName}`;
@@ -389,7 +391,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         onSaveQuote(newQuote);
     };
 
-    // --- 4. UPDATED: CATEGORIZE DB PRODUCTS ---
     const productCategories = useMemo(() => {
         return dbProducts.reduce((acc, p) => {
             const cat = p.category || 'Uncategorized';
@@ -398,6 +399,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             return acc;
         }, {});
     }, [dbProducts]);
+
+    // --- TIER BADGE HELPER ---
+    const currentTier = PRICING_TIERS[customer.tier || 'STANDARD'];
 
     return (
         <Card>
@@ -446,6 +450,12 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                                     {company.isVerified && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Verified</span>}
                                                 </div>
                                                 {company.address && <span className="block truncate text-xs text-gray-500">{company.address}</span>}
+                                                {/* SHOW TIER IN DROPDOWN */}
+                                                {company.tier && PRICING_TIERS[company.tier] && (
+                                                    <span className={`text-[10px] font-bold px-1.5 rounded bg-${PRICING_TIERS[company.tier].color}-100 text-${PRICING_TIERS[company.tier].color}-800`}>
+                                                        {PRICING_TIERS[company.tier].label}
+                                                    </span>
+                                                )}
                                             </div>
                                         ))
                                     )}
@@ -453,7 +463,28 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                             )}
                         </div>
 
-                        {/* --- NEW: CONTACT PERSON DROPDOWN --- */}
+                        {/* --- NEW: PRICING TIER DROPDOWN (MANUAL OVERRIDE) --- */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Pricing Tier / Discount Level</label>
+                            <div className="relative">
+                                <select 
+                                    value={customer.tier} 
+                                    onChange={handleTierChange} 
+                                    className={`block w-full pl-3 pr-10 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm font-semibold
+                                        ${currentTier ? `bg-${currentTier.color}-50 border-${currentTier.color}-200 text-${currentTier.color}-800` : 'bg-white border-gray-300'}
+                                    `}
+                                >
+                                    {Object.entries(PRICING_TIERS).map(([key, t]) => (
+                                        <option key={key} value={key}>
+                                            {t.label} ({t.discount}% Off)
+                                        </option>
+                                    ))}
+                                </select>
+                                {customer.tier === 'PARTNER' && <Handshake size={16} className="absolute right-8 top-1/2 -translate-y-1/2 text-teal-600"/>}
+                            </div>
+                        </div>
+
+                        {/* --- CONTACT PERSON DROPDOWN --- */}
                         {customer.name && companyContacts.length > 0 && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Attention To (Contact)</label>
@@ -488,7 +519,18 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                         <Input label="Delivery Time" value={commercial.deliveryTime} onChange={handleInputChange(setCommercial, 'deliveryTime')} />
                         <Input label="Payment Due Date" type="date" value={commercial.dueDate} onChange={handleInputChange(setCommercial, 'dueDate')} />
                         <div className="flex gap-4">
-                           <Input label="Discount (%)" type="number" value={commercial.discount} onChange={handleInputChange(setCommercial, 'discount', true)} />
+                           <div className="w-full">
+                               <label className="block text-sm font-medium text-gray-600 mb-1">Discount (%)</label>
+                               <div className="relative">
+                                   <input 
+                                        type="number" 
+                                        value={commercial.discount} 
+                                        onChange={handleInputChange(setCommercial, 'discount', true)} 
+                                        className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-orange-500 ${commercial.discount > 0 ? 'border-green-500 bg-green-50 font-bold text-green-700' : 'border-gray-300'}`}
+                                   />
+                                   {commercial.discount > 0 && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-green-600 font-bold">APPLIED</span>}
+                               </div>
+                           </div>
                            <Input label="WHT (%)" type="number" value={commercial.wht} onChange={handleInputChange(setCommercial, 'wht', true)} />
                         </div>
                     </div>
