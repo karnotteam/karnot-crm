@@ -1,9 +1,18 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check, User } from 'lucide-react';
-import { ALL_PRODUCTS, Card, Button, Input, Textarea, Checkbox, Section } from '../data/constants.jsx';
+import { Card, Button, Input, Textarea, Checkbox, Section } from '../data/constants.jsx';
+
+// --- FIREBASE IMPORTS ---
+import { db } from '../firebase';
+import { collection, getDocs } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, companies, contacts }) => {
     
+    // --- 1. NEW: STATE FOR LIVE PRODUCTS ---
+    const [dbProducts, setDbProducts] = useState([]);
+    const [loadingProducts, setLoadingProducts] = useState(true);
+
     const [opportunityId, setOpportunityId] = useState(initialData?.opportunityId || null);
 
     // Added contact fields to customer state
@@ -28,6 +37,36 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     const [companySearch, setCompanySearch] = useState('');
     const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
+
+    // --- 2. NEW: FETCH PRODUCTS FROM FIREBASE ---
+    useEffect(() => {
+        const fetchProducts = async () => {
+            const auth = getAuth();
+            const user = auth.currentUser;
+            if (!user) return;
+
+            try {
+                const querySnapshot = await getDocs(collection(db, "users", user.uid, "products"));
+                const products = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                // Sort by category then name
+                products.sort((a, b) => {
+                    if (a.category === b.category) {
+                        return a.name.localeCompare(b.name);
+                    }
+                    return a.category.localeCompare(b.category);
+                });
+
+                setDbProducts(products);
+            } catch (error) {
+                console.error("Error fetching products:", error);
+            } finally {
+                setLoadingProducts(false);
+            }
+        };
+
+        fetchProducts();
+    }, []);
 
     // Handle click outside to close dropdown
     useEffect(() => {
@@ -172,11 +211,12 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         setEditingItem(prev => ({ ...prev, [field]: e.target.value }));
     };
 
+    // --- 3. UPDATED: USE DB PRODUCTS FOR CALCULATIONS ---
     const quoteTotals = useMemo(() => {
         const allItems = [
             ...Object.entries(selectedProducts)
                 .map(([id, quantity]) => {
-                    const product = ALL_PRODUCTS.find(p => p.id === id);
+                    const product = dbProducts.find(p => p.id === id); // Look up in DB list
                     if (!product) return null; 
                     return { ...product, quantity };
                 })
@@ -193,7 +233,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const grossMarginPercentage = finalSalesPrice > 0 ? (grossMarginAmount / finalSalesPrice) * 100 : 0;
         
         return { allItems, subtotalUSD, finalSalesPrice, grossMarginAmount, grossMarginPercentage };
-    }, [selectedProducts, manualItems, commercial.discount]);
+    }, [selectedProducts, manualItems, commercial.discount, dbProducts]); // Add dbProducts dependency
 
     const generateQuotePreview = () => {
         const { allItems, subtotalUSD } = quoteTotals;
@@ -335,13 +375,15 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         onSaveQuote(newQuote);
     };
 
+    // --- 4. UPDATED: CATEGORIZE DB PRODUCTS ---
     const productCategories = useMemo(() => {
-        return ALL_PRODUCTS.reduce((acc, p) => {
-            if (!acc[p.category]) acc[p.category] = [];
-            acc[p.category].push(p);
+        return dbProducts.reduce((acc, p) => {
+            const cat = p.category || 'Uncategorized';
+            if (!acc[cat]) acc[cat] = [];
+            acc[cat].push(p);
             return acc;
         }, {});
-    }, []);
+    }, [dbProducts]);
 
     return (
         <Card>
@@ -450,11 +492,11 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             
             <Section title="3a. International Costing & Taxes">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                     <Input label="Forex (USD to PHP)" type="number" value={costing.forexRate} onChange={handleInputChange(setCosting, 'forexRate', true)} />
-                     <Input label="Transport (USD)" type="number" value={costing.transportCost} onChange={handleInputChange(setCosting, 'transportCost', true)} />
-                     <Input label="Duties Rate (%)" type="number" value={costing.dutiesRate} onChange={handleInputChange(setCosting, 'dutiesRate', true)} />
-                     <Input label="VAT on Import (%)" type="number" value={costing.vatRate} onChange={handleInputChange(setCosting, 'vatRate', true)} />
-                     <Input label="Broker Fees (USD)" type="number" value={costing.brokerFees} onChange={handleInputChange(setCosting, 'brokerFees', true)} />
+                      <Input label="Forex (USD to PHP)" type="number" value={costing.forexRate} onChange={handleInputChange(setCosting, 'forexRate', true)} />
+                      <Input label="Transport (USD)" type="number" value={costing.transportCost} onChange={handleInputChange(setCosting, 'transportCost', true)} />
+                      <Input label="Duties Rate (%)" type="number" value={costing.dutiesRate} onChange={handleInputChange(setCosting, 'dutiesRate', true)} />
+                      <Input label="VAT on Import (%)" type="number" value={costing.vatRate} onChange={handleInputChange(setCosting, 'vatRate', true)} />
+                      <Input label="Broker Fees (USD)" type="number" value={costing.brokerFees} onChange={handleInputChange(setCosting, 'brokerFees', true)} />
                 </div>
             </Section>
 
@@ -469,19 +511,27 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             </Section>
             
             <Section title="5. Product Selection">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
-                    {Object.entries(productCategories).map(([category, products]) => (
-                        <div key={category}>
-                           <h4 className="text-orange-600 font-semibold mt-4 mb-2">{category}</h4>
-                           {products.map(p => (
-                               <div key={p.id} className="flex items-center justify-between gap-4 my-1">
-                                   <Checkbox id={p.id} label={p.name} checked={!!selectedProducts[p.id]} onChange={handleProductSelect(p.id)} />
-                                   <Input type="number" className="w-20 text-center" value={selectedProducts[p.id] || 1} onChange={handleProductQuantityChange(p.id)} disabled={!selectedProducts[p.id]} />
-                               </div>
-                           ))}
-                        </div>
-                    ))}
-                </div>
+                {loadingProducts ? (
+                    <div className="text-center p-4">Loading Products from Database...</div>
+                ) : dbProducts.length === 0 ? (
+                    <div className="text-center p-4 bg-orange-50 border border-orange-200 rounded text-orange-700">
+                        No products found in the database. Please use the <strong>Admin Page</strong> to upload your products.
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
+                        {Object.entries(productCategories).map(([category, products]) => (
+                            <div key={category}>
+                               <h4 className="text-orange-600 font-semibold mt-4 mb-2">{category}</h4>
+                               {products.map(p => (
+                                   <div key={p.id} className="flex items-center justify-between gap-4 my-1">
+                                       <Checkbox id={p.id} label={p.name} checked={!!selectedProducts[p.id]} onChange={handleProductSelect(p.id)} />
+                                       <Input type="number" className="w-20 text-center" value={selectedProducts[p.id] || 1} onChange={handleProductQuantityChange(p.id)} disabled={!selectedProducts[p.id]} />
+                                   </div>
+                               ))}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </Section>
 
             <Section title="6. Manual Line Items (USD)">
