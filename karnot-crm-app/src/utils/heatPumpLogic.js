@@ -4,14 +4,19 @@
 export const CONFIG = {
     FX: { PHP: 58.5, USD: 1, GBP: 0.79, EUR: 0.92 },
     SYMBOLS: { PHP: "₱", USD: "$", GBP: "£", EUR: "€" },
+    defaultRate: {
+        PHP: { grid: 12.25, lpgPrice: 950, lpgSize: 11, gas: 7.0, diesel: 60.0 },
+        USD: { grid: 0.21, lpgPrice: 25, lpgSize: 9, gas: 0.05, diesel: 1.00 },
+        GBP: { grid: 0.17, lpgPrice: 20, lpgSize: 13, gas: 0.07, diesel: 1.30 },
+        EUR: { grid: 0.19, lpgPrice: 22, lpgSize: 11, gas: 0.11, diesel: 1.40 },
+    },
     KWH_PER_KG_LPG: 13.8, 
     DIESEL_KWH_PER_LITER: 10.7,
-    COP_STANDARD: 1,
+    COP_STANDARD: 1, // Electric resistance or equivalent COP
     SOLAR_PANEL_KW_RATED: 0.425, 
     SOLAR_PANEL_COST_USD: 200, 
     INVERTER_COST_PER_WATT_USD: 0.30,
-    COOLING_COP: 2.6,
-    RATED_AMBIENT_C: 20, 
+    COOLING_COP: 2.6, // COP used for estimating AC savings
     RATED_LIFT_C: 40, // Assuming 40C rise (15C to 55C) is the test point
 };
 
@@ -25,7 +30,7 @@ export function calculateHeatPump(inputs, dbProducts) {
     else if (inputs.userType === 'resort') dailyLiters = (inputs.roomsOccupied * 50) + (inputs.mealsPerDay * 7);
     else dailyLiters = inputs.dailyLitersInput;
 
-    if (dailyLiters <= 0) return { error: "Please enter valid demand inputs." };
+    if (dailyLiters <= 0) return { error: "Please enter valid demand inputs (Liters/Day)." };
 
     const hoursPerDay = Math.max(1, inputs.hoursPerDay);
     const deltaT = inputs.targetTemp - inputs.inletTemp;
@@ -36,7 +41,7 @@ export function calculateHeatPump(inputs, dbProducts) {
     const kwhPerLiter = (deltaT * 1.163) / 1000;
     const dailyThermalEnergyKWH = dailyLiters * kwhPerLiter;
 
-    // Required Thermal Power (kW) based on DeltaT (Liters/Day * kwh/Liters / Hours/Day)
+    // Required Thermal Power (kW) based on scheduling (Liters/Day * kwh/Liters / Hours/Day)
     const requiredThermalPowerKW = dailyThermalEnergyKWH / hoursPerDay;
 
     // --- 2. BASELINE (OLD SYSTEM) COST ---
@@ -50,40 +55,24 @@ export function calculateHeatPump(inputs, dbProducts) {
     }
     const annualCostOld = (dailyThermalEnergyKWH / CONFIG.COP_STANDARD) * 365 * currentRateKWH;
 
-    // --- 3. FIND BEST HEAT PUMP (Using kW fields) ---
-    
-    // We adjust the nominal power based on the required temperature lift (deltaT) 
-    // to find the minimum *Nominal Rated kW* capacity needed to meet the demand.
-    const ratedDeltaT = CONFIG.RATED_LIFT_C; // 40C test lift
-    const powerAdjustmentFactor = deltaT / ratedDeltaT; 
-    
-    // The target nominal power is the required power scaled by the required lift ratio.
-    // We target a nominal machine kW that is roughly equal to or greater than the demand kW,
-    // assuming the machine's performance holds up across temp ranges.
-    const targetNominalPowerKW = requiredThermalPowerKW * powerAdjustmentFactor;
+    // --- 3. FIND BEST HEAT PUMP (Using kW fields and Refrigerant Filter) ---
 
-    // Filter, Adjust, and Select
     let availableModels = dbProducts
-        // 1. Filter out non-heating accessories (kW_DHW_Nominal must be > 0) and filter by Type
         .filter(p => {
             const nominalDHWPower = Number(p.kW_DHW_Nominal) || 0;
             const price = Number(p.salesPriceUSD) || 0;
-            const category = (p.category || '').toLowerCase();
 
             if (nominalDHWPower === 0 || price === 0) return false;
             
-            // Filter by selected Heat Pump Type
+            // Filter 1: Refrigerant Type Check (The user selected the type)
             if (inputs.heatPumpType !== 'all') {
-                const typeMap = {
-                    'r32': 'r32',
-                    'r290': 'r290',
-                    'co2': 'co2'
-                };
-                const requiredType = typeMap[inputs.heatPumpType];
-                if (!category.includes(requiredType)) return false;
+                const productRef = (p.Refrigerant || '').toUpperCase();
+                const requiredRef = inputs.heatPumpType.toUpperCase();
+                
+                if (productRef !== requiredRef) return false;
             }
 
-            // Filter if cooling is required
+            // Filter 2: Cooling Requirement Check
             if (inputs.includeCooling && !p.isReversible) return false;
 
             return true;
@@ -97,8 +86,8 @@ export function calculateHeatPump(inputs, dbProducts) {
             // Match 1: Max Temperature must be sufficient.
             if (inputs.targetTemp > maxTemp) return false;
 
-            // Match 2: Nominal Power must be equal to or greater than the required capacity.
-            // We use a 95% tolerance (i.e., allowing a small shortfall if it's the next best model)
+            // Match 2: Nominal Power must be equal to or greater than the required power.
+            // We use a 95% tolerance (i.e., allowing a small shortfall if it's the next size up).
             return nominalDHWPower >= (requiredThermalPowerKW * 0.95); 
         })
         
@@ -116,7 +105,6 @@ export function calculateHeatPump(inputs, dbProducts) {
     const fxRate = CONFIG.FX[inputs.currency];
     const symbol = CONFIG.SYMBOLS[inputs.currency];
     
-    // Read the correct fields from the selected product
     const heatPumpCOP = Number(heatPumpSystem.COP_DHW) || 3.5;
     
     // Energy In = Energy Out / COP
@@ -126,7 +114,7 @@ export function calculateHeatPump(inputs, dbProducts) {
     const heatPumpCost = Number(heatPumpSystem.salesPriceUSD) * fxRate;
     let karnotAnnualCost = 0, solarCost = 0, inverterCost = 0, karnotPanelCount = 0;
 
-    // Solar Offset Logic (Retained from original calculator)
+    // Solar Offset Logic
     if (inputs.systemType === 'grid-only') {
         karnotAnnualCost = karnotDailyElecKwh * 365 * inputs.elecRate;
     } else { // Grid + Solar
@@ -143,7 +131,7 @@ export function calculateHeatPump(inputs, dbProducts) {
     // Free Cooling Savings
     let coolSavings = 0;
     if (inputs.includeCooling && heatPumpSystem.isReversible) {
-        // Estimate cooling capacity needed roughly equal to heating capacity
+        // Use the product's Nominal Cooling kW, or estimate if missing
         const nominalCoolingPower = Number(heatPumpSystem.kW_Cooling_Nominal) || heatPumpSystem.kW_DHW_Nominal * 1.2;
         // Daily Cooling kWh is estimated based on nominal cooling power * operating hours
         const dailyCoolingKwh = nominalCoolingPower * hoursPerDay;
@@ -162,7 +150,6 @@ export function calculateHeatPump(inputs, dbProducts) {
             panelCount: karnotPanelCount,
             requiredThermalPowerKW: requiredThermalPowerKW.toFixed(1),
             selectedNominalPowerKW: heatPumpSystem.kW_DHW_Nominal,
-            adjustedHourlyOutput: (heatPumpSystem.kW_DHW_Nominal / kwhPerLiter).toFixed(1), // L/hr output
         },
         financials: {
             symbol, annualCostOld, karnotAnnualCost, totalSavings: totalAnnualSavings, coolSavings,
