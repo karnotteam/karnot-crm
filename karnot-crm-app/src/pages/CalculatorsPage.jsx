@@ -1,418 +1,87 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { auth, db } from './firebase'; 
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { collection, onSnapshot, query, doc, setDoc, deleteDoc, serverTimestamp, addDoc } from "firebase/firestore"; 
+import React from 'react';
+import { Button } from '../data/constants.jsx';
+import { Calculator, Sun, Droplets, Wind, Zap, ArrowRight } from 'lucide-react';
 
-// --- Import Pages & Components ---
-import LoginPage from './pages/LoginPage.jsx';
-import FunnelPage from './pages/FunnelPage.jsx';
-import DashboardPage from './pages/DashboardPage.jsx';
-import QuotesListPage from './pages/QuotesListPage.jsx';
-import QuoteCalculator from './components/QuoteCalculator.jsx';
-import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
-import CompaniesPage from './pages/CompaniesPage.jsx'; 
-import ContactsPage from './pages/ContactsPage.jsx';
-import CommissioningPage from './pages/CommissioningPage.jsx'; 
-import AdminPage from './pages/AdminPage.jsx';
+const CalculatorsPage = ({ setActiveView }) => {
 
-// --- NEW IMPORTS (Make sure these files exist!) ---
-import CalculatorsPage from './pages/CalculatorsPage.jsx';     
-import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
-
-// --- Import Constants & Header ---
-import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
-import { BarChart2, FileText, List, HardHat, LogOut, Building, Users, ClipboardCheck, Settings, Calculator } from 'lucide-react'; 
-
-// --- Header Component ---
-const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( 
-    <header className="bg-white shadow-md sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-                <img src={KARNOT_LOGO_BASE_64} alt="Karnot Logo" style={{height: '40px'}}/>
-                <h1 className="text-2xl font-bold text-orange-600">Funnel CRM</h1>
-            </div>
-            <nav className="flex flex-wrap gap-2 justify-end">
-                <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'}><HardHat className="mr-2" size={16} /> Funnel</Button>
-                <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'}><BarChart2 className="mr-2" size={16} /> Dashboard</Button>
-                <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'}><Building className="mr-2" size={16} /> Companies</Button>
-                <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'}><Users className="mr-2" size={16} /> Contacts</Button>
-                
-                <Button onClick={() => setActiveView('commissioning')} variant={activeView === 'commissioning' ? 'primary' : 'secondary'}>
-                    <ClipboardCheck className="mr-2" size={16} /> Commissioning
-                </Button>
-                
-                {/* --- NEW CALCULATORS BUTTON --- */}
-                <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc'].includes(activeView) ? 'primary' : 'secondary'}>
-                    <Calculator className="mr-2" size={16} /> Calculators
-                </Button>
-
-                <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
-                <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
-                
-                <Button onClick={() => setActiveView('admin')} variant={activeView === 'admin' ? 'primary' : 'secondary'} title="Admin / Settings">
-                    <Settings size={16} />
-                </Button>
-
-                <Button onClick={onLogout} variant="secondary"><LogOut className="mr-2" size={16} />Logout</Button>
-            </nav>
-        </div>
-    </header>
-);
-
-// --- Main App Component ---
-export default function App() {
-    const [user, setUser] = useState(null); 
-    const [activeView, setActiveView] = useState('funnel');
-    
-    // Navigation State
-    const [quoteToEdit, setQuoteToEdit] = useState(null);
-    const [reportToEdit, setReportToEdit] = useState(null); 
-    const [contactToEdit, setContactToEdit] = useState(null); 
-    const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
-    
-    // --- State from Firebase ---
-    const [opportunities, setOpportunities] = useState([]);
-    const [quotes, setQuotes] = useState([]);
-    const [companies, setCompanies] = useState([]); 
-    const [contacts, setContacts] = useState([]);
-    const [commissioningReports, setCommissioningReports] = useState([]); 
-    
-    const [loadingAuth, setLoadingAuth] = useState(true);
-    const [loadingData, setLoadingData] = useState(true);
-
-    // AUTH HOOK
-    useEffect(() => {
-        setLoadingAuth(true); 
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            if (user) {
-                setUser(user); 
-            } else {
-                setUser(null); 
-            }
-            setLoadingAuth(false); 
-        });
-        return () => unsubscribe(); 
-    }, []);
-
-    // DATA SYNC HOOK
-    useEffect(() => {
-        if (user) {
-            setLoadingData(true); 
-            
-            let quotesLoaded = false;
-            let oppsLoaded = false;
-            let companiesLoaded = false;
-            let contactsLoaded = false;
-            let commsLoaded = false;
-            
-            const checkAllDataLoaded = () => {
-                if (quotesLoaded && oppsLoaded && companiesLoaded && contactsLoaded && commsLoaded) {
-                    setLoadingData(false); 
-                }
-            };
-            
-            // 1. Sync Quotes
-            const quotesQuery = query(collection(db, "users", user.uid, "quotes"));
-            const unsubQuotes = onSnapshot(quotesQuery, (snapshot) => {
-                const liveQuotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setQuotes(liveQuotes);
-                quotesLoaded = true;
-                checkAllDataLoaded();
-            });
-
-            // 2. Sync Opportunities
-            const oppsQuery = query(collection(db, "users", user.uid, "opportunities"));
-            const unsubOpps = onSnapshot(oppsQuery, (snapshot) => {
-                const liveOpps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setOpportunities(liveOpps);
-                oppsLoaded = true;
-                checkAllDataLoaded();
-            });
-            
-            // 3. Sync Companies
-            const companiesQuery = query(collection(db, "users", user.uid, "companies"));
-            const unsubCompanies = onSnapshot(companiesQuery, (snapshot) => {
-                const liveCompanies = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setCompanies(liveCompanies);
-                companiesLoaded = true;
-                checkAllDataLoaded();
-            });
-            
-            // 4. Sync Contacts
-            const contactsQuery = query(collection(db, "users", user.uid, "contacts"));
-            const unsubContacts = onSnapshot(contactsQuery, (snapshot) => {
-                const liveContacts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setContacts(liveContacts);
-                contactsLoaded = true;
-                checkAllDataLoaded();
-            });
-
-            // 5. Sync Commissioning Reports
-            const commsQuery = query(collection(db, "users", user.uid, "commissioning_reports"));
-            const unsubComms = onSnapshot(commsQuery, (snapshot) => {
-                const liveComms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setCommissioningReports(liveComms);
-                commsLoaded = true;
-                checkAllDataLoaded();
-            });
-
-            return () => {
-                unsubQuotes();
-                unsubOpps();
-                unsubCompanies(); 
-                unsubContacts();
-                unsubComms();
-            };
-        } else {
-            setQuotes([]);
-            setOpportunities([]);
-            setCompanies([]);
-            setContacts([]);
-            setCommissioningReports([]);
-            setLoadingData(false);
+    const tools = [
+        {
+            id: 'heatPumpCalc', // This matches the activeView string in App.jsx
+            title: 'Heat Pump ROI',
+            description: 'Calculate savings, payback period, and CO2 reduction for Heat Pump vs. LPG/Diesel.',
+            icon: <Calculator className="text-orange-600" size={32} />,
+            status: 'Ready'
+        },
+        {
+            id: 'solarCalc',
+            title: 'Solar PV Sizing',
+            description: 'Estimate panel count and inverter size based on roof area and daily load.',
+            icon: <Sun className="text-yellow-500" size={32} />,
+            status: 'Coming Soon'
+        },
+        {
+            id: 'poolCalc',
+            title: 'Pool Heating',
+            description: 'Calculate thermal loss and heat pump sizing for commercial swimming pools.',
+            icon: <Droplets className="text-blue-500" size={32} />,
+            status: 'Coming Soon'
+        },
+        {
+            id: 'windCalc',
+            title: 'Wind Load',
+            description: 'Check mounting requirements based on roof type and wind zone.',
+            icon: <Wind className="text-gray-500" size={32} />,
+            status: 'Coming Soon'
+        },
+        {
+            id: 'elecCalc',
+            title: 'Electrical Load',
+            description: 'Breaker sizing and wire gauge calculator for installation teams.',
+            icon: <Zap className="text-purple-500" size={32} />,
+            status: 'Coming Soon'
         }
-    }, [user]); 
-
-    // --- Handlers ---
-    const handleLogin = (email, password) => {
-        signInWithEmailAndPassword(auth, email, password)
-            .catch((error) => alert("Login Failed: " + error.message));
-    };
-    const handleLogout = () => {
-        signOut(auth);
-    };
-    const handleSaveQuote = async (quoteData) => {
-        if (!user) {
-            alert("Error: You are not logged in. Please refresh and log in again.");
-            return;
-        }
-        let currentOpportunityId = quoteData.opportunityId;
-        if (!currentOpportunityId) {
-            try {
-                const newOppData = {
-                    customerName: quoteData.customer.name, 
-                    project: `Quote ${quoteData.id} Project`,
-                    estimatedValue: quoteData.finalSalesPrice || 0,
-                    stage: 'Proposal Sent', 
-                    probability: 75,
-                    contactName: quoteData.customer.name || 'Unknown', 
-                    contactEmail: 'N/A',
-                    createdAt: serverTimestamp(),
-                    lastModified: serverTimestamp()
-                };
-                const oppsCollectionRef = collection(db, "users", user.uid, "opportunities");
-                const oppDocRef = await addDoc(oppsCollectionRef, newOppData); 
-                currentOpportunityId = oppDocRef.id; 
-            } catch (error) {
-                console.error("Error creating new opportunity automatically: ", error);
-            }
-        }
-        const quoteRef = doc(db, "users", user.uid, "quotes", quoteData.id);
-        try {
-            await setDoc(quoteRef, {
-                ...quoteData,
-                opportunityId: currentOpportunityId, 
-                createdAt: quoteData.createdAt || serverTimestamp(), 
-                lastModified: serverTimestamp()
-            }, { merge: true }); 
-            alert(`Quote ${quoteData.id} has been saved and linked to the Funnel!`);
-            setActiveView('funnel'); 
-            setQuoteToEdit(null);
-            setSelectedOpportunity(null); 
-        } catch (error) {
-            console.error("Error saving quote: ", error);
-            alert("Error saving quote. See console.");
-        }
-    };
-    const handleUpdateQuoteStatus = async (quoteId, newStatus) => {
-        const quoteRef = doc(db, "users", user.uid, "quotes", quoteId);
-        try {
-            await setDoc(quoteRef, { status: newStatus, lastModified: serverTimestamp() }, { merge: true });
-        } catch (error) {
-            console.error("Error updating status: ", error);
-        }
-    };
-    const handleDeleteQuote = async (quoteId) => {
-        if (window.confirm("Are you sure you want to permanently delete this quote?")) {
-            const quoteRef = doc(db, "users", user.uid, "quotes", quoteId);
-            try {
-                await deleteDoc(quoteRef);
-            } catch (error) {
-                console.error("Error deleting quote: ", error);
-            }
-        }
-    };
-    
-    // --- Navigation Handlers ---
-    const handleEditQuote = (quote) => {
-        setQuoteToEdit(quote);
-        setActiveView('calculator');
-    };
-    const handleEditReport = (report) => {
-        setReportToEdit(report);
-        setActiveView('commissioning');
-    };
-    const handleEditContact = (contact) => {
-        setContactToEdit(contact); 
-        setActiveView('contacts'); 
-    };
-    
-    const handleOpenOpportunity = (opp) => {
-        setSelectedOpportunity(opp);
-        setActiveView('opportunityDetail'); 
-    };
-    const handleBackToFunnel = () => {
-        setSelectedOpportunity(null);
-        setActiveView('funnel');
-    };
-    const handleNewQuoteFromOpp = () => {
-        if (!selectedOpportunity) return;
-        const initialQuoteData = {
-            customer: { 
-                name: selectedOpportunity.customerName, 
-                saleType: selectedOpportunity.customerName.includes('Canada') ? 'Export' : 'Domestic'
-            },
-            opportunityId: selectedOpportunity.id 
-        };
-        setQuoteToEdit(initialQuoteData);
-        setActiveView('calculator');
-    };
-    const handleNewQuote = () => {
-        setQuoteToEdit(null); 
-        setSelectedOpportunity(null); 
-        setActiveView('calculator');
-    };
-
-    const nextQuoteNumber = useMemo(() => {
-        if (quotes.length === 0) return 2501;
-        const lastQuoteNum = quotes
-            .map(q => parseInt(q.id.split('-')[0].replace('QN', ''), 10))
-            .filter(num => !isNaN(num))
-            .reduce((max, num) => Math.max(max, num), 0);
-        return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
-    }, [quotes]); 
-
-    // --- RENDER ---
-    if (loadingAuth) {
-        return <div className="text-center p-10 font-semibold">Authenticating...</div>;
-    }
-    if (!user) {
-        return <LoginPage onLogin={handleLogin} />;
-    }
-    if (loadingData) {
-        return <div className="text-center p-10 font-semibold">Loading Karnot CRM...</div>;
-    }
+    ];
 
     return (
-        <div className="bg-gray-100 min-h-screen font-sans text-gray-900">
-            <Header 
-                activeView={activeView} 
-                setActiveView={setActiveView} 
-                quoteCount={quotes.length} 
-                onLogout={handleLogout}
-                onNewQuote={handleNewQuote} 
-            />
-            
-            <main className="container mx-auto p-4 md:p-8">
-                
-                {activeView === 'companies' && (
-                    <CompaniesPage 
-                        companies={companies}
-                        contacts={contacts} 
-                        quotes={quotes}
-                        commissioningReports={commissioningReports}
-                        user={user}
-                        onOpenQuote={handleEditQuote} 
-                        onOpenReport={handleEditReport} 
-                        onEditContact={handleEditContact}
-                    />
-                )}
-                
-                {activeView === 'contacts' && (
-                    <ContactsPage 
-                        contacts={contacts}
-                        companies={companies}
-                        quotes={quotes}
-                        user={user}
-                        initialContactToEdit={contactToEdit}
-                    />
-                )}
+        <div className="max-w-6xl mx-auto">
+            <h2 className="text-3xl font-bold text-gray-800 mb-2">Engineering Tools</h2>
+            <p className="text-gray-500 mb-8">Select a calculator to generate reports for your clients.</p>
 
-                {activeView === 'commissioning' && (
-                    <CommissioningPage 
-                        user={user}
-                        companies={companies} 
-                        contacts={contacts} 
-                        initialData={reportToEdit}
-                        onBack={() => setActiveView('dashboard')}
-                    />
-                )}
-                
-                {activeView === 'opportunityDetail' && (
-                    <OpportunityDetailPage
-                        opportunity={selectedOpportunity}
-                        quotes={quotes.filter(q => q.opportunityId === selectedOpportunity.id)} 
-                        onBack={handleBackToFunnel}
-                        onAddQuote={handleNewQuoteFromOpp} 
-                        user={user} 
-                    />
-                )}
-                
-                {activeView === 'funnel' && (
-                    <FunnelPage 
-                        opportunities={opportunities} 
-                        user={user}
-                        onOpen={handleOpenOpportunity} 
-                        companies={companies}
-                        contacts={contacts} 
-                    />
-                )}
-                
-                {activeView === 'dashboard' && (
-                    <DashboardPage quotes={quotes} user={user} />
-                )}
-
-                {/* --- NEW CALCULATORS HUB & TOOL --- */}
-                {activeView === 'calculatorsHub' && (
-                    <CalculatorsPage setActiveView={setActiveView} />
-                )}
-
-                {activeView === 'heatPumpCalc' && (
-                    <div>
-                         <Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">
-                            ← Back to Calculators
-                         </Button>
-                        <div className="max-w-5xl mx-auto">
-                            <HeatPumpCalculator />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {tools.map((tool) => (
+                    <div 
+                        key={tool.id} 
+                        className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow flex flex-col justify-between"
+                    >
+                        <div>
+                            <div className="mb-4 p-3 bg-gray-50 rounded-full w-fit">
+                                {tool.icon}
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">{tool.title}</h3>
+                            <p className="text-gray-600 text-sm mb-6 leading-relaxed">
+                                {tool.description}
+                            </p>
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-100">
+                            {tool.status === 'Ready' ? (
+                                <Button 
+                                    onClick={() => setActiveView(tool.id)} 
+                                    className="w-full justify-center"
+                                >
+                                    Launch Tool <ArrowRight size={16} className="ml-2"/>
+                                </Button>
+                            ) : (
+                                <span className="text-xs font-semibold bg-gray-100 text-gray-500 px-3 py-1 rounded-full">
+                                    In Development
+                                </span>
+                            )}
                         </div>
                     </div>
-                )}
-                
-                {activeView === 'calculator' && (
-                    <QuoteCalculator 
-                        onSaveQuote={handleSaveQuote} 
-                        nextQuoteNumber={nextQuoteNumber}
-                        key={quoteToEdit ? quoteToEdit.id : 'new'} 
-                        initialData={quoteToEdit} 
-                        companies={companies}
-                        contacts={contacts} 
-                    />
-                )}
-                
-                {activeView === 'list' && (
-                    <QuotesListPage 
-                        quotes={quotes} 
-                        onUpdateQuoteStatus={handleUpdateQuoteStatus} 
-                        onDeleteQuote={handleDeleteQuote} 
-                        onEditQuote={handleEditQuote} 
-                    />
-                )}
-
-                {activeView === 'admin' && (
-                    <AdminPage user={user} />
-                )}
-
-            </main>
+                ))}
+            </div>
         </div>
     );
-}
+};
+
+export default CalculatorsPage;
