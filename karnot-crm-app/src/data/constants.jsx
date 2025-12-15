@@ -28,10 +28,11 @@ export const BOI_TARGETS_USD = {
     2028: 5109436,
 };
 
-// --- PRICING TIERS (NEW) ---
+// --- PRICING TIERS ---
 export const PRICING_TIERS = {
     STANDARD: { label: 'Standard / End User', discount: 0, color: 'gray' },
     VIP:      { label: 'VIP Customer',        discount: 5, color: 'blue' },
+    PARTNER:  { label: 'Investor / Partner',  discount: 15, color: 'teal' }, // <--- NEW PARTNER TIER
     DEALER:   { label: 'Authorized Dealer',   discount: 15, color: 'purple' },
     DISTRIB:  { label: 'Master Distributor',  discount: 25, color: 'orange' },
     EXPORT:   { label: 'Export Partner',      discount: 30, color: 'green' }
