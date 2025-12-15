@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
-import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Plug } from 'lucide-react';
 import { Card, Button, Input, Checkbox } from '../data/constants';
 
 const ProductManager = ({ user }) => {
@@ -25,29 +25,39 @@ const ProductManager = ({ user }) => {
         kW_DHW_Nominal: 0,
         COP_DHW: 3.8,
         kW_Cooling_Nominal: 0,
-        Cooling_EER_Range: '', // New
+        Cooling_EER_Range: '', 
 
         // Operation & Compliance
-        Rated_Power_Input: 0, // New
-        SCOP_DHW_Avg: 3.51, // New
-        Max_Running_Current: 0, // New
-        Sound_Power_Level: 0, // New
-        Outdoor_Air_Temp_Range: '', // New (e.g., -7 °C to 43 °C)
-        Power_Supply: '', // New (e.g., 220–240V / 50Hz / 1Ph)
-        Recommended_Breaker: '', // New
+        Rated_Power_Input: 0, 
+        SCOP_DHW_Avg: 3.51, 
+        Max_Running_Current: 0, 
+        Sound_Power_Level: 0, 
+        Outdoor_Air_Temp_Range: '', 
+        Power_Supply: '', 
+        Recommended_Breaker: '',
         
-        // Refrigeration & Safety
-        Refrigerant: 'R290', // New
-        Refrigerant_Charge: '150g', // New
-        Rated_Water_Pressure: '0.7 MPa', // New
+        // Refrigeration & Connections (NEW FIELDS FOR iCOOL)
+        Refrigerant: 'R290', 
+        Refrigerant_Charge: '150g', 
+        Rated_Water_Pressure: '0.7 MPa', 
+        Evaporating_Temp_Nominal: '', // NEW: Evaporating Temp (°C)
+        Ambient_Temp_Nominal: '',     // NEW: Ambient Temp (°C)
+        Suction_Connection: '',       // NEW: Suction connection
+        Liquid_Connection: '',        // NEW: Liquid connection
+        Suitable_Compressor: '',      // NEW: Suitable compressor model
+        Type_of_Oil: '',              // NEW: Type of oil
+        Receiver_Volume: '',          // NEW: Receiver volume
+        Fan_Details: '',              // NEW: Number x Diameter of fan
+        Air_Flow: '',                 // NEW: Air flow
+        Certificates: '',             // NEW: Certificates
         
         // Sizing & Logistics
         max_temp_c: 75,
         isReversible: true,
-        Unit_Dimensions: '', // New (L×W×H)
-        Net_Weight: 0, // New
-        Gross_Weight: 0, // New
-        Order_Reference: '', // New
+        Unit_Dimensions: '', 
+        Net_Weight: 0, 
+        Gross_Weight: 0, 
+        Order_Reference: '',
     });
 
     useEffect(() => {
@@ -66,8 +76,8 @@ const ProductManager = ({ user }) => {
         setEditId(product.id);
         // Load all fields, defaulting to 0 or '' if not present in DB
         setFormData({
-            ...formData, // Start with defaults
-            ...product, // Overwrite with existing product data
+            ...formData, // Start with current component defaults
+            ...product, // Overwrite with existing product data (safely handling missing fields)
             // Ensure numbers are handled:
             costPriceUSD: product.costPriceUSD || 0,
             salesPriceUSD: product.salesPriceUSD || 0,
@@ -94,16 +104,18 @@ const ProductManager = ({ user }) => {
             name: '', category: 'Heat Pump', costPriceUSD: 0, salesPriceUSD: 0, specs: '',
             kW_DHW_Nominal: 0, COP_DHW: 3.8, kW_Cooling_Nominal: 0, Cooling_EER_Range: '', 
             Rated_Power_Input: 0, SCOP_DHW_Avg: 3.51, Max_Running_Current: 0, Sound_Power_Level: 0,
-            Outdoor_Air_Temp_Range: '', Power_Supply: '', Recommended_Breaker: '',
+            Outdoor_Air_Temp_Range: '', Power_Supply: '380/420 V-50/60 Hz-3 ph', Recommended_Breaker: '',
             Refrigerant: 'R290', Refrigerant_Charge: '150g', Rated_Water_Pressure: '0.7 MPa', 
-            max_temp_c: 75, isReversible: true, Unit_Dimensions: '', Net_Weight: 0, 
-            Gross_Weight: 0, Order_Reference: '',
+            Evaporating_Temp_Nominal: '', Ambient_Temp_Nominal: '', Suction_Connection: '', 
+            Liquid_Connection: '', Suitable_Compressor: '', Type_of_Oil: '', Receiver_Volume: '', 
+            Fan_Details: '', Air_Flow: '', Certificates: '', max_temp_c: 75, isReversible: true, 
+            Unit_Dimensions: '', Net_Weight: 0, Gross_Weight: 0, Order_Reference: '',
         });
     };
 
     const handleSave = async () => {
-        if (!formData.name || !formData.salesPriceUSD || !formData.kW_DHW_Nominal) {
-            alert("Please provide Name, Sales Price, and DHW Power (kW).");
+        if (!formData.name || !formData.salesPriceUSD) {
+            alert("Please provide Name and Sales Price.");
             return;
         }
 
@@ -141,12 +153,10 @@ const ProductManager = ({ user }) => {
         }
     };
     
-    // Handler for all standard text/number fields
     const handleInputChange = (field) => (e) => {
         setFormData(prev => ({ ...prev, [field]: e.target.value }));
     };
     const handleCancel = () => { setIsEditing(false); setEditId(null); };
-    const handleDelete = async (id) => { /* ... (Keep existing delete logic) ... */ };
     
     const filteredProducts = useMemo(() => {
         return products.filter(p => 
@@ -160,7 +170,6 @@ const ProductManager = ({ user }) => {
 
     return (
         <div className="space-y-6">
-            {/* Header and Add New Button */}
             <div className="flex justify-between items-center">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                     <Package className="text-orange-600"/> Product List ({products.length})
@@ -190,7 +199,7 @@ const ProductManager = ({ user }) => {
                         <Input label="Cost Price (USD)" type="number" value={formData.costPriceUSD} onChange={handleInputChange('costPriceUSD')} />
                     </div>
 
-                    {/* --- 2. PERFORMANCE --- */}
+                    {/* --- 2. PERFORMANCE & THERMAL --- */}
                     <div className="bg-white p-4 rounded-lg border border-orange-200 mb-4">
                         <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Zap size={16}/> Power & Efficiency Specs</h5>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -212,7 +221,29 @@ const ProductManager = ({ user }) => {
                         </div>
                     </div>
 
-                    {/* --- 3. ELECTRICAL & CONDITIONS --- */}
+                    {/* --- 3. REFRIGERATION & CONNECTIONS (NEW BLOCK) --- */}
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Plug size={16}/> Refrigeration & Piping Details</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <Input label="Refrigerant" value={formData.Refrigerant} onChange={handleInputChange('Refrigerant')} />
+                            <Input label="Charge Weight" value={formData.Refrigerant_Charge} onChange={handleInputChange('Refrigerant_Charge')} />
+                            <Input label="Suction Connection" value={formData.Suction_Connection} onChange={handleInputChange('Suction_Connection')} placeholder="e.g. 3/8&quot;" />
+                            <Input label="Liquid Connection" value={formData.Liquid_Connection} onChange={handleInputChange('Liquid_Connection')} placeholder="e.g. 1/4&quot;" />
+                            
+                            <Input label="Nominal Evap Temp (°C)" value={formData.Evaporating_Temp_Nominal} onChange={handleInputChange('Evaporating_Temp_Nominal')} placeholder="e.g. -10" />
+                            <Input label="Nominal Ambient Temp (°C)" value={formData.Ambient_Temp_Nominal} onChange={handleInputChange('Ambient_Temp_Nominal')} placeholder="e.g. 32" />
+                            <Input label="Suitable Compressor" value={formData.Suitable_Compressor} onChange={handleInputChange('Suitable_Compressor')} />
+                            <Input label="Type of Oil" value={formData.Type_of_Oil} onChange={handleInputChange('Type_of_Oil')} />
+
+                            <Input label="Receiver Volume" value={formData.Receiver_Volume} onChange={handleInputChange('Receiver_Volume')} placeholder="e.g. 10.0 dm³" />
+                            <Input label="Air Flow" value={formData.Air_Flow} onChange={handleInputChange('Air_Flow')} placeholder="e.g. 3600 m³/h" />
+                            <Input label="Fan Details" value={formData.Fan_Details} onChange={handleInputChange('Fan_Details')} placeholder="e.g. 1×630 mm" />
+                            <Input label="Rated Water Pressure (MPa)" value={formData.Rated_Water_Pressure} onChange={handleInputChange('Rated_Water_Pressure')} />
+                        </div>
+                    </div>
+
+
+                    {/* --- 4. ELECTRICAL & CONDITIONS --- */}
                     <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
                         <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><BarChart3 size={16}/> Electrical & Operating Data</h5>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -223,17 +254,16 @@ const ProductManager = ({ user }) => {
                             
                             <Input label="Outdoor Temp Range" value={formData.Outdoor_Air_Temp_Range} onChange={handleInputChange('Outdoor_Air_Temp_Range')} placeholder="e.g. -7 °C to 43 °C" />
                             <Input label="Sound Power Level (dB(A))" type="number" value={formData.Sound_Power_Level} onChange={handleInputChange('Sound_Power_Level')} />
-                            <Input label="Rated Water Pressure (MPa)" value={formData.Rated_Water_Pressure} onChange={handleInputChange('Rated_Water_Pressure')} />
+                            <Input label="Certificates" value={formData.Certificates} onChange={handleInputChange('Certificates')} placeholder="e.g. CE, TUV, RoHS" />
                         </div>
                     </div>
 
-                    {/* --- 4. LOGISTICS & DETAILS --- */}
+
+                    {/* --- 5. LOGISTICS --- */}
                     <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
-                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Ruler size={16}/> Refrigerant & Logistics</h5>
+                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Ruler size={16}/> Sizing & Weight</h5>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <Input label="Refrigerant" value={formData.Refrigerant} onChange={handleInputChange('Refrigerant')} />
-                            <Input label="Refrigerant Charge" value={formData.Refrigerant_Charge} onChange={handleInputChange('Refrigerant_Charge')} />
-                            <Input label="Net Dimensions (L×W×H)" value={formData.Unit_Dimensions} onChange={handleInputChange('Unit_Dimensions')} />
+                            <Input label="Net Dimensions (L×W×H)" value={formData.Unit_Dimensions} onChange={handleInputChange('Unit_Dimensions')} placeholder="e.g. 510 × 1289 × 963 mm" />
                             <Input label="Net Weight (kg)" type="number" value={formData.Net_Weight} onChange={handleInputChange('Net_Weight')} />
                             <Input label="Gross Weight (kg)" type="number" value={formData.Gross_Weight} onChange={handleInputChange('Gross_Weight')} />
                         </div>
@@ -257,6 +287,7 @@ const ProductManager = ({ user }) => {
             )}
 
             {/* --- LIST TABLE (Kept simple for overview) --- */}
+            {/* ... (Keep existing List Table rendering logic) ... */}
             <div className="relative mb-4">
                 <input type="text" placeholder="Search products..." value={searchTerm} onChange={handleInputChange('searchTerm')} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
@@ -268,6 +299,7 @@ const ProductManager = ({ user }) => {
                         <tr>
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Heating (kW)</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cooling (kW)</th>
                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Price (USD)</th>
                             <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
                         </tr>
@@ -278,7 +310,7 @@ const ProductManager = ({ user }) => {
                                 <td className="px-6 py-4">
                                     <div className="text-sm font-bold text-gray-900">{p.name}</div>
                                     <div className="text-xs text-gray-500">
-                                        {p.category} | Ref: {p.Refrigerant || '-'} | COP: {p.COP_DHW || '-'}
+                                        {p.category} | Ref: {p.Refrigerant || '-'} | Max Temp: {p.max_temp_c || '-'}°C
                                     </div>
                                 </td>
                                 
@@ -288,6 +320,12 @@ const ProductManager = ({ user }) => {
                                     </span>
                                 </td>
                                 
+                                <td className="px-6 py-4 text-right text-sm text-gray-500">
+                                    <span className="font-semibold text-gray-700">
+                                        {p.kW_Cooling_Nominal > 0 ? `${p.kW_Cooling_Nominal} kW` : (p.isReversible ? '0 kW' : '-')}
+                                    </span>
+                                </td>
+
                                 <td className="px-6 py-4 text-right text-sm font-bold text-gray-900">
                                     ${p.salesPriceUSD?.toLocaleString()}
                                 </td>
