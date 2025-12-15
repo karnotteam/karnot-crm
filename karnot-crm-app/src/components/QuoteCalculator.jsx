@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check, User } from 'lucide-react';
-import { Card, Button, Input, Textarea, Checkbox, Section } from '../data/constants.jsx';
+import { Card, Button, Input, Textarea, Checkbox, Section, PRICING_TIERS } from '../data/constants.jsx'; // Added PRICING_TIERS
 
 // --- FIREBASE IMPORTS ---
 import { db } from '../firebase';
@@ -125,6 +125,13 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     }, [contacts, customer.name]);
 
     const handleSelectCompany = (company) => {
+        // 1. Determine the Discount based on Company Tier
+        let autoDiscount = 0;
+        if (company.tier && PRICING_TIERS[company.tier]) {
+            autoDiscount = PRICING_TIERS[company.tier].discount;
+        }
+
+        // 2. Update Customer Details
         setCustomer(prev => ({
             ...prev,
             name: company.companyName,
@@ -133,6 +140,13 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         }));
         setCompanySearch(company.companyName);
         setIsCompanyDropdownOpen(false);
+
+        // 3. Auto-Apply the Commercial Terms
+        setCommercial(prev => ({
+            ...prev,
+            discount: autoDiscount, // <--- Auto-Apply Discount
+            shippingTerms: company.tier === 'EXPORT' ? 'FOB' : prev.shippingTerms 
+        }));
     };
 
     const handleSelectContact = (e) => {
