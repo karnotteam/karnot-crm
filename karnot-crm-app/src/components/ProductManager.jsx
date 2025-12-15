@@ -66,6 +66,8 @@ const ProductManager = ({ user }) => {
             Sound_Power_Level: parseFloat(product.Sound_Power_Level) || 0,
             Net_Weight: parseFloat(product.Net_Weight) || 0,
             Gross_Weight: parseFloat(product.Gross_Weight) || 0,
+            // Checkbox value needs specific check, though firebase will store it as a boolean.
+            isReversible: product.isReversible !== undefined ? product.isReversible : true,
         }));
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -98,6 +100,7 @@ const ProductManager = ({ user }) => {
             const safeId = formData.id.replace(/\s+/g, '_').toLowerCase();
             
             // --- FINAL ROBUST DATA SANITIZATION AND ASSIGNMENT (THE FIX) ---
+            // Ensure all fields from formData are explicitly included in productData
             const productData = {
                 id: safeId,
                 name: formData.name || '',
@@ -112,19 +115,19 @@ const ProductManager = ({ user }) => {
                 
                 // PERFORMANCE (PARSED)
                 kW_DHW_Nominal: parseFloat(formData.kW_DHW_Nominal) || 0,
-                COP_DHW: parseFloat(formData.COP_DHW) || 3.0,
+                COP_DHW: parseFloat(formData.COP_DHW) || 3.8,
                 kW_Cooling_Nominal: parseFloat(formData.kW_Cooling_Nominal) || 0,
-                SCOP_DHW_Avg: parseFloat(formData.SCOP_DHW_Avg) || 3.0,
-                max_temp_c: parseFloat(formData.max_temp_c) || 60,
+                SCOP_DHW_Avg: parseFloat(formData.SCOP_DHW_Avg) || 3.51,
+                max_temp_c: parseFloat(formData.max_temp_c) || 75,
 
-                // STRING/RANGE FIELDS (Saved as strings, defaulting to empty string)
+                // STRING/RANGE FIELDS 
                 Cooling_EER_Range: formData.Cooling_EER_Range || '', 
                 Outdoor_Air_Temp_Range: formData.Outdoor_Air_Temp_Range || '', 
-                Power_Supply: formData.Power_Supply || '', 
+                Power_Supply: formData.Power_Supply || '380/420 V-50/60 Hz-3 ph', 
                 Recommended_Breaker: formData.Recommended_Breaker || '',
-                Refrigerant: formData.Refrigerant || '', 
-                Refrigerant_Charge: formData.Refrigerant_Charge || '', 
-                Rated_Water_Pressure: formData.Rated_Water_Pressure || '', 
+                Refrigerant: formData.Refrigerant || 'R290', 
+                Refrigerant_Charge: formData.Refrigerant_Charge || '150g', 
+                Rated_Water_Pressure: formData.Rated_Water_Pressure || '0.7 MPa', 
                 Evaporating_Temp_Nominal: formData.Evaporating_Temp_Nominal || '',
                 Ambient_Temp_Nominal: formData.Ambient_Temp_Nominal || '',
                 Suction_Connection: formData.Suction_Connection || '',
@@ -170,8 +173,14 @@ const ProductManager = ({ user }) => {
     };
     
     const handleInputChange = (field) => (e) => {
-        setFormData(prev => ({ ...prev, [field]: e.target.value }));
+        // Handle checkbox specific type (boolean)
+        if (field === 'isReversible') {
+            setFormData(prev => ({ ...prev, [field]: e.target.checked }));
+        } else {
+            setFormData(prev => ({ ...prev, [field]: e.target.value }));
+        }
     };
+    
     const handleCancel = () => { setIsEditing(false); setEditId(null); };
     
     const filteredProducts = useMemo(() => {
@@ -225,7 +234,7 @@ const ProductManager = ({ user }) => {
                             <Input label="Max Hot Water Temp (°C)" type="number" value={formData.max_temp_c} onChange={handleInputChange('max_temp_c')} />
 
                             <div className="md:col-span-4 flex items-center mt-2">
-                                <Checkbox label="Is Reversible (Has Cooling)?" checked={formData.isReversible} onChange={e => setFormData(p => ({...p, isReversible: e.target.checked, kW_Cooling_Nominal: e.target.checked ? p.kW_Cooling_Nominal : 0 }))} />
+                                <Checkbox label="Is Reversible (Has Cooling)?" checked={formData.isReversible} onChange={handleInputChange('isReversible')} />
                             </div>
                             
                             {formData.isReversible && (
@@ -304,7 +313,7 @@ const ProductManager = ({ user }) => {
 
             {/* --- LIST TABLE --- */}
             <div className="relative mb-4">
-                <input type="text" placeholder="Search products..." value={searchTerm} onChange={handleInputChange('searchTerm')} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
+                <input type="text" placeholder="Search products..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
             </div>
 
