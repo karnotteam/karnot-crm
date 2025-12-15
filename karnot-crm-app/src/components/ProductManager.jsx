@@ -12,7 +12,7 @@ const ProductManager = ({ user }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editId, setEditId] = useState(null); 
     
-    // --- FINALIZED STATE SCHEMA ---
+    // --- FINALIZED STATE SCHEMA (All numeric fields initialized as numbers) ---
     const [formData, setFormData] = useState({
         id: '', name: '', category: 'Heat Pump', costPriceUSD: 0, salesPriceUSD: 0, specs: '',
         
@@ -49,24 +49,23 @@ const ProductManager = ({ user }) => {
     const handleEdit = (product) => {
         setIsEditing(true);
         setEditId(product.id);
-        // Load all fields, ensuring missing ones default gracefully
+        // Load all fields, ensuring missing ones default gracefully, and ensure numbers are parsed
         setFormData(prev => ({
             ...prev,
             ...product,
-            // Ensure numbers are handled from the database (they might be stored as strings if imported)
-            costPriceUSD: parseFloat(product.costPriceUSD) || 0,
-            salesPriceUSD: parseFloat(product.salesPriceUSD) || 0,
-            kW_DHW_Nominal: parseFloat(product.kW_DHW_Nominal) || 0,
-            kW_Cooling_Nominal: parseFloat(product.kW_Cooling_Nominal) || 0,
-            COP_DHW: parseFloat(product.COP_DHW) || 3.8,
-            max_temp_c: parseFloat(product.max_temp_c) || 75,
-            Rated_Power_Input: parseFloat(product.Rated_Power_Input) || 0,
-            SCOP_DHW_Avg: parseFloat(product.SCOP_DHW_Avg) || 3.51,
-            Max_Running_Current: parseFloat(product.Max_Running_Current) || 0,
-            Sound_Power_Level: parseFloat(product.Sound_Power_Level) || 0,
-            Net_Weight: parseFloat(product.Net_Weight) || 0,
-            Gross_Weight: parseFloat(product.Gross_Weight) || 0,
-            // Checkbox value needs specific check, though firebase will store it as a boolean.
+            // Explicitly parse values coming from Firestore to ensure they are numbers for the form
+            costPriceUSD: parseFloat(product.costPriceUSD || 0),
+            salesPriceUSD: parseFloat(product.salesPriceUSD || 0),
+            kW_DHW_Nominal: parseFloat(product.kW_DHW_Nominal || 0),
+            kW_Cooling_Nominal: parseFloat(product.kW_Cooling_Nominal || 0),
+            COP_DHW: parseFloat(product.COP_DHW || 3.8),
+            max_temp_c: parseFloat(product.max_temp_c || 75),
+            Rated_Power_Input: parseFloat(product.Rated_Power_Input || 0),
+            SCOP_DHW_Avg: parseFloat(product.SCOP_DHW_Avg || 3.51),
+            Max_Running_Current: parseFloat(product.Max_Running_Current || 0),
+            Sound_Power_Level: parseFloat(product.Sound_Power_Level || 0),
+            Net_Weight: parseFloat(product.Net_Weight || 0),
+            Gross_Weight: parseFloat(product.Gross_Weight || 0),
             isReversible: product.isReversible !== undefined ? product.isReversible : true,
         }));
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -91,16 +90,16 @@ const ProductManager = ({ user }) => {
     };
 
     const handleSave = async () => {
-        if (!formData.name || !formData.salesPriceUSD) {
-            alert("Please provide Name and Sales Price.");
+        // Since state is updated to use numbers, checking for 0 is fine for required number fields
+        if (!formData.name || formData.salesPriceUSD === 0) {
+            alert("Please provide Name and a Sales Price greater than 0.");
             return;
         }
 
         try {
             const safeId = formData.id.replace(/\s+/g, '_').toLowerCase();
             
-            // --- FINAL ROBUST DATA SANITIZATION AND ASSIGNMENT (THE FIX) ---
-            // Ensure all fields from formData are explicitly included in productData
+            // --- FINAL ROBUST DATA ASSIGNMENT (Now just mapping state, as state is pre-parsed) ---
             const productData = {
                 id: safeId,
                 name: formData.name || '',
@@ -109,16 +108,16 @@ const ProductManager = ({ user }) => {
                 isReversible: Boolean(formData.isReversible),
                 lastModified: serverTimestamp(),
                 
-                // CORE FINANCIALS (PARSED)
-                costPriceUSD: parseFloat(formData.costPriceUSD) || 0,
-                salesPriceUSD: parseFloat(formData.salesPriceUSD) || 0,
+                // CORE FINANCIALS (Already numbers in state)
+                costPriceUSD: formData.costPriceUSD,
+                salesPriceUSD: formData.salesPriceUSD,
                 
-                // PERFORMANCE (PARSED)
-                kW_DHW_Nominal: parseFloat(formData.kW_DHW_Nominal) || 0,
-                COP_DHW: parseFloat(formData.COP_DHW) || 3.8,
-                kW_Cooling_Nominal: parseFloat(formData.kW_Cooling_Nominal) || 0,
-                SCOP_DHW_Avg: parseFloat(formData.SCOP_DHW_Avg) || 3.51,
-                max_temp_c: parseFloat(formData.max_temp_c) || 75,
+                // PERFORMANCE (Already numbers in state)
+                kW_DHW_Nominal: formData.kW_DHW_Nominal,
+                COP_DHW: formData.COP_DHW,
+                kW_Cooling_Nominal: formData.kW_Cooling_Nominal,
+                SCOP_DHW_Avg: formData.SCOP_DHW_Avg,
+                max_temp_c: formData.max_temp_c,
 
                 // STRING/RANGE FIELDS 
                 Cooling_EER_Range: formData.Cooling_EER_Range || '', 
@@ -141,14 +140,14 @@ const ProductManager = ({ user }) => {
                 Unit_Dimensions: formData.Unit_Dimensions || '',
                 Order_Reference: formData.Order_Reference || '',
                 
-                // ELECTRICAL & LOGISTICS (PARSED)
-                Rated_Power_Input: parseFloat(formData.Rated_Power_Input) || 0,
-                Max_Running_Current: parseFloat(formData.Max_Running_Current) || 0,
-                Sound_Power_Level: parseFloat(formData.Sound_Power_Level) || 0,
-                Net_Weight: parseFloat(formData.Net_Weight) || 0,
-                Gross_Weight: parseFloat(formData.Gross_Weight) || 0,
+                // ELECTRICAL & LOGISTICS (Already numbers in state)
+                Rated_Power_Input: formData.Rated_Power_Input, // FIXED: Now a number
+                Max_Running_Current: formData.Max_Running_Current, // FIXED: Now a number
+                Sound_Power_Level: formData.Sound_Power_Level, // FIXED: Now a number
+                Net_Weight: formData.Net_Weight, // FIXED: Now a number
+                Gross_Weight: formData.Gross_Weight, // FIXED: Now a number
             };
-            // --- END FINAL ROBUST DATA SANITIZATION ---
+            // --- END FINAL ROBUST DATA ASSIGNMENT ---
 
             await setDoc(doc(db, "users", user.uid, "products", safeId), productData, { merge: true });
             
@@ -172,17 +171,40 @@ const ProductManager = ({ user }) => {
         }
     };
     
+    // *** MODIFIED HANDLER TO PARSE NUMERIC INPUTS IMMEDIATELY ***
     const handleInputChange = (field) => (e) => {
-        // Handle checkbox specific type (boolean)
-        if (field === 'isReversible') {
-            setFormData(prev => ({ ...prev, [field]: e.target.checked }));
-        } else {
-            setFormData(prev => ({ ...prev, [field]: e.target.value }));
+        const { value, checked, type } = e.target;
+
+        // 1. Handle Checkbox (Boolean)
+        if (type === 'checkbox') {
+            setFormData(prev => ({ ...prev, [field]: checked }));
+            return;
         }
+
+        // 2. Define Numeric Fields to convert
+        const isNumeric = [
+            'costPriceUSD', 'salesPriceUSD', 'kW_DHW_Nominal', 'COP_DHW', 'kW_Cooling_Nominal', 
+            'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current', 
+            'Sound_Power_Level', 'Net_Weight', 'Gross_Weight'
+        ].includes(field);
+
+        let finalValue = value;
+        if (isNumeric) {
+            // Convert string value to float, defaulting to 0 if the input is cleared
+            finalValue = value === '' ? 0 : parseFloat(value);
+        }
+
+        // 3. Update State
+        setFormData(prev => ({ ...prev, [field]: finalValue }));
     };
-    
+
     const handleCancel = () => { setIsEditing(false); setEditId(null); };
     
+    // Separate function for search input
+    const handleSearchChange = (e) => {
+        setSearchTerm(e.target.value);
+    };
+
     const filteredProducts = useMemo(() => {
         return products.filter(p => 
             (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -313,7 +335,7 @@ const ProductManager = ({ user }) => {
 
             {/* --- LIST TABLE --- */}
             <div className="relative mb-4">
-                <input type="text" placeholder="Search products..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
+                <input type="text" placeholder="Search products..." value={searchTerm} onChange={handleSearchChange} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
             </div>
 
