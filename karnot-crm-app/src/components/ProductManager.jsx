@@ -12,7 +12,7 @@ const ProductManager = ({ user }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editId, setEditId] = useState(null); 
     
-    // --- FINALIZED STATE SCHEMA (Includes all new fields) ---
+    // --- FINALIZED STATE SCHEMA ---
     const [formData, setFormData] = useState({
         id: '',
         name: '',
@@ -36,20 +36,20 @@ const ProductManager = ({ user }) => {
         Power_Supply: '', 
         Recommended_Breaker: '',
         
-        // Refrigeration & Connections (NEW FIELDS FOR iCOOL)
+        // Refrigeration & Connections
         Refrigerant: 'R290', 
         Refrigerant_Charge: '150g', 
         Rated_Water_Pressure: '0.7 MPa', 
-        Evaporating_Temp_Nominal: '', // NEW: Evaporating Temp (°C)
-        Ambient_Temp_Nominal: '',     // NEW: Ambient Temp (°C)
-        Suction_Connection: '',       // NEW: Suction connection
-        Liquid_Connection: '',        // NEW: Liquid connection
-        Suitable_Compressor: '',      // NEW: Suitable compressor model
-        Type_of_Oil: '',              // NEW: Type of oil
-        Receiver_Volume: '',          // NEW: Receiver volume
-        Fan_Details: '',              // NEW: Number x Diameter of fan
-        Air_Flow: '',                 // NEW: Air flow
-        Certificates: '',             // NEW: Certificates
+        Evaporating_Temp_Nominal: '', 
+        Ambient_Temp_Nominal: '', 
+        Suction_Connection: '', 
+        Liquid_Connection: '', 
+        Suitable_Compressor: '', 
+        Type_of_Oil: '', 
+        Receiver_Volume: '', 
+        Fan_Details: '', 
+        Air_Flow: '', 
+        Certificates: '', 
         
         // Sizing & Logistics
         max_temp_c: 75,
@@ -76,8 +76,8 @@ const ProductManager = ({ user }) => {
         setEditId(product.id);
         // Load all fields, defaulting to 0 or '' if not present in DB
         setFormData({
-            ...formData, // Start with current component defaults
-            ...product, // Overwrite with existing product data (safely handling missing fields)
+            ...formData,
+            ...product,
             // Ensure numbers are handled:
             costPriceUSD: product.costPriceUSD || 0,
             salesPriceUSD: product.salesPriceUSD || 0,
@@ -153,6 +153,19 @@ const ProductManager = ({ user }) => {
         }
     };
     
+    // --- RESTORED DELETE FUNCTION ---
+    const handleDelete = async (id) => {
+        if (window.confirm("Are you sure you want to delete this product? This cannot be undone.")) {
+            try {
+                await deleteDoc(doc(db, "users", user.uid, "products", id));
+            } catch (error) {
+                console.error("Error deleting:", error);
+                alert("Failed to delete product.");
+            }
+        }
+    };
+    // --- END RESTORED DELETE FUNCTION ---
+    
     const handleInputChange = (field) => (e) => {
         setFormData(prev => ({ ...prev, [field]: e.target.value }));
     };
@@ -181,7 +194,7 @@ const ProductManager = ({ user }) => {
                 )}
             </div>
 
-            {/* --- EDITOR FORM --- */}
+            {/* --- EDITOR FORM --- (Kept the same) */}
             {isEditing && (
                 <Card className="bg-orange-50 border-orange-200 mb-6">
                     <h4 className="font-bold text-lg mb-4 text-orange-800">{editId ? 'Edit Product' : 'New Product'}</h4>
@@ -221,7 +234,7 @@ const ProductManager = ({ user }) => {
                         </div>
                     </div>
 
-                    {/* --- 3. REFRIGERATION & CONNECTIONS (NEW BLOCK) --- */}
+                    {/* --- 3. REFRIGERATION & CONNECTIONS --- */}
                     <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
                         <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Plug size={16}/> Refrigeration & Piping Details</h5>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -286,8 +299,7 @@ const ProductManager = ({ user }) => {
                 </Card>
             )}
 
-            {/* --- LIST TABLE (Kept simple for overview) --- */}
-            {/* ... (Keep existing List Table rendering logic) ... */}
+            {/* --- LIST TABLE --- */}
             <div className="relative mb-4">
                 <input type="text" placeholder="Search products..." value={searchTerm} onChange={handleInputChange('searchTerm')} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
