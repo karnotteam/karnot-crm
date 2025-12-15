@@ -88,6 +88,8 @@ const ProductManager = ({ user }) => {
         });
     };
 
+ // Inside src/components/ProductManager.jsx
+
     const handleSave = async () => {
         if (!formData.name || !formData.salesPriceUSD) {
             alert("Please provide Name and Sales Price.");
@@ -97,7 +99,8 @@ const ProductManager = ({ user }) => {
         try {
             const safeId = formData.id.replace(/\s+/g, '_').toLowerCase();
             
-            // --- EXPLICITLY DEFINE ALL FIELDS FOR SAVE (This fixes the data saving issue) ---
+            // --- FINAL ROBUST DATA SANITIZATION AND ASSIGNMENT ---
+            // This method guarantees every field is included in the document being sent to Firebase.
             const productData = {
                 id: safeId,
                 name: formData.name || '',
@@ -114,19 +117,14 @@ const ProductManager = ({ user }) => {
                 kW_DHW_Nominal: parseFloat(formData.kW_DHW_Nominal) || 0,
                 COP_DHW: parseFloat(formData.COP_DHW) || 3.0,
                 kW_Cooling_Nominal: parseFloat(formData.kW_Cooling_Nominal) || 0,
-                Cooling_EER_Range: formData.Cooling_EER_Range || '', 
                 SCOP_DHW_Avg: parseFloat(formData.SCOP_DHW_Avg) || 3.0,
                 max_temp_c: parseFloat(formData.max_temp_c) || 60,
 
-                // ELECTRICAL & OPERATION (PARSED WHERE NECESSARY)
-                Rated_Power_Input: parseFloat(formData.Rated_Power_Input) || 0,
-                Max_Running_Current: parseFloat(formData.Max_Running_Current) || 0,
-                Sound_Power_Level: parseFloat(formData.Sound_Power_Level) || 0,
+                // STRING/RANGE FIELDS (Saved as strings, defaulting to empty string)
+                Cooling_EER_Range: formData.Cooling_EER_Range || '', 
                 Outdoor_Air_Temp_Range: formData.Outdoor_Air_Temp_Range || '', 
                 Power_Supply: formData.Power_Supply || '', 
                 Recommended_Breaker: formData.Recommended_Breaker || '',
-                
-                // REFRIGERATION & CONNECTIONS (STRING)
                 Refrigerant: formData.Refrigerant || '', 
                 Refrigerant_Charge: formData.Refrigerant_Charge || '', 
                 Rated_Water_Pressure: formData.Rated_Water_Pressure || '', 
@@ -140,13 +138,17 @@ const ProductManager = ({ user }) => {
                 Fan_Details: formData.Fan_Details || '',
                 Air_Flow: formData.Air_Flow || '',
                 Certificates: formData.Certificates || '',
-
-                // LOGISTICS (PARSED WHERE NECESSARY)
                 Unit_Dimensions: formData.Unit_Dimensions || '',
+                Order_Reference: formData.Order_Reference || '',
+                
+                // ELECTRICAL & LOGISTICS (PARSED)
+                Rated_Power_Input: parseFloat(formData.Rated_Power_Input) || 0,
+                Max_Running_Current: parseFloat(formData.Max_Running_Current) || 0,
+                Sound_Power_Level: parseFloat(formData.Sound_Power_Level) || 0,
                 Net_Weight: parseFloat(formData.Net_Weight) || 0,
                 Gross_Weight: parseFloat(formData.Gross_Weight) || 0,
-                Order_Reference: formData.Order_Reference || '',
             };
+            // --- END FINAL ROBUST DATA SANITIZATION ---
 
             await setDoc(doc(db, "users", user.uid, "products", safeId), productData, { merge: true });
             
@@ -155,9 +157,9 @@ const ProductManager = ({ user }) => {
             alert("Product Saved!");
         } catch (error) {
             console.error("Error saving:", error);
-            alert("Failed to save product.");
+            alert("Failed to save product: " + error.message);
         }
-    };
+    }
     
     const handleDelete = async (id) => {
         if (window.confirm("Are you sure you want to delete this product? This cannot be undone.")) {
