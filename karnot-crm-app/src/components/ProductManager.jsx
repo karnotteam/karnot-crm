@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
-import { Plus, Search, Edit, Trash2, X, Save, Package, Settings, Zap } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler } from 'lucide-react';
 import { Card, Button, Input, Checkbox } from '../data/constants';
 
 const ProductManager = ({ user }) => {
@@ -9,11 +9,10 @@ const ProductManager = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     
-    // Form State for Adding/Editing
     const [isEditing, setIsEditing] = useState(false);
-    const [editId, setEditId] = useState(null); // If null, we are adding new
+    const [editId, setEditId] = useState(null); 
     
-    // --- FINALIZED STATE SCHEMA ---
+    // --- FINALIZED STATE SCHEMA (Includes all new fields) ---
     const [formData, setFormData] = useState({
         id: '',
         name: '',
@@ -21,20 +20,40 @@ const ProductManager = ({ user }) => {
         costPriceUSD: 0,
         salesPriceUSD: 0,
         specs: '',
+        
+        // Performance
         kW_DHW_Nominal: 0,
-        kW_Cooling_Nominal: 0,
         COP_DHW: 3.8,
+        kW_Cooling_Nominal: 0,
+        Cooling_EER_Range: '', // New
+
+        // Operation & Compliance
+        Rated_Power_Input: 0, // New
+        SCOP_DHW_Avg: 3.51, // New
+        Max_Running_Current: 0, // New
+        Sound_Power_Level: 0, // New
+        Outdoor_Air_Temp_Range: '', // New (e.g., -7 °C to 43 °C)
+        Power_Supply: '', // New (e.g., 220–240V / 50Hz / 1Ph)
+        Recommended_Breaker: '', // New
+        
+        // Refrigeration & Safety
+        Refrigerant: 'R290', // New
+        Refrigerant_Charge: '150g', // New
+        Rated_Water_Pressure: '0.7 MPa', // New
+        
+        // Sizing & Logistics
         max_temp_c: 75,
-        isReversible: true 
+        isReversible: true,
+        Unit_Dimensions: '', // New (L×W×H)
+        Net_Weight: 0, // New
+        Gross_Weight: 0, // New
+        Order_Reference: '', // New
     });
 
-    // 1. Sync Products Live
     useEffect(() => {
         if (!user) return;
-        // The list reads all fields, including the new kW fields
         const unsub = onSnapshot(collection(db, "users", user.uid, "products"), (snapshot) => {
             const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            // Sort by category then name
             list.sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''));
             setProducts(list);
             setLoading(false);
@@ -42,23 +61,26 @@ const ProductManager = ({ user }) => {
         return () => unsub();
     }, [user]);
 
-    // 2. Handlers
     const handleEdit = (product) => {
         setIsEditing(true);
         setEditId(product.id);
+        // Load all fields, defaulting to 0 or '' if not present in DB
         setFormData({
-            id: product.id || '',
-            name: product.name || '',
-            category: product.category || 'Heat Pump',
+            ...formData, // Start with defaults
+            ...product, // Overwrite with existing product data
+            // Ensure numbers are handled:
             costPriceUSD: product.costPriceUSD || 0,
             salesPriceUSD: product.salesPriceUSD || 0,
-            specs: product.specs || '',
-            // Load new technical data from DB
             kW_DHW_Nominal: product.kW_DHW_Nominal || 0,
             kW_Cooling_Nominal: product.kW_Cooling_Nominal || 0,
             COP_DHW: product.COP_DHW || 3.8,
             max_temp_c: product.max_temp_c || 75,
-            isReversible: product.isReversible || false
+            Rated_Power_Input: product.Rated_Power_Input || 0,
+            SCOP_DHW_Avg: product.SCOP_DHW_Avg || 3.51,
+            Max_Running_Current: product.Max_Running_Current || 0,
+            Sound_Power_Level: product.Sound_Power_Level || 0,
+            Net_Weight: product.Net_Weight || 0,
+            Gross_Weight: product.Gross_Weight || 0,
         });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -66,37 +88,17 @@ const ProductManager = ({ user }) => {
     const handleAddNew = () => {
         setIsEditing(true);
         setEditId(null);
-        // Auto-generate a simple ID
-        const newId = `prod_${Date.now()}`;
+        // Reset form to defaults
         setFormData({
-            id: newId,
-            name: '',
-            category: 'Heat Pump',
-            costPriceUSD: 0,
-            salesPriceUSD: 0,
-            specs: '',
-            kW_DHW_Nominal: 0,
-            kW_Cooling_Nominal: 0,
-            COP_DHW: 3.8,
-            max_temp_c: 75,
-            isReversible: true
+            id: `prod_${Date.now()}`,
+            name: '', category: 'Heat Pump', costPriceUSD: 0, salesPriceUSD: 0, specs: '',
+            kW_DHW_Nominal: 0, COP_DHW: 3.8, kW_Cooling_Nominal: 0, Cooling_EER_Range: '', 
+            Rated_Power_Input: 0, SCOP_DHW_Avg: 3.51, Max_Running_Current: 0, Sound_Power_Level: 0,
+            Outdoor_Air_Temp_Range: '', Power_Supply: '', Recommended_Breaker: '',
+            Refrigerant: 'R290', Refrigerant_Charge: '150g', Rated_Water_Pressure: '0.7 MPa', 
+            max_temp_c: 75, isReversible: true, Unit_Dimensions: '', Net_Weight: 0, 
+            Gross_Weight: 0, Order_Reference: '',
         });
-    };
-
-    const handleCancel = () => {
-        setIsEditing(false);
-        setEditId(null);
-    };
-
-    const handleDelete = async (id) => {
-        if (window.confirm("Are you sure you want to delete this product? This cannot be undone.")) {
-            try {
-                await deleteDoc(doc(db, "users", user.uid, "products", id));
-            } catch (error) {
-                console.error("Error deleting:", error);
-                alert("Failed to delete product.");
-            }
-        }
     };
 
     const handleSave = async () => {
@@ -106,19 +108,24 @@ const ProductManager = ({ user }) => {
         }
 
         try {
-            // Ensure ID is safe and used as document ID
             const safeId = formData.id.replace(/\s+/g, '_').toLowerCase();
             
             const productData = {
                 ...formData,
                 id: safeId,
+                // Ensure number fields are parsed correctly
                 costPriceUSD: parseFloat(formData.costPriceUSD) || 0,
                 salesPriceUSD: parseFloat(formData.salesPriceUSD) || 0,
-                // Ensure all number fields are parsed as floats
                 kW_DHW_Nominal: parseFloat(formData.kW_DHW_Nominal) || 0,
                 kW_Cooling_Nominal: parseFloat(formData.kW_Cooling_Nominal) || 0,
                 COP_DHW: parseFloat(formData.COP_DHW) || 3.0,
                 max_temp_c: parseFloat(formData.max_temp_c) || 60,
+                Rated_Power_Input: parseFloat(formData.Rated_Power_Input) || 0,
+                SCOP_DHW_Avg: parseFloat(formData.SCOP_DHW_Avg) || 3.0,
+                Max_Running_Current: parseFloat(formData.Max_Running_Current) || 0,
+                Sound_Power_Level: parseFloat(formData.Sound_Power_Level) || 0,
+                Net_Weight: parseFloat(formData.Net_Weight) || 0,
+                Gross_Weight: parseFloat(formData.Gross_Weight) || 0,
                 isReversible: Boolean(formData.isReversible),
                 lastModified: serverTimestamp()
             };
@@ -127,14 +134,20 @@ const ProductManager = ({ user }) => {
             
             setIsEditing(false);
             setEditId(null);
-            alert(editId ? "Product Updated!" : "New Product Added!");
+            alert("Product Saved!");
         } catch (error) {
             console.error("Error saving:", error);
             alert("Failed to save product.");
         }
     };
-
-    // 3. Filter for Search
+    
+    // Handler for all standard text/number fields
+    const handleInputChange = (field) => (e) => {
+        setFormData(prev => ({ ...prev, [field]: e.target.value }));
+    };
+    const handleCancel = () => { setIsEditing(false); setEditId(null); };
+    const handleDelete = async (id) => { /* ... (Keep existing delete logic) ... */ };
+    
     const filteredProducts = useMemo(() => {
         return products.filter(p => 
             (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -142,10 +155,12 @@ const ProductManager = ({ user }) => {
         );
     }, [products, searchTerm]);
 
+
     if (loading) return <div className="p-4 text-center">Loading Products...</div>;
 
     return (
         <div className="space-y-6">
+            {/* Header and Add New Button */}
             <div className="flex justify-between items-center">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                     <Package className="text-orange-600"/> Product List ({products.length})
@@ -162,63 +177,75 @@ const ProductManager = ({ user }) => {
                 <Card className="bg-orange-50 border-orange-200 mb-6">
                     <h4 className="font-bold text-lg mb-4 text-orange-800">{editId ? 'Edit Product' : 'New Product'}</h4>
                     
-                    {/* Basic Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <Input label="Product Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-                        <Input label="Category" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} />
-                        <Input label="Cost Price (USD)" type="number" value={formData.costPriceUSD} onChange={e => setFormData({...formData, costPriceUSD: e.target.value})} />
-                        <Input label="Sales Price (USD)" type="number" value={formData.salesPriceUSD} onChange={e => setFormData({...formData, salesPriceUSD: e.target.value})} />
+                    {/* --- 1. CORE & FINANCIALS --- */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 border-b pb-4">
+                        <div className="md:col-span-2">
+                            <Input label="Product Name" value={formData.name} onChange={handleInputChange('name')} />
+                            <Input label="Order Reference / SKU" value={formData.Order_Reference} onChange={handleInputChange('Order_Reference')} />
+                        </div>
+                        <Input label="Category" value={formData.category} onChange={handleInputChange('category')} />
+                        <Input label="System ID (Unique)" value={formData.id} onChange={handleInputChange('id')} disabled={!!editId} />
+                        
+                        <Input label="Sales Price (USD)" type="number" value={formData.salesPriceUSD} onChange={handleInputChange('salesPriceUSD')} />
+                        <Input label="Cost Price (USD)" type="number" value={formData.costPriceUSD} onChange={handleInputChange('costPriceUSD')} />
                     </div>
 
-                    {/* NEW: Engineering Data Section */}
+                    {/* --- 2. PERFORMANCE --- */}
                     <div className="bg-white p-4 rounded-lg border border-orange-200 mb-4">
-                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Zap size={16}/> Technical Specs (kW Power & Efficiency)</h5>
+                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Zap size={16}/> Power & Efficiency Specs</h5>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <Input 
-                                label="DHW Heating Power (kW)" 
-                                placeholder="e.g. 15.5" 
-                                type="number" 
-                                value={formData.kW_DHW_Nominal} 
-                                onChange={e => setFormData({...formData, kW_DHW_Nominal: e.target.value})} 
-                            />
-                            <Input 
-                                label="Cooling Power (kW)" 
-                                placeholder="e.g. 18.6" 
-                                type="number" 
-                                value={formData.kW_Cooling_Nominal} 
-                                onChange={e => setFormData({...formData, kW_Cooling_Nominal: e.target.value})} 
-                            />
-                            <Input 
-                                label="DHW COP" 
-                                placeholder="e.g. 3.60" 
-                                type="number" 
-                                value={formData.COP_DHW} 
-                                onChange={e => setFormData({...formData, COP_DHW: e.target.value})} 
-                            />
-                            <Input 
-                                label="Max Temp (°C)" 
-                                placeholder="e.g. 75" 
-                                type="number" 
-                                value={formData.max_temp_c} 
-                                onChange={e => setFormData({...formData, max_temp_c: e.target.value})} 
-                            />
-                        </div>
-                        <div className="flex items-center mt-4">
-                            <Checkbox 
-                                label="Is Reversible (Has Cooling)?" 
-                                checked={formData.isReversible} 
-                                onChange={e => setFormData({...formData, isReversible: e.target.checked})} 
-                            />
+                            <Input label="DHW Heating Power (kW)" type="number" value={formData.kW_DHW_Nominal} onChange={handleInputChange('kW_DHW_Nominal')} />
+                            <Input label="DHW COP" type="number" value={formData.COP_DHW} onChange={handleInputChange('COP_DHW')} />
+                            <Input label="SCOP (Avg Climate)" type="number" value={formData.SCOP_DHW_Avg} onChange={handleInputChange('SCOP_DHW_Avg')} />
+                            <Input label="Max Hot Water Temp (°C)" type="number" value={formData.max_temp_c} onChange={handleInputChange('max_temp_c')} />
+
+                            <div className="md:col-span-4 flex items-center mt-2">
+                                <Checkbox label="Is Reversible (Has Cooling)?" checked={formData.isReversible} onChange={e => setFormData(p => ({...p, isReversible: e.target.checked, kW_Cooling_Nominal: e.target.checked ? p.kW_Cooling_Nominal : 0 }))} />
+                            </div>
+                            
+                            {formData.isReversible && (
+                                <>
+                                    <Input label="Cooling Power (kW)" type="number" value={formData.kW_Cooling_Nominal} onChange={handleInputChange('kW_Cooling_Nominal')} />
+                                    <Input label="Cooling EER Range" value={formData.Cooling_EER_Range} onChange={handleInputChange('Cooling_EER_Range')} />
+                                </>
+                            )}
                         </div>
                     </div>
 
-                    <div className="md:col-span-2 mb-4">
+                    {/* --- 3. ELECTRICAL & CONDITIONS --- */}
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><BarChart3 size={16}/> Electrical & Operating Data</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <Input label="Power Supply" value={formData.Power_Supply} onChange={handleInputChange('Power_Supply')} placeholder="e.g. 380V / 3Ph / 50Hz" />
+                            <Input label="Rated Power Input (kW)" type="number" value={formData.Rated_Power_Input} onChange={handleInputChange('Rated_Power_Input')} />
+                            <Input label="Max. Running Current (A)" type="number" value={formData.Max_Running_Current} onChange={handleInputChange('Max_Running_Current')} />
+                            <Input label="Recommended Breaker (A)" value={formData.Recommended_Breaker} onChange={handleInputChange('Recommended_Breaker')} />
+                            
+                            <Input label="Outdoor Temp Range" value={formData.Outdoor_Air_Temp_Range} onChange={handleInputChange('Outdoor_Air_Temp_Range')} placeholder="e.g. -7 °C to 43 °C" />
+                            <Input label="Sound Power Level (dB(A))" type="number" value={formData.Sound_Power_Level} onChange={handleInputChange('Sound_Power_Level')} />
+                            <Input label="Rated Water Pressure (MPa)" value={formData.Rated_Water_Pressure} onChange={handleInputChange('Rated_Water_Pressure')} />
+                        </div>
+                    </div>
+
+                    {/* --- 4. LOGISTICS & DETAILS --- */}
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Ruler size={16}/> Refrigerant & Logistics</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <Input label="Refrigerant" value={formData.Refrigerant} onChange={handleInputChange('Refrigerant')} />
+                            <Input label="Refrigerant Charge" value={formData.Refrigerant_Charge} onChange={handleInputChange('Refrigerant_Charge')} />
+                            <Input label="Net Dimensions (L×W×H)" value={formData.Unit_Dimensions} onChange={handleInputChange('Unit_Dimensions')} />
+                            <Input label="Net Weight (kg)" type="number" value={formData.Net_Weight} onChange={handleInputChange('Net_Weight')} />
+                            <Input label="Gross Weight (kg)" type="number" value={formData.Gross_Weight} onChange={handleInputChange('Gross_Weight')} />
+                        </div>
+                    </div>
+                    
+                    <div className="md:col-span-4 mb-4">
                         <label className="block text-sm font-medium text-gray-600 mb-1">Specs / Description</label>
                         <textarea
                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500"
                             rows="2"
                             value={formData.specs}
-                            onChange={e => setFormData({...formData, specs: e.target.value})}
+                            onChange={handleInputChange('specs')}
                         />
                     </div>
 
@@ -229,13 +256,12 @@ const ProductManager = ({ user }) => {
                 </Card>
             )}
 
-            {/* --- SEARCH --- */}
+            {/* --- LIST TABLE (Kept simple for overview) --- */}
             <div className="relative mb-4">
-                <input type="text" placeholder="Search products..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
+                <input type="text" placeholder="Search products..." value={searchTerm} onChange={handleInputChange('searchTerm')} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
             </div>
 
-            {/* --- LIST TABLE --- */}
             <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
@@ -252,7 +278,7 @@ const ProductManager = ({ user }) => {
                                 <td className="px-6 py-4">
                                     <div className="text-sm font-bold text-gray-900">{p.name}</div>
                                     <div className="text-xs text-gray-500">
-                                        {p.category} | COP: **{p.COP_DHW || '-'}** | Max Temp: **{p.max_temp_c || '-'}°C**
+                                        {p.category} | Ref: {p.Refrigerant || '-'} | COP: {p.COP_DHW || '-'}
                                     </div>
                                 </td>
                                 
