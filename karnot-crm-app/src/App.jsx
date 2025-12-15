@@ -13,11 +13,15 @@ import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
 import CompaniesPage from './pages/CompaniesPage.jsx'; 
 import ContactsPage from './pages/ContactsPage.jsx';
 import CommissioningPage from './pages/CommissioningPage.jsx'; 
-import AdminPage from './pages/AdminPage.jsx'; // <--- NEW IMPORT
+import AdminPage from './pages/AdminPage.jsx';
+
+// --- NEW IMPORTS (Make sure these files exist!) ---
+import CalculatorsPage from './pages/CalculatorsPage.jsx';     
+import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
-import { BarChart2, FileText, List, HardHat, LogOut, Building, Users, ClipboardCheck, Settings } from 'lucide-react'; 
+import { BarChart2, FileText, List, HardHat, LogOut, Building, Users, ClipboardCheck, Settings, Calculator } from 'lucide-react'; 
 
 // --- Header Component ---
 const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( 
@@ -37,10 +41,14 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                     <ClipboardCheck className="mr-2" size={16} /> Commissioning
                 </Button>
                 
+                {/* --- NEW CALCULATORS BUTTON --- */}
+                <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc'].includes(activeView) ? 'primary' : 'secondary'}>
+                    <Calculator className="mr-2" size={16} /> Calculators
+                </Button>
+
                 <Button onClick={onNewQuote} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
                 <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
                 
-                {/* NEW ADMIN BUTTON */}
                 <Button onClick={() => setActiveView('admin')} variant={activeView === 'admin' ? 'primary' : 'secondary'} title="Admin / Settings">
                     <Settings size={16} />
                 </Button>
@@ -363,6 +371,22 @@ export default function App() {
                 {activeView === 'dashboard' && (
                     <DashboardPage quotes={quotes} user={user} />
                 )}
+
+                {/* --- NEW CALCULATORS HUB & TOOL --- */}
+                {activeView === 'calculatorsHub' && (
+                    <CalculatorsPage setActiveView={setActiveView} />
+                )}
+
+                {activeView === 'heatPumpCalc' && (
+                    <div>
+                         <Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">
+                            ← Back to Calculators
+                         </Button>
+                        <div className="max-w-5xl mx-auto">
+                            <HeatPumpCalculator />
+                        </div>
+                    </div>
+                )}
                 
                 {activeView === 'calculator' && (
                     <QuoteCalculator 
@@ -384,7 +408,6 @@ export default function App() {
                     />
                 )}
 
-                {/* --- NEW ADMIN PAGE VIEW --- */}
                 {activeView === 'admin' && (
                     <AdminPage user={user} />
                 )}
