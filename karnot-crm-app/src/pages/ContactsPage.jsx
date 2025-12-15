@@ -2,8 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs, updateDoc } from "firebase/firestore";
 import Papa from 'papaparse'; 
-// FIX 1: Added MessageCircle to imports below
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, MessageCircle, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, Database, Send, Download, FileCheck } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, MessageCircle, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, Database, Send, Download, FileCheck, Handshake } from 'lucide-react'; // <--- Added Handshake
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
 // --- 1. Helper: WhatsApp Link Generator ---
@@ -184,6 +183,9 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     const [isVisited, setIsVisited] = useState(contactToEdit?.isVisited || false);
     const [visitDate, setVisitDate] = useState(contactToEdit?.visitDate || '');
     const [notes, setNotes] = useState(contactToEdit?.notes || '');
+    
+    // --- NEW: Partner/Investor Flag ---
+    const [isPartner, setIsPartner] = useState(contactToEdit?.isPartner || false);
 
     // Interaction History
     const [interactions, setInteractions] = useState(contactToEdit?.interactions || []);
@@ -267,7 +269,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
         
         const contactData = {
             firstName, lastName, jobTitle, email, phone, linkedIn, companyId, companyName: finalCompanyName, 
-            isVerified, isEmailed, isContacted, isVisited, notes, interactions
+            isVerified, isEmailed, isContacted, isVisited, isPartner, notes, interactions // Added isPartner
         };
         onSave(contactData);
     };
@@ -278,7 +280,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
                 
                 {/* LEFT: Contact Details */}
                 <div className="flex-1 space-y-4">
-                     <div className="flex justify-between items-center mb-2">
+                      <div className="flex justify-between items-center mb-2">
                         <h3 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Contact' : 'New Contact'}</h3>
                         <button onClick={onClose} className="md:hidden text-gray-500"><X /></button>
                     </div>
@@ -333,7 +335,17 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
                     
                     <Textarea label="General Notes" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} />
                     
-                    <div className="grid grid-cols-2 gap-2 mt-4 p-4 bg-gray-50 rounded-lg">
+                    {/* --- NEW PARTNER CHECKBOX --- */}
+                    <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
+                        <Checkbox 
+                            id="isPartner" 
+                            label={<span className="font-bold text-teal-800 flex items-center gap-2"><Handshake size={16}/> Investor / Strategic Partner (15% Off)</span>}
+                            checked={isPartner} 
+                            onChange={(e) => setIsPartner(e.target.checked)} 
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mt-2 p-4 bg-gray-50 rounded-lg">
                         <Checkbox id="isVerified" label="Verified" checked={isVerified} onChange={(e) => setIsVerified(e.target.checked)} />
                         <Checkbox id="isEmailed" label="Emailed" checked={isEmailed} onChange={(e) => setIsEmailed(e.target.checked)} />
                         <Checkbox id="isContacted" label="Call/Met" checked={isContacted} onChange={(e) => setIsContacted(e.target.checked)} />
@@ -428,6 +440,8 @@ const ContactCard = ({ contact, onEdit, onDelete, selected, onToggleSelect }) =>
                 <div className="flex justify-between items-start mb-2">
                     <div className="flex items-center gap-2">
                         <h4 className="font-bold text-lg text-gray-800 leading-tight">{contact.firstName} {contact.lastName}</h4>
+                        {/* --- NEW PARTNER BADGE --- */}
+                        {contact.isPartner && <Handshake size={20} className="text-teal-600" title="Investor / Strategic Partner"/>}
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
                         <Button onClick={() => onEdit(contact)} variant="secondary" className="p-1 h-auto w-auto"><Edit size={14}/></Button>
@@ -500,14 +514,15 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
 
     // --- CRASH PROOF STATS CALCULATION ---
     const stats = useMemo(() => {
-        if (!contacts) return { total: 0, contacted: 0, visited: 0, emailed: 0, esco: 0 };
+        if (!contacts) return { total: 0, contacted: 0, visited: 0, emailed: 0, esco: 0, partners: 0 };
         const total = contacts.length;
         const contacted = contacts.filter(c => c.isContacted).length;
         const visited = contacts.filter(c => c.isVisited).length;
         const emailed = contacts.filter(c => c.isEmailed).length;
+        const partners = contacts.filter(c => c.isPartner).length; // <--- Count Partners
         // SAFE NOTE CHECK
         const esco = contacts.filter(c => c.notes && (c.notes || '').includes('ESCO')).length;
-        return { total, contacted, visited, emailed, esco };
+        return { total, contacted, visited, emailed, esco, partners };
     }, [contacts]);
 
     // --- Handlers ---
@@ -850,6 +865,7 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
         if (activeFilter === 'CONTACTED') list = list.filter(c => c.isContacted);
         if (activeFilter === 'VISITED') list = list.filter(c => c.isVisited);
         if (activeFilter === 'ESCO') list = list.filter(c => c.notes && (c.notes || '').includes('ESCO')); 
+        if (activeFilter === 'PARTNERS') list = list.filter(c => c.isPartner); // <--- NEW PARTNER FILTER
         
         return list.filter(c => {
             const first = (c.firstName || '').toLowerCase();
@@ -880,10 +896,10 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
 
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                 <StatBadge icon={User} label="Total Contacts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
+                <StatBadge icon={Handshake} label="Partners" count={stats.partners} total={stats.total} color="teal" active={activeFilter === 'PARTNERS'} onClick={() => setActiveFilter(activeFilter === 'PARTNERS' ? 'ALL' : 'PARTNERS')} />
                 <StatBadge icon={Mail} label="Emailed" count={stats.emailed} total={stats.total} color="purple" active={activeFilter === 'EMAILED'} onClick={() => setActiveFilter(activeFilter === 'EMAILED' ? 'ALL' : 'EMAILED')} />
                 <StatBadge icon={Phone} label="Contacted" count={stats.contacted} total={stats.total} color="blue" active={activeFilter === 'CONTACTED'} onClick={() => setActiveFilter(activeFilter === 'CONTACTED' ? 'ALL' : 'CONTACTED')} />
                 <StatBadge icon={Building} label="Visited" count={stats.visited} total={stats.total} color="green" active={activeFilter === 'VISITED'} onClick={() => setActiveFilter(activeFilter === 'VISITED' ? 'ALL' : 'VISITED')} />
-                <StatBadge icon={Database} label="ESCO List" count={stats.esco} total={stats.total} color="orange" active={activeFilter === 'ESCO'} onClick={() => setActiveFilter(activeFilter === 'ESCO' ? 'ALL' : 'ESCO')} />
             </div>
 
             <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
