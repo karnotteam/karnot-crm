@@ -1,172 +1,154 @@
-// src/components/DataImporter.jsx
 import React, { useState } from 'react';
-import Papa from 'papaparse';
 import { db } from '../firebase';
-import { collection, writeBatch, doc } from "firebase/firestore";
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { Button } from '../data/constants';
+import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getAuth } from "firebase/auth";
+import Papa from 'papaparse';
+import { Card, Button } from '../data/constants';
+import { Upload, CheckCircle, AlertTriangle } from 'lucide-react';
 
-const DataImporter = ({ user, type = 'products' }) => {
+const DataImporter = ({ user }) => {
     const [file, setFile] = useState(null);
-    const [preview, setPreview] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [status, setStatus] = useState({ type: '', message: '' });
+    const [status, setStatus] = useState('idle'); // idle, processing, success, error
+    const [message, setMessage] = useState('');
+    const [importCount, setImportCount] = useState(0);
 
-    // 1. Handle File Selection
     const handleFileChange = (e) => {
-        const selectedFile = e.target.files[0];
-        if (selectedFile) {
-            setFile(selectedFile);
-            setStatus({ type: '', message: '' });
-            
-            // Parse immediately to preview
-            Papa.parse(selectedFile, {
-                header: true,
-                skipEmptyLines: true,
-                complete: (results) => {
-                    // Show first 5 rows as preview
-                    setPreview(results.data.slice(0, 5));
-                },
-                error: (error) => {
-                    setStatus({ type: 'error', message: 'Error reading CSV: ' + error.message });
-                }
-            });
-        }
+        setFile(e.target.files[0]);
+        setStatus('idle');
+        setMessage('');
     };
 
-    // 2. Upload Logic
-    const handleUpload = async () => {
-        if (!file || !user) return;
-        setLoading(true);
-        setStatus({ type: 'info', message: 'Processing...' });
+    const importData = async () => {
+        if (!file) {
+            setMessage('Please select a CSV file first.');
+            return;
+        }
 
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            complete: async (results) => {
-                const data = results.data;
-                const batch = writeBatch(db);
-                const collectionName = type === 'products' ? 'products' : 'contacts';
-                
-                // Firestore limits batches to 500 operations. 
-                // For safety, we process the first 450 items (if you have more, we can add looping logic later).
-                const itemsToProcess = data.slice(0, 450); 
-                let count = 0;
+        setStatus('processing');
+        setMessage('Processing file...');
+        setImportCount(0);
+        
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+            setStatus('error');
+            setMessage('Error: User not authenticated.');
+            return;
+        }
 
-                itemsToProcess.forEach((item) => {
-                    // Clean up data based on type
-                    let cleanItem = {};
+        const reader = new FileReader();
+        reader.onload = async ({ target }) => {
+            const csv = target.result;
+            Papa.parse(csv, {
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: true, // Auto-converts numbers and booleans
+                complete: async (results) => {
+                    const data = results.data;
+                    let successCount = 0;
 
-                    if (type === 'products') {
-                        // Ensure numbers are actually numbers for math to work later
-                        cleanItem = {
-                            name: item.name || 'Unknown Product',
-                            category: item.category || 'Uncategorized',
-                            costPriceUSD: parseFloat(item.costPriceUSD) || 0,
-                            salesPriceUSD: parseFloat(item.salesPriceUSD) || 0,
-                            specs: item.specs || '',
-                            id: item.id || doc(collection(db, 'users', user.uid, collectionName)).id // Generate ID if missing
-                        };
-                    } else {
-                        // Contacts
-                        cleanItem = {
-                            firstName: item.firstName || '',
-                            lastName: item.lastName || '',
-                            email: item.email || '',
-                            companyName: item.companyName || '',
-                            jobTitle: item.jobTitle || '',
-                            phone: item.phone || '',
-                            id: item.id || doc(collection(db, 'users', user.uid, collectionName)).id
-                        };
+                    for (const row of data) {
+                        try {
+                            // --- CRITICAL MAPPING AND DATA CLEANING ---
+                            let safeId = (row.id || row.name).toString().toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_{2,}/g, '_').replace(/^_|_$/g, '');
+                            if (!safeId) {
+                                console.warn("Skipping row due to missing ID/Name:", row);
+                                continue;
+                            }
+
+                            const productData = {
+                                // REQUIRED BASE FIELDS
+                                id: safeId,
+                                name: row.name || 'Untitled Product',
+                                category: row.category || 'Uncategorized',
+                                specs: row.specs || '',
+                                
+                                // FINANCIAL FIELDS (Must be Numbers)
+                                salesPriceUSD: parseFloat(row.salesPriceUSD) || 0,
+                                costPriceUSD: parseFloat(row.costPriceUSD) || 0,
+
+                                // --- NEW TECHNICAL SPECS MAPPING ---
+                                // These must match the columns in your CSV and the fields in ProductManager.jsx
+                                kW_DHW_Nominal: parseFloat(row.kW_DHW_Nominal) || 0,
+                                kW_Cooling_Nominal: parseFloat(row.kW_Cooling_Nominal) || 0,
+                                COP_DHW: parseFloat(row.COP_DHW) || 3.0,
+                                max_temp_c: parseFloat(row.max_temp_c) || 60,
+                                isReversible: row.isReversible === true || row.isReversible === 'TRUE' || row.isReversible === 'True' || false,
+
+                                lastModified: serverTimestamp(),
+                            };
+
+                            // Save to Firebase
+                            await setDoc(doc(db, "users", currentUser.uid, "products", safeId), productData, { merge: true });
+                            successCount++;
+
+                        } catch (e) {
+                            console.error("Error processing row:", row, e);
+                            setMessage(`Error on row: ${row.id || row.name}. Check console for details.`);
+                            setStatus('error');
+                            break;
+                        }
                     }
 
-                    // Prepare the DB reference
-                    // Storing under: users -> UID -> products -> PRODUCT_ID
-                    const docRef = doc(db, "users", user.uid, collectionName, cleanItem.id.toString());
-                    batch.set(docRef, cleanItem, { merge: true }); // merge: true means it updates existing items instead of deleting fields
-                    count++;
-                });
-
-                try {
-                    await batch.commit();
-                    setLoading(false);
-                    setStatus({ type: 'success', message: `Successfully imported ${count} ${type}!` });
-                    setFile(null);
-                    setPreview([]);
-                } catch (error) {
-                    console.error("Firebase Error:", error);
-                    setLoading(false);
-                    setStatus({ type: 'error', message: 'Upload failed: ' + error.message });
+                    if (status !== 'error') {
+                        setImportCount(successCount);
+                        setStatus('success');
+                        setMessage(`${successCount} products imported successfully! Check the Product List.`);
+                    }
+                },
+                error: (error) => {
+                    setStatus('error');
+                    setMessage(`CSV Parsing Error: ${error.message}`);
+                    console.error("PapaParse Error:", error);
                 }
-            }
-        });
+            });
+        };
+        reader.readAsText(file);
     };
 
     return (
-        <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
-                <Upload className="mr-2" size={20} /> 
-                Import {type === 'products' ? 'Products' : 'Contacts'} (CSV)
+        <Card className="max-w-xl mx-auto">
+            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2 mb-4">
+                <Upload className="text-orange-600"/> Product Data Importer (CSV)
             </h3>
+            <p className="text-sm text-gray-600 mb-6">
+                Upload a CSV file to bulk update your product inventory.
+                <br/>
+                <span className="font-semibold text-orange-600">Required Column Headers:</span> `id`, `name`, `salesPriceUSD`, `kW_DHW_Nominal`, `kW_Cooling_Nominal`, `COP_DHW`, `max_temp_c`, `isReversible`.
+            </p>
 
-            {/* Step 1: File Input */}
-            <div className="mb-4">
-                <input 
-                    type="file" 
-                    accept=".csv" 
+            <div className="flex items-center space-x-4 mb-6">
+                <input
+                    type="file"
+                    accept=".csv"
                     onChange={handleFileChange}
-                    className="block w-full text-sm text-gray-500
-                        file:mr-4 file:py-2 file:px-4
-                        file:rounded-full file:border-0
-                        file:text-sm file:font-semibold
-                        file:bg-orange-50 file:text-orange-700
-                        hover:file:bg-orange-100"
+                    className="flex-1 block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none"
                 />
-                <p className="text-xs text-gray-500 mt-2">
-                    {type === 'products' 
-                        ? 'Required Columns: id, name, category, costPriceUSD, salesPriceUSD' 
-                        : 'Required Columns: firstName, lastName, email, companyName, jobTitle'}
-                </p>
+                <Button onClick={importData} disabled={!file || status === 'processing'} variant="primary">
+                    {status === 'processing' ? 'Processing...' : 'Start Import'}
+                </Button>
             </div>
 
-            {/* Step 2: Preview */}
-            {preview.length > 0 && (
-                <div className="mb-4 overflow-x-auto bg-gray-50 p-2 rounded">
-                    <p className="text-xs font-bold text-gray-500 mb-2">Preview (First 5 rows):</p>
-                    <table className="w-full text-xs text-left">
-                        <thead>
-                            <tr className="border-b">
-                                {Object.keys(preview[0]).map(key => <th key={key} className="p-1">{key}</th>)}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {preview.map((row, i) => (
-                                <tr key={i} className="border-b last:border-0">
-                                    {Object.values(row).map((val, j) => <td key={j} className="p-1 truncate max-w-[100px]">{val}</td>)}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+            {/* --- Status Display --- */}
+            {status !== 'idle' && (
+                <div className={`p-4 rounded-lg flex items-center gap-3 ${
+                    status === 'success' ? 'bg-green-100 text-green-700' : 
+                    status === 'error' ? 'bg-red-100 text-red-700' : 
+                    'bg-yellow-100 text-yellow-700'
+                }`}>
+                    {status === 'success' && <CheckCircle size={20} />}
+                    {status === 'error' && <AlertTriangle size={20} />}
+                    {status === 'processing' && <span className="animate-spin">⏳</span>}
+                    
+                    <div>
+                        <p className="font-semibold">{message}</p>
+                        {importCount > 0 && status === 'success' && (
+                            <p className="text-sm">Total products imported: {importCount}</p>
+                        )}
+                    </div>
                 </div>
             )}
-
-            {/* Step 3: Status Messages */}
-            {status.message && (
-                <div className={`mb-4 p-3 rounded-md flex items-center ${status.type === 'error' ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-                    {status.type === 'error' ? <AlertCircle size={18} className="mr-2"/> : <CheckCircle size={18} className="mr-2"/>}
-                    {status.message}
-                </div>
-            )}
-
-            {/* Step 4: Action Button */}
-            <Button 
-                onClick={handleUpload} 
-                disabled={!file || loading}
-                className="w-full"
-            >
-                {loading ? 'Uploading...' : 'Upload to Database'}
-            </Button>
-        </div>
+        </Card>
     );
 };
 
