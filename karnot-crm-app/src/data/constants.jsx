@@ -2,7 +2,6 @@ import React from 'react';
 import { Loader2 } from 'lucide-react';
 
 // --- CENTRAL CURRENCY RATES ---
-// Update these rates here to affect Price Lists, Quotes, and Calculators instantly.
 export const FX_RATES = {
     USD: { rate: 1.00, symbol: '$', locale: 'en-US', name: 'US Dollar' },
     CAD: { rate: 1.37, symbol: 'C$', locale: 'en-CA', name: 'Canadian Dollar' },
@@ -29,83 +28,14 @@ export const BOI_TARGETS_USD = {
     2028: 5109436,
 };
 
-// --- INITIAL PRODUCT DATA (FOR MIGRATION ONLY) ---
-// This list is used by MigrateProducts.jsx to populate Firestore.
-// After migration, the "Single Source of Truth" is the database, not this array.
-export const ALL_PRODUCTS = [
-    // iHEAT Pro (R32)
-    { id: 'iheat_pro_r32_6_220v', name: "Karnot iHEAT Pro R32 - 6kW (220V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1273.00, salesPriceUSD: 2546.00 },
-    { id: 'iheat_pro_r32_9_5_220v', name: "Karnot iHEAT Pro R32 - 9.5kW (220V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1339.00, salesPriceUSD: 2678.00 },
-    { id: 'iheat_pro_r32_12_220v', name: "Karnot iHEAT Pro R32 - 12kW (220V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1442.00, salesPriceUSD: 2884.00 },
-    { id: 'iheat_pro_r32_16_220v', name: "Karnot iHEAT Pro R32 - 16kW (220V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1577.00, salesPriceUSD: 3154.00 },
-    { id: 'iheat_pro_r32_20_220v', name: "Karnot iHEAT Pro R32 - 20kW (220V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1790.00, salesPriceUSD: 3580.00 },
-    { id: 'iheat_pro_r32_22_220v', name: "Karnot iHEAT Pro R32 - 22kW (220V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1864.00, salesPriceUSD: 3728.00 },
-    { id: 'iheat_pro_r32_9_5_380v', name: "Karnot iHEAT Pro R32 - 9.5kW (380V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1427.00, salesPriceUSD: 2854.00 },
-    { id: 'iheat_pro_r32_12_380v', name: "Karnot iHEAT Pro R32 - 12kW (380V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1530.00, salesPriceUSD: 3060.00 },
-    { id: 'iheat_pro_r32_16_380v', name: "Karnot iHEAT Pro R32 - 16kW (380V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1666.00, salesPriceUSD: 3332.00 },
-    { id: 'iheat_pro_r32_20_380v', name: "Karnot iHEAT Pro R32 - 20kW (380V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1878.00, salesPriceUSD: 3756.00 },
-    { id: 'iheat_pro_r32_22_380v', name: "Karnot iHEAT Pro R32 - 22kW (380V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1952.00, salesPriceUSD: 3904.00 },
-
-    // iHEAT Clima (R32)
-    { id: 'iheat_clima_r32_6_220v', name: "Karnot iHEAT Clima R32 - 6kW (220V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 920.00, salesPriceUSD: 1840.00 },
-    { id: 'iheat_clima_r32_9_4_220v', name: "Karnot iHEAT Clima R32 - 9.4kW (220V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1192.00, salesPriceUSD: 2384.00 },
-    { id: 'iheat_clima_r32_11_6_220v', name: "Karnot iHEAT Clima R32 - 11.6kW (220V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1339.00, salesPriceUSD: 2678.00 },
-    { id: 'iheat_clima_r32_15_8_220v', name: "Karnot iHEAT Clima R32 - 15.8kW (220V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1430.00, salesPriceUSD: 2860.00 },
-    { id: 'iheat_clima_r32_19_8_220v', name: "Karnot iHEAT Clima R32 - 19.8kW (220V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1761.00, salesPriceUSD: 3522.00 },
-    { id: 'iheat_clima_r32_21_8_220v', name: "Karnot iHEAT Clima R32 - 21.8kW (220V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1834.00, salesPriceUSD: 3668.00 },
-    { id: 'iheat_clima_r32_9_4_380v', name: "Karnot iHEAT Clima R32 - 9.4kW (380V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1236.00, salesPriceUSD: 2472.00 },
-    { id: 'iheat_clima_r32_11_6_380v', name: "Karnot iHEAT Clima R32 - 11.6kW (380V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1383.00, salesPriceUSD: 2766.00 },
-    { id: 'iheat_clima_r32_15_8_380v', name: "Karnot iHEAT Clima R32 - 15.8kW (380V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1474.00, salesPriceUSD: 2948.00 },
-    { id: 'iheat_clima_r32_20_380v', name: "Karnot iHEAT Clima R32 - 20kW (380V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1790.00, salesPriceUSD: 3580.00 },
-    { id: 'iheat_clima_r32_21_8_380v', name: "Karnot iHEAT Clima R32 - 21.8kW (380V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1864.00, salesPriceUSD: 3728.00 },
-    { id: 'iheat_clima_r32_29_380v', name: "Karnot iHEAT Clima R32 - 29kW (380V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 2217.00, salesPriceUSD: 4434.00 },
-    { id: 'iheat_clima_r32_34_5_380v_top', name: "Karnot iHEAT Clima R32 - 34.5kW (380V, -30°C, Top Discharge)", category: 'iHEAT Clima (R32)', costPriceUSD: 3090.00, salesPriceUSD: 6180.00 },
-    { id: 'iheat_clima_r32_35_380v_side', name: "Karnot iHEAT Clima R32 - 35kW (380V, -30°C, Side Discharge)", category: 'iHEAT Clima (R32)', costPriceUSD: 2722.00, salesPriceUSD: 5444.00 },
-
-    // iHEAT (R290)
-    { id: 'iheat_r290_9_5_240v', name: "Karnot iHEAT R290 - 9.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 1972.00, salesPriceUSD: 3944.00 },
-    { id: 'iheat_r290_11_5_240v', name: "Karnot iHEAT R290 - 11.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2063.00, salesPriceUSD: 4126.00 },
-    { id: 'iheat_r290_15_5_380v', name: "Karnot iHEAT R290 - 15.5kW - 380V", category: 'iHEAT (R290)', costPriceUSD: 2791.00, salesPriceUSD: 5582.00 },
-    { id: 'iheat_r290_18_380v', name: "Karnot iHEAT R290 - 18kW - 380V", category: 'iHEAT (R290)', costPriceUSD: 2938.00, salesPriceUSD: 5876.00 },
-    { id: 'iheat_r290_30_380v', name: "Karnot iHEAT R290 - 30kW - 380V", category: 'iHEAT (R290)', costPriceUSD: 3428.00, salesPriceUSD: 6856.00 },
-    { id: 'iheat_r290_50_380v', name: "Karnot iHEAT R290 - 50kW - 380V", category: 'iHEAT (R290)', costPriceUSD: 5150.00, salesPriceUSD: 10300.00 },
-    { id: 'aquahero_200l', name: "Karnot R290 AquaHERO 200L", category: 'iHEAT (R290)', costPriceUSD: 877.00, salesPriceUSD: 1754.00 },
-    { id: 'aquahero_300l', name: "Karnot R290 AquaHERO 300L", category: 'iHEAT (R290)', costPriceUSD: 958.00, salesPriceUSD: 1916.00 },
-
-    // iHEAT (CO2)
-    { id: 'iheat_co2_35', name: "Karnot iHEAT - CO2 - 35kW", category: 'iHEAT (CO₂)', costPriceUSD: 21471.00, salesPriceUSD: 42942.00 },
-    { id: 'iheat_co2_75', name: "Karnot iHEAT - CO2 - 75kW", category: 'iHEAT (CO₂)', costPriceUSD: 35000.00, salesPriceUSD: 70000.00 },
-
-    // iCOOL
-    { id: 'icool_5_mt', name: "Karnot iCOOL 5 CO2 MT", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 7012.00, salesPriceUSD: 10518.00 },
-    { id: 'icool_7_mt', name: "Karnot iCOOL 7 CO2 MT", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 9981.00, salesPriceUSD: 14972.00 },
-    { id: 'icool_15_mt_lt', name: "Karnot iCOOL 15 CO2 MT/LT", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 13677.00, salesPriceUSD: 20516.00 },
-
-    // iSPA
-    { id: 'ispa_ocean_6_5', name: "Karnot iSPA Ocean Series - 6.5kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 637.00, salesPriceUSD: 955.50 },
-    { id: 'ispa_ocean_9', name: "Karnot iSPA Ocean Series - 9kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 706.00, salesPriceUSD: 1059.00 },
-    { id: 'ispa_ocean_10_5', name: "Karnot iSPA Ocean Series - 10.5kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 773.00, salesPriceUSD: 1159.50 },
-    { id: 'ispa_ocean_14', name: "Karnot iSPA Ocean Series - 14kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 984.00, salesPriceUSD: 1476.00 },
-    { id: 'ispa_ocean_17', name: "Karnot iSPA Ocean Series - 17kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 1014.00, salesPriceUSD: 1521.00 },
-    { id: 'ispa_ocean_23', name: "Karnot iSPA Ocean Series - 23kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 1220.00, salesPriceUSD: 1830.00 },
-    { id: 'ispa_ocean_28', name: "Karnot iSPA Ocean Series - 28kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 1383.00, salesPriceUSD: 2074.50 },
-
-    // iSTOR
-    { id: 'istor_dhw_tank_210l', name: "Karnot iSTOR 210 Litre DHW Tank", category: 'iSTOR (Thermal Storage)', costPriceUSD: 1716.00, salesPriceUSD: 3432.00 },
-    { id: 'istor_tank_ss_60l', name: "iSTOR Stainless Steel Tank - 60L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 162.00, salesPriceUSD: 243.00 },
-    { id: 'istor_tank_ss_100l', name: "iSTOR Stainless Steel Tank - 100L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 225.00, salesPriceUSD: 337.50 },
-    { id: 'istor_tank_ss_150l', name: "iSTOR Stainless Steel Tank - 150L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 256.00, salesPriceUSD: 384.00 },
-    { id: 'istor_tank_ss_200l', name: "iSTOR Stainless Steel Tank - 200L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 321.00, salesPriceUSD: 481.50 },
-    { id: 'istor_tank_ss_260l', name: "iSTOR Stainless Steel Tank - 260L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 368.00, salesPriceUSD: 552.00 },
-    { id: 'istor_tank_ss_320l', name: "iSTOR Stainless Steel Tank - 320L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 413.00, salesPriceUSD: 619.50 },
-    { id: 'istor_tank_ss_400l', name: "Karnot iSTOR Stainless Steel Tank - 400L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 534.00, salesPriceUSD: 801.00 },
-    { id: 'istor_tank_ss_500l', name: "Karnot iSTOR Stainless Steel Tank - 500L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 603.00, salesPriceUSD: 904.50 },
-    { id: 'istor_tank_ss_600l', name: "Karnot iSTOR Stainless Steel Tank - 600L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 721.00, salesPriceUSD: 1081.50 },
-    { id: 'istor_tank_ss_1000l', name: "Karnot iSTOR Stainless Steel Tank - 1000L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 1489.00, salesPriceUSD: 2233.50 },
-
-    // Components
-    { id: 'imesh', name: "Karnot iMESH", category: 'System Components', costPriceUSD: 576.00, salesPriceUSD: 1728.00 }
-];
+// --- PRICING TIERS (NEW) ---
+export const PRICING_TIERS = {
+    STANDARD: { label: 'Standard / End User', discount: 0, color: 'gray' },
+    VIP:      { label: 'VIP Customer',        discount: 5, color: 'blue' },
+    DEALER:   { label: 'Authorized Dealer',   discount: 15, color: 'purple' },
+    DISTRIB:  { label: 'Master Distributor',  discount: 25, color: 'orange' },
+    EXPORT:   { label: 'Export Partner',      discount: 30, color: 'green' }
+};
 
 // --- UI COMPONENTS ---
 export const Card = ({ children, className = '' }) => (
