@@ -1,10 +1,39 @@
 import React from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, FileText, List, Send, CheckCircle, XCircle, BarChart2, DollarSign, Target, PieChart, Edit, Eye, Save, X, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
+// --- CENTRAL CURRENCY RATES ---
+// Update these rates here to affect Price Lists, Quotes, and Calculators instantly.
+export const FX_RATES = {
+    USD: { rate: 1.00, symbol: '$', locale: 'en-US', name: 'US Dollar' },
+    CAD: { rate: 1.37, symbol: 'C$', locale: 'en-CA', name: 'Canadian Dollar' },
+    GBP: { rate: 0.79, symbol: '£', locale: 'en-GB', name: 'British Pound' },
+    MYR: { rate: 4.70, symbol: 'RM', locale: 'ms-MY', name: 'Malaysian Ringgit' },
+    PHP: { rate: 58.75, symbol: '₱', locale: 'en-PH', name: 'Philippine Peso' } 
+};
+
+// --- ASSETS & DEFAULTS ---
+export const KARNOT_LOGO_BASE_64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCAyMDAgNjAiPjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iNjAiIGZpbGw9IiNlYTU4MGMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiPktBUk5PVDwvdGV4dD48L3N2Zz4=";
+
+export const QUOTE_STATUSES = {
+    DRAFT: { text: "Draft", color: "bg-gray-500" },
+    SENT: { text: "Sent", color: "bg-blue-500" },
+    APPROVED: { text: "Approved", color: "bg-green-500" },
+    WON: { text: "Won", color: "bg-green-600" },
+    LOST: { text: "Lost", color: "bg-red-600" },
+    DECLINED: { text: "Declined", color: "bg-red-500" }
+};
+
+export const BOI_TARGETS_USD = {
+    2026: 1988802,
+    2027: 3650988,
+    2028: 5109436,
+};
+
+// --- INITIAL PRODUCT DATA (FOR MIGRATION ONLY) ---
+// This list is used by MigrateProducts.jsx to populate Firestore.
+// After migration, the "Single Source of Truth" is the database, not this array.
 export const ALL_PRODUCTS = [
-    // =================================================================================
-    // iHEAT Pro (R32) - CAREL Controller, Low Temp -25C
-    // =================================================================================
+    // iHEAT Pro (R32)
     { id: 'iheat_pro_r32_6_220v', name: "Karnot iHEAT Pro R32 - 6kW (220V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1273.00, salesPriceUSD: 2546.00 },
     { id: 'iheat_pro_r32_9_5_220v', name: "Karnot iHEAT Pro R32 - 9.5kW (220V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1339.00, salesPriceUSD: 2678.00 },
     { id: 'iheat_pro_r32_12_220v', name: "Karnot iHEAT Pro R32 - 12kW (220V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1442.00, salesPriceUSD: 2884.00 },
@@ -17,9 +46,7 @@ export const ALL_PRODUCTS = [
     { id: 'iheat_pro_r32_20_380v', name: "Karnot iHEAT Pro R32 - 20kW (380V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1878.00, salesPriceUSD: 3756.00 },
     { id: 'iheat_pro_r32_22_380v', name: "Karnot iHEAT Pro R32 - 22kW (380V, -25°C)", category: 'iHEAT Pro (R32)', costPriceUSD: 1952.00, salesPriceUSD: 3904.00 },
 
-    // =================================================================================
-    // iHEAT Clima (R32) - Self Developed Controller, Low Temp -30C
-    // =================================================================================
+    // iHEAT Clima (R32)
     { id: 'iheat_clima_r32_6_220v', name: "Karnot iHEAT Clima R32 - 6kW (220V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 920.00, salesPriceUSD: 1840.00 },
     { id: 'iheat_clima_r32_9_4_220v', name: "Karnot iHEAT Clima R32 - 9.4kW (220V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1192.00, salesPriceUSD: 2384.00 },
     { id: 'iheat_clima_r32_11_6_220v', name: "Karnot iHEAT Clima R32 - 11.6kW (220V, -30°C)", category: 'iHEAT Clima (R32)', costPriceUSD: 1339.00, salesPriceUSD: 2678.00 },
@@ -35,9 +62,7 @@ export const ALL_PRODUCTS = [
     { id: 'iheat_clima_r32_34_5_380v_top', name: "Karnot iHEAT Clima R32 - 34.5kW (380V, -30°C, Top Discharge)", category: 'iHEAT Clima (R32)', costPriceUSD: 3090.00, salesPriceUSD: 6180.00 },
     { id: 'iheat_clima_r32_35_380v_side', name: "Karnot iHEAT Clima R32 - 35kW (380V, -30°C, Side Discharge)", category: 'iHEAT Clima (R32)', costPriceUSD: 2722.00, salesPriceUSD: 5444.00 },
 
-    // =================================================================================
-    // Other existing product categories
-    // =================================================================================
+    // iHEAT (R290)
     { id: 'iheat_r290_9_5_240v', name: "Karnot iHEAT R290 - 9.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 1972.00, salesPriceUSD: 3944.00 },
     { id: 'iheat_r290_11_5_240v', name: "Karnot iHEAT R290 - 11.5kW - 240V", category: 'iHEAT (R290)', costPriceUSD: 2063.00, salesPriceUSD: 4126.00 },
     { id: 'iheat_r290_15_5_380v', name: "Karnot iHEAT R290 - 15.5kW - 380V", category: 'iHEAT (R290)', costPriceUSD: 2791.00, salesPriceUSD: 5582.00 },
@@ -46,11 +71,17 @@ export const ALL_PRODUCTS = [
     { id: 'iheat_r290_50_380v', name: "Karnot iHEAT R290 - 50kW - 380V", category: 'iHEAT (R290)', costPriceUSD: 5150.00, salesPriceUSD: 10300.00 },
     { id: 'aquahero_200l', name: "Karnot R290 AquaHERO 200L", category: 'iHEAT (R290)', costPriceUSD: 877.00, salesPriceUSD: 1754.00 },
     { id: 'aquahero_300l', name: "Karnot R290 AquaHERO 300L", category: 'iHEAT (R290)', costPriceUSD: 958.00, salesPriceUSD: 1916.00 },
+
+    // iHEAT (CO2)
     { id: 'iheat_co2_35', name: "Karnot iHEAT - CO2 - 35kW", category: 'iHEAT (CO₂)', costPriceUSD: 21471.00, salesPriceUSD: 42942.00 },
     { id: 'iheat_co2_75', name: "Karnot iHEAT - CO2 - 75kW", category: 'iHEAT (CO₂)', costPriceUSD: 35000.00, salesPriceUSD: 70000.00 },
+
+    // iCOOL
     { id: 'icool_5_mt', name: "Karnot iCOOL 5 CO2 MT", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 7012.00, salesPriceUSD: 10518.00 },
     { id: 'icool_7_mt', name: "Karnot iCOOL 7 CO2 MT", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 9981.00, salesPriceUSD: 14972.00 },
     { id: 'icool_15_mt_lt', name: "Karnot iCOOL 15 CO2 MT/LT", category: 'iCOOL (CO₂ Refrigeration)', costPriceUSD: 13677.00, salesPriceUSD: 20516.00 },
+
+    // iSPA
     { id: 'ispa_ocean_6_5', name: "Karnot iSPA Ocean Series - 6.5kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 637.00, salesPriceUSD: 955.50 },
     { id: 'ispa_ocean_9', name: "Karnot iSPA Ocean Series - 9kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 706.00, salesPriceUSD: 1059.00 },
     { id: 'ispa_ocean_10_5', name: "Karnot iSPA Ocean Series - 10.5kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 773.00, salesPriceUSD: 1159.50 },
@@ -58,6 +89,8 @@ export const ALL_PRODUCTS = [
     { id: 'ispa_ocean_17', name: "Karnot iSPA Ocean Series - 17kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 1014.00, salesPriceUSD: 1521.00 },
     { id: 'ispa_ocean_23', name: "Karnot iSPA Ocean Series - 23kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 1220.00, salesPriceUSD: 1830.00 },
     { id: 'ispa_ocean_28', name: "Karnot iSPA Ocean Series - 28kW", category: 'iSPA (Pool Heaters)', costPriceUSD: 1383.00, salesPriceUSD: 2074.50 },
+
+    // iSTOR
     { id: 'istor_dhw_tank_210l', name: "Karnot iSTOR 210 Litre DHW Tank", category: 'iSTOR (Thermal Storage)', costPriceUSD: 1716.00, salesPriceUSD: 3432.00 },
     { id: 'istor_tank_ss_60l', name: "iSTOR Stainless Steel Tank - 60L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 162.00, salesPriceUSD: 243.00 },
     { id: 'istor_tank_ss_100l', name: "iSTOR Stainless Steel Tank - 100L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 225.00, salesPriceUSD: 337.50 },
@@ -69,26 +102,12 @@ export const ALL_PRODUCTS = [
     { id: 'istor_tank_ss_500l', name: "Karnot iSTOR Stainless Steel Tank - 500L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 603.00, salesPriceUSD: 904.50 },
     { id: 'istor_tank_ss_600l', name: "Karnot iSTOR Stainless Steel Tank - 600L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 721.00, salesPriceUSD: 1081.50 },
     { id: 'istor_tank_ss_1000l', name: "Karnot iSTOR Stainless Steel Tank - 1000L", category: 'iSTOR (Thermal Storage)', costPriceUSD: 1489.00, salesPriceUSD: 2233.50 },
+
+    // Components
     { id: 'imesh', name: "Karnot iMESH", category: 'System Components', costPriceUSD: 576.00, salesPriceUSD: 1728.00 }
 ];
 
-export const QUOTE_STATUSES = {
-    DRAFT: { text: "Draft", color: "bg-gray-500" },
-    SENT: { text: "Sent", color: "bg-blue-500" },
-    APPROVED: { text: "Approved", color: "bg-green-500" },
-    DECLINED: { text: "Declined", color: "bg-red-500" }
-};
-
-export const BOI_TARGETS_USD = {
-    // These reflect the 'Totals' row from the 2026-2030 Forecast
-    2026: 1988802,  // Total Revenue 2026
-    2027: 3650988,  // Total Revenue 2027
-    2028: 5109436, // Total Revenue 2028
-};
-
-// A reliable SVG Base64 logo (Orange background, White Text)
-export const KARNOT_LOGO_BASE_64 = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCAyMDAgNjAiPjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iNjAiIGZpbGw9IiNlYTU4MGMiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iYm9sZCIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiPktBUk5PVDwvdGV4dD48L3N2Zz4=";
-
+// --- UI COMPONENTS ---
 export const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-2xl shadow-lg p-6 md:p-8 ${className}`}>
     {children}
@@ -109,7 +128,6 @@ export const Button = ({ children, onClick, variant = 'primary', className = '',
     </button>;
 };
 
-// --- UPDATED: Inputs with Spell Check ---
 export const Input = ({ label, id, ...props }) => (
     <div className="w-full">
         {label && <label htmlFor={id} className="block text-sm font-medium text-gray-600 mb-1">{label}</label>}
