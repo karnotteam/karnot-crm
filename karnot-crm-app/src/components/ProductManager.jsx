@@ -88,8 +88,6 @@ const ProductManager = ({ user }) => {
         });
     };
 
- // Inside src/components/ProductManager.jsx
-
     const handleSave = async () => {
         if (!formData.name || !formData.salesPriceUSD) {
             alert("Please provide Name and Sales Price.");
@@ -99,8 +97,7 @@ const ProductManager = ({ user }) => {
         try {
             const safeId = formData.id.replace(/\s+/g, '_').toLowerCase();
             
-            // --- FINAL ROBUST DATA SANITIZATION AND ASSIGNMENT ---
-            // This method guarantees every field is included in the document being sent to Firebase.
+            // --- FINAL ROBUST DATA SANITIZATION AND ASSIGNMENT (THE FIX) ---
             const productData = {
                 id: safeId,
                 name: formData.name || '',
@@ -159,7 +156,7 @@ const ProductManager = ({ user }) => {
             console.error("Error saving:", error);
             alert("Failed to save product: " + error.message);
         }
-    }
+    };
     
     const handleDelete = async (id) => {
         if (window.confirm("Are you sure you want to delete this product? This cannot be undone.")) {
