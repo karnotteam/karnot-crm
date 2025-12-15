@@ -9,10 +9,11 @@ const ProductManager = ({ user }) => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     
+    // Form State for Adding/Editing
     const [isEditing, setIsEditing] = useState(false);
-    const [editId, setEditId] = useState(null); 
+    const [editId, setEditId] = useState(null); // If null, we are adding new
     
-    // --- UPDATED STATE: Includes kW Engineering Fields ---
+    // --- FINALIZED STATE SCHEMA ---
     const [formData, setFormData] = useState({
         id: '',
         name: '',
@@ -27,28 +28,32 @@ const ProductManager = ({ user }) => {
         isReversible: true 
     });
 
+    // 1. Sync Products Live
     useEffect(() => {
         if (!user) return;
+        // The list reads all fields, including the new kW fields
         const unsub = onSnapshot(collection(db, "users", user.uid, "products"), (snapshot) => {
             const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            list.sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
+            // Sort by category then name
+            list.sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''));
             setProducts(list);
             setLoading(false);
         });
         return () => unsub();
     }, [user]);
 
+    // 2. Handlers
     const handleEdit = (product) => {
         setIsEditing(true);
         setEditId(product.id);
         setFormData({
-            id: product.id,
+            id: product.id || '',
             name: product.name || '',
             category: product.category || 'Heat Pump',
             costPriceUSD: product.costPriceUSD || 0,
             salesPriceUSD: product.salesPriceUSD || 0,
             specs: product.specs || '',
-            // Load existing technical data or defaults
+            // Load new technical data from DB
             kW_DHW_Nominal: product.kW_DHW_Nominal || 0,
             kW_Cooling_Nominal: product.kW_Cooling_Nominal || 0,
             COP_DHW: product.COP_DHW || 3.8,
@@ -61,6 +66,7 @@ const ProductManager = ({ user }) => {
     const handleAddNew = () => {
         setIsEditing(true);
         setEditId(null);
+        // Auto-generate a simple ID
         const newId = `prod_${Date.now()}`;
         setFormData({
             id: newId,
@@ -100,6 +106,7 @@ const ProductManager = ({ user }) => {
         }
 
         try {
+            // Ensure ID is safe and used as document ID
             const safeId = formData.id.replace(/\s+/g, '_').toLowerCase();
             
             const productData = {
@@ -107,7 +114,7 @@ const ProductManager = ({ user }) => {
                 id: safeId,
                 costPriceUSD: parseFloat(formData.costPriceUSD) || 0,
                 salesPriceUSD: parseFloat(formData.salesPriceUSD) || 0,
-                // Save Engineering Data as Numbers
+                // Ensure all number fields are parsed as floats
                 kW_DHW_Nominal: parseFloat(formData.kW_DHW_Nominal) || 0,
                 kW_Cooling_Nominal: parseFloat(formData.kW_Cooling_Nominal) || 0,
                 COP_DHW: parseFloat(formData.COP_DHW) || 3.0,
@@ -120,17 +127,18 @@ const ProductManager = ({ user }) => {
             
             setIsEditing(false);
             setEditId(null);
-            alert("Product Saved!");
+            alert(editId ? "Product Updated!" : "New Product Added!");
         } catch (error) {
             console.error("Error saving:", error);
             alert("Failed to save product.");
         }
     };
 
+    // 3. Filter for Search
     const filteredProducts = useMemo(() => {
         return products.filter(p => 
-            p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-            p.category.toLowerCase().includes(searchTerm.toLowerCase())
+            (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+            (p.category || '').toLowerCase().includes(searchTerm.toLowerCase())
         );
     }, [products, searchTerm]);
 
@@ -205,7 +213,13 @@ const ProductManager = ({ user }) => {
                     </div>
 
                     <div className="md:col-span-2 mb-4">
-                        <Input label="Specs / Description" value={formData.specs} onChange={e => setFormData({...formData, specs: e.target.value})} />
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Specs / Description</label>
+                        <textarea
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500"
+                            rows="2"
+                            value={formData.specs}
+                            onChange={e => setFormData({...formData, specs: e.target.value})}
+                        />
                     </div>
 
                     <div className="flex justify-end gap-3">
@@ -215,8 +229,56 @@ const ProductManager = ({ user }) => {
                 </Card>
             )}
 
+            {/* --- SEARCH --- */}
+            <div className="relative mb-4">
+                <input type="text" placeholder="Search products..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
+            </div>
+
             {/* --- LIST TABLE --- */}
-            {/* ... (Keep existing List Table rendering logic) ... */}
+            <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Heating (kW)</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Price (USD)</th>
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                        {filteredProducts.map((p) => (
+                            <tr key={p.id} className="hover:bg-gray-50">
+                                <td className="px-6 py-4">
+                                    <div className="text-sm font-bold text-gray-900">{p.name}</div>
+                                    <div className="text-xs text-gray-500">
+                                        {p.category} | COP: **{p.COP_DHW || '-'}** | Max Temp: **{p.max_temp_c || '-'}°C**
+                                    </div>
+                                </td>
+                                
+                                <td className="px-6 py-4 text-right text-sm text-gray-500">
+                                    <span className="font-semibold text-gray-700">
+                                        {p.kW_DHW_Nominal ? `${p.kW_DHW_Nominal} kW` : '-'}
+                                    </span>
+                                </td>
+                                
+                                <td className="px-6 py-4 text-right text-sm font-bold text-gray-900">
+                                    ${p.salesPriceUSD?.toLocaleString()}
+                                </td>
+                                
+                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                    <button onClick={() => handleEdit(p)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18}/></button>
+                                    <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900"><Trash2 size={18}/></button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {filteredProducts.length === 0 && (
+                <div className="p-8 text-center text-gray-500">No products found.</div>
+            )}
         </div>
     );
 };
