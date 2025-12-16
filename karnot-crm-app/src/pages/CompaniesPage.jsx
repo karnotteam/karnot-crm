@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, PRICING_TIERS } from '../data/constants.jsx';
 
-// --- 1. Helper: Haversine Distance Formula (km) ---
 const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371; 
     const dLat = (lat2 - lat1) * (Math.PI/180);  
@@ -22,7 +21,6 @@ const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
     return R * c; 
 };
 
-// --- 2. Stats Badge ---
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return (
@@ -36,7 +34,6 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-// --- 3. Duplicate Resolver Modal ---
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
     const toggleSelection = (id) => {
@@ -62,7 +59,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
                 <div className="overflow-y-auto flex-1 space-y-4">
                     {duplicates.map((group, i) => (
                         <div key={i} className="border rounded-lg overflow-hidden">
-                            <div className="bg-orange-50 px-4 py-2 text-sm font-bold text-orange-800 uppercase">{group.key}</div>
+                            <div className="bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 uppercase">{group.key}</div>
                             {group.items.map(c => (
                                 <div key={c.id} className="flex items-center justify-between p-3 border-t">
                                     <div className="flex items-center gap-3">
@@ -75,6 +72,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
                     ))}
                 </div>
                 <div className="mt-4 pt-4 border-t flex justify-end gap-2">
+                    <Button onClick={onClose} variant="secondary">Cancel</Button>
                     <Button onClick={handleAutoSelect} variant="secondary">Auto-Select Newer</Button>
                     <Button onClick={() => onResolve(Array.from(selectedToDelete))} variant="danger">Delete Selected ({selectedToDelete.size})</Button>
                 </div>
@@ -83,8 +81,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 4. Company Detail Modal (Synced Activity & Linked Data) ---
-const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = [], commissioningReports = [], onOpenQuote, onEditContact, onOpenReport }) => {
+const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = [], onOpenQuote }) => {
     const [activeTab, setActiveTab] = useState('ACTIVITY');
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
@@ -116,14 +113,11 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                 <div className="flex-1 p-6 overflow-y-auto border-r border-gray-100 space-y-4">
                     <h2 className="text-2xl font-bold text-gray-800">{companyToEdit ? 'Edit Account' : 'New Account'}</h2>
                     <Input label="Company Name" value={companyName} onChange={e => setCompanyName(e.target.value)} />
-                    <div>
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block">Pricing Tier</label>
-                        <select value={tier} onChange={e => setTier(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white font-bold text-sm shadow-sm focus:ring-orange-500 focus:border-orange-500">
-                            {Object.entries(PRICING_TIERS).map(([key, t]) => (
-                                <option key={key} value={key}>{t.label} ({t.discount}% Off)</option>
-                            ))}
-                        </select>
-                    </div>
+                    <select value={tier} onChange={e => setTier(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md bg-white font-bold text-sm">
+                        {Object.entries(PRICING_TIERS).map(([key, t]) => (
+                            <option key={key} value={key}>{t.label} ({t.discount}% Off)</option>
+                        ))}
+                    </select>
                     <div className="grid grid-cols-2 gap-4">
                         <Input label="Website" value={website} onChange={e => setWebsite(e.target.value)} />
                         <Input label="Industry" value={industry} onChange={e => setIndustry(e.target.value)} />
@@ -135,24 +129,23 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                     </div>
                     <Textarea label="General Notes" value={notes} onChange={e => setNotes(e.target.value)} rows="3" />
                 </div>
-
                 <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden">
                     <div className="flex border-b bg-white">
                         <button onClick={() => setActiveTab('ACTIVITY')} className={`flex-1 py-3 text-xs font-bold ${activeTab === 'ACTIVITY' ? 'text-orange-600 border-b-2 border-orange-600' : 'text-gray-400'}`}>Activity Log</button>
-                        <button onClick={() => setActiveTab('DATA')} className={`flex-1 py-3 text-xs font-bold ${activeTab === 'DATA' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`}>Files & Contacts</button>
+                        <button onClick={() => setActiveTab('DATA')} className={`flex-1 py-3 text-xs font-bold ${activeTab === 'DATA' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-400'}`}>Linked Data</button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4">
                         {activeTab === 'ACTIVITY' ? (
                             <div className="space-y-4">
-                                <div className="bg-white p-3 rounded border shadow-sm space-y-2">
+                                <div className="bg-white p-3 rounded border space-y-2 shadow-sm">
                                     <div className="flex gap-2">
                                         <Input type="date" value={newLogDate} onChange={e => setNewLogDate(e.target.value)} className="text-xs" />
-                                        <select value={newLogType} onChange={e => setNewLogType(e.target.value)} className="text-xs border rounded p-1 flex-1">
-                                            <option value="Call">Call</option><option value="Visit">Site Visit</option><option value="Email">Email</option><option value="Note">Note</option>
+                                        <select value={newLogType} onChange={e => setNewLogType(e.target.value)} className="text-xs border rounded p-1 flex-1 font-bold">
+                                            <option value="Call">Call</option><option value="Visit">Site Visit</option><option value="Email">Email</option>
                                         </select>
                                     </div>
                                     <div className="flex gap-2">
-                                        <input type="text" value={newLogOutcome} onChange={e => setNewLogOutcome(e.target.value)} placeholder="What happened?" className="flex-1 text-sm p-2 border rounded" />
+                                        <input type="text" value={newLogOutcome} onChange={e => setNewLogOutcome(e.target.value)} placeholder="Summary..." className="flex-1 text-sm p-2 border rounded" />
                                         <Button onClick={handleAddInteraction} variant="primary"><Plus size={18}/></Button>
                                     </div>
                                 </div>
@@ -160,7 +153,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                     <div key={log.id} className="bg-white p-3 rounded border shadow-sm">
                                         <div className="flex justify-between items-center mb-1">
                                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${log.type === 'Visit' ? 'bg-green-500' : 'bg-blue-500'}`}>{log.type}</span>
-                                            <span className="text-[10px] text-gray-400">{log.date}</span>
+                                            <span className="text-[10px] text-gray-400 font-bold">{log.date}</span>
                                         </div>
                                         <p className="text-xs text-gray-700 font-medium">{log.outcome}</p>
                                     </div>
@@ -168,17 +161,17 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div className="bg-white p-3 rounded border">
-                                    <h5 className="font-bold text-[10px] text-gray-400 uppercase mb-2">Primary Contacts</h5>
+                                <div className="bg-white p-3 rounded border shadow-sm">
+                                    <h5 className="font-bold text-[10px] text-gray-400 uppercase mb-2 flex items-center gap-1"><Users size={12}/> Contacts</h5>
                                     {companyContacts.map(c => (
-                                        <div key={c.id} className="flex justify-between items-center text-xs py-1 border-b last:border-0">
-                                            <span className="font-bold">{c.firstName} {c.lastName}</span>
-                                            <a href={`tel:${c.phone}`} className="text-blue-600"><Phone size={14}/></a>
+                                        <div key={c.id} className="flex justify-between items-center text-xs py-1 border-b last:border-0 font-bold">
+                                            <span>{c.firstName} {c.lastName}</span>
+                                            <a href={`tel:${c.phone}`} className="text-blue-600"><Phone size={12}/></a>
                                         </div>
                                     ))}
                                 </div>
-                                <div className="bg-white p-3 rounded border">
-                                    <h5 className="font-bold text-[10px] text-gray-400 uppercase mb-2">Quotes</h5>
+                                <div className="bg-white p-3 rounded border shadow-sm">
+                                    <h5 className="font-bold text-[10px] text-gray-400 uppercase mb-2 flex items-center gap-1"><FileText size={12}/> Quotes</h5>
                                     {relevantQuotes.map(q => (
                                         <div key={q.id} onClick={() => onOpenQuote(q)} className="flex justify-between items-center text-xs py-2 border-b last:border-0 cursor-pointer hover:bg-gray-50">
                                             <span className="font-bold">{q.id}</span>
@@ -199,7 +192,6 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
     );
 };
 
-// --- 5. Main Page Component ---
 const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpenQuote }) => {
     const [showModal, setShowModal] = useState(false);
     const [editingCompany, setEditingCompany] = useState(null);
@@ -220,7 +212,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
 
     const filtered = useMemo(() => {
         const term = searchTerm.toLowerCase();
-        let list = companies.filter(c => c.companyName.toLowerCase().includes(term) || (c.industry || '').toLowerCase().includes(term));
+        let list = (companies || []).filter(c => c.companyName.toLowerCase().includes(term) || (c.industry || '').toLowerCase().includes(term));
         if (activeFilter === 'TARGETS') list = list.filter(c => c.isTarget);
         if (activeFilter === 'NEARBY' && userLocation) {
             list = list.filter(c => c.latitude && getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude) <= 20);
@@ -228,7 +220,6 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
         return list;
     }, [companies, searchTerm, activeFilter, userLocation]);
 
-    // CSV Import Logic
     const handleFileChange = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -237,26 +228,13 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
             header: true, skipEmptyLines: true,
             complete: async (results) => {
                 const batch = writeBatch(db);
-                const companiesRef = collection(db, "users", user.uid, "companies");
                 results.data.forEach(row => {
                     if (!row.companyName) return;
-                    batch.set(doc(companiesRef), { ...row, createdAt: serverTimestamp(), interactions: [], tier: 'STANDARD' });
+                    batch.set(doc(collection(db, "users", user.uid, "companies")), { ...row, createdAt: serverTimestamp(), interactions: [], tier: 'STANDARD' });
                 });
                 await batch.commit(); setIsImporting(false); alert("Imported!");
             }
         });
-    };
-
-    // Duplicate Scan Logic
-    const handleScanDuplicates = () => {
-        const groups = {};
-        companies.forEach(c => {
-            const key = c.companyName.toLowerCase().trim();
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(c);
-        });
-        const conflicts = Object.keys(groups).filter(k => groups[k].length > 1).map(k => ({ key: k, items: groups[k] }));
-        if (conflicts.length > 0) { setDuplicateGroups(conflicts); setShowDuplicateModal(true); } else alert("No duplicates!");
     };
 
     const handleNearMe = () => {
@@ -286,17 +264,22 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                 await batch.commit(); setShowDuplicateModal(false);
             }} />}
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                <StatBadge icon={Building} label="Total Companies" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
+            <div className="flex flex-wrap gap-4 mb-8">
+                <StatBadge icon={Building} label="Total Accounts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
                 <StatBadge icon={Navigation} label="Near Me (20km)" count={stats.nearMe} total={stats.total} color="orange" active={activeFilter === 'NEARBY'} onClick={handleNearMe} />
                 <StatBadge icon={CheckSquare} label="Target Accounts" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveFilter('TARGETS')} />
-                <StatBadge icon={Clock} label="Active Logs" count={stats.active} total={stats.total} color="blue" active={activeFilter === 'ACTIVE'} onClick={() => setActiveFilter('ACTIVE')} />
+                <StatBadge icon={Clock} label="Active Interactions" count={stats.active} total={stats.total} color="blue" active={activeFilter === 'ACTIVE'} onClick={() => setActiveFilter('ACTIVE')} />
             </div>
 
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Accounts ({filtered.length})</h1>
+                <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Companies ({filtered.length})</h1>
                 <div className="flex gap-2">
-                    <Button onClick={handleScanDuplicates} variant="secondary"><CheckSquare className="mr-1" size={16}/> Dedupe</Button>
+                    <Button onClick={() => {
+                        const groups = {};
+                        companies.forEach(c => { const key = c.companyName.toLowerCase().trim(); if(!groups[key]) groups[key] = []; groups[key].push(c); });
+                        const conflicts = Object.keys(groups).filter(k => groups[k].length > 1).map(k => ({ key: k, items: groups[k] }));
+                        if(conflicts.length > 0) { setDuplicateGroups(conflicts); setShowDuplicateModal(true); } else alert("No duplicates!");
+                    }} variant="secondary"><CheckSquare className="mr-1" size={16}/> Dedupe</Button>
                     <Button onClick={() => fileInputRef.current.click()} variant="secondary" disabled={isImporting}><Upload className="mr-1" size={16}/> Import CSV</Button>
                     <Button onClick={() => { setEditingCompany(null); setShowModal(true); }} variant="primary"><Plus className="mr-1" size={16}/> New Company</Button>
                 </div>
@@ -317,12 +300,12 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                                 <h4 className="font-bold text-lg text-gray-800 leading-tight">{c.companyName}</h4>
                                 <p className="text-xs font-bold text-orange-600 uppercase tracking-widest">{c.industry || 'Account'}</p>
                             </div>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100">
                                 <button onClick={() => { setEditingCompany(c); setShowModal(true); }} className="p-1 text-gray-400 hover:text-indigo-600"><Edit size={16}/></button>
                                 <button onClick={async () => { if(window.confirm("Delete?")) await deleteDoc(doc(db, "users", user.uid, "companies", c.id)); }} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={16}/></button>
                             </div>
                         </div>
-                        <p className="text-xs text-gray-500 mb-4 truncate"><MapPin size={12} className="inline mr-1"/>{c.address || 'No address'}</p>
+                        <p className="text-xs text-gray-500 mb-4 truncate font-medium"><MapPin size={12} className="inline mr-1 text-gray-300"/>{c.address || 'No address'}</p>
                         
                         {(c.interactions || []).length > 0 ? (
                             <div className="bg-slate-50 p-2 rounded border border-slate-100 text-xs flex justify-between items-center">
@@ -330,7 +313,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                                 <span className="font-bold text-gray-600 truncate w-32 text-right">{c.interactions[0].outcome}</span>
                             </div>
                         ) : (
-                            <div className="text-[10px] font-bold text-gray-300 uppercase text-center border border-dashed rounded p-2">No History</div>
+                            <div className="text-[10px] font-bold text-gray-300 uppercase text-center border border-dashed rounded p-2 tracking-widest">No History</div>
                         )}
                     </Card>
                 ))}
