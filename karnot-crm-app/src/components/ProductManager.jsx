@@ -2,13 +2,23 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, writeBatch, query, getDocs, updateDoc } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Plug, Upload, AlertTriangle, CheckSquare, Download, Filter } from 'lucide-react'; 
+import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Plug, Upload, AlertTriangle, CheckSquare, Download, Filter, Sun, Thermometer, Box } from 'lucide-react'; // Added new icons
 import { Card, Button, Input, Checkbox } from '../data/constants';
 
+// --- Default Category Icons and Colors for Stat Badges ---
+const CATEGORY_MAP = {
+    'Heat Pump': { icon: Thermometer, color: 'orange' },
+    'iSTOR systems': { icon: Package, color: 'teal' }, // New Category
+    'iSPA': { icon: Sun, color: 'blue' }, // New Category
+    'iMESH': { icon: Box, color: 'purple' }, // New Category
+    'Other Products Miscellaneous': { icon: Filter, color: 'pink' }, // New Category
+    'Uncategorized': { icon: Package, color: 'gray' },
+};
+
 // ----------------------------------------------------------------------
-// --- 1. Helper: Stat Badge (For Category Filtering) ---
+// --- 1. Helper: Stat Badge (Updated to use Category Map) ---
 // ----------------------------------------------------------------------
-const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
+const StatBadge = ({ label, count, total, color, active, onClick, icon: Icon }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return (
         <div 
@@ -31,7 +41,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
 };
 
 // ----------------------------------------------------------------------
-// --- 2. Helper: Duplicate Resolver Modal (Adapted for Products) ---
+// --- 2. Helper: Duplicate Resolver Modal (Unchanged) ---
 // ----------------------------------------------------------------------
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
@@ -47,16 +57,13 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
         const newSet = new Set();
         let count = 0;
         duplicates.forEach(group => {
-            // Auto-select items that are NOT the one with the lowest sales price, or just the newer ones if prices are equal.
             const sortedItems = [...group.items].sort((a, b) => {
                 const priceDiff = (a.salesPriceUSD || 0) - (b.salesPriceUSD || 0);
                 if (priceDiff !== 0) return priceDiff;
-                // If prices are the same, keep the older record (assuming it's the master)
                 const timeA = a.createdAt?.seconds || 0;
                 const timeB = b.createdAt?.seconds || 0;
                 return timeA - timeB; 
             });
-            // Select all but the first (the keeper)
             for (let i = 1; i < sortedItems.length; i++) {
                 newSet.add(sortedItems[i].id);
                 count++;
@@ -150,7 +157,6 @@ const ProductManager = ({ user }) => {
         Liquid_Connection: '', Suitable_Compressor: '', Type_of_Oil: '', Receiver_Volume: '', 
         Fan_Details: '', Air_Flow: '', Certificates: '', max_temp_c: 75, isReversible: true,
         Unit_Dimensions: '', Net_Weight: 0, Gross_Weight: 0, Order_Reference: '',
-        // Add createdAt for dedupe logic consistency (will be overwritten by serverTimestamp on save)
         createdAt: null 
     };
     const [formData, setFormData] = useState(defaultFormData);
@@ -168,18 +174,16 @@ const ProductManager = ({ user }) => {
     }, [user]);
 
     // ----------------------------------------------------------------------
-    // --- Handlers for CRUD Operations ---
+    // --- CRUD and UI Handlers (largely unchanged) ---
     // ----------------------------------------------------------------------
     
     const handleEdit = (product) => {
         setIsEditing(true);
         setEditId(product.id);
         
-        // Load all fields, merging with defaults to ensure all keys exist
         setFormData(prev => ({
             ...defaultFormData, 
             ...product,
-            // Explicitly parse numeric values for the form inputs
             costPriceUSD: parseFloat(product.costPriceUSD || 0),
             salesPriceUSD: parseFloat(product.salesPriceUSD || 0),
             kW_DHW_Nominal: parseFloat(product.kW_DHW_Nominal || 0),
@@ -200,7 +204,6 @@ const ProductManager = ({ user }) => {
     const handleAddNew = () => {
         setIsEditing(true);
         setEditId(null);
-        // Reset form to defaults and create a new unique ID
         setFormData({
             ...defaultFormData,
             id: `prod_${Date.now()}`,
@@ -221,8 +224,8 @@ const ProductManager = ({ user }) => {
                 lastModified: serverTimestamp(),
             };
             
-            delete productData.id; // Exclude ID from data payload since it is used as doc name
-            delete productData.createdAt; // Clean up local state field
+            delete productData.id; 
+            delete productData.createdAt; 
             
             await setDoc(doc(db, "users", user.uid, "products", safeId), productData, { merge: true });
             
@@ -271,8 +274,9 @@ const ProductManager = ({ user }) => {
     const handleCancel = () => { setIsEditing(false); setEditId(null); };
     const handleSearchChange = (e) => { setSearchTerm(e.target.value); };
 
+
     // ----------------------------------------------------------------------
-    // --- Handlers for CRM Features ---
+    // --- CRM Feature Handlers (Dedupe, Filter, Bulk Operations) ---
     // ----------------------------------------------------------------------
 
     const stats = useMemo(() => {
@@ -291,6 +295,7 @@ const ProductManager = ({ user }) => {
     };
 
     const handleScanForDuplicates = () => { 
+        // ... (Dedupe logic unchanged)
         const groups = {};
         products.forEach(p => {
             const key = (p.name || '').toLowerCase().trim();
@@ -410,18 +415,18 @@ const ProductManager = ({ user }) => {
         const url = URL.createObjectURL(blob);
         
         link.setAttribute("href", url);
-        link.setAttribute("download", `karnot_products_export_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute("download", `karnot_product_import_template_${new Date().toISOString().split('T')[0]}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
-    // 
 
     const handleImportClick = () => {
         fileInputRef.current.click();
     };
-
+    
+    // --- UPDATED LOGIC: CSV Upsert (Update or Insert) ---
     const handleFileChange = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -434,21 +439,22 @@ const ProductManager = ({ user }) => {
                 const dataRows = results.data;
                 const batch = writeBatch(db);
                 let updatedCount = 0;
-                let notFoundCount = 0;
+                let insertedCount = 0;
+                let skippedCount = 0;
                 const productsRef = collection(db, "users", user.uid, "products");
                 
-                // Fields to map from CSV to Firestore (key is CSV name part, value is Firestore key)
+                // --- Master Field Mapping (CSV Header -> Firestore Key) ---
                 const fieldMappings = {
                     'system id': 'id',
                     'product name': 'name',
                     'category': 'category',
-                    'sales price': 'salesPriceUSD',
-                    'cost price': 'costPriceUSD',
+                    'sales price (usd)': 'salesPriceUSD',
+                    'cost price (usd)': 'costPriceUSD',
                     'kw_dhw_nominal': 'kW_DHW_Nominal',
                     'kw_cooling_nominal': 'kW_Cooling_Nominal',
                     'cop_dhw': 'COP_DHW',
                     'scop_dhw_avg': 'SCOP_DHW_Avg',
-                    'max temp': 'max_temp_c',
+                    'max hot water temp (°c)': 'max_temp_c', 
                     'refrigerant': 'Refrigerant',
                     'power supply': 'Power_Supply',
                     'rated power input': 'Rated_Power_Input',
@@ -468,8 +474,8 @@ const ProductManager = ({ user }) => {
                     'fan details': 'Fan_Details',
                     'air flow': 'Air_Flow',
                     'certificates': 'Certificates',
-                    'net weight': 'Net_Weight',
-                    'gross weight': 'Gross_Weight',
+                    'net weight (kg)': 'Net_Weight', 
+                    'gross weight (kg)': 'Gross_Weight', 
                     'unit dimensions': 'Unit_Dimensions',
                     'order reference': 'Order_Reference',
                     'specs': 'specs',
@@ -478,65 +484,98 @@ const ProductManager = ({ user }) => {
                 const numericFields = ['salesPriceUSD', 'costPriceUSD', 'kW_DHW_Nominal', 'kW_Cooling_Nominal', 'COP_DHW', 'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current', 'Sound_Power_Level', 'Net_Weight', 'Gross_Weight'];
 
                 dataRows.forEach(row => {
-                    // Try matching by System ID or Product Name from CSV
-                    const csvSystemId = (row['System ID'] || row['id'])?.trim();
-                    const csvProductName = (row['Product Name'] || row['name'])?.trim();
+                    // Normalize the unique identifiers
+                    const csvSystemId = (row['System ID'] || row['system id'] || '').trim();
+                    const csvProductName = (row['Product Name'] || row['product name'] || '').trim();
                     
-                    if (!csvSystemId && !csvProductName) return;
-
-                    const match = products.find(p => p.id === csvSystemId) || products.find(p => p.name?.toLowerCase() === csvProductName?.toLowerCase());
+                    if (!csvProductName) {
+                         skippedCount++;
+                         return;
+                    }
                     
-                    if (match) {
-                        const ref = doc(productsRef, match.id);
-                        const updateData = { lastModified: serverTimestamp() };
-                        
-                        // Iterate through CSV row keys to find matches
-                        Object.keys(row).forEach(csvHeader => {
-                            const normalizedHeader = csvHeader.toLowerCase().trim();
-                            const firestoreKey = fieldMappings[normalizedHeader];
-                            
-                            if (firestoreKey && row[csvHeader] !== undefined && row[csvHeader] !== null) {
-                                let value = row[csvHeader];
-                                
-                                if (numericFields.includes(firestoreKey)) {
-                                    let parsedValue = parseFloat(value);
-                                    if (!isNaN(parsedValue)) {
-                                        updateData[firestoreKey] = parsedValue;
-                                    }
-                                } else if (value.trim() !== '') {
-                                    // For non-numeric, non-empty strings
-                                    updateData[firestoreKey] = value;
-                                }
-                            }
-                        });
-
-                        // Only proceed if there are updates other than lastModified
-                        if (Object.keys(updateData).length > 1) {
-                            batch.update(ref, updateData);
-                            updatedCount++;
-                        }
-                        
+                    // Create a unique ID for the product document reference
+                    let docId;
+                    if (csvSystemId) {
+                        docId = csvSystemId.replace(/[\s/]+/g, '_').toLowerCase();
                     } else {
-                        notFoundCount++;
+                        // For new products without an ID, use a cleaned product name and timestamp
+                        docId = `${csvProductName.replace(/[\s/]+/g, '_').toLowerCase()}_${Date.now()}`;
+                    }
+
+                    // Check if product exists (only use local state for fast lookup)
+                    const existingProduct = products.find(p => p.id === docId);
+                    
+                    // --- Build the Product Data Object ---
+                    let productData = { lastModified: serverTimestamp() };
+                    let hasData = false;
+
+                    Object.keys(row).forEach(csvHeader => {
+                        const normalizedHeader = csvHeader.toLowerCase().trim();
+                        const firestoreKey = fieldMappings[normalizedHeader];
+                        
+                        if (firestoreKey && row[csvHeader] !== undefined && row[csvHeader] !== null) {
+                            let value = row[csvHeader];
+                            
+                            if (numericFields.includes(firestoreKey)) {
+                                let parsedValue = parseFloat(value);
+                                if (!isNaN(parsedValue)) {
+                                    productData[firestoreKey] = parsedValue;
+                                    hasData = true;
+                                }
+                            } else if (value.trim() !== '') {
+                                productData[firestoreKey] = value.trim();
+                                hasData = true;
+                            }
+                        }
+                    });
+
+                    // Ensure Name and Category are set even if imported under different column names
+                    if (!productData.name) productData.name = csvProductName;
+                    if (!productData.category) productData.category = row['Category'] || 'Heat Pump';
+
+
+                    if (!hasData) {
+                        skippedCount++;
+                        return; // Skip rows with no meaningful data after ID/Name check
+                    }
+
+                    if (existingProduct) {
+                        // UPDATE existing product
+                        batch.update(doc(productsRef, docId), productData);
+                        updatedCount++;
+                    } else {
+                        // INSERT new product
+                        // Merge productData with default template to ensure all fields are initialized
+                        const newProduct = {
+                            ...defaultFormData, 
+                            ...productData,
+                            createdAt: serverTimestamp(),
+                            // Ensure numeric fields from default aren't accidentally overwritten by null/empty string if not in CSV
+                            ...Object.fromEntries(numericFields.map(field => [field, productData[field] !== undefined ? productData[field] : defaultFormData[field]]))
+                        };
+                        delete newProduct.lastModified; // Already set by serverTimestamp
+                        
+                        batch.set(doc(productsRef, docId), newProduct);
+                        insertedCount++;
                     }
                 });
 
                 try {
                     await batch.commit();
-                    alert(`Price/Spec Update Complete!\n✅ Updated: ${updatedCount} products.\n🚫 Not Found (Skipped): ${notFoundCount} rows.`);
+                    alert(`Product Upsert Complete!\n✅ Added New: ${insertedCount}\n🔄 Updated Existing: ${updatedCount}\n🚫 Skipped (No name/data): ${skippedCount} rows.`);
                 } catch (error) {
-                    console.error("Update Error:", error);
-                    alert("Failed to update products from CSV.");
+                    console.error("Upsert Error:", error);
+                    alert("Failed to process products from CSV. Check console for details.");
                 }
                 setIsImporting(false);
-                event.target.value = null; // Clear file input
+                event.target.value = null; 
             },
             error: () => { alert("Failed to parse CSV."); setIsImporting(false); }
         });
     };
     
     // ----------------------------------------------------------------------
-    // --- Updated Filtered Products Logic (Includes Category Filter) ---
+    // --- Filtered Products Logic (Includes new categories) ---
     // ----------------------------------------------------------------------
 
     const filteredProducts = useMemo(() => {
@@ -559,27 +598,50 @@ const ProductManager = ({ user }) => {
 
     if (loading) return <div className="p-4 text-center">Loading Products...</div>;
 
+    // Filter categories to show only those present in the data, plus ALL
+    const categoriesToShow = useMemo(() => {
+        const uniqueCategories = Object.keys(stats.categories).sort();
+        // Fallback to defaults if no products exist
+        if (uniqueCategories.length === 0) {
+            return Object.keys(CATEGORY_MAP).filter(c => c !== 'Uncategorized').sort();
+        }
+        return uniqueCategories;
+    }, [stats.categories]);
+
+
     return (
         <div className="w-full pb-20"> 
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                <StatBadge icon={Package} label="All Products" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => handleCategoryFilter('ALL')} />
+            {/* --- STAT BADGES / CATEGORY FILTER --- */}
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8 overflow-x-auto pb-3">
+                <StatBadge 
+                    icon={Package} 
+                    label="All Products" 
+                    count={stats.total} 
+                    total={stats.total} 
+                    color="gray" 
+                    active={activeFilter === 'ALL'} 
+                    onClick={() => handleCategoryFilter('ALL')} 
+                />
                 
-                {/* Dynamically render category badges */}
-                {Object.keys(stats.categories).slice(0, 4).map((cat, index) => (
-                    <StatBadge 
-                        key={cat}
-                        icon={Package} 
-                        label={cat} 
-                        count={stats.categories[cat]} 
-                        total={stats.total} 
-                        color={['orange', 'blue', 'green', 'purple'][index % 4]} 
-                        active={activeFilter === cat} 
-                        onClick={() => handleCategoryFilter(cat)} 
-                    />
-                ))}
+                {categoriesToShow.map((cat, index) => {
+                    const map = CATEGORY_MAP[cat] || CATEGORY_MAP['Uncategorized'];
+                    return (
+                        <StatBadge 
+                            key={cat}
+                            icon={map.icon} 
+                            label={cat} 
+                            count={stats.categories[cat] || 0} 
+                            total={stats.total} 
+                            color={map.color || CATEGORY_MAP['Uncategorized'].color} 
+                            active={activeFilter === cat} 
+                            onClick={() => handleCategoryFilter(cat)} 
+                        />
+                    );
+                })}
             </div>
+            {/*  */}
             
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-2">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -589,7 +651,7 @@ const ProductManager = ({ user }) => {
                 </h3>
                 
                 <div className="flex gap-2 flex-wrap justify-end w-full md:w-auto">
-                    <Button onClick={handleImportClick} variant="secondary" disabled={isImporting}><Upload className="mr-2" size={16} /> Update via CSV</Button>
+                    <Button onClick={handleImportClick} variant="secondary" disabled={isImporting}><Upload className="mr-2" size={16} /> Import/Update CSV</Button>
                     <Button onClick={handleScanForDuplicates} variant="secondary" title="Find duplicate products"><CheckSquare className="mr-2" size={16}/> Dedupe</Button>
                     {!isEditing && (
                         <Button onClick={handleAddNew} variant="primary">
@@ -601,7 +663,7 @@ const ProductManager = ({ user }) => {
 
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" style={{ display: 'none' }} />
             
-            {/* --- EDITOR FORM --- */}
+            {/* --- EDITOR FORM (Unchanged) --- */}
             {isEditing && (
                 <Card className="bg-orange-50 border-orange-200 mb-6">
                     <h4 className="font-bold text-lg mb-4 text-orange-800">{editId ? 'Edit Product' : 'New Product'}</h4>
@@ -789,7 +851,7 @@ const ProductManager = ({ user }) => {
                     
                     <button onClick={handleBulkExport} className="flex items-center gap-2 hover:text-green-400 transition-colors">
                         <Download size={18} />
-                        <span className="text-sm font-bold">Export CSV</span>
+                        <span className="text-sm font-bold">Export Template CSV</span>
                     </button>
 
                     <button onClick={handleBulkDelete} className="flex items-center gap-2 hover:text-red-400 transition-colors">
