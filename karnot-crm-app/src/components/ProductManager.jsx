@@ -19,7 +19,6 @@ const CATEGORY_MAP = {
 // --- 1. Helper: Stat Badge ---
 // ----------------------------------------------------------------------
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
-    // Added null guard to prevent crash if icon or color is missing (safety measure)
     if (!Icon || !color) return null; 
     
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
@@ -166,8 +165,14 @@ const ProductManager = ({ user }) => {
     const [formData, setFormData] = useState(defaultFormData);
 
 
+    // IMPROVEMENT: Handle null user state to prevent stuck loading
     useEffect(() => {
-        if (!user) return;
+        if (!user) { 
+            setLoading(false); 
+            setProducts([]); 
+            return; 
+        }
+        
         const unsub = onSnapshot(collection(db, "users", user.uid, "products"), (snapshot) => {
             const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             list.sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || ''));
@@ -176,6 +181,55 @@ const ProductManager = ({ user }) => {
         });
         return () => unsub();
     }, [user]);
+
+    
+    // ----------------------------------------------------------------------
+    // 🔥 HOOK ORDER FIX: ALL useMemo calls MUST precede the conditional return
+    // ----------------------------------------------------------------------
+
+    const stats = useMemo(() => {
+        if (!products || products.length === 0) return { total: 0, categories: {} };
+        const total = products.length;
+        const categories = {};
+        products.forEach(p => {
+            const cat = p.category || 'Uncategorized';
+            categories[cat] = (categories[cat] || 0) + 1;
+        });
+        return { total, categories };
+    }, [products]);
+
+
+    const categoriesToShow = useMemo(() => {
+        const productCategories = Object.keys(stats.categories).filter(c => c !== 'Uncategorized').sort();
+        const predefinedCategories = Object.keys(CATEGORY_MAP).filter(c => c !== 'Uncategorized');
+        
+        const combined = new Set([...predefinedCategories, ...productCategories]);
+        return Array.from(combined).sort();
+    }, [stats.categories]);
+
+
+    const filteredProducts = useMemo(() => {
+        const lowerSearchTerm = (searchTerm || '').toLowerCase();
+        let list = products || [];
+
+        if (activeFilter !== 'ALL') {
+            list = list.filter(p => p.category === activeFilter);
+        }
+
+        return list.filter(p => 
+            (p.name || '').toLowerCase().includes(lowerSearchTerm) || 
+            (p.category || '').toLowerCase().includes(lowerSearchTerm) ||
+            (p.Order_Reference || '').toLowerCase().includes(lowerSearchTerm)
+        );
+    }, [products, searchTerm, activeFilter]);
+
+
+    // ----------------------------------------------------------------------
+    // --- CONDITIONAL RETURN (This must be after ALL hooks) ---
+    // ----------------------------------------------------------------------
+
+    if (loading) return <div className="p-4 text-center">Loading Products...</div>;
+
 
     // ----------------------------------------------------------------------
     // --- CRUD and UI Handlers ---
@@ -281,36 +335,6 @@ const ProductManager = ({ user }) => {
 
     const handleCancel = () => { setIsEditing(false); setEditId(null); };
     const handleSearchChange = (e) => { setSearchTerm(e.target.value); };
-
-
-    // ----------------------------------------------------------------------
-    // --- CRM Feature Handlers (Dedupe, Filter, Bulk Operations) ---
-    // ----------------------------------------------------------------------
-
-    const stats = useMemo(() => {
-        if (!products || products.length === 0) return { total: 0, categories: {} };
-        const total = products.length;
-        const categories = {};
-        products.forEach(p => {
-            const cat = p.category || 'Uncategorized';
-            categories[cat] = (categories[cat] || 0) + 1;
-        });
-        return { total, categories };
-    }, [products]);
-
-
-    // 🔥 HOOK ORDER FIX: Moved useMemo ABOVE the conditional return
-    const categoriesToShow = useMemo(() => {
-        const productCategories = Object.keys(stats.categories).filter(c => c !== 'Uncategorized').sort();
-        const predefinedCategories = Object.keys(CATEGORY_MAP).filter(c => c !== 'Uncategorized');
-        
-        const combined = new Set([...predefinedCategories, ...productCategories]);
-        return Array.from(combined).sort();
-    }, [stats.categories]);
-    // ----------------------------------------------------------------------
-
-
-    if (loading) return <div className="p-4 text-center">Loading Products...</div>;
 
 
     const handleCategoryFilter = (category) => {
