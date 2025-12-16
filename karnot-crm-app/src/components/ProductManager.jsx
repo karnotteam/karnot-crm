@@ -223,6 +223,20 @@ const ProductManager = ({ user }) => {
         );
     }, [products, searchTerm, activeFilter]);
 
+    // NEW HOOK: Group products by Power Supply for visual grouping in the table
+    const groupedProducts = useMemo(() => {
+        if (!filteredProducts) return {};
+        return filteredProducts.reduce((acc, product) => {
+            // Grouping by Power_Supply (e.g., "380/420 V-50/60 Hz-3 ph")
+            const key = product.Power_Supply || 'N/A';
+            if (!acc[key]) {
+                acc[key] = [];
+            }
+            acc[key].push(product);
+            return acc;
+        }, {});
+    }, [filteredProducts]);
+
 
     // ----------------------------------------------------------------------
     // --- CONDITIONAL RETURN (This must be after ALL hooks) ---
@@ -232,7 +246,7 @@ const ProductManager = ({ user }) => {
 
 
     // ----------------------------------------------------------------------
-    // --- CRUD and UI Handlers (REST OF THE LOGIC) ---
+    // --- CRUD and UI Handlers ---
     // ----------------------------------------------------------------------
     
     const handleEdit = (product) => {
@@ -414,10 +428,13 @@ const ProductManager = ({ user }) => {
         }
     };
 
-    // --- CORRECTED EXPORT FUNCTION (Headers simplified for import compatibility) ---
-    const handleBulkExport = () => {
-        const productsToExport = products.filter(p => selectedIds.has(p.id));
-        if (productsToExport.length === 0) return alert("Select products to export.");
+    // --- UPDATED EXPORT FUNCTION: Handles both selection export and Export All ---
+    const handleBulkExport = (exportAll = false) => {
+        const productsToExport = exportAll 
+            ? products 
+            : products.filter(p => selectedIds.has(p.id));
+
+        if (productsToExport.length === 0) return alert("Select products or use the Export ALL option.");
 
         const exportData = productsToExport.map(p => ({
             "System ID": p.id,
@@ -462,7 +479,7 @@ const ProductManager = ({ user }) => {
         const url = URL.createObjectURL(blob);
         
         link.setAttribute("href", url);
-        link.setAttribute("download", `karnot_products_export_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute("download", `karnot_products_export_${exportAll ? 'ALL' : 'SELECTED'}_${new Date().toISOString().split('T')[0]}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
@@ -613,6 +630,12 @@ const ProductManager = ({ user }) => {
                 
                 <div className="flex gap-2 flex-wrap justify-end w-full md:w-auto">
                     <Button onClick={handleImportClick} variant="secondary" disabled={isImporting}><Upload className="mr-2" size={16} /> Update via CSV</Button>
+                    
+                    {/* NEW: Export ALL Products Button */}
+                    <Button onClick={() => handleBulkExport(true)} variant="secondary" title="Export ALL products to CSV template">
+                        <Download className="mr-2" size={16} /> Export ALL CSV
+                    </Button>
+                    
                     <Button onClick={handleScanForDuplicates} variant="secondary" title="Find duplicate products"><CheckSquare className="mr-2" size={16}/> Dedupe</Button>
                     {!isEditing && (
                         <Button onClick={handleAddNew} variant="primary">
@@ -756,47 +779,59 @@ const ProductManager = ({ user }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                        {/* Filter out any product missing an ID before rendering */}
-                        {filteredProducts
-                            .filter(p => p.id)
-                            .map((p) => (
-                            <tr key={p.id} className={`hover:bg-gray-50 ${selectedIds.has(p.id) ? 'bg-orange-50' : ''}`}>
-                                <td className="px-6 py-4 w-10">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={selectedIds.has(p.id)} 
-                                        onChange={() => toggleSelection(p.id)}
-                                        className="w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
-                                    />
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="text-sm font-bold text-gray-900">{p.name}</div>
-                                    <div className="text-xs text-gray-500">
-                                        {p.category} | Ref: {p.Refrigerant || '-'} | Max Temp: {p.max_temp_c || '-'}°C
-                                    </div>
-                                </td>
-                                
-                                <td className="px-6 py-4 text-right text-sm text-gray-500">
-                                    <span className="font-semibold text-gray-700">
-                                        {p.kW_DHW_Nominal ? `${p.kW_DHW_Nominal} kW` : '-'}
-                                    </span>
-                                </td>
-                                
-                                <td className="px-6 py-4 text-right text-sm text-gray-500">
-                                    <span className="font-semibold text-gray-700">
-                                        {p.kW_Cooling_Nominal > 0 ? `${p.kW_Cooling_Nominal} kW` : (p.isReversible ? '0 kW' : '-')}
-                                    </span>
-                                </td>
+                        {/* Iterate over sorted power supply groups */}
+                        {Object.keys(groupedProducts).sort().map(groupKey => (
+                            <React.Fragment key={groupKey}>
+                                {/* GROUP HEADER ROW */}
+                                <tr className="bg-gray-100 sticky top-0 border-t-2 border-orange-300"> 
+                                    <td colSpan="6" className="px-6 py-2 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                        Power Supply Group: {groupKey}
+                                    </td>
+                                </tr>
 
-                                <td className="px-6 py-4 text-right text-sm font-bold text-gray-900">
-                                    ${p.salesPriceUSD?.toLocaleString()}
-                                </td>
-                                
-                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                    <button onClick={() => handleEdit(p)} className="text-indigo-600 hover:text-indigo-900 mr-4" title="Edit Product"><Edit size={18}/></button>
-                                    <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900" title="Delete Product"><Trash2 size={18}/></button>
-                                </td>
-                            </tr>
+                                {/* Iterate over products within the group */}
+                                {groupedProducts[groupKey]
+                                    .filter(p => p.id)
+                                    .map((p) => (
+                                    <tr key={p.id} className={`hover:bg-gray-50 ${selectedIds.has(p.id) ? 'bg-orange-50' : ''}`}>
+                                        <td className="px-6 py-4 w-10">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedIds.has(p.id)} 
+                                                onChange={() => toggleSelection(p.id)}
+                                                className="w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
+                                            />
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="text-sm font-bold text-gray-900">{p.name}</div>
+                                            <div className="text-xs text-gray-500">
+                                                {p.category} | Ref: {p.Refrigerant || '-'} | Max Temp: {p.max_temp_c || '-'}°C
+                                            </div>
+                                        </td>
+                                        
+                                        <td className="px-6 py-4 text-right text-sm text-gray-500">
+                                            <span className="font-semibold text-gray-700">
+                                                {p.kW_DHW_Nominal ? `${p.kW_DHW_Nominal} kW` : '-'}
+                                            </span>
+                                        </td>
+                                        
+                                        <td className="px-6 py-4 text-right text-sm text-gray-500">
+                                            <span className="font-semibold text-gray-700">
+                                                {p.kW_Cooling_Nominal > 0 ? `${p.kW_Cooling_Nominal} kW` : (p.isReversible ? '0 kW' : '-')}
+                                            </span>
+                                        </td>
+
+                                        <td className="px-6 py-4 text-right text-sm font-bold text-gray-900">
+                                            ${p.salesPriceUSD?.toLocaleString()}
+                                        </td>
+                                        
+                                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                            <button onClick={() => handleEdit(p)} className="text-indigo-600 hover:text-indigo-900 mr-4" title="Edit Product"><Edit size={18}/></button>
+                                            <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900" title="Delete Product"><Trash2 size={18}/></button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </React.Fragment>
                         ))}
                     </tbody>
                 </table>
@@ -813,9 +848,9 @@ const ProductManager = ({ user }) => {
                     
                     <div className="h-4 w-px bg-gray-600"></div>
                     
-                    <button onClick={handleBulkExport} className="flex items-center gap-2 hover:text-green-400 transition-colors">
+                    <button onClick={() => handleBulkExport(false)} className="flex items-center gap-2 hover:text-green-400 transition-colors">
                         <Download size={18} />
-                        <span className="text-sm font-bold">Export CSV</span>
+                        <span className="text-sm font-bold">Export Selected CSV</span>
                     </button>
 
                     <button onClick={handleBulkDelete} className="flex items-center gap-2 hover:text-red-400 transition-colors">
