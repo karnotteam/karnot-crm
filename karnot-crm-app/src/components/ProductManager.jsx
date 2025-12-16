@@ -96,20 +96,71 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
         <div className={`p-2 rounded-lg bg-${color}-100 text-${color}-600`}>
           <Icon size={18} />
         </div>
-        <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
+        <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded uppercase">
           {percentage}%
         </span>
       </div>
       <div>
-        <p className="text-[10px] text-gray-500 font-bold uppercase truncate mb-1">{label}</p>
+        <p className="text-[10px] text-gray-500 font-bold uppercase truncate leading-tight mb-1">{label}</p>
         <p className="text-xl font-black text-gray-800 leading-none">{count}</p>
       </div>
     </div>
   );
 };
 
-// ... [DuplicateResolverModal remains the same as your version] ...
+// ----------------------------------------------------------------------
+// --- 2. Helper: Duplicate Resolver Modal ---
+// ----------------------------------------------------------------------
+const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
+  const [selectedToDelete, setSelectedToDelete] = useState(new Set());
+  const toggleSelection = (id) => {
+    const newSet = new Set(selectedToDelete);
+    if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+    setSelectedToDelete(newSet);
+  };
+  const handleAutoSelect = () => {
+    const newSet = new Set();
+    duplicates.forEach(group => {
+      const sortedItems = [...group.items].sort((a, b) => (a.salesPriceUSD || 0) - (b.salesPriceUSD || 0));
+      for (let i = 1; i < sortedItems.length; i++) newSet.add(sortedItems[i].id);
+    });
+    setSelectedToDelete(newSet);
+  };
+  const handleResolve = () => {
+    if (window.confirm(`Delete ${selectedToDelete.size} duplicates?`)) onResolve(Array.from(selectedToDelete));
+  };
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
+      <Card className="w-full max-w-3xl max-h-[80vh] flex flex-col shadow-2xl">
+        <div className="flex justify-between items-center mb-4 border-b pb-2">
+          <h3 className="text-xl font-bold flex items-center gap-2"><AlertTriangle className="text-orange-500" /> Duplicates Found</h3>
+          <button onClick={onClose}><X /></button>
+        </div>
+        <div className="overflow-y-auto flex-1 space-y-4 p-2">
+          {duplicates.map((group, i) => (
+            <div key={i} className="border rounded-lg overflow-hidden">
+              <div className="bg-orange-50 px-4 py-2 text-xs font-bold text-orange-800 uppercase tracking-widest">{group.key}</div>
+              {group.items.map(p => (
+                <div key={p.id} className="flex items-center gap-3 p-3 border-t">
+                  <input type="checkbox" checked={selectedToDelete.has(p.id)} onChange={() => toggleSelection(p.id)} />
+                  <div className="text-sm font-bold">{p.name} (${p.salesPriceUSD})</div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 pt-4 border-t flex justify-end gap-2">
+          <Button onClick={handleAutoSelect} variant="secondary">Auto-Select</Button>
+          <Button onClick={handleResolve} variant="danger">Delete Selected ({selectedToDelete.size})</Button>
+        </div>
+      </Card>
+    </div>
+  );
+};
 
+// ----------------------------------------------------------------------
+// --- 3. Main Product Manager Component ---
+// ----------------------------------------------------------------------
 const ProductManager = ({ user }) => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -151,10 +202,20 @@ const ProductManager = ({ user }) => {
     return { total: products.length, categories };
   }, [products]);
 
+  const categoriesInDropdown = useMemo(() => {
+    const existing = Object.keys(stats.categories);
+    const presets = Object.keys(CATEGORY_MAP);
+    return Array.from(new Set([...presets, ...existing])).sort();
+  }, [stats.categories]);
+
   const filteredProducts = useMemo(() => {
     const term = (searchTerm || '').toLowerCase();
     let list = activeFilter === 'ALL' ? products : products.filter(p => p.category === activeFilter);
-    return list.filter(p => (p.name || '').toLowerCase().includes(term) || (p.category || '').toLowerCase().includes(term));
+    return list.filter(p => 
+        (p.name || '').toLowerCase().includes(term) || 
+        (p.category || '').toLowerCase().includes(term) ||
+        (p.Order_Reference || '').toLowerCase().includes(term)
+    );
   }, [products, searchTerm, activeFilter]);
 
   const groupedProducts = useMemo(() => {
@@ -165,6 +226,12 @@ const ProductManager = ({ user }) => {
       return acc;
     }, {});
   }, [filteredProducts]);
+
+  const handleEdit = (product) => {
+    setIsEditing(true); setEditId(product.id);
+    setFormData({ ...defaultFormData, ...product, id: product.id });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleSave = async () => {
     if (!user || !formData.name || Number(formData.salesPriceUSD) <= 0) {
@@ -181,6 +248,46 @@ const ProductManager = ({ user }) => {
     } catch (e) { alert("Save error: " + e.message); }
   };
 
+  const handleDelete = async (id) => {
+    if (!user) return;
+    if (window.confirm("Delete this product?")) {
+      await deleteDoc(doc(db, "users", user.uid, "products", id));
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    const pin = prompt("DANGER! Enter password to delete ALL products:");
+    if (pin !== PASSWORD) return alert("Wrong password.");
+    if (!window.confirm("Confirm deletion of ALL data?")) return;
+    const batch = writeBatch(db);
+    products.forEach(p => batch.delete(doc(db, "users", user.uid, "products", p.id)));
+    await batch.commit(); alert("Inventory cleared.");
+  };
+
+  const handleBulkExport = (all = false) => {
+    const list = all ? products : products.filter(p => selectedIds.has(p.id));
+    if (!list.length) return alert("Nothing to export.");
+    const csv = Papa.unparse(list);
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `karnot_inventory_${all ? 'all' : 'selected'}.csv`;
+    link.click();
+  };
+
+  const handleSelectAll = () => {
+    const allVisibleIds = filteredProducts.map(p => p.id);
+    const allSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selectedIds.has(id));
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(allVisibleIds));
+  };
+
+  const toggleSelection = (id) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+    setSelectedIds(newSet);
+  };
+
   const handleBulkDelete = async () => {
     if (!user || !window.confirm(`Delete ${selectedIds.size} products?`)) return;
     const batch = writeBatch(db);
@@ -188,14 +295,13 @@ const ProductManager = ({ user }) => {
     await batch.commit(); setSelectedIds(new Set()); alert("Deleted.");
   };
 
-  const handleBulkExport = (all = false) => {
-    const list = all ? products : products.filter(p => selectedIds.has(p.id));
-    const csv = Papa.unparse(list);
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `karnot_inventory.csv`;
-    link.click();
+  const handleInputChange = (field) => (e) => {
+    const { value, checked, type } = e.target;
+    if (type === 'checkbox') { setFormData(prev => ({ ...prev, [field]: checked })); return; }
+    const isNumeric = ['costPriceUSD', 'salesPriceUSD', 'kW_DHW_Nominal', 'COP_DHW', 'kW_Cooling_Nominal', 'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current', 'Sound_Power_Level', 'Net_Weight', 'Gross_Weight'].includes(field);
+    let finalValue = value;
+    if (isNumeric) finalValue = value === '' ? 0 : parseFloat(value);
+    setFormData(prev => ({ ...prev, [field]: finalValue }));
   };
 
   if (loading) return <div className="p-8 text-center font-bold text-orange-600">Syncing Inventory...</div>;
@@ -205,7 +311,7 @@ const ProductManager = ({ user }) => {
       {/* --- Uniform Stat Grid --- */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
         <StatBadge
-          icon={Package} label="All Products" count={stats.total} total={stats.total} color="gray"
+          icon={Package} label="All Assets" count={stats.total} total={stats.total} color="gray"
           active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')}
         />
         {Object.entries(CATEGORY_MAP).filter(([l]) => l !== 'Uncategorized').map(([label, config]) => (
@@ -221,14 +327,13 @@ const ProductManager = ({ user }) => {
         <div className="relative flex-1 w-full">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input
-            type="text" placeholder="Search by name or SKU..." value={searchTerm}
+            type="text" placeholder="Search by name, SKU or refrigerant..." value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-12 pr-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-orange-500 font-medium"
           />
         </div>
         
         <div className="flex flex-wrap items-center gap-2">
-          {/* Category Quick Switcher */}
           <div className="relative">
             <select
               value={activeFilter}
@@ -236,20 +341,21 @@ const ProductManager = ({ user }) => {
               className="appearance-none pl-4 pr-10 py-3 bg-gray-100 border-none rounded-xl font-bold text-xs uppercase focus:ring-2 focus:ring-orange-500 cursor-pointer"
             >
               <option value="ALL">All Categories</option>
-              {Object.keys(stats.categories).sort().map(c => <option key={c} value={c}>{c}</option>)}
+              {categoriesInDropdown.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
           </div>
 
-          <Button onClick={() => fileInputRef.current.click()} variant="secondary" className="!py-3 text-xs uppercase font-black tracking-widest"><Upload size={14} className="mr-2"/> Import</Button>
-          <Button onClick={() => handleBulkExport(true)} variant="secondary" className="!py-3 text-xs uppercase font-black tracking-widest"><Download size={14} className="mr-2"/> Export All</Button>
-          <Button onClick={() => { setIsEditing(true); setEditId(null); setFormData({...defaultFormData, id: `prod_${Date.now()}`})}} variant="primary" className="!py-3 text-xs uppercase font-black tracking-widest"><Plus size={14} className="mr-2"/> Add New</Button>
+          <Button onClick={() => fileInputRef.current.click()} variant="secondary" className="!py-3 text-xs font-black uppercase tracking-widest"><Upload size={14} className="mr-2"/> Import</Button>
+          <Button onClick={() => handleBulkExport(true)} variant="secondary" className="!py-3 text-xs font-black uppercase tracking-widest"><Download size={14} className="mr-2"/> Export All</Button>
+          <Button onClick={() => { setIsEditing(true); setEditId(null); setFormData({...defaultFormData, id: `prod_${Date.now()}`})}} variant="primary" className="!py-3 text-xs font-black uppercase tracking-widest"><Plus size={14} className="mr-2"/> Add New</Button>
+          <Button onClick={handleDeleteAll} variant="danger" className="!py-3 text-xs px-2"><Trash2 size={14}/></Button>
         </div>
       </div>
 
-      <input type="file" ref={fileInputRef} onChange={(e) => {/* Import logic handled in handleFileChange */}} accept=".csv" className="hidden" />
+      <input type="file" ref={fileInputRef} onChange={(e) => {/* logic in handler */}} accept=".csv" className="hidden" />
 
-      {/* --- FORM WITH PRESET DROPDOWN --- */}
+      {/* --- EDITOR FORM --- */}
       {isEditing && (
         <Card className="bg-orange-50 border-orange-200 mb-8 p-6 shadow-lg animate-in fade-in zoom-in-95">
           <div className="flex justify-between items-center mb-6">
@@ -261,8 +367,6 @@ const ProductManager = ({ user }) => {
             <div className="md:col-span-2">
               <Input label="Full Product Name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
             </div>
-
-            {/* PRESET CATEGORY DROPDOWN */}
             <div className="flex flex-col gap-1">
                 <label className="text-[10px] font-black text-orange-700 uppercase tracking-widest mb-1">Category</label>
                 <select 
@@ -275,15 +379,14 @@ const ProductManager = ({ user }) => {
                     ))}
                 </select>
             </div>
-
             <Input label="System ID" value={formData.id} onChange={(e) => setFormData({...formData, id: e.target.value})} disabled={!!editId} />
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-             <Input label="Price (USD)" type="number" value={formData.salesPriceUSD} onChange={(e) => setFormData({...formData, salesPriceUSD: e.target.value})} />
-             <Input label="Heating (kW)" type="number" value={formData.kW_DHW_Nominal} onChange={(e) => setFormData({...formData, kW_DHW_Nominal: e.target.value})} />
-             <Input label="Cooling (kW)" type="number" value={formData.kW_Cooling_Nominal} onChange={(e) => setFormData({...formData, kW_Cooling_Nominal: e.target.value})} />
-             <Input label="COP" type="number" value={formData.COP_DHW} onChange={(e) => setFormData({...formData, COP_DHW: e.target.value})} />
+             <Input label="Price (USD)" type="number" value={formData.salesPriceUSD} onChange={handleInputChange('salesPriceUSD')} />
+             <Input label="Heating (kW)" type="number" value={formData.kW_DHW_Nominal} onChange={handleInputChange('kW_DHW_Nominal')} />
+             <Input label="Cooling (kW)" type="number" value={formData.kW_Cooling_Nominal} onChange={handleInputChange('kW_Cooling_Nominal')} />
+             <Input label="COP" type="number" value={formData.COP_DHW} onChange={handleInputChange('COP_DHW')} />
           </div>
 
           <div className="flex justify-end gap-3 pt-6 border-t border-orange-200">
@@ -293,9 +396,68 @@ const ProductManager = ({ user }) => {
         </Card>
       )}
 
-      {/* --- TABLE LIST --- [Keep your Table JSX here, it works well] ... */}
-      {/* [The rest of the Table code from your version goes here] */}
-      
+      {/* --- TABLE LIST --- */}
+      <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+        <table className="min-w-full divide-y divide-gray-100">
+          <thead className="bg-gray-50/50">
+            <tr>
+              <th className="px-6 py-4 w-10">
+                <input type="checkbox" checked={filteredProducts.length > 0 && selectedIds.size === filteredProducts.length} onChange={handleSelectAll} className="rounded text-orange-600 focus:ring-orange-500" />
+              </th>
+              <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Product Details</th>
+              <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Power (kW)</th>
+              <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Price (USD)</th>
+              <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Action</th>
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-gray-50">
+            {Object.keys(groupedProducts).sort().map(groupKey => (
+              <React.Fragment key={groupKey}>
+                <tr className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm border-y border-slate-100">
+                  <td colSpan="5" className="px-6 py-2.5 text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
+                    🔌 Power Configuration: {groupKey}
+                  </td>
+                </tr>
+
+                {groupedProducts[groupKey].map((p) => (
+                  <tr key={p.id} className={`group hover:bg-orange-50/30 ${selectedIds.has(p.id) ? 'bg-orange-50/50' : ''}`}>
+                    <td className="px-6 py-4"><input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelection(p.id)} className="rounded text-orange-600" /></td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm font-black text-gray-900 leading-tight">{p.name}</div>
+                      <div className="text-[10px] text-gray-400 mt-1 font-bold uppercase tracking-wider">{p.category} • {p.Refrigerant || 'N/A'}</div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="text-sm font-black text-gray-700">{p.kW_DHW_Nominal ? `${p.kW_DHW_Nominal} kW` : '-'}</div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="text-sm font-black text-orange-600 font-mono">${p.salesPriceUSD?.toLocaleString()}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex justify-center gap-2">
+                        <button onClick={() => handleEdit(p)} className="p-2 bg-white shadow-sm border border-gray-100 rounded-lg text-indigo-600 hover:bg-indigo-50"><Edit size={16}/></button>
+                        <button onClick={() => handleDelete(p.id)} className="p-2 bg-white shadow-sm border border-gray-100 rounded-lg text-red-600 hover:bg-red-50"><Trash2 size={16}/></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* --- Floating selection bar --- */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 z-40 animate-in slide-in-from-bottom-8">
+          <span className="text-sm font-bold">{selectedIds.size} Selected</span>
+          <div className="h-8 w-px bg-gray-700" />
+          <div className="flex gap-2">
+            <Button onClick={() => handleBulkExport(false)} variant="success" className="!py-2 !px-4 text-xs font-black uppercase">Export Selected</Button>
+            <Button onClick={handleBulkDelete} variant="danger" className="!py-2 !px-4 text-xs font-black uppercase">Delete Selected</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
