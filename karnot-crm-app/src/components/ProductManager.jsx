@@ -5,6 +5,8 @@ import Papa from 'papaparse'; 
 import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Plug, Upload, AlertTriangle, CheckSquare, Download, Filter, Sun, Thermometer, Box } from 'lucide-react'; 
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants';
 
+const PASSWORD = "Edmund18931!"; // SECURITY CONSTANT
+
 // --- Default Category Icons and Colors for Stat Badges ---
 const CATEGORY_MAP = {
     'Heat Pump': { icon: Thermometer, color: 'orange' },
@@ -24,9 +26,10 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     
     return (
+        // UI FIX: Added flex-1 and min-w-[200px] here to ensure consistent sizing/wrapping
         <div 
             onClick={onClick}
-            className={`cursor-pointer p-3 rounded-xl border transition-all duration-200 flex items-center justify-between gap-3
+            className={`cursor-pointer flex-1 min-w-[200px] p-3 rounded-xl border transition-all duration-200 flex items-center justify-between gap-3
                 ${active ? `bg-${color}-100 border-${color}-500 ring-2 ring-${color}-400` : 'bg-white border-gray-200 hover:border-orange-300 hover:shadow-md'}
             `}
         >
@@ -324,6 +327,35 @@ const ProductManager = ({ user }) => {
             }
         }
     };
+
+    // NEW FUNCTION: Securely delete all products
+    const handleDeleteAll = async () => {
+        const confirmedPassword = prompt("WARNING! This will permanently delete ALL products. Enter the security password to proceed:");
+
+        if (confirmedPassword !== PASSWORD) {
+            alert("Incorrect password or operation cancelled.");
+            return;
+        }
+
+        if (!window.confirm(`FINAL CONFIRMATION: Are you absolutely sure you want to delete ALL ${products.length} products? This cannot be undone.`)) {
+            return;
+        }
+        
+        // Execute bulk delete logic
+        const batch = writeBatch(db);
+        products.forEach(p => {
+            const ref = doc(db, "users", user.uid, "products", p.id);
+            batch.delete(ref);
+        });
+
+        try {
+            await batch.commit();
+            alert("SUCCESS: All products have been deleted.");
+        } catch (error) {
+            console.error("Error deleting all products:", error);
+            alert("Failed to delete all products.");
+        }
+    };
     
     const handleInputChange = (field) => (e) => {
         const { value, checked, type } = e.target;
@@ -586,8 +618,8 @@ const ProductManager = ({ user }) => {
         <div className="w-full pb-20"> 
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
 
-            {/* --- STAT BADGES / CATEGORY FILTER --- */}
-            <div className="flex flex-row gap-4 mb-8 overflow-x-auto pb-3">
+            {/* --- STAT BADGES / CATEGORY FILTER (UI FIX: flex-wrap for two lines) --- */}
+            <div className="flex flex-wrap gap-4 mb-8 pb-3"> 
                 <StatBadge 
                     icon={Package} 
                     label="All Products" 
@@ -606,17 +638,16 @@ const ProductManager = ({ user }) => {
                     const dynamicColor = map.color || ['orange', 'blue', 'green', 'purple'][index % 4];
 
                     return (
-                        <div key={cat} className="flex-shrink-0 w-[220px] md:w-auto">
-                            <StatBadge 
-                                icon={map.icon} 
-                                label={cat} 
-                                count={stats.categories[cat] || 0} 
-                                total={stats.total} 
-                                color={dynamicColor} 
-                                active={activeFilter === cat} 
-                                onClick={() => handleCategoryFilter(cat)} 
-                            />
-                        </div>
+                        <StatBadge 
+                            key={cat}
+                            icon={map.icon} 
+                            label={cat} 
+                            count={stats.categories[cat] || 0} 
+                            total={stats.total} 
+                            color={dynamicColor} 
+                            active={activeFilter === cat} 
+                            onClick={() => handleCategoryFilter(cat)} 
+                        />
                     );
                 })}
             </div>
@@ -642,6 +673,11 @@ const ProductManager = ({ user }) => {
                             <Plus size={16} className="mr-2"/> Add New Product
                         </Button>
                     )}
+                    
+                    {/* NEW: DELETE ALL BUTTON with Password */}
+                    <Button onClick={handleDeleteAll} variant="danger" title="DANGER: Permanently delete ALL products (requires password)">
+                        <Trash2 className="mr-2" size={16}/> DELETE ALL
+                    </Button>
                 </div>
             </div>
 
@@ -779,7 +815,7 @@ const ProductManager = ({ user }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                        {/* Iterate over sorted power supply groups */}
+                        {/* Iterate over sorted power supply groups (GROUPING FIX) */}
                         {Object.keys(groupedProducts).sort().map(groupKey => (
                             <React.Fragment key={groupKey}>
                                 {/* GROUP HEADER ROW */}
