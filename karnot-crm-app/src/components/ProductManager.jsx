@@ -3,7 +3,6 @@ import { db } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import Papa from 'papaparse'; 
 import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Plug, Upload, AlertTriangle, CheckSquare, Download, Filter, Sun, Thermometer, Box } from 'lucide-react'; 
-// CORRECTED: Added Textarea to the imports
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants';
 
 // --- Default Category Icons and Colors for Stat Badges ---
@@ -381,13 +380,13 @@ const ProductManager = ({ user }) => {
             "System ID": p.id,
             "Product Name": p.name,
             "Category": p.category,
-            "Sales Price": p.salesPriceUSD,      // Simplified to match import map
-            "Cost Price": p.costPriceUSD,        // Simplified to match import map
+            "Sales Price": p.salesPriceUSD,      
+            "Cost Price": p.costPriceUSD,        
             "kW_DHW_Nominal": p.kW_DHW_Nominal,
             "kW_Cooling_Nominal": p.kW_Cooling_Nominal,
             "COP_DHW": p.COP_DHW,
             "SCOP_DHW_Avg": p.SCOP_DHW_Avg,
-            "Max Temp": p.max_temp_c,            // Simplified to match import map
+            "Max Temp": p.max_temp_c,            
             "Refrigerant": p.Refrigerant,
             "Power Supply": p.Power_Supply,
             "Rated Power Input": p.Rated_Power_Input,
@@ -407,8 +406,8 @@ const ProductManager = ({ user }) => {
             "Fan Details": p.Fan_Details,
             "Air Flow": p.Air_Flow,
             "Certificates": p.Certificates,
-            "Net Weight": p.Net_Weight,          // Simplified to match import map
-            "Gross Weight": p.Gross_Weight,      // Simplified to match import map
+            "Net Weight": p.Net_Weight,          
+            "Gross Weight": p.Gross_Weight,      
             "Unit Dimensions": p.Unit_Dimensions,
             "Order Reference": p.Order_Reference,
             "Specs": p.specs,
@@ -447,61 +446,36 @@ const ProductManager = ({ user }) => {
                 let notFoundCount = 0;
                 const productsRef = collection(db, "users", user.uid, "products");
                 
-                // Fields to map from CSV to Firestore (key is CSV name part, value is Firestore key)
                 const fieldMappings = {
-                    'system id': 'id',
-                    'product name': 'name',
-                    'category': 'category',
-                    'sales price': 'salesPriceUSD',
-                    'cost price': 'costPriceUSD',
-                    'kw_dhw_nominal': 'kW_DHW_Nominal',
-                    'kw_cooling_nominal': 'kW_Cooling_Nominal',
-                    'cop_dhw': 'COP_DHW',
-                    'scop_dhw_avg': 'SCOP_DHW_Avg',
-                    'max temp': 'max_temp_c',
-                    'refrigerant': 'Refrigerant',
-                    'power supply': 'Power_Supply',
-                    'rated power input': 'Rated_Power_Input',
-                    'max running current': 'Max_Running_Current',
-                    'sound power level': 'Sound_Power_Level',
-                    'outdoor air temp range': 'Outdoor_Air_Temp_Range',
-                    'recommended breaker': 'Recommended_Breaker',
-                    'refrigerant charge': 'Refrigerant_Charge',
-                    'rated water pressure': 'Rated_Water_Pressure',
-                    'evaporating temp nominal': 'Evaporating_Temp_Nominal',
-                    'ambient temp nominal': 'Ambient_Temp_Nominal',
-                    'suction connection': 'Suction_Connection',
-                    'liquid connection': 'Liquid_Connection',
-                    'suitable compressor': 'Suitable_Compressor',
-                    'type of oil': 'Type_of_Oil',
-                    'receiver volume': 'Receiver_Volume',
-                    'fan details': 'Fan_Details',
-                    'air flow': 'Air_Flow',
-                    'certificates': 'Certificates',
-                    'net weight': 'Net_Weight',
-                    'gross weight': 'Gross_Weight',
-                    'unit dimensions': 'Unit_Dimensions',
-                    'order reference': 'Order_Reference',
-                    'specs': 'specs',
+                    'system id': 'id', 'product name': 'name', 'category': 'category', 'sales price': 'salesPriceUSD', 
+                    'cost price': 'costPriceUSD', 'kw_dhw_nominal': 'kW_DHW_Nominal', 'kw_cooling_nominal': 'kW_Cooling_Nominal',
+                    'cop_dhw': 'COP_DHW', 'scop_dhw_avg': 'SCOP_DHW_Avg', 'max temp': 'max_temp_c',
+                    'refrigerant': 'Refrigerant', 'power supply': 'Power_Supply', 'rated power input': 'Rated_Power_Input', 
+                    'max running current': 'Max_Running_Current', 'sound power level': 'Sound_Power_Level', 
+                    'outdoor air temp range': 'Outdoor_Air_Temp_Range', 'recommended breaker': 'Recommended_Breaker', 
+                    'refrigerant charge': 'Refrigerant_Charge', 'rated water pressure': 'Rated_Water_Pressure', 
+                    'evaporating temp nominal': 'Evaporating_Temp_Nominal', 'ambient temp nominal': 'Ambient_Temp_Nominal', 
+                    'suction connection': 'Suction_Connection', 'liquid connection': 'Liquid_Connection', 
+                    'suitable compressor': 'Suitable_Compressor', 'type of oil': 'Type_of_Oil', 
+                    'receiver volume': 'Receiver_Volume', 'fan details': 'Fan_Details', 'air flow': 'Air_Flow', 
+                    'certificates': 'Certificates', 'net weight': 'Net_Weight', 'gross weight': 'Gross_Weight', 
+                    'unit dimensions': 'Unit_Dimensions', 'order reference': 'Order_Reference', 'specs': 'specs',
                 };
                 
                 const numericFields = ['salesPriceUSD', 'costPriceUSD', 'kW_DHW_Nominal', 'kW_Cooling_Nominal', 'COP_DHW', 'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current', 'Sound_Power_Level', 'Net_Weight', 'Gross_Weight'];
 
                 dataRows.forEach(row => {
-                    // Try matching by System ID or Product Name from CSV
                     const csvSystemId = (row['System ID'] || row['id'])?.trim();
                     const csvProductName = (row['Product Name'] || row['name'])?.trim();
                     
                     if (!csvSystemId && !csvProductName) return;
 
-                    // Match product locally to get existing ID
                     const match = products.find(p => p.id === csvSystemId) || products.find(p => p.name?.toLowerCase() === csvProductName?.toLowerCase());
                     
                     if (match) {
                         const ref = doc(productsRef, match.id);
                         const updateData = { lastModified: serverTimestamp() };
                         
-                        // Iterate through CSV row keys to find matches
                         Object.keys(row).forEach(csvHeader => {
                             const normalizedHeader = csvHeader.toLowerCase().trim();
                             const firestoreKey = fieldMappings[normalizedHeader];
@@ -515,18 +489,15 @@ const ProductManager = ({ user }) => {
                                         updateData[firestoreKey] = parsedValue;
                                     }
                                 } else if (value.trim() !== '') {
-                                    // For non-numeric, non-empty strings
                                     updateData[firestoreKey] = value;
                                 }
                             }
                         });
 
-                        // Only proceed if there are updates other than lastModified
                         if (Object.keys(updateData).length > 1) {
                             batch.update(ref, updateData);
                             updatedCount++;
                         }
-                        
                     } else {
                         notFoundCount++;
                     }
@@ -540,7 +511,7 @@ const ProductManager = ({ user }) => {
                     alert("Failed to update products from CSV.");
                 }
                 setIsImporting(false);
-                event.target.value = null; // Clear file input
+                event.target.value = null;
             },
             error: () => { alert("Failed to parse CSV."); setIsImporting(false); }
         });
@@ -554,12 +525,10 @@ const ProductManager = ({ user }) => {
         const lowerSearchTerm = (searchTerm || '').toLowerCase();
         let list = products || [];
 
-        // Apply Category Filter
         if (activeFilter !== 'ALL') {
             list = list.filter(p => p.category === activeFilter);
         }
 
-        // Apply Search Filter
         return list.filter(p => 
             (p.name || '').toLowerCase().includes(lowerSearchTerm) || 
             (p.category || '').toLowerCase().includes(lowerSearchTerm) ||
@@ -570,7 +539,6 @@ const ProductManager = ({ user }) => {
 
     if (loading) return <div className="p-4 text-center">Loading Products...</div>;
 
-    // Filter categories to show only those present in the data, plus ALL
     const categoriesToShow = useMemo(() => {
         const productCategories = Object.keys(stats.categories).filter(c => c !== 'Uncategorized').sort();
         const predefinedCategories = Object.keys(CATEGORY_MAP).filter(c => c !== 'Uncategorized');
@@ -596,10 +564,11 @@ const ProductManager = ({ user }) => {
                     onClick={() => handleCategoryFilter('ALL')} 
                 />
                 
-                {/* Dynamically render category badges */}
-                {categoriesToShow.map((cat, index) => {
+                {/* FIX: Robustly render dynamic category badges, filtering out null/undefined categories */}
+                {categoriesToShow
+                    .filter(cat => cat)
+                    .map((cat, index) => {
                     const map = CATEGORY_MAP[cat] || CATEGORY_MAP['Uncategorized'];
-                    // Use a simple, non-dynamic color array for the badges not in CATEGORY_MAP
                     const dynamicColor = map.color || ['orange', 'blue', 'green', 'purple'][index % 4];
 
                     return (
@@ -727,7 +696,7 @@ const ProductManager = ({ user }) => {
                     </div>
                     
                     <div className="md:col-span-4 mb-4">
-                        {/* CORRECTED: Using the imported Textarea component */}
+                        {/* Correctly using the imported Textarea component */}
                         <Textarea
                             label="Specs / Description"
                             rows="2"
@@ -770,7 +739,10 @@ const ProductManager = ({ user }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                        {filteredProducts.map((p) => (
+                        {/* FIX: Filter out any product missing an ID before rendering */}
+                        {filteredProducts
+                            .filter(p => p.id)
+                            .map((p) => (
                             <tr key={p.id} className={`hover:bg-gray-50 ${selectedIds.has(p.id) ? 'bg-orange-50' : ''}`}>
                                 <td className="px-6 py-4 w-10">
                                     <input 
