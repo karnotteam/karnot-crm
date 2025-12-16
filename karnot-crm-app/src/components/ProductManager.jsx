@@ -6,7 +6,7 @@ import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Pl
 import { Card, Button, Input, Checkbox } from '../data/constants';
 
 // ----------------------------------------------------------------------
-// --- 1. Helper: Stat Badge (Unchanged) ---
+// --- 1. Helper: Stat Badge (For Category Filtering) ---
 // ----------------------------------------------------------------------
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
@@ -31,7 +31,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
 };
 
 // ----------------------------------------------------------------------
-// --- 2. Helper: Duplicate Resolver Modal (Unchanged) ---
+// --- 2. Helper: Duplicate Resolver Modal (Adapted for Products) ---
 // ----------------------------------------------------------------------
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
@@ -47,13 +47,16 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
         const newSet = new Set();
         let count = 0;
         duplicates.forEach(group => {
+            // Auto-select items that are NOT the one with the lowest sales price, or just the newer ones if prices are equal.
             const sortedItems = [...group.items].sort((a, b) => {
                 const priceDiff = (a.salesPriceUSD || 0) - (b.salesPriceUSD || 0);
                 if (priceDiff !== 0) return priceDiff;
+                // If prices are the same, keep the older record (assuming it's the master)
                 const timeA = a.createdAt?.seconds || 0;
                 const timeB = b.createdAt?.seconds || 0;
                 return timeA - timeB; 
             });
+            // Select all but the first (the keeper)
             for (let i = 1; i < sortedItems.length; i++) {
                 newSet.add(sortedItems[i].id);
                 count++;
@@ -147,6 +150,7 @@ const ProductManager = ({ user }) => {
         Liquid_Connection: '', Suitable_Compressor: '', Type_of_Oil: '', Receiver_Volume: '', 
         Fan_Details: '', Air_Flow: '', Certificates: '', max_temp_c: 75, isReversible: true,
         Unit_Dimensions: '', Net_Weight: 0, Gross_Weight: 0, Order_Reference: '',
+        // Add createdAt for dedupe logic consistency (will be overwritten by serverTimestamp on save)
         createdAt: null 
     };
     const [formData, setFormData] = useState(defaultFormData);
@@ -164,17 +168,18 @@ const ProductManager = ({ user }) => {
     }, [user]);
 
     // ----------------------------------------------------------------------
-    // --- CRUD and UI Handlers (largely unchanged) ---
+    // --- Handlers for CRUD Operations ---
     // ----------------------------------------------------------------------
     
     const handleEdit = (product) => {
         setIsEditing(true);
         setEditId(product.id);
         
-        // Use defaultFormData to ensure all keys exist when loading a product
+        // Load all fields, merging with defaults to ensure all keys exist
         setFormData(prev => ({
             ...defaultFormData, 
             ...product,
+            // Explicitly parse numeric values for the form inputs
             costPriceUSD: parseFloat(product.costPriceUSD || 0),
             salesPriceUSD: parseFloat(product.salesPriceUSD || 0),
             kW_DHW_Nominal: parseFloat(product.kW_DHW_Nominal || 0),
@@ -195,6 +200,7 @@ const ProductManager = ({ user }) => {
     const handleAddNew = () => {
         setIsEditing(true);
         setEditId(null);
+        // Reset form to defaults and create a new unique ID
         setFormData({
             ...defaultFormData,
             id: `prod_${Date.now()}`,
@@ -215,9 +221,8 @@ const ProductManager = ({ user }) => {
                 lastModified: serverTimestamp(),
             };
             
-            // Clean up state fields that shouldn't be saved as data fields
-            delete productData.id; 
-            delete productData.createdAt; 
+            delete productData.id; // Exclude ID from data payload since it is used as doc name
+            delete productData.createdAt; // Clean up local state field
             
             await setDoc(doc(db, "users", user.uid, "products", safeId), productData, { merge: true });
             
@@ -266,9 +271,8 @@ const ProductManager = ({ user }) => {
     const handleCancel = () => { setIsEditing(false); setEditId(null); };
     const handleSearchChange = (e) => { setSearchTerm(e.target.value); };
 
-
     // ----------------------------------------------------------------------
-    // --- CRM Feature Handlers (Dedupe, Filter, Bulk Operations) ---
+    // --- Handlers for CRM Features ---
     // ----------------------------------------------------------------------
 
     const stats = useMemo(() => {
@@ -287,7 +291,6 @@ const ProductManager = ({ user }) => {
     };
 
     const handleScanForDuplicates = () => { 
-        // ... (Dedupe logic unchanged)
         const groups = {};
         products.forEach(p => {
             const key = (p.name || '').toLowerCase().trim();
@@ -370,7 +373,6 @@ const ProductManager = ({ user }) => {
             "Category": p.category,
             "Sales Price (USD)": p.salesPriceUSD,
             "Cost Price (USD)": p.costPriceUSD,
-            // Include ALL technical data for easy re-import/new product creation
             "kW_DHW_Nominal": p.kW_DHW_Nominal,
             "kW_Cooling_Nominal": p.kW_Cooling_Nominal,
             "COP_DHW": p.COP_DHW,
@@ -408,19 +410,18 @@ const ProductManager = ({ user }) => {
         const url = URL.createObjectURL(blob);
         
         link.setAttribute("href", url);
-        // Ensure the downloaded CSV name indicates it's a template for import
-        link.setAttribute("download", `karnot_product_import_template_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute("download", `karnot_products_export_${new Date().toISOString().split('T')[0]}.csv`);
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
+    // 
 
     const handleImportClick = () => {
         fileInputRef.current.click();
     };
-    
-    // --- UPDATED LOGIC: Handles both Update (Upsert) and Insert (New) ---
+
     const handleFileChange = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -433,7 +434,7 @@ const ProductManager = ({ user }) => {
                 const dataRows = results.data;
                 const batch = writeBatch(db);
                 let updatedCount = 0;
-                let insertedCount = 0;
+                let notFoundCount = 0;
                 const productsRef = collection(db, "users", user.uid, "products");
                 
                 // Fields to map from CSV to Firestore (key is CSV name part, value is Firestore key)
@@ -447,7 +448,7 @@ const ProductManager = ({ user }) => {
                     'kw_cooling_nominal': 'kW_Cooling_Nominal',
                     'cop_dhw': 'COP_DHW',
                     'scop_dhw_avg': 'SCOP_DHW_Avg',
-                    'max hot water temp (°c)': 'max_temp_c', // Matched full header name
+                    'max temp': 'max_temp_c',
                     'refrigerant': 'Refrigerant',
                     'power supply': 'Power_Supply',
                     'rated power input': 'Rated_Power_Input',
@@ -467,11 +468,342 @@ const ProductManager = ({ user }) => {
                     'fan details': 'Fan_Details',
                     'air flow': 'Air_Flow',
                     'certificates': 'Certificates',
-                    'net weight (kg)': 'Net_Weight', // Matched full header name
-                    'gross weight (kg)': 'Gross_Weight', // Matched full header name
+                    'net weight': 'Net_Weight',
+                    'gross weight': 'Gross_Weight',
                     'unit dimensions': 'Unit_Dimensions',
                     'order reference': 'Order_Reference',
                     'specs': 'specs',
                 };
                 
-                const numericFields = ['salesPriceUSD', 'costPriceUSD', 'kW_DHW_Nominal', 'kW_Cooling_Nominal', 'COP
+                const numericFields = ['salesPriceUSD', 'costPriceUSD', 'kW_DHW_Nominal', 'kW_Cooling_Nominal', 'COP_DHW', 'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current', 'Sound_Power_Level', 'Net_Weight', 'Gross_Weight'];
+
+                dataRows.forEach(row => {
+                    // Try matching by System ID or Product Name from CSV
+                    const csvSystemId = (row['System ID'] || row['id'])?.trim();
+                    const csvProductName = (row['Product Name'] || row['name'])?.trim();
+                    
+                    if (!csvSystemId && !csvProductName) return;
+
+                    const match = products.find(p => p.id === csvSystemId) || products.find(p => p.name?.toLowerCase() === csvProductName?.toLowerCase());
+                    
+                    if (match) {
+                        const ref = doc(productsRef, match.id);
+                        const updateData = { lastModified: serverTimestamp() };
+                        
+                        // Iterate through CSV row keys to find matches
+                        Object.keys(row).forEach(csvHeader => {
+                            const normalizedHeader = csvHeader.toLowerCase().trim();
+                            const firestoreKey = fieldMappings[normalizedHeader];
+                            
+                            if (firestoreKey && row[csvHeader] !== undefined && row[csvHeader] !== null) {
+                                let value = row[csvHeader];
+                                
+                                if (numericFields.includes(firestoreKey)) {
+                                    let parsedValue = parseFloat(value);
+                                    if (!isNaN(parsedValue)) {
+                                        updateData[firestoreKey] = parsedValue;
+                                    }
+                                } else if (value.trim() !== '') {
+                                    // For non-numeric, non-empty strings
+                                    updateData[firestoreKey] = value;
+                                }
+                            }
+                        });
+
+                        // Only proceed if there are updates other than lastModified
+                        if (Object.keys(updateData).length > 1) {
+                            batch.update(ref, updateData);
+                            updatedCount++;
+                        }
+                        
+                    } else {
+                        notFoundCount++;
+                    }
+                });
+
+                try {
+                    await batch.commit();
+                    alert(`Price/Spec Update Complete!\n✅ Updated: ${updatedCount} products.\n🚫 Not Found (Skipped): ${notFoundCount} rows.`);
+                } catch (error) {
+                    console.error("Update Error:", error);
+                    alert("Failed to update products from CSV.");
+                }
+                setIsImporting(false);
+                event.target.value = null; // Clear file input
+            },
+            error: () => { alert("Failed to parse CSV."); setIsImporting(false); }
+        });
+    };
+    
+    // ----------------------------------------------------------------------
+    // --- Updated Filtered Products Logic (Includes Category Filter) ---
+    // ----------------------------------------------------------------------
+
+    const filteredProducts = useMemo(() => {
+        const lowerSearchTerm = (searchTerm || '').toLowerCase();
+        let list = products || [];
+
+        // Apply Category Filter
+        if (activeFilter !== 'ALL') {
+            list = list.filter(p => p.category === activeFilter);
+        }
+
+        // Apply Search Filter
+        return list.filter(p => 
+            (p.name || '').toLowerCase().includes(lowerSearchTerm) || 
+            (p.category || '').toLowerCase().includes(lowerSearchTerm) ||
+            (p.Order_Reference || '').toLowerCase().includes(lowerSearchTerm)
+        );
+    }, [products, searchTerm, activeFilter]);
+
+
+    if (loading) return <div className="p-4 text-center">Loading Products...</div>;
+
+    return (
+        <div className="w-full pb-20"> 
+            {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                <StatBadge icon={Package} label="All Products" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => handleCategoryFilter('ALL')} />
+                
+                {/* Dynamically render category badges */}
+                {Object.keys(stats.categories).slice(0, 4).map((cat, index) => (
+                    <StatBadge 
+                        key={cat}
+                        icon={Package} 
+                        label={cat} 
+                        count={stats.categories[cat]} 
+                        total={stats.total} 
+                        color={['orange', 'blue', 'green', 'purple'][index % 4]} 
+                        active={activeFilter === cat} 
+                        onClick={() => handleCategoryFilter(cat)} 
+                    />
+                ))}
+            </div>
+            
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-2">
+                <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    {activeFilter !== 'ALL' && <Filter size={20} className="text-orange-600"/>}
+                    {activeFilter === 'ALL' ? 'All Products' : `${activeFilter} Products`} 
+                    <span className="text-gray-400 font-normal text-base ml-2">({filteredProducts.length})</span>
+                </h3>
+                
+                <div className="flex gap-2 flex-wrap justify-end w-full md:w-auto">
+                    <Button onClick={handleImportClick} variant="secondary" disabled={isImporting}><Upload className="mr-2" size={16} /> Update via CSV</Button>
+                    <Button onClick={handleScanForDuplicates} variant="secondary" title="Find duplicate products"><CheckSquare className="mr-2" size={16}/> Dedupe</Button>
+                    {!isEditing && (
+                        <Button onClick={handleAddNew} variant="primary">
+                            <Plus size={16} className="mr-2"/> Add New Product
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" style={{ display: 'none' }} />
+            
+            {/* --- EDITOR FORM --- */}
+            {isEditing && (
+                <Card className="bg-orange-50 border-orange-200 mb-6">
+                    <h4 className="font-bold text-lg mb-4 text-orange-800">{editId ? 'Edit Product' : 'New Product'}</h4>
+                    
+                    {/* --- 1. CORE & FINANCIALS --- */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 border-b pb-4">
+                        <div className="md:col-span-2">
+                            <Input label="Product Name" value={formData.name} onChange={handleInputChange('name')} />
+                            <Input label="Order Reference / SKU" value={formData.Order_Reference} onChange={handleInputChange('Order_Reference')} />
+                        </div>
+                        <Input label="Category" value={formData.category} onChange={handleInputChange('category')} />
+                        <Input label="System ID (Unique)" value={formData.id} onChange={handleInputChange('id')} disabled={!!editId} />
+                        
+                        <Input label="Sales Price (USD)" type="number" value={formData.salesPriceUSD} onChange={handleInputChange('salesPriceUSD')} />
+                        <Input label="Cost Price (USD)" type="number" value={formData.costPriceUSD} onChange={handleInputChange('costPriceUSD')} />
+                    </div>
+
+                    {/* --- 2. PERFORMANCE & THERMAL --- */}
+                    <div className="bg-white p-4 rounded-lg border border-orange-200 mb-4">
+                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Zap size={16}/> Power & Efficiency Specs</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <Input label="DHW Heating Power (kW)" type="number" value={formData.kW_DHW_Nominal} onChange={handleInputChange('kW_DHW_Nominal')} />
+                            <Input label="DHW COP" type="number" value={formData.COP_DHW} onChange={handleInputChange('COP_DHW')} />
+                            <Input label="SCOP (Avg Climate)" type="number" value={formData.SCOP_DHW_Avg} onChange={handleInputChange('SCOP_DHW_Avg')} />
+                            <Input label="Max Hot Water Temp (°C)" type="number" value={formData.max_temp_c} onChange={handleInputChange('max_temp_c')} />
+
+                            <div className="md:col-span-4 flex items-center mt-2">
+                                <Checkbox label="Is Reversible (Has Cooling)?" checked={formData.isReversible} onChange={handleInputChange('isReversible')} />
+                            </div>
+                            
+                            {formData.isReversible && (
+                                <>
+                                    <Input label="Cooling Power (kW)" type="number" value={formData.kW_Cooling_Nominal} onChange={handleInputChange('kW_Cooling_Nominal')} />
+                                    <Input label="Cooling EER Range" value={formData.Cooling_EER_Range} onChange={handleInputChange('Cooling_EER_Range')} />
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* --- 3. REFRIGERATION & CONNECTIONS (NEW BLOCK) --- */}
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Plug size={16}/> Refrigeration & Piping Details</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <Input label="Refrigerant" value={formData.Refrigerant} onChange={handleInputChange('Refrigerant')} />
+                            <Input label="Charge Weight" value={formData.Refrigerant_Charge} onChange={handleInputChange('Refrigerant_Charge')} />
+                            <Input label="Suction Connection" value={formData.Suction_Connection} onChange={handleInputChange('Suction_Connection')} placeholder="e.g. 3/8&quot;" />
+                            <Input label="Liquid Connection" value={formData.Liquid_Connection} onChange={handleInputChange('Liquid_Connection')} placeholder="e.g. 1/4&quot;" />
+                            
+                            <Input label="Nominal Evap Temp (°C)" value={formData.Evaporating_Temp_Nominal} onChange={handleInputChange('Evaporating_Temp_Nominal')} placeholder="e.g. -10" />
+                            <Input label="Nominal Ambient Temp (°C)" value={formData.Ambient_Temp_Nominal} onChange={handleInputChange('Ambient_Temp_Nominal')} placeholder="e.g. 32" />
+                            <Input label="Suitable Compressor" value={formData.Suitable_Compressor} onChange={handleInputChange('Suitable_Compressor')} />
+                            <Input label="Type of Oil" value={formData.Type_of_Oil} onChange={handleInputChange('Type_of_Oil')} />
+
+                            <Input label="Receiver Volume" value={formData.Receiver_Volume} onChange={handleInputChange('Receiver_Volume')} placeholder="e.g. 10.0 dm³" />
+                            <Input label="Air Flow" value={formData.Air_Flow} onChange={handleInputChange('Air_Flow')} placeholder="e.g. 3600 m³/h" />
+                            <Input label="Fan Details" value={formData.Fan_Details} onChange={handleInputChange('Fan_Details')} placeholder="e.g. 1×630 mm" />
+                            <Input label="Rated Water Pressure (MPa)" value={formData.Rated_Water_Pressure} onChange={handleInputChange('Rated_Water_Pressure')} />
+                        </div>
+                    </div>
+
+
+                    {/* --- 4. ELECTRICAL & CONDITIONS --- */}
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><BarChart3 size={16}/> Electrical & Operating Data</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <Input label="Power Supply" value={formData.Power_Supply} onChange={handleInputChange('Power_Supply')} placeholder="e.g. 380V / 3Ph / 50Hz" />
+                            <Input label="Rated Power Input (kW)" type="number" value={formData.Rated_Power_Input} onChange={handleInputChange('Rated_Power_Input')} />
+                            <Input label="Max. Running Current (A)" type="number" value={formData.Max_Running_Current} onChange={handleInputChange('Max_Running_Current')} />
+                            <Input label="Recommended Breaker (A)" value={formData.Recommended_Breaker} onChange={handleInputChange('Recommended_Breaker')} />
+                            
+                            <Input label="Outdoor Temp Range" value={formData.Outdoor_Air_Temp_Range} onChange={handleInputChange('Outdoor_Air_Temp_Range')} placeholder="e.g. -7 °C to 43 °C" />
+                            <Input label="Sound Power Level (dB(A))" type="number" value={formData.Sound_Power_Level} onChange={handleInputChange('Sound_Power_Level')} />
+                            <Input label="Certificates" value={formData.Certificates} onChange={handleInputChange('Certificates')} placeholder="e.g. CE, TUV, RoHS" />
+                        </div>
+                    </div>
+
+
+                    {/* --- 5. LOGISTICS --- */}
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                        <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2"><Ruler size={16}/> Sizing & Weight</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <Input label="Net Dimensions (L×W×H)" value={formData.Unit_Dimensions} onChange={handleInputChange('Unit_Dimensions')} placeholder="e.g. 510 × 1289 × 963 mm" />
+                            <Input label="Net Weight (kg)" type="number" value={formData.Net_Weight} onChange={handleInputChange('Net_Weight')} />
+                            <Input label="Gross Weight (kg)" type="number" value={formData.Gross_Weight} onChange={handleInputChange('Gross_Weight')} />
+                        </div>
+                    </div>
+                    
+                    <div className="md:col-span-4 mb-4">
+                        <label className="block text-sm font-medium text-gray-600 mb-1">Specs / Description</label>
+                        <textarea
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500"
+                            rows="2"
+                            value={formData.specs}
+                            onChange={handleInputChange('specs')}
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-3">
+                        <Button onClick={handleCancel} variant="secondary">Cancel</Button>
+                        <Button onClick={handleSave} variant="success"><Save size={16} className="mr-2"/> Save Product</Button>
+                    </div>
+                </Card>
+            )}
+
+            {/* --- LIST TABLE --- */}
+            <div className="relative mb-4">
+                <input type="text" placeholder="Search products by Name, Category, or SKU..." value={searchTerm} onChange={handleSearchChange} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
+            </div>
+
+            {/* --- Table with Checkboxes for Bulk Action --- */}
+            <div className="bg-white rounded-lg shadow overflow-x-auto border border-gray-200">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-6 py-3 w-10">
+                                <input 
+                                    type="checkbox" 
+                                    checked={selectedIds.size > 0 && selectedIds.size === filteredProducts.length} 
+                                    onChange={handleSelectAll} 
+                                    className="w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
+                                />
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase min-w-[200px]">Product</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Heating (kW)</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cooling (kW)</th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Price (USD)</th>
+                            <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase min-w-[100px]">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                        {filteredProducts.map((p) => (
+                            <tr key={p.id} className={`hover:bg-gray-50 ${selectedIds.has(p.id) ? 'bg-orange-50' : ''}`}>
+                                <td className="px-6 py-4 w-10">
+                                    <input 
+                                        type="checkbox" 
+                                        checked={selectedIds.has(p.id)} 
+                                        onChange={() => toggleSelection(p.id)}
+                                        className="w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
+                                    />
+                                </td>
+                                <td className="px-6 py-4">
+                                    <div className="text-sm font-bold text-gray-900">{p.name}</div>
+                                    <div className="text-xs text-gray-500">
+                                        {p.category} | Ref: {p.Refrigerant || '-'} | Max Temp: {p.max_temp_c || '-'}°C
+                                    </div>
+                                </td>
+                                
+                                <td className="px-6 py-4 text-right text-sm text-gray-500">
+                                    <span className="font-semibold text-gray-700">
+                                        {p.kW_DHW_Nominal ? `${p.kW_DHW_Nominal} kW` : '-'}
+                                    </span>
+                                </td>
+                                
+                                <td className="px-6 py-4 text-right text-sm text-gray-500">
+                                    <span className="font-semibold text-gray-700">
+                                        {p.kW_Cooling_Nominal > 0 ? `${p.kW_Cooling_Nominal} kW` : (p.isReversible ? '0 kW' : '-')}
+                                    </span>
+                                </td>
+
+                                <td className="px-6 py-4 text-right text-sm font-bold text-gray-900">
+                                    ${p.salesPriceUSD?.toLocaleString()}
+                                </td>
+                                
+                                <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                    <button onClick={() => handleEdit(p)} className="text-indigo-600 hover:text-indigo-900 mr-4" title="Edit Product"><Edit size={18}/></button>
+                                    <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900" title="Delete Product"><Trash2 size={18}/></button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {filteredProducts.length === 0 && (
+                <div className="p-8 text-center text-gray-500">No products found matching filters.</div>
+            )}
+
+            {/* --- BULK ACTION BAR --- */}
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-in fade-in slide-in-from-bottom-4">
+                    <span className="font-bold text-sm">{selectedIds.size} Selected</span>
+                    
+                    <div className="h-4 w-px bg-gray-600"></div>
+                    
+                    <button onClick={handleBulkExport} className="flex items-center gap-2 hover:text-green-400 transition-colors">
+                        <Download size={18} />
+                        <span className="text-sm font-bold">Export CSV</span>
+                    </button>
+
+                    <button onClick={handleBulkDelete} className="flex items-center gap-2 hover:text-red-400 transition-colors">
+                        <Trash2 size={18} />
+                        <span className="text-sm font-bold">Delete</span>
+                    </button>
+
+                    <button onClick={() => setSelectedIds(new Set())} className="ml-2 text-gray-400 hover:text-white">
+                        <X size={18}/>
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default ProductManager;
