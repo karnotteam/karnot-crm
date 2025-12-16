@@ -3,7 +3,8 @@ import { db } from '../firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import Papa from 'papaparse'; 
 import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Plug, Upload, AlertTriangle, CheckSquare, Download, Filter, Sun, Thermometer, Box } from 'lucide-react'; 
-import { Card, Button, Input, Checkbox } from '../data/constants';
+// CORRECTED: Added Textarea to the imports
+import { Card, Button, Input, Checkbox, Textarea } from '../data/constants';
 
 // --- Default Category Icons and Colors for Stat Badges ---
 const CATEGORY_MAP = {
@@ -224,13 +225,11 @@ const ProductManager = ({ user }) => {
                 lastModified: serverTimestamp(),
             };
             
-            // If it's a new product, add createdAt timestamp
             if (!editId) {
                 productData.createdAt = serverTimestamp();
             }
 
             delete productData.id; 
-            // We only delete createdAt if it's already in the form data, but since we manage it manually, it's fine.
             delete productData.createdAt; 
             
             await setDoc(doc(db, "users", user.uid, "products", safeId), productData, { merge: true });
@@ -373,24 +372,22 @@ const ProductManager = ({ user }) => {
         }
     };
 
-    // --- CORRECTED EXPORT FUNCTION ---
+    // --- CORRECTED EXPORT FUNCTION (Headers simplified for import compatibility) ---
     const handleBulkExport = () => {
         const productsToExport = products.filter(p => selectedIds.has(p.id));
         if (productsToExport.length === 0) return alert("Select products to export.");
 
-        // IMPORTANT: These headers are simplified to match the keys expected 
-        // by the CSV import logic (handleFileChange), where symbols/units are stripped.
         const exportData = productsToExport.map(p => ({
             "System ID": p.id,
             "Product Name": p.name,
             "Category": p.category,
-            "Sales Price": p.salesPriceUSD,      // Simplified from "Sales Price (USD)"
-            "Cost Price": p.costPriceUSD,        // Simplified from "Cost Price (USD)"
+            "Sales Price": p.salesPriceUSD,      // Simplified to match import map
+            "Cost Price": p.costPriceUSD,        // Simplified to match import map
             "kW_DHW_Nominal": p.kW_DHW_Nominal,
             "kW_Cooling_Nominal": p.kW_Cooling_Nominal,
             "COP_DHW": p.COP_DHW,
             "SCOP_DHW_Avg": p.SCOP_DHW_Avg,
-            "Max Temp": p.max_temp_c,            // Simplified from "Max Hot Water Temp (°C)"
+            "Max Temp": p.max_temp_c,            // Simplified to match import map
             "Refrigerant": p.Refrigerant,
             "Power Supply": p.Power_Supply,
             "Rated Power Input": p.Rated_Power_Input,
@@ -410,8 +407,8 @@ const ProductManager = ({ user }) => {
             "Fan Details": p.Fan_Details,
             "Air Flow": p.Air_Flow,
             "Certificates": p.Certificates,
-            "Net Weight": p.Net_Weight,          // Simplified from "Net Weight (kg)"
-            "Gross Weight": p.Gross_Weight,      // Simplified from "Gross Weight (kg)"
+            "Net Weight": p.Net_Weight,          // Simplified to match import map
+            "Gross Weight": p.Gross_Weight,      // Simplified to match import map
             "Unit Dimensions": p.Unit_Dimensions,
             "Order Reference": p.Order_Reference,
             "Specs": p.specs,
@@ -455,13 +452,13 @@ const ProductManager = ({ user }) => {
                     'system id': 'id',
                     'product name': 'name',
                     'category': 'category',
-                    'sales price': 'salesPriceUSD', // Matches simplified header in export
-                    'cost price': 'costPriceUSD',   // Matches simplified header in export
+                    'sales price': 'salesPriceUSD',
+                    'cost price': 'costPriceUSD',
                     'kw_dhw_nominal': 'kW_DHW_Nominal',
                     'kw_cooling_nominal': 'kW_Cooling_Nominal',
                     'cop_dhw': 'COP_DHW',
                     'scop_dhw_avg': 'SCOP_DHW_Avg',
-                    'max temp': 'max_temp_c', // Matches simplified header in export
+                    'max temp': 'max_temp_c',
                     'refrigerant': 'Refrigerant',
                     'power supply': 'Power_Supply',
                     'rated power input': 'Rated_Power_Input',
@@ -481,8 +478,8 @@ const ProductManager = ({ user }) => {
                     'fan details': 'Fan_Details',
                     'air flow': 'Air_Flow',
                     'certificates': 'Certificates',
-                    'net weight': 'Net_Weight', // Matches simplified header in export
-                    'gross weight': 'Gross_Weight', // Matches simplified header in export
+                    'net weight': 'Net_Weight',
+                    'gross weight': 'Gross_Weight',
                     'unit dimensions': 'Unit_Dimensions',
                     'order reference': 'Order_Reference',
                     'specs': 'specs',
@@ -641,7 +638,7 @@ const ProductManager = ({ user }) => {
 
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" style={{ display: 'none' }} />
             
-            {/* --- EDITOR FORM (unchanged) --- */}
+            {/* --- EDITOR FORM --- */}
             {isEditing && (
                 <Card className="bg-orange-50 border-orange-200 mb-6">
                     <h4 className="font-bold text-lg mb-4 text-orange-800">{editId ? 'Edit Product' : 'New Product'}</h4>
@@ -730,9 +727,9 @@ const ProductManager = ({ user }) => {
                     </div>
                     
                     <div className="md:col-span-4 mb-4">
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Specs / Description</label>
-                        <textarea
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500"
+                        {/* CORRECTED: Using the imported Textarea component */}
+                        <Textarea
+                            label="Specs / Description"
                             rows="2"
                             value={formData.specs}
                             onChange={handleInputChange('specs')}
@@ -746,7 +743,7 @@ const ProductManager = ({ user }) => {
                 </Card>
             )}
 
-            {/* --- LIST TABLE (unchanged) --- */}
+            {/* --- LIST TABLE --- */}
             <div className="relative mb-4">
                 <input type="text" placeholder="Search products by Name, Category, or SKU..." value={searchTerm} onChange={handleSearchChange} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
