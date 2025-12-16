@@ -35,12 +35,12 @@ import { Card, Button, Input, Checkbox, Textarea } from '../data/constants';
 
 const PASSWORD = "Edmund18931!";
 
-// --- Optimized Category Map (Merged with Solar & Inverters) ---
+// --- Optimized Category Map (Cleaned up and Updated) ---
 const CATEGORY_MAP = {
   'Heat Pump': { icon: Thermometer, color: 'orange' },
   'iCOOL': { icon: Box, color: 'purple' },
-  'iSTOR systems': { icon: Package, color: 'teal' },
-  'iSPA': { icon: Sun, color: 'blue' },
+  'iSTOR Storage (non-PCM)': { icon: Package, color: 'teal' },
+  'iSTOR Storage (with-PCM)': { icon: Package, color: 'blue' }, // NEW
   'Solar Panels': { icon: Sun, color: 'amber' }, 
   'Inverters': { icon: Zap, color: 'indigo' },    
   'iMESH': { icon: Box, color: 'purple' },
@@ -78,7 +78,7 @@ const makeSafeId = (s) =>
   String(s || '').trim().replace(/[\s/]+/g, '_').replace(/[^\w.-]+/g, '_').toLowerCase();
 
 // ----------------------------------------------------------------------
-// --- 1. Helper: Stat Badge (Keeping your "Sharp" Layout) ---
+// --- 1. Helper: Stat Badge ---
 // ----------------------------------------------------------------------
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
   if (!Icon || !color) return null;
@@ -123,29 +123,33 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     setSelectedToDelete(newSet);
   };
   const handleResolve = () => {
-    if (window.confirm(`Delete ${selectedToDelete.size} selected duplicate products?`)) onResolve(Array.from(selectedToDelete));
+    if (window.confirm(`Permanently delete ${selectedToDelete.size} selected duplicate products?`)) onResolve(Array.from(selectedToDelete));
   };
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-30 flex justify-center items-center p-4">
       <Card className="w-full max-w-3xl max-h-[80vh] flex flex-col">
         <div className="flex justify-between items-center mb-4 border-b pb-2">
-          <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2"><AlertTriangle className="text-orange-500" /> {duplicates.length} Duplicate Product Groups Found</h3>
+          <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <AlertTriangle className="text-orange-500" /> {duplicates.length} Duplicate Product Groups Found
+          </h3>
           <button onClick={onClose}><X /></button>
         </div>
         <div className="bg-gray-50 p-3 rounded mb-4 flex justify-between items-center">
           <p className="text-sm text-gray-600">Select records to <span className="text-red-600 font-bold">DELETE</span>.</p>
-          <Button onClick={handleAutoSelect} variant="secondary" className="text-sm"><CheckSquare size={14} className="mr-2 text-purple-600" /> Auto-Select</Button>
+          <Button onClick={handleAutoSelect} variant="secondary" className="text-sm">
+            <CheckSquare size={14} className="mr-2 text-purple-600" /> Auto-Select Duplicates
+          </Button>
         </div>
         <div className="overflow-y-auto flex-1 space-y-6 p-2">
           {duplicates.map((group, i) => (
             <div key={i} className="border border-orange-200 rounded-lg overflow-hidden">
-              <div className="bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 uppercase tracking-widest">{group.key}</div>
+              <div className="bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 tracking-widest">{group.key}</div>
               <div className="divide-y divide-gray-100">
-                {group.items.map(p => (
-                  <div key={p.id} className={`flex items-center justify-between p-3 ${selectedToDelete.has(p.id) ? 'bg-red-50' : 'bg-white'}`}>
+                {group.items.map(product => (
+                  <div key={product.id} className={`flex items-center justify-between p-3 ${selectedToDelete.has(product.id) ? 'bg-red-50' : 'bg-white'}`}>
                     <div className="flex items-center gap-3">
-                      <input type="checkbox" checked={selectedToDelete.has(p.id)} onChange={() => toggleSelection(p.id)} className="w-5 h-5 text-red-600 rounded" />
-                      <div><p className="font-bold text-gray-800">{p.name} (${p.salesPriceUSD})</p></div>
+                      <input type="checkbox" checked={selectedToDelete.has(product.id)} onChange={() => toggleSelection(product.id)} className="w-5 h-5 text-red-600 rounded" />
+                      <div><p className="font-bold text-gray-800">{product.name} (${product.salesPriceUSD})</p></div>
                     </div>
                   </div>
                 ))}
@@ -254,13 +258,13 @@ const ProductManager = ({ user }) => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Delete product?")) await deleteDoc(doc(db, "users", user.uid, "products", id));
+    if (window.confirm("Delete this product?")) await deleteDoc(doc(db, "users", user.uid, "products", id));
   };
 
   const handleDeleteAll = async () => {
     const pin = prompt("DANGER! Enter password to delete ALL products:");
     if (pin !== PASSWORD) return alert("Wrong password.");
-    if (!window.confirm("Confirm deletion?")) return;
+    if (!window.confirm("Confirm deletion of ALL data?")) return;
     const batch = writeBatch(db);
     products.forEach(p => batch.delete(doc(db, "users", user.uid, "products", p.id)));
     await batch.commit(); alert("Inventory cleared.");
@@ -268,11 +272,12 @@ const ProductManager = ({ user }) => {
 
   const handleBulkExport = (all = false) => {
     const list = all ? products : products.filter(p => selectedIds.has(p.id));
+    if (!list.length) return alert("Nothing to export.");
     const csv = Papa.unparse(list);
     const blob = new Blob([csv], { type: 'text/csv' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `karnot_inventory.csv`;
+    link.download = `karnot_inventory_${all ? 'all' : 'selected'}.csv`;
     link.click();
   };
 
@@ -338,21 +343,21 @@ const ProductManager = ({ user }) => {
 
       <input type="file" ref={fileInputRef} onChange={() => {}} accept=".csv" className="hidden" />
 
-      {/* --- PRESET CATEGORY FORM --- */}
+      {/* --- EDITOR FORM --- */}
       {isEditing && (
         <Card className="bg-orange-50 border-orange-200 mb-6">
-          <h4 className="font-bold text-lg mb-4 text-orange-800">{editId ? 'Edit Product' : 'New Product Entry'}</h4>
+          <h4 className="font-bold text-lg mb-4 text-orange-800 tracking-tight">{editId ? 'Edit Product' : 'New Asset Entry'}</h4>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 border-b pb-4">
             <div className="md:col-span-2">
-              <Input label="Name" value={formData.name} onChange={handleInputChange('name')} />
+              <Input label="Product Name" value={formData.name} onChange={handleInputChange('name')} />
               <Input label="SKU / Reference" value={formData.Order_Reference} onChange={handleInputChange('Order_Reference')} />
             </div>
 
             {/* PRESET CATEGORY DROPDOWN */}
             <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">Category</label>
+                <label className="text-[10px] font-black text-orange-700 uppercase tracking-widest mb-1 ml-1">Category Selection</label>
                 <select 
-                    className="w-full p-2 border border-gray-300 rounded-lg bg-white focus:ring-orange-500 text-sm font-bold"
+                    className="w-full p-2.5 border border-orange-200 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 text-sm font-bold shadow-sm"
                     value={formData.category} 
                     onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
                 >
@@ -366,53 +371,57 @@ const ProductManager = ({ user }) => {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-             <Input label="Sales Price" type="number" value={formData.salesPriceUSD} onChange={handleInputChange('salesPriceUSD')} />
-             <Input label="Cost Price" type="number" value={formData.costPriceUSD} onChange={handleInputChange('costPriceUSD')} />
-             <Input label="Heat (kW)" type="number" value={formData.kW_DHW_Nominal} onChange={handleInputChange('kW_DHW_Nominal')} />
-             <Input label="Cool (kW)" type="number" value={formData.kW_Cooling_Nominal} onChange={handleInputChange('kW_Cooling_Nominal')} />
+             <Input label="Sales Price (USD)" type="number" value={formData.salesPriceUSD} onChange={handleInputChange('salesPriceUSD')} />
+             <Input label="Cost Price (USD)" type="number" value={formData.costPriceUSD} onChange={handleInputChange('costPriceUSD')} />
+             <Input label="Heating (kW)" type="number" value={formData.kW_DHW_Nominal} onChange={handleInputChange('kW_DHW_Nominal')} />
+             <Input label="Cooling (kW)" type="number" value={formData.kW_Cooling_Nominal} onChange={handleInputChange('kW_Cooling_Nominal')} />
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button onClick={() => setIsEditing(false)} variant="secondary">Cancel</Button>
-            <Button onClick={handleSave} variant="success"><Save size={16} className="mr-2" /> Save to Inventory</Button>
+            <Button onClick={() => setIsEditing(false)} variant="secondary">Discard</Button>
+            <Button onClick={handleSave} variant="success" className="font-bold"><Save size={16} className="mr-2" /> Commit to Inventory</Button>
           </div>
         </Card>
       )}
 
       {/* --- SEARCH BAR --- */}
       <div className="relative mb-4">
-        <input type="text" placeholder="Search product name or SKU..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500" />
+        <input type="text" placeholder="Search by name, SKU or refrigerant..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-orange-500 shadow-sm" />
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
       </div>
 
       {/* --- TABLE --- */}
-      <div className="bg-white rounded-lg shadow overflow-x-auto border border-gray-200">
+      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-6 py-3 w-10"><input type="checkbox" checked={filteredProducts.length > 0 && selectedIds.size === filteredProducts.length} onChange={handleSelectAll} className="w-4 h-4 text-orange-600 rounded" /></th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Heat (kW)</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Price (USD)</th>
-              <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
+              <th className="px-6 py-4 w-10"><input type="checkbox" checked={filteredProducts.length > 0 && selectedIds.size === filteredProducts.length} onChange={handleSelectAll} className="w-4 h-4 text-orange-600 rounded" /></th>
+              <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Product Details</th>
+              <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Performance</th>
+              <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Price (USD)</th>
+              <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {Object.keys(groupedProducts).sort().map(groupKey => (
               <React.Fragment key={groupKey}>
-                <tr className="bg-gray-100 sticky top-0 border-t-2 border-orange-300"><td colSpan="5" className="px-6 py-2 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Power: {groupKey}</td></tr>
+                <tr className="bg-slate-50 sticky top-0 border-y border-slate-100 z-10"><td colSpan="5" className="px-6 py-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">🔌 Power Setup: {groupKey}</td></tr>
                 {groupedProducts[groupKey].map((p) => (
-                  <tr key={p.id} className={`hover:bg-gray-50 ${selectedIds.has(p.id) ? 'bg-orange-50' : ''}`}>
+                  <tr key={p.id} className={`hover:bg-orange-50/30 transition-colors ${selectedIds.has(p.id) ? 'bg-orange-50' : ''}`}>
                     <td className="px-6 py-4"><input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => toggleSelection(p.id)} className="w-4 h-4 text-orange-600 rounded" /></td>
                     <td className="px-6 py-4">
-                      <div className="text-sm font-bold text-gray-900">{p.name}</div>
-                      <div className="text-xs text-gray-500">{p.category} | {p.Refrigerant || '-'}</div>
+                      <div className="text-sm font-bold text-gray-900 leading-tight">{p.name}</div>
+                      <div className="text-[10px] text-gray-400 font-bold uppercase mt-1">{p.category} • {p.Refrigerant || '-'}</div>
                     </td>
-                    <td className="px-6 py-4 text-right text-sm font-semibold text-gray-700">{p.kW_DHW_Nominal || '-'} kW</td>
-                    <td className="px-6 py-4 text-right text-sm font-bold text-gray-900">${p.salesPriceUSD?.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-center text-sm font-medium">
-                      <button onClick={() => handleEdit(p)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18} /></button>
-                      <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900"><Trash2 size={18} /></button>
+                    <td className="px-6 py-4 text-right">
+                      <div className="text-sm font-bold text-gray-700">{p.kW_DHW_Nominal ? `${p.kW_DHW_Nominal} kW` : '-'}</div>
+                    </td>
+                    <td className="px-6 py-4 text-right font-mono font-bold text-orange-600 text-sm">${p.salesPriceUSD?.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex justify-center gap-2">
+                        <button onClick={() => handleEdit(p)} className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={18} /></button>
+                        <button onClick={() => handleDelete(p.id)} className="text-red-600 hover:text-red-900"><Trash2 size={18} /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -424,12 +433,12 @@ const ProductManager = ({ user }) => {
 
       {/* --- FLOATING BAR --- */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50">
-          <span className="font-bold text-sm">{selectedIds.size} Selected</span>
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-in slide-in-from-bottom-4">
+          <span className="text-sm font-bold tracking-tight">{selectedIds.size} Selected</span>
           <div className="h-4 w-px bg-gray-600" />
-          <Button onClick={() => handleBulkExport(false)} variant="success" className="text-xs">EXPORT CSV</Button>
-          <Button onClick={handleBulkDelete} variant="danger" className="text-xs">DELETE</Button>
-          <button onClick={() => setSelectedIds(new Set())} className="ml-2 text-gray-400 hover:text-white"><X size={18} /></button>
+          <Button onClick={() => handleBulkExport(false)} variant="success" className="text-xs font-black px-4">EXPORT CSV</Button>
+          <Button onClick={handleBulkDelete} variant="danger" className="text-xs font-black px-4">DELETE</Button>
+          <button onClick={() => setSelectedIds(new Set())} className="ml-2 text-gray-400 hover:text-white transition-colors"><X size={18} /></button>
         </div>
       )}
     </div>
