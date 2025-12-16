@@ -232,7 +232,7 @@ const ProductManager = ({ user }) => {
 
 
     // ----------------------------------------------------------------------
-    // --- CRUD and UI Handlers ---
+    // --- CRUD and UI Handlers (REST OF THE LOGIC) ---
     // ----------------------------------------------------------------------
     
     const handleEdit = (product) => {
@@ -561,23 +561,8 @@ const ProductManager = ({ user }) => {
     };
     
     // ----------------------------------------------------------------------
-    // --- Filtered Products Logic ---
+    // --- Final JSX Return ---
     // ----------------------------------------------------------------------
-
-    const filteredProducts = useMemo(() => {
-        const lowerSearchTerm = (searchTerm || '').toLowerCase();
-        let list = products || [];
-
-        if (activeFilter !== 'ALL') {
-            list = list.filter(p => p.category === activeFilter);
-        }
-
-        return list.filter(p => 
-            (p.name || '').toLowerCase().includes(lowerSearchTerm) || 
-            (p.category || '').toLowerCase().includes(lowerSearchTerm) ||
-            (p.Order_Reference || '').toLowerCase().includes(lowerSearchTerm)
-        );
-    }, [products, searchTerm, activeFilter]);
 
 
     return (
