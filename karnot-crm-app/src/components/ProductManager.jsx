@@ -1,17 +1,27 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, writeBatch, query, getDocs, updateDoc } from "firebase/firestore";
-import Papa from 'papaparse'; 
-import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Plug, Upload, AlertTriangle, CheckSquare, Download, Filter } from 'lucide-react'; 
+import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import Papa from 'papaparse'; 
+import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Plug, Upload, AlertTriangle, CheckSquare, Download, Filter, Sun, Thermometer, Box } from 'lucide-react'; 
 import { Card, Button, Input, Checkbox } from '../data/constants';
 
+// --- Default Category Icons and Colors for Stat Badges ---
+const CATEGORY_MAP = {
+    'Heat Pump': { icon: Thermometer, color: 'orange' },
+    'iSTOR systems': { icon: Package, color: 'teal' }, 
+    'iSPA': { icon: Sun, color: 'blue' }, 
+    'iMESH': { icon: Box, color: 'purple' }, 
+    'Other Products Miscellaneous': { icon: Filter, color: 'pink' }, 
+    'Uncategorized': { icon: Package, color: 'gray' },
+};
+
 // ----------------------------------------------------------------------
-// --- 1. Helper: Stat Badge (For Category Filtering) ---
+// --- 1. Helper: Stat Badge ---
 // ----------------------------------------------------------------------
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return (
-        <div 
+        <div 
             onClick={onClick}
             className={`cursor-pointer p-3 rounded-xl border transition-all duration-200 flex items-center justify-between gap-3
                 ${active ? `bg-${color}-100 border-${color}-500 ring-2 ring-${color}-400` : 'bg-white border-gray-200 hover:border-orange-300 hover:shadow-md'}
@@ -31,7 +41,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
 };
 
 // ----------------------------------------------------------------------
-// --- 2. Helper: Duplicate Resolver Modal (Adapted for Products) ---
+// --- 2. Helper: Duplicate Resolver Modal ---
 // ----------------------------------------------------------------------
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
@@ -47,16 +57,13 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
         const newSet = new Set();
         let count = 0;
         duplicates.forEach(group => {
-            // Auto-select items that are NOT the one with the lowest sales price, or just the newer ones if prices are equal.
             const sortedItems = [...group.items].sort((a, b) => {
                 const priceDiff = (a.salesPriceUSD || 0) - (b.salesPriceUSD || 0);
                 if (priceDiff !== 0) return priceDiff;
-                // If prices are the same, keep the older record (assuming it's the master)
                 const timeA = a.createdAt?.seconds || 0;
                 const timeB = b.createdAt?.seconds || 0;
-                return timeA - timeB; 
+                return timeA - timeB; 
             });
-            // Select all but the first (the keeper)
             for (let i = 1; i < sortedItems.length; i++) {
                 newSet.add(sortedItems[i].id);
                 count++;
@@ -77,7 +84,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
             <Card className="w-full max-w-3xl max-h-[80vh] flex flex-col">
                 <div className="flex justify-between items-center mb-4 border-b pb-2">
                     <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                        <AlertTriangle className="text-orange-500"/> 
+                        <AlertTriangle className="text-orange-500"/> 
                         {duplicates.length} Duplicate Product Groups Found
                     </h3>
                     <button onClick={onClose}><X /></button>
@@ -129,7 +136,7 @@ const ProductManager = ({ user }) => {
     const [searchTerm, setSearchTerm] = useState('');
     
     // CRM Feature States
-    const [activeFilter, setActiveFilter] = useState('ALL'); 
+    const [activeFilter, setActiveFilter] = useState('ALL'); 
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [showDuplicateModal, setShowDuplicateModal] = useState(false);
     const [duplicateGroups, setDuplicateGroups] = useState([]);
@@ -137,21 +144,20 @@ const ProductManager = ({ user }) => {
     const fileInputRef = useRef(null);
 
     const [isEditing, setIsEditing] = useState(false);
-    const [editId, setEditId] = useState(null); 
+    const [editId, setEditId] = useState(null); 
     
     // Default form data template
     const defaultFormData = {
         id: '', name: '', category: 'Heat Pump', costPriceUSD: 0, salesPriceUSD: 0, specs: '',
-        kW_DHW_Nominal: 0, COP_DHW: 3.8, kW_Cooling_Nominal: 0, Cooling_EER_Range: '', 
-        SCOP_DHW_Avg: 3.51, Rated_Power_Input: 0, Max_Running_Current: 0, Sound_Power_Level: 0, 
+        kW_DHW_Nominal: 0, COP_DHW: 3.8, kW_Cooling_Nominal: 0, Cooling_EER_Range: '', 
+        SCOP_DHW_Avg: 3.51, Rated_Power_Input: 0, Max_Running_Current: 0, Sound_Power_Level: 0, 
         Outdoor_Air_Temp_Range: '', Power_Supply: '380/420 V-50/60 Hz-3 ph', Recommended_Breaker: '',
-        Refrigerant: 'R290', Refrigerant_Charge: '150g', Rated_Water_Pressure: '0.7 MPa', 
-        Evaporating_Temp_Nominal: '', Ambient_Temp_Nominal: '', Suction_Connection: '', 
-        Liquid_Connection: '', Suitable_Compressor: '', Type_of_Oil: '', Receiver_Volume: '', 
+        Refrigerant: 'R290', Refrigerant_Charge: '150g', Rated_Water_Pressure: '0.7 MPa', 
+        Evaporating_Temp_Nominal: '', Ambient_Temp_Nominal: '', Suction_Connection: '', 
+        Liquid_Connection: '', Suitable_Compressor: '', Type_of_Oil: '', Receiver_Volume: '', 
         Fan_Details: '', Air_Flow: '', Certificates: '', max_temp_c: 75, isReversible: true,
         Unit_Dimensions: '', Net_Weight: 0, Gross_Weight: 0, Order_Reference: '',
-        // Add createdAt for dedupe logic consistency (will be overwritten by serverTimestamp on save)
-        createdAt: null 
+        createdAt: null 
     };
     const [formData, setFormData] = useState(defaultFormData);
 
@@ -168,18 +174,16 @@ const ProductManager = ({ user }) => {
     }, [user]);
 
     // ----------------------------------------------------------------------
-    // --- Handlers for CRUD Operations ---
+    // --- CRUD and UI Handlers ---
     // ----------------------------------------------------------------------
     
     const handleEdit = (product) => {
         setIsEditing(true);
         setEditId(product.id);
         
-        // Load all fields, merging with defaults to ensure all keys exist
         setFormData(prev => ({
-            ...defaultFormData, 
+            ...defaultFormData, 
             ...product,
-            // Explicitly parse numeric values for the form inputs
             costPriceUSD: parseFloat(product.costPriceUSD || 0),
             salesPriceUSD: parseFloat(product.salesPriceUSD || 0),
             kW_DHW_Nominal: parseFloat(product.kW_DHW_Nominal || 0),
@@ -200,7 +204,6 @@ const ProductManager = ({ user }) => {
     const handleAddNew = () => {
         setIsEditing(true);
         setEditId(null);
-        // Reset form to defaults and create a new unique ID
         setFormData({
             ...defaultFormData,
             id: `prod_${Date.now()}`,
@@ -221,8 +224,14 @@ const ProductManager = ({ user }) => {
                 lastModified: serverTimestamp(),
             };
             
-            delete productData.id; // Exclude ID from data payload since it is used as doc name
-            delete productData.createdAt; // Clean up local state field
+            // If it's a new product, add createdAt timestamp
+            if (!editId) {
+                productData.createdAt = serverTimestamp();
+            }
+
+            delete productData.id; 
+            // We only delete createdAt if it's already in the form data, but since we manage it manually, it's fine.
+            delete productData.createdAt; 
             
             await setDoc(doc(db, "users", user.uid, "products", safeId), productData, { merge: true });
             
@@ -255,8 +264,8 @@ const ProductManager = ({ user }) => {
         }
 
         const isNumeric = [
-            'costPriceUSD', 'salesPriceUSD', 'kW_DHW_Nominal', 'COP_DHW', 'kW_Cooling_Nominal', 
-            'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current', 
+            'costPriceUSD', 'salesPriceUSD', 'kW_DHW_Nominal', 'COP_DHW', 'kW_Cooling_Nominal', 
+            'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current', 
             'Sound_Power_Level', 'Net_Weight', 'Gross_Weight'
         ].includes(field);
 
@@ -271,8 +280,9 @@ const ProductManager = ({ user }) => {
     const handleCancel = () => { setIsEditing(false); setEditId(null); };
     const handleSearchChange = (e) => { setSearchTerm(e.target.value); };
 
+
     // ----------------------------------------------------------------------
-    // --- Handlers for CRM Features ---
+    // --- CRM Feature Handlers (Dedupe, Filter, Bulk Operations) ---
     // ----------------------------------------------------------------------
 
     const stats = useMemo(() => {
@@ -290,7 +300,7 @@ const ProductManager = ({ user }) => {
         setActiveFilter(activeFilter === category ? 'ALL' : category);
     };
 
-    const handleScanForDuplicates = () => { 
+    const handleScanForDuplicates = () => { 
         const groups = {};
         products.forEach(p => {
             const key = (p.name || '').toLowerCase().trim();
@@ -310,7 +320,7 @@ const ProductManager = ({ user }) => {
         }
     };
     
-    const handleResolveDuplicates = async (idsToDelete) => { 
+    const handleResolveDuplicates = async (idsToDelete) => { 
         if(!user) return;
         const batch = writeBatch(db);
         idsToDelete.forEach(id => {
@@ -321,7 +331,7 @@ const ProductManager = ({ user }) => {
             await batch.commit();
             setShowDuplicateModal(false);
             setDuplicateGroups([]);
-            setSelectedIds(new Set()); 
+            setSelectedIds(new Set()); 
             alert(`Resolved. Deleted ${idsToDelete.length} products.`);
         } catch(err) {
             console.error(err);
@@ -363,21 +373,24 @@ const ProductManager = ({ user }) => {
         }
     };
 
+    // --- CORRECTED EXPORT FUNCTION ---
     const handleBulkExport = () => {
         const productsToExport = products.filter(p => selectedIds.has(p.id));
         if (productsToExport.length === 0) return alert("Select products to export.");
 
+        // IMPORTANT: These headers are simplified to match the keys expected 
+        // by the CSV import logic (handleFileChange), where symbols/units are stripped.
         const exportData = productsToExport.map(p => ({
             "System ID": p.id,
             "Product Name": p.name,
             "Category": p.category,
-            "Sales Price (USD)": p.salesPriceUSD,
-            "Cost Price (USD)": p.costPriceUSD,
+            "Sales Price": p.salesPriceUSD,      // Simplified from "Sales Price (USD)"
+            "Cost Price": p.costPriceUSD,        // Simplified from "Cost Price (USD)"
             "kW_DHW_Nominal": p.kW_DHW_Nominal,
             "kW_Cooling_Nominal": p.kW_Cooling_Nominal,
             "COP_DHW": p.COP_DHW,
             "SCOP_DHW_Avg": p.SCOP_DHW_Avg,
-            "Max Hot Water Temp (°C)": p.max_temp_c,
+            "Max Temp": p.max_temp_c,            // Simplified from "Max Hot Water Temp (°C)"
             "Refrigerant": p.Refrigerant,
             "Power Supply": p.Power_Supply,
             "Rated Power Input": p.Rated_Power_Input,
@@ -397,8 +410,8 @@ const ProductManager = ({ user }) => {
             "Fan Details": p.Fan_Details,
             "Air Flow": p.Air_Flow,
             "Certificates": p.Certificates,
-            "Net Weight (kg)": p.Net_Weight,
-            "Gross Weight (kg)": p.Gross_Weight,
+            "Net Weight": p.Net_Weight,          // Simplified from "Net Weight (kg)"
+            "Gross Weight": p.Gross_Weight,      // Simplified from "Gross Weight (kg)"
             "Unit Dimensions": p.Unit_Dimensions,
             "Order Reference": p.Order_Reference,
             "Specs": p.specs,
@@ -416,12 +429,12 @@ const ProductManager = ({ user }) => {
         link.click();
         document.body.removeChild(link);
     };
-    // 
 
     const handleImportClick = () => {
         fileInputRef.current.click();
     };
-
+    
+    // --- CSV Update/Insert Logic (handleFileChange) ---
     const handleFileChange = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -442,13 +455,13 @@ const ProductManager = ({ user }) => {
                     'system id': 'id',
                     'product name': 'name',
                     'category': 'category',
-                    'sales price': 'salesPriceUSD',
-                    'cost price': 'costPriceUSD',
+                    'sales price': 'salesPriceUSD', // Matches simplified header in export
+                    'cost price': 'costPriceUSD',   // Matches simplified header in export
                     'kw_dhw_nominal': 'kW_DHW_Nominal',
                     'kw_cooling_nominal': 'kW_Cooling_Nominal',
                     'cop_dhw': 'COP_DHW',
                     'scop_dhw_avg': 'SCOP_DHW_Avg',
-                    'max temp': 'max_temp_c',
+                    'max temp': 'max_temp_c', // Matches simplified header in export
                     'refrigerant': 'Refrigerant',
                     'power supply': 'Power_Supply',
                     'rated power input': 'Rated_Power_Input',
@@ -468,8 +481,8 @@ const ProductManager = ({ user }) => {
                     'fan details': 'Fan_Details',
                     'air flow': 'Air_Flow',
                     'certificates': 'Certificates',
-                    'net weight': 'Net_Weight',
-                    'gross weight': 'Gross_Weight',
+                    'net weight': 'Net_Weight', // Matches simplified header in export
+                    'gross weight': 'Gross_Weight', // Matches simplified header in export
                     'unit dimensions': 'Unit_Dimensions',
                     'order reference': 'Order_Reference',
                     'specs': 'specs',
@@ -484,6 +497,7 @@ const ProductManager = ({ user }) => {
                     
                     if (!csvSystemId && !csvProductName) return;
 
+                    // Match product locally to get existing ID
                     const match = products.find(p => p.id === csvSystemId) || products.find(p => p.name?.toLowerCase() === csvProductName?.toLowerCase());
                     
                     if (match) {
@@ -536,7 +550,7 @@ const ProductManager = ({ user }) => {
     };
     
     // ----------------------------------------------------------------------
-    // --- Updated Filtered Products Logic (Includes Category Filter) ---
+    // --- Filtered Products Logic ---
     // ----------------------------------------------------------------------
 
     const filteredProducts = useMemo(() => {
@@ -549,8 +563,8 @@ const ProductManager = ({ user }) => {
         }
 
         // Apply Search Filter
-        return list.filter(p => 
-            (p.name || '').toLowerCase().includes(lowerSearchTerm) || 
+        return list.filter(p => 
+            (p.name || '').toLowerCase().includes(lowerSearchTerm) || 
             (p.category || '').toLowerCase().includes(lowerSearchTerm) ||
             (p.Order_Reference || '').toLowerCase().includes(lowerSearchTerm)
         );
@@ -559,32 +573,58 @@ const ProductManager = ({ user }) => {
 
     if (loading) return <div className="p-4 text-center">Loading Products...</div>;
 
+    // Filter categories to show only those present in the data, plus ALL
+    const categoriesToShow = useMemo(() => {
+        const productCategories = Object.keys(stats.categories).filter(c => c !== 'Uncategorized').sort();
+        const predefinedCategories = Object.keys(CATEGORY_MAP).filter(c => c !== 'Uncategorized');
+        
+        const combined = new Set([...predefinedCategories, ...productCategories]);
+        return Array.from(combined).sort();
+    }, [stats.categories]);
+
+
     return (
-        <div className="w-full pb-20"> 
+        <div className="w-full pb-20"> 
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
-                <StatBadge icon={Package} label="All Products" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => handleCategoryFilter('ALL')} />
+            {/* --- STAT BADGES / CATEGORY FILTER --- */}
+            <div className="flex flex-row gap-4 mb-8 overflow-x-auto pb-3">
+                <StatBadge 
+                    icon={Package} 
+                    label="All Products" 
+                    count={stats.total} 
+                    total={stats.total} 
+                    color="gray" 
+                    active={activeFilter === 'ALL'} 
+                    onClick={() => handleCategoryFilter('ALL')} 
+                />
                 
                 {/* Dynamically render category badges */}
-                {Object.keys(stats.categories).slice(0, 4).map((cat, index) => (
-                    <StatBadge 
-                        key={cat}
-                        icon={Package} 
-                        label={cat} 
-                        count={stats.categories[cat]} 
-                        total={stats.total} 
-                        color={['orange', 'blue', 'green', 'purple'][index % 4]} 
-                        active={activeFilter === cat} 
-                        onClick={() => handleCategoryFilter(cat)} 
-                    />
-                ))}
+                {categoriesToShow.map((cat, index) => {
+                    const map = CATEGORY_MAP[cat] || CATEGORY_MAP['Uncategorized'];
+                    // Use a simple, non-dynamic color array for the badges not in CATEGORY_MAP
+                    const dynamicColor = map.color || ['orange', 'blue', 'green', 'purple'][index % 4];
+
+                    return (
+                        <div key={cat} className="flex-shrink-0 w-[220px] md:w-auto">
+                            <StatBadge 
+                                icon={map.icon} 
+                                label={cat} 
+                                count={stats.categories[cat] || 0} 
+                                total={stats.total} 
+                                color={dynamicColor} 
+                                active={activeFilter === cat} 
+                                onClick={() => handleCategoryFilter(cat)} 
+                            />
+                        </div>
+                    );
+                })}
             </div>
             
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-2">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                     {activeFilter !== 'ALL' && <Filter size={20} className="text-orange-600"/>}
-                    {activeFilter === 'ALL' ? 'All Products' : `${activeFilter} Products`} 
+                    {activeFilter === 'ALL' ? 'All Products' : `${activeFilter} Products`} 
                     <span className="text-gray-400 font-normal text-base ml-2">({filteredProducts.length})</span>
                 </h3>
                 
@@ -601,7 +641,7 @@ const ProductManager = ({ user }) => {
 
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" style={{ display: 'none' }} />
             
-            {/* --- EDITOR FORM --- */}
+            {/* --- EDITOR FORM (unchanged) --- */}
             {isEditing && (
                 <Card className="bg-orange-50 border-orange-200 mb-6">
                     <h4 className="font-bold text-lg mb-4 text-orange-800">{editId ? 'Edit Product' : 'New Product'}</h4>
@@ -706,7 +746,7 @@ const ProductManager = ({ user }) => {
                 </Card>
             )}
 
-            {/* --- LIST TABLE --- */}
+            {/* --- LIST TABLE (unchanged) --- */}
             <div className="relative mb-4">
                 <input type="text" placeholder="Search products by Name, Category, or SKU..." value={searchTerm} onChange={handleSearchChange} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-orange-500 focus:border-orange-500" />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
@@ -718,10 +758,10 @@ const ProductManager = ({ user }) => {
                     <thead className="bg-gray-50">
                         <tr>
                             <th className="px-6 py-3 w-10">
-                                <input 
-                                    type="checkbox" 
-                                    checked={selectedIds.size > 0 && selectedIds.size === filteredProducts.length} 
-                                    onChange={handleSelectAll} 
+                                <input 
+                                    type="checkbox" 
+                                    checked={selectedIds.size > 0 && selectedIds.size === filteredProducts.length} 
+                                    onChange={handleSelectAll} 
                                     className="w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
                                 />
                             </th>
@@ -736,9 +776,9 @@ const ProductManager = ({ user }) => {
                         {filteredProducts.map((p) => (
                             <tr key={p.id} className={`hover:bg-gray-50 ${selectedIds.has(p.id) ? 'bg-orange-50' : ''}`}>
                                 <td className="px-6 py-4 w-10">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={selectedIds.has(p.id)} 
+                                    <input 
+                                        type="checkbox" 
+                                        checked={selectedIds.has(p.id)} 
                                         onChange={() => toggleSelection(p.id)}
                                         className="w-4 h-4 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
                                     />
