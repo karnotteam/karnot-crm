@@ -19,7 +19,11 @@ const CATEGORY_MAP = {
 // --- 1. Helper: Stat Badge ---
 // ----------------------------------------------------------------------
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
+    // Added null guard to prevent crash if icon or color is missing (safety measure)
+    if (!Icon || !color) return null; 
+    
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+    
     return (
         <div 
             onClick={onClick}
@@ -294,6 +298,21 @@ const ProductManager = ({ user }) => {
         return { total, categories };
     }, [products]);
 
+
+    // 🔥 HOOK ORDER FIX: Moved useMemo ABOVE the conditional return
+    const categoriesToShow = useMemo(() => {
+        const productCategories = Object.keys(stats.categories).filter(c => c !== 'Uncategorized').sort();
+        const predefinedCategories = Object.keys(CATEGORY_MAP).filter(c => c !== 'Uncategorized');
+        
+        const combined = new Set([...predefinedCategories, ...productCategories]);
+        return Array.from(combined).sort();
+    }, [stats.categories]);
+    // ----------------------------------------------------------------------
+
+
+    if (loading) return <div className="p-4 text-center">Loading Products...</div>;
+
+
     const handleCategoryFilter = (category) => {
         setActiveFilter(activeFilter === category ? 'ALL' : category);
     };
@@ -535,17 +554,6 @@ const ProductManager = ({ user }) => {
             (p.Order_Reference || '').toLowerCase().includes(lowerSearchTerm)
         );
     }, [products, searchTerm, activeFilter]);
-
-
-    if (loading) return <div className="p-4 text-center">Loading Products...</div>;
-
-    const categoriesToShow = useMemo(() => {
-        const productCategories = Object.keys(stats.categories).filter(c => c !== 'Uncategorized').sort();
-        const predefinedCategories = Object.keys(CATEGORY_MAP).filter(c => c !== 'Uncategorized');
-        
-        const combined = new Set([...predefinedCategories, ...productCategories]);
-        return Array.from(combined).sort();
-    }, [stats.categories]);
 
 
     return (
