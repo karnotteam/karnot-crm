@@ -1,25 +1,26 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, writeBatch, query, getDocs, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Plug, Upload, AlertTriangle, CheckSquare, Download, Filter, Sun, Thermometer, Box } from 'lucide-react'; // Added new icons
+import { Plus, Search, Edit, Trash2, X, Save, Package, Zap, BarChart3, Ruler, Plug, Upload, AlertTriangle, CheckSquare, Download, Filter, Sun, Thermometer, Box } from 'lucide-react'; 
 import { Card, Button, Input, Checkbox } from '../data/constants';
 
 // --- Default Category Icons and Colors for Stat Badges ---
 const CATEGORY_MAP = {
     'Heat Pump': { icon: Thermometer, color: 'orange' },
-    'iSTOR systems': { icon: Package, color: 'teal' }, // New Category
-    'iSPA': { icon: Sun, color: 'blue' }, // New Category
-    'iMESH': { icon: Box, color: 'purple' }, // New Category
-    'Other Products Miscellaneous': { icon: Filter, color: 'pink' }, // New Category
+    'iSTOR systems': { icon: Package, color: 'teal' }, 
+    'iSPA': { icon: Sun, color: 'blue' }, 
+    'iMESH': { icon: Box, color: 'purple' }, 
+    'Other Products Miscellaneous': { icon: Filter, color: 'pink' }, 
     'Uncategorized': { icon: Package, color: 'gray' },
 };
 
 // ----------------------------------------------------------------------
-// --- 1. Helper: Stat Badge (Updated to use Category Map) ---
+// --- 1. Helper: Stat Badge ---
 // ----------------------------------------------------------------------
 const StatBadge = ({ label, count, total, color, active, onClick, icon: Icon }) => {
-    const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
+    // Safety check for total=0 to prevent division by zero, although total is usually > 0
+    const percentage = total > 0 ? Math.round((count / total) * 100) : 0; 
     return (
         <div 
             onClick={onClick}
@@ -41,7 +42,7 @@ const StatBadge = ({ label, count, total, color, active, onClick, icon: Icon }) 
 };
 
 // ----------------------------------------------------------------------
-// --- 2. Helper: Duplicate Resolver Modal (Unchanged) ---
+// --- 2. Helper: Duplicate Resolver Modal ---
 // ----------------------------------------------------------------------
 const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     const [selectedToDelete, setSelectedToDelete] = useState(new Set());
@@ -295,7 +296,6 @@ const ProductManager = ({ user }) => {
     };
 
     const handleScanForDuplicates = () => { 
-        // ... (Dedupe logic unchanged)
         const groups = {};
         products.forEach(p => {
             const key = (p.name || '').toLowerCase().trim();
@@ -426,7 +426,7 @@ const ProductManager = ({ user }) => {
         fileInputRef.current.click();
     };
     
-    // --- UPDATED LOGIC: CSV Upsert (Update or Insert) ---
+    // --- CSV Upsert (Update or Insert) Logic ---
     const handleFileChange = (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -502,7 +502,7 @@ const ProductManager = ({ user }) => {
                         docId = `${csvProductName.replace(/[\s/]+/g, '_').toLowerCase()}_${Date.now()}`;
                     }
 
-                    // Check if product exists (only use local state for fast lookup)
+                    // Check if product exists (use the current list of products loaded via snapshot)
                     const existingProduct = products.find(p => p.id === docId);
                     
                     // --- Build the Product Data Object ---
@@ -529,14 +529,14 @@ const ProductManager = ({ user }) => {
                         }
                     });
 
-                    // Ensure Name and Category are set even if imported under different column names
+                    // Ensure Name and Category are set 
                     if (!productData.name) productData.name = csvProductName;
                     if (!productData.category) productData.category = row['Category'] || 'Heat Pump';
 
 
-                    if (!hasData) {
+                    if (!hasData && !existingProduct) { // Skip if new product has no useful data
                         skippedCount++;
-                        return; // Skip rows with no meaningful data after ID/Name check
+                        return; 
                     }
 
                     if (existingProduct) {
@@ -550,10 +550,13 @@ const ProductManager = ({ user }) => {
                             ...defaultFormData, 
                             ...productData,
                             createdAt: serverTimestamp(),
-                            // Ensure numeric fields from default aren't accidentally overwritten by null/empty string if not in CSV
+                            // Force Name and Category to be the imported values if present
+                            name: productData.name, 
+                            category: productData.category,
+                            // Ensure numeric fields from default are used if not in CSV
                             ...Object.fromEntries(numericFields.map(field => [field, productData[field] !== undefined ? productData[field] : defaultFormData[field]]))
                         };
-                        delete newProduct.lastModified; // Already set by serverTimestamp
+                        delete newProduct.lastModified; 
                         
                         batch.set(doc(productsRef, docId), newProduct);
                         insertedCount++;
@@ -582,12 +585,10 @@ const ProductManager = ({ user }) => {
         const lowerSearchTerm = (searchTerm || '').toLowerCase();
         let list = products || [];
 
-        // Apply Category Filter
         if (activeFilter !== 'ALL') {
             list = list.filter(p => p.category === activeFilter);
         }
 
-        // Apply Search Filter
         return list.filter(p => 
             (p.name || '').toLowerCase().includes(lowerSearchTerm) || 
             (p.category || '').toLowerCase().includes(lowerSearchTerm) ||
@@ -600,12 +601,12 @@ const ProductManager = ({ user }) => {
 
     // Filter categories to show only those present in the data, plus ALL
     const categoriesToShow = useMemo(() => {
-        const uniqueCategories = Object.keys(stats.categories).sort();
-        // Fallback to defaults if no products exist
-        if (uniqueCategories.length === 0) {
-            return Object.keys(CATEGORY_MAP).filter(c => c !== 'Uncategorized').sort();
-        }
-        return uniqueCategories;
+        const productCategories = Object.keys(stats.categories).filter(c => c !== 'Uncategorized').sort();
+        // Ensure all predefined CATEGORY_MAP items are included for filtering even if count is 0
+        const predefinedCategories = Object.keys(CATEGORY_MAP).filter(c => c !== 'Uncategorized');
+        
+        const combined = new Set([...predefinedCategories, ...productCategories]);
+        return Array.from(combined).sort();
     }, [stats.categories]);
 
 
@@ -614,7 +615,8 @@ const ProductManager = ({ user }) => {
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
 
             {/* --- STAT BADGES / CATEGORY FILTER --- */}
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-8 overflow-x-auto pb-3">
+            {/* Added container for horizontal scrolling if too many categories are active */}
+            <div className="flex flex-row gap-4 mb-8 overflow-x-auto pb-3">
                 <StatBadge 
                     icon={Package} 
                     label="All Products" 
@@ -628,20 +630,20 @@ const ProductManager = ({ user }) => {
                 {categoriesToShow.map((cat, index) => {
                     const map = CATEGORY_MAP[cat] || CATEGORY_MAP['Uncategorized'];
                     return (
-                        <StatBadge 
-                            key={cat}
-                            icon={map.icon} 
-                            label={cat} 
-                            count={stats.categories[cat] || 0} 
-                            total={stats.total} 
-                            color={map.color || CATEGORY_MAP['Uncategorized'].color} 
-                            active={activeFilter === cat} 
-                            onClick={() => handleCategoryFilter(cat)} 
-                        />
+                        <div key={cat} className="flex-shrink-0 w-[220px] md:w-auto">
+                            <StatBadge 
+                                icon={map.icon} 
+                                label={cat} 
+                                count={stats.categories[cat] || 0} 
+                                total={stats.total} 
+                                color={map.color || CATEGORY_MAP['Uncategorized'].color} 
+                                active={activeFilter === cat} 
+                                onClick={() => handleCategoryFilter(cat)} 
+                            />
+                        </div>
                     );
                 })}
             </div>
-            {/*  */}
             
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-2">
                 <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
@@ -663,7 +665,7 @@ const ProductManager = ({ user }) => {
 
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" style={{ display: 'none' }} />
             
-            {/* --- EDITOR FORM (Unchanged) --- */}
+            {/* --- EDITOR FORM --- */}
             {isEditing && (
                 <Card className="bg-orange-50 border-orange-200 mb-6">
                     <h4 className="font-bold text-lg mb-4 text-orange-800">{editId ? 'Edit Product' : 'New Product'}</h4>
