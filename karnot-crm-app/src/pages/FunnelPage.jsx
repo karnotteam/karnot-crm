@@ -1,7 +1,13 @@
-React, { useState, useEffect, useMemo } from 'react'; // --- 1. IMPORT useMemo ---
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase'; 
-import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { Plus, X, Edit, Trash2, FileText } from 'lucide-react';
+import { 
+    collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc 
+} from "firebase/firestore";
+import { 
+    Plus, X, Edit, Trash2, FileText, MessageSquare, 
+    Calendar, Clock, Users, ClipboardCheck, ArrowRight, 
+    MapPin, Navigation, Phone, Mail, Link as LinkIcon 
+} from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
 const STAGE_ORDER = [
@@ -14,415 +20,313 @@ const STAGE_ORDER = [
     'Closed-Lost'
 ];
 
-// --- (OpportunityCard component is unchanged) ---
-const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
-    const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
-    const nextStage = STAGE_ORDER[currentStageIndex + 1];
-
-    const handleMoveForward = () => {
-        if (nextStage) {
-            onUpdate(opp.id, nextStage);
-        }
-    };
-    
-    return (
-        <Card className="p-4 mb-3 rounded-lg shadow border border-gray-200">
-            <div className="flex justify-between items-start">
-                <h4 className="font-bold text-gray-800">
-                    {opp.customerName}
-                </h4>
-                <div className="flex gap-1">
-                    <Button onClick={() => onEdit(opp)} variant="secondary" className="p-1 h-auto w-auto"><Edit size={14}/></Button>
-                    <Button onClick={() => onDelete(opp.id)} variant="danger" className="p-1 h-auto w-auto"><Trash2 size={14}/></Button>
-                </div>
-            </div>
-            <p className="text-sm text-gray-600">{opp.project}</p>
-            <div className="mt-3 flex justify-between items-center">
-                <span className="text-lg font-semibold text-orange-600">
-                    ${(opp.estimatedValue || 0).toLocaleString()}
-                </span>
-                <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
-                    {opp.probability || 0}%
-                </span>
-            </div>
-            <Button onClick={() => onOpen(opp)} variant="secondary" className="w-full text-xs py-1 mt-3">
-                <FileText size={14} className="mr-2"/> View Details / Notes
-            </Button>
-            {nextStage && opp.stage !== 'Closed-Won' && opp.stage !== 'Closed-Lost' && (
-                <div className="mt-2">
-                    <Button onClick={handleMoveForward} variant="secondary" className="w-full text-xs py-1">
-                        Move to {nextStage} Stage
-                    </Button>
-                </div>
-            )}
-        </Card>
-    );
-};
-
-
-// --- 2. REBUILD THE NewOpportunityModal to be SMART ---
+// ----------------------------------------------------------------------
+// 1. SMART OPPORTUNITY MODAL (The Popup for Adding/Editing Leads)
+// ----------------------------------------------------------------------
 const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, contacts }) => {
     const isEditMode = Boolean(opportunityToEdit);
-    
-    // --- New State ---
-    const [companyId, setCompanyId] = useState(''); // Store the Company ID
-    const [contactId, setContactId] = useState(''); // Store the Contact ID
+    const [companyId, setCompanyId] = useState('');
+    const [contactId, setContactId] = useState('');
     const [project, setProject] = useState('');
     const [estimatedValue, setEstimatedValue] = useState(0);
     const [probability, setProbability] = useState(10);
-    const [contactEmail, setContactEmail] = useState(''); // This will now auto-fill
+    const [contactEmail, setContactEmail] = useState('');
 
-    // --- Smart Dropdown Logic ---
-    // This filters the contacts list based on the selected company
     const availableContacts = useMemo(() => {
-        if (!companyId) return []; // If no company is selected, show no contacts
+        if (!companyId) return [];
         return contacts.filter(contact => contact.companyId === companyId);
     }, [companyId, contacts]);
 
-    // --- Updated useEffect ---
     useEffect(() => {
         if (isEditMode) {
-            // EDIT MODE: Pre-fill all fields from the opportunity
             const company = companies.find(c => c.companyName === opportunityToEdit.customerName);
-            const companyId = company ? company.id : '';
-            
-            setCompanyId(companyId);
+            const cid = company ? company.id : '';
+            setCompanyId(cid);
             setProject(opportunityToEdit.project);
             setEstimatedValue(opportunityToEdit.estimatedValue);
             setProbability(opportunityToEdit.probability);
             
-            // Find the matching contact
             const contact = contacts.find(c => 
-                c.companyId === companyId && 
-                c.firstName.includes(opportunityToEdit.contactName.split(' ')[0]) &&
-                c.lastName.includes(opportunityToEdit.contactName.split(' ')[1])
+                c.companyId === cid && 
+                c.firstName === opportunityToEdit.contactName?.split(' ')[0]
             );
-
             if (contact) {
                 setContactId(contact.id);
                 setContactEmail(contact.email);
-            } else {
-                // Handle contacts that were manually entered
-                setContactId('manual'); // Set a special ID
-                setContactEmail(opportunityToEdit.contactEmail);
-            }
-
-        } else {
-            // NEW MODE: Set defaults
-            const defaultCompanyId = companies.length > 0 ? companies[0].id : '';
-            setCompanyId(defaultCompanyId);
-            setProject('');
-            setEstimatedValue(0);
-            setProbability(10);
-            
-            // Auto-select first contact of that company
-            const defaultContacts = contacts.filter(c => c.companyId === defaultCompanyId);
-            if (defaultContacts.length > 0) {
-                setContactId(defaultContacts[0].id);
-                setContactEmail(defaultContacts[0].email);
-            } else {
-                setContactId('');
-                setContactEmail('');
             }
         }
     }, [opportunityToEdit, isEditMode, companies, contacts]);
 
-    // --- Event Handlers for Dropdowns ---
-    const handleCompanyChange = (e) => {
-        const newCompanyId = e.target.value;
-        setCompanyId(newCompanyId);
-
-        // Auto-select the first contact from this new company
-        const newContacts = contacts.filter(c => c.companyId === newCompanyId);
-        if (newContacts.length > 0) {
-            setContactId(newContacts[0].id);
-            setContactEmail(newContacts[0].email);
-        } else {
-            setContactId('');
-            setContactEmail('');
-        }
-    };
-
-    const handleContactChange = (e) => {
-        const newContactId = e.target.value;
-        setContactId(newContactId);
-        
-        // Auto-fill the email
-        const contact = contacts.find(c => c.id === newContactId);
-        if (contact) {
-            setContactEmail(contact.email);
-        } else {
-            setContactEmail('');
-        }
-    };
-
-    // --- Updated Save Function ---
-    const handleSave = async () => {
+    const handleSave = () => {
         const selectedCompany = companies.find(c => c.id === companyId);
         const selectedContact = contacts.find(c => c.id === contactId);
+        if (!selectedCompany) return alert('Select a company.');
 
-        if (!selectedCompany || !selectedContact) {
-            alert('Please select a valid company and contact.');
-            return;
-        }
-        
-        const oppData = {
+        onSave({
             companyId: selectedCompany.id,
-            customerName: selectedCompany.companyName, // Use 'customerName' to keep card display simple
+            customerName: selectedCompany.companyName,
             project,
             estimatedValue: Number(estimatedValue),
             probability: Number(probability),
-            contactId: selectedContact.id,
-            contactName: `${selectedContact.firstName} ${selectedContact.lastName}`,
-            contactEmail: selectedContact.email,
-        };
-        
-        onSave(oppData);
+            contactId: selectedContact?.id || '',
+            contactName: selectedContact ? `${selectedContact.firstName} ${selectedContact.lastName}` : '',
+            contactEmail: selectedContact?.email || '',
+        });
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-20 flex justify-center items-center p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
             <Card className="w-full max-w-lg">
                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-2xl font-bold text-gray-800">
-                        {isEditMode ? 'Edit Opportunity' : 'New Opportunity'}
-                    </h3>
+                    <h3 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Opportunity' : 'New Opportunity'}</h3>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-800"><X /></button>
                 </div>
                 <div className="space-y-4">
-                    
-                    {/* --- Company Dropdown --- */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-                        <select
-                            value={companyId}
-                            onChange={handleCompanyChange}
-                            className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                            required
-                        >
-                            {!companies || companies.length === 0 ? (
-                                <option value="">Please add a company first</option>
-                            ) : (
-                                companies.map(company => (
-                                    <option key={company.id} value={company.id}>
-                                        {company.companyName}
-                                    </option>
-                                ))
-                            )}
-                        </select>
+                    <label className="block text-sm font-medium text-gray-700">Company</label>
+                    <select value={companyId} onChange={e => setCompanyId(e.target.value)} className="w-full p-2 border rounded-md shadow-sm">
+                        <option value="">Select Company</option>
+                        {companies.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
+                    </select>
+                    <Input label="Project Name" value={project} onChange={e => setProject(e.target.value)} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input label="Estimated Value ($)" type="number" value={estimatedValue} onChange={e => setEstimatedValue(e.target.value)} />
+                        <Input label="Probability (%)" type="number" value={probability} onChange={e => setProbability(e.target.value)} />
                     </div>
-
-                    <Input label="Project Name" value={project} onChange={(e) => setProject(e.target.value)} placeholder="e.g., Laguna Plant - Cooling/Heat Recovery" required />
-                    <Input label="Estimated Value ($)" type="number" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} />
-                    <Input label="Probability (%)" type="number" value={probability} onChange={(e) => setProbability(e.target.value)} />
-
-                    <hr className="my-2"/>
-                    <h4 className="text-lg font-semibold text-gray-700">Primary Contact</h4>
-                    
-                    {/* --- Smart Contact Dropdown --- */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
-                        <select
-                            value={contactId}
-                            onChange={handleContactChange}
-                            className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                            required
-                            disabled={availableContacts.length === 0} // Disable if no contacts
-                        >
-                            {availableContacts.length === 0 ? (
-                                <option value="">No contacts found for this company</option>
-                            ) : (
-                                availableContacts.map(contact => (
-                                    <option key={contact.id} value={contact.id}>
-                                        {contact.firstName} {contact.lastName} ({contact.jobTitle})
-                                    </option>
-                                ))
-                            )}
-                            {isEditMode && contactId === 'manual' && (
-                                <option value="manual">Manually Entered Contact</option>
-                            )}
-                        </select>
-                    </div>
-                    
-                    {/* --- Auto-filled Email --- */}
-                    <Input label="Contact Email" type="email" value={contactEmail} readOnly disabled />
-
+                    <label className="block text-sm font-medium text-gray-700">Contact Name</label>
+                    <select value={contactId} onChange={e => setContactId(e.target.value)} className="w-full p-2 border rounded-md shadow-sm">
+                        <option value="">Select Contact</option>
+                        {availableContacts.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+                    </select>
                 </div>
-                <div className="mt-6 flex justify-end">
-                    <Button onClick={handleSave} variant="primary">
-                        <Plus className="mr-2" size={16} /> 
-                        {isEditMode ? 'Update Opportunity' : 'Save Opportunity'}
-                    </Button>
+                <div className="mt-6 flex justify-end gap-2">
+                    <Button onClick={onClose} variant="secondary">Cancel</Button>
+                    <Button onClick={handleSave} variant="primary">Save Opportunity</Button>
                 </div>
             </Card>
         </div>
     );
 };
 
-// --- 3. ACCEPT 'contacts' PROP ---
-const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => { 
-    const [showModal, setShowModal] = useState(false);
-    const [editingOpportunity, setEditingOpportunity] = useState(null);
+// ----------------------------------------------------------------------
+// 2. ADVANCED DETAIL MODAL (The Interaction Log & Linked Data Tabs)
+// ----------------------------------------------------------------------
+const OpportunityDetailModal = ({ 
+    opp, onClose, onSaveInteraction, quotes, contacts, commissioningReports, onOpenQuote, onOpenReport, onEditContact 
+}) => {
+    const [activeTab, setActiveTab] = useState('ACTIVITY');
+    const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
+    const [newLogType, setNewLogType] = useState('Call');
+    const [newLogOutcome, setNewLogOutcome] = useState('');
+
+    // Logic ported from CompaniesPage for smart data linking
+    const targetName = (opp.customerName || '').toLowerCase().trim();
     
-    const STAGES = STAGE_ORDER;
+    const companyContacts = useMemo(() => contacts.filter(c => 
+        c.companyId === opp.companyId || (c.companyName && c.companyName.toLowerCase().trim() === targetName)
+    ), [contacts, targetName, opp]);
 
-    // --- (All handle... functions are unchanged) ---
-    const handleSaveOpportunity = async (newOppData) => {
-        if (!user || !user.uid) {
-            alert("Error: You are not logged in.");
-            return;
-        }
-        try {
-            const newOpp = {
-                ...newOppData,
-                stage: 'Lead', 
-                createdAt: serverTimestamp(), 
-                notes: [] 
-            };
-            await addDoc(collection(db, "users", user.uid, "opportunities"), newOpp);
-            console.log("Opportunity saved!");
-            handleCloseModal(); 
-        } catch (e) {
-            console.error("Error adding document: ", e);
-            alert("Failed to save opportunity. Check console.");
-        }
-    };
-    const handleUpdateFullOpportunity = async (oppData) => {
-        if (!editingOpportunity || !editingOpportunity.id) return alert("Error: No opportunity selected for update.");
-        if (!user || !user.uid) return alert("Error: User not logged in.");
+    const relevantQuotes = useMemo(() => quotes.filter(q => 
+        q.customer?.name?.toLowerCase().includes(targetName)
+    ), [quotes, targetName]);
 
-        const oppRef = doc(db, "users", user.uid, "opportunities", editingOpportunity.id);
-        try {
-            await setDoc(oppRef, {
-                ...oppData, 
-                lastModified: serverTimestamp() 
-            }, { merge: true }); 
-            
-            console.log("Opportunity updated!");
-            handleCloseModal(); 
-        } catch (e) {
-            console.error("Error updating document: ", e);
-            alert("Failed to update opportunity.");
-        }
+    const relevantReports = useMemo(() => commissioningReports.filter(r => 
+        r.customerName && r.customerName.toLowerCase().includes(targetName)
+    ), [commissioningReports, targetName]);
+
+    const handleAddInteraction = () => {
+        if (!newLogOutcome) return alert("Enter details.");
+        onSaveInteraction(opp.id, {
+            id: Date.now(),
+            date: newLogDate,
+            type: newLogType,
+            outcome: newLogOutcome
+        });
+        setNewLogOutcome('');
     };
-    const handleSave = (oppDataFromModal) => {
-        if (editingOpportunity) {
-            handleUpdateFullOpportunity(oppDataFromModal);
-        } else {
-            handleSaveOpportunity(oppDataFromModal);
-        }
-    };
-    const handleOpenNewModal = () => {
-        setEditingOpportunity(null);
-        setShowModal(true);
-    };
-    const handleOpenEditModal = (opp) => {
-        setEditingOpportunity(opp);
-        setShowModal(true);
-    };
-    const handleCloseModal = () => {
-        setShowModal(false);
-        setEditingOpportunity(null);
-    };
-    const handleUpdateOpportunityStage = async (oppId, newStage) => {
-        if (!user || !user.uid) return alert("Error: User not logged in.");
-        const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
-        let newProbability;
-        switch (newStage) {
-            case 'Lead': newProbability = 10; break;
-            case 'Qualifying': newProbability = 25; break;
-            case 'Site Visit / Demo': newProbability = 50; break;
-            case 'Proposal Sent': newProbability = 75; break;
-            case 'Negotiation': newProbability = 90; break;
-            case 'Closed-Won': newProbability = 100; break;
-            case 'Closed-Lost': newProbability = 0; break;
-            default: newProbability = 0;
-        }
-        try {
-            await setDoc(oppRef, {
-                stage: newStage,
-                probability: newProbability,
-                lastModified: serverTimestamp()
-            }, { merge: true });
-            console.log(`Opportunity ${oppId} updated to ${newStage}`);
-        } catch (error) {
-            console.error("Error updating opportunity: ", error);
-            alert("Failed to update lead stage.");
-        }
-    };
-    const handleDeleteOpportunity = async (oppId) => {
-        if (!user || !user.uid) return alert("Error: User not logged in.");
-        if (window.confirm("Are you sure you want to permanently delete this Opportunity?")) {
-            const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
-            try {
-                await deleteDoc(oppRef);
-                console.log(`Opportunity ${oppId} deleted`);
-            } catch (error) {
-                console.error("Error deleting opportunity: ", error);
-                alert("Failed to delete lead.");
-            }
-        }
-    };
-    const getOppsByStage = (stage) => {
-        if (!opportunities) return []; 
-        return opportunities.filter(opp => opp.stage === stage);
-    };
-    // --- (End of unchanged handle... functions) ---
 
     return (
-        <div className="w-full">
-            {/* --- 4. PASS 'contacts' DOWN TO THE MODAL --- */}
-            {showModal && <NewOpportunityModal 
-                onSave={handleSave} 
-                onClose={handleCloseModal}
-                opportunityToEdit={editingOpportunity} 
-                companies={companies}
-                contacts={contacts} 
-            />}
-            
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-800">Sales Funnel</h1>
-                <Button onClick={handleOpenNewModal} variant="primary">
-                    <Plus className="mr-2" size={16} /> New Opportunity
-                </Button>
-            </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <Card className="w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col md:flex-row gap-6 bg-white p-0">
+                {/* Left Side: Summary */}
+                <div className="flex-1 p-6 overflow-y-auto space-y-4">
+                    <div className="flex justify-between items-center border-b pb-4">
+                        <h3 className="text-2xl font-bold text-gray-800">{opp.customerName}</h3>
+                        <button onClick={onClose} className="md:hidden"><X /></button>
+                    </div>
+                    <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
+                        <p className="text-sm font-bold text-orange-600 uppercase tracking-widest">Active Project</p>
+                        <p className="text-lg font-bold text-gray-800">{opp.project}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs font-bold text-gray-400">ESTIMATED VALUE</p>
+                            <p className="text-xl font-bold text-gray-800">${opp.estimatedValue?.toLocaleString()}</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                            <p className="text-xs font-bold text-gray-400">PROBABILITY</p>
+                            <p className="text-xl font-bold text-orange-600">{opp.probability}%</p>
+                        </div>
+                    </div>
+                    <Textarea label="Internal Briefing/Notes" rows="6" value={opp.notes || ''} readOnly className="bg-gray-50" />
+                </div>
 
-            <div className="flex gap-4 overflow-x-auto pb-4" style={{minHeight: '60vh'}}>
-                {STAGES.map(stage => {
-                    const stageOpps = getOppsByStage(stage);
-                    const stageValue = stageOpps.reduce((sum, opp) => sum + (opp.estimatedValue || 0), 0);
-                    
+                {/* Right Side: Linked Data Tabs (The advanced stuff from Companies page) */}
+                <div className="flex-1 border-l border-gray-200 bg-slate-50 p-6 flex flex-col">
+                    <div className="flex justify-between items-center mb-4">
+                        <div className="flex gap-2">
+                            <button onClick={() => setActiveTab('ACTIVITY')} className={`px-3 py-1 rounded text-sm font-bold ${activeTab === 'ACTIVITY' ? 'bg-orange-100 text-orange-700' : 'text-gray-500 hover:bg-gray-100'}`}>Activity Log</button>
+                            <button onClick={() => setActiveTab('DATA')} className={`px-3 py-1 rounded text-sm font-bold ${activeTab === 'DATA' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}>Linked Data ({companyContacts.length + relevantQuotes.length})</button>
+                        </div>
+                        <button onClick={onClose} className="hidden md:block text-gray-500"><X /></button>
+                    </div>
+
+                    {activeTab === 'ACTIVITY' ? (
+                        <>
+                            <div className="bg-white p-3 rounded-lg border shadow-sm mb-4 space-y-2">
+                                <div className="flex gap-2">
+                                    <Input type="date" value={newLogDate} onChange={e => setNewLogDate(e.target.value)} className="text-sm w-1/3" />
+                                    <select value={newLogType} onChange={e => setNewLogType(e.target.value)} className="block w-2/3 px-2 py-2 border rounded-md text-sm">
+                                        <option value="Visit">Site Visit</option><option value="Call">Call</option><option value="Email">Email</option><option value="Note">Note</option>
+                                    </select>
+                                </div>
+                                <div className="flex gap-2">
+                                    <input type="text" value={newLogOutcome} onChange={e => setNewLogOutcome(e.target.value)} placeholder="Log outcome..." className="flex-1 px-3 py-2 border rounded-md text-sm" />
+                                    <Button onClick={handleAddInteraction} variant="secondary"><Plus size={16}/></Button>
+                                </div>
+                            </div>
+                            <div className="flex-1 overflow-y-auto space-y-3">
+                                {(opp.interactions || []).map(log => (
+                                    <div key={log.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-white ${log.type === 'Visit' ? 'bg-green-500' : 'bg-blue-500'}`}>{log.type}</span>
+                                            <span className="text-[10px] text-gray-400">{log.date}</span>
+                                        </div>
+                                        <p className="text-sm text-gray-800">{log.outcome}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex-1 overflow-y-auto space-y-4">
+                            <div className="bg-white rounded-lg p-3 border shadow-sm">
+                                <h5 className="font-bold text-xs text-gray-400 uppercase mb-2 flex items-center gap-2"><Users size={14}/> Contacts</h5>
+                                {companyContacts.map(c => (
+                                    <div key={c.id} className="flex justify-between items-center text-sm py-1 border-b last:border-0">
+                                        <span>{c.firstName} {c.lastName}</span>
+                                        <div className="flex gap-2">
+                                            <a href={`tel:${c.phone}`} className="text-blue-600"><Phone size={14}/></a>
+                                            <button onClick={() => onEditContact(c)} className="text-gray-400"><Edit size={14}/></button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="bg-white rounded-lg p-3 border shadow-sm">
+                                <h5 className="font-bold text-xs text-gray-400 uppercase mb-2 flex items-center gap-2"><FileText size={14}/> Quotes</h5>
+                                {relevantQuotes.map(q => (
+                                    <div key={q.id} onClick={() => onOpenQuote(q)} className="flex justify-between items-center text-sm py-2 cursor-pointer hover:bg-slate-50 border-b last:border-0">
+                                        <span className="font-bold">{q.id}</span>
+                                        <span className="text-orange-600 font-bold">${q.finalSalesPrice?.toLocaleString()}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+// ----------------------------------------------------------------------
+// 3. MAIN FUNNEL PAGE
+// ----------------------------------------------------------------------
+const FunnelPage = ({ opportunities, user, companies, contacts, quotes, commissioningReports, onOpenQuote, onOpenReport, onEditContact }) => { 
+    const [showModal, setShowModal] = useState(false);
+    const [showDetailModal, setShowDetailModal] = useState(false);
+    const [editingOpportunity, setEditingOpportunity] = useState(null);
+    const [selectedOpp, setSelectedOpp] = useState(null);
+
+    const STAGES = STAGE_ORDER;
+
+    const handleSave = async (oppData) => {
+        if (!user) return;
+        try {
+            if (editingOpportunity) {
+                await setDoc(doc(db, "users", user.uid, "opportunities", editingOpportunity.id), { ...oppData, lastModified: serverTimestamp() }, { merge: true });
+            } else {
+                await addDoc(collection(db, "users", user.uid, "opportunities"), { ...oppData, stage: 'Lead', createdAt: serverTimestamp(), interactions: [] });
+            }
+            setShowModal(false); setEditingOpportunity(null);
+        } catch (e) { console.error(e); }
+    };
+
+    const handleSaveInteraction = async (oppId, log) => {
+        const opp = opportunities.find(o => o.id === oppId);
+        const updatedLogs = [log, ...(opp.interactions || [])];
+        await setDoc(doc(db, "users", user.uid, "opportunities", oppId), { interactions: updatedLogs }, { merge: true });
+    };
+
+    const handleUpdateOpportunityStage = async (oppId, next) => {
+        const probs = { 'Lead': 10, 'Qualifying': 25, 'Site Visit / Demo': 50, 'Proposal Sent': 75, 'Negotiation': 90, 'Closed-Won': 100, 'Closed-Lost': 0 };
+        await setDoc(doc(db, "users", user.uid, "opportunities", oppId), { stage: next, probability: probs[next], lastModified: serverTimestamp() }, { merge: true });
+    };
+
+    return (
+        <div className="w-full">
+            {showModal && <NewOpportunityModal onSave={handleSave} onClose={() => setShowModal(false)} opportunityToEdit={editingOpportunity} companies={companies} contacts={contacts} />}
+            {showDetailModal && selectedOpp && <OpportunityDetailModal opp={selectedOpp} onClose={() => setShowDetailModal(false)} onSaveInteraction={handleSaveInteraction} quotes={quotes} contacts={contacts} commissioningReports={commissioningReports} onOpenQuote={onOpenQuote} onOpenReport={onOpenReport} onEditContact={onEditContact} />}
+
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-3xl font-bold text-gray-800">Sales Funnel</h1>
+                <Button onClick={() => { setEditingOpportunity(null); setShowModal(true); }} variant="primary"><Plus className="mr-2" size={16} /> New Opportunity</Button>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto pb-4" style={{minHeight: '60vh'}}>
+                {STAGES.map(stage => {
+                    const stageOpps = (opportunities || []).filter(opp => opp.stage === stage);
+                    const stageValue = stageOpps.reduce((sum, opp) => sum + (opp.estimatedValue || 0), 0);
                     let columnBg = "bg-gray-200";
                     if (stage === 'Closed-Won') columnBg = "bg-green-100";
                     if (stage === 'Closed-Lost') columnBg = "bg-red-100";
 
-                    return (
-                        <div key={stage} className={`flex-shrink-0 w-80 ${columnBg} p-3 rounded-xl shadow-sm`}>
-                            <div className="mb-3 flex justify-between items-center">
-                                <h3 className="font-semibold text-gray-800">{stage} ({stageOpps.length})</h3>
-                                <span className="text-sm font-bold text-gray-700">${stageValue.toLocaleString()}</span>
-                            </div>
-                            <div className="h-full space-y-3">
-                                {stageOpps
-                                    .sort((a, b) => b.estimatedValue - a.estimatedValue) 
-                                    .map(opp => (
-                                        <OpportunityCard 
-                                            key={opp.id} 
-                                            opp={opp} 
-                                            onUpdate={handleUpdateOpportunityStage}
-                                            onDelete={handleDeleteOpportunity}
-                                            onEdit={handleOpenEditModal}
-                                            onOpen={onOpen}
-                                        />
-                                    ))
-                                }
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
+                    return (
+                        <div key={stage} className={`flex-shrink-0 w-80 ${columnBg} p-3 rounded-xl shadow-sm border border-gray-300`}>
+                            <div className="mb-3 flex justify-between items-center">
+                                <h3 className="font-bold text-gray-700">{stage} ({stageOpps.length})</h3>
+                                <span className="text-sm font-bold text-gray-500">${stageValue.toLocaleString()}</span>
+                            </div>
+                            <div className="space-y-3">
+                                {stageOpps.map(opp => (
+                                    <Card key={opp.id} className="p-4 rounded-lg shadow border bg-white border-gray-200 hover:border-orange-400 transition-all group relative">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <h4 className="font-bold text-gray-800">{opp.customerName}</h4>
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => { setEditingOpportunity(opp); setShowModal(true); }} className="p-1 text-gray-400 hover:text-indigo-600"><Edit size={14}/></button>
+                                                <button onClick={async () => { if(window.confirm("Delete lead?")) await deleteDoc(doc(db, "users", user.uid, "opportunities", opp.id)); }} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={14}/></button>
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mb-3">{opp.project}</p>
+                                        <div className="flex justify-between items-center bg-gray-50 p-2 rounded border mb-3">
+                                            <span className="text-sm font-bold text-orange-600">${(opp.estimatedValue || 0).toLocaleString()}</span>
+                                            <span className="text-[10px] font-bold text-gray-400 border bg-white px-1 rounded">{opp.probability}% win</span>
+                                        </div>
+                                        <Button onClick={() => { setSelectedOpp(opp); setShowDetailModal(true); }} variant="secondary" className="w-full !py-1 text-[10px] font-bold uppercase tracking-widest">
+                                            <FileText size={12} className="mr-2"/> View Details & Interaction Logs
+                                        </Button>
+                                        {STAGE_ORDER[STAGE_ORDER.indexOf(opp.stage) + 1] && opp.stage !== 'Closed-Won' && (
+                                            <button onClick={() => handleUpdateOpportunityStage(opp.id, STAGE_ORDER[STAGE_ORDER.indexOf(opp.stage) + 1])} className="w-full mt-2 py-1 text-[10px] font-bold text-blue-500 hover:text-blue-700 bg-blue-50 rounded border border-blue-100 uppercase tracking-widest">
+                                                Advance Stage &rarr;
+                                            </button>
+                                        )}
+                                    </Card>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
 };
 
 export default FunnelPage;
