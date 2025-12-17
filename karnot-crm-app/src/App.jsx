@@ -37,6 +37,9 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><BarChart2 className="mr-1" size={14} /> Dashboard</Button>
                 <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Building className="mr-1" size={14} /> Companies</Button>
                 
+                {/* RESTORED CONTACTS BUTTON */}
+                <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Users className="mr-1" size={14} /> Contacts</Button>
+                
                 <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
                     <Calculator className="mr-1" size={14} /> Calculators
                 </Button>
@@ -56,7 +59,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
     </header>
 );
 
-// --- Main App Component ---
 export default function App() {
     const [user, setUser] = useState(null); 
     const [activeView, setActiveView] = useState('funnel');
@@ -180,7 +182,10 @@ export default function App() {
                     />
                 )}
                 {activeView === 'companies' && <CompaniesPage companies={companies} contacts={contacts} quotes={quotes} user={user} onOpenQuote={handleEditQuote} />}
+                
+                {/* RESTORED CONTACTS VIEW BLOCK */}
                 {activeView === 'contacts' && <ContactsPage contacts={contacts} companies={companies} user={user} />}
+                
                 {activeView === 'calculator' && <QuoteCalculator onSaveQuote={handleSaveQuote} nextQuoteNumber={nextQuoteNumber} key={quoteToEdit ? quoteToEdit.id : 'new'} initialData={quoteToEdit} companies={companies} contacts={contacts} />}
                 {activeView === 'list' && <QuotesListPage quotes={quotes} onDeleteQuote={handleDeleteQuote} onEditQuote={handleEditQuote} onUpdateQuoteStatus={handleUpdateQuoteStatus} />}
                 {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
