@@ -37,15 +37,13 @@ export function calculateHeatPump(inputs, dbProducts) {
     
     if (deltaT <= 0) return { error: "Target Temp must be higher than Inlet Temp." };
 
-    // Required Thermal Energy (Energy Out)
     const kwhPerLiter = (deltaT * 1.163) / 1000;
     const dailyThermalEnergyKWH = dailyLiters * kwhPerLiter;
-
-    // Required Thermal Power (kW) based on scheduling (Liters/Day * kwh/Liters / Hours/Day)
     const requiredThermalPowerKW = dailyThermalEnergyKWH / hoursPerDay;
 
     // --- 2. BASELINE (OLD SYSTEM) COST ---
-    // Note: inputs.fuelPrice is already in the selected local currency
+    // User inputs for fuelPrice and elecRate are local currency. 
+    // We do NOT multiply these by FX.
     let currentRateKWH = 0;
     if (inputs.heatingType === 'propane') {
         currentRateKWH = (inputs.fuelPrice / inputs.tankSize) / CONFIG.KWH_PER_KG_LPG;
@@ -56,98 +54,75 @@ export function calculateHeatPump(inputs, dbProducts) {
     }
     const annualCostOld = (dailyThermalEnergyKWH / CONFIG.COP_STANDARD) * 365 * currentRateKWH;
 
-    // --- 3. FIND BEST HEAT PUMP (Using kW fields and Refrigerant Filter) ---
-
+    // --- 3. FIND BEST HEAT PUMP ---
     let availableModels = dbProducts
         .filter(p => {
             const nominalDHWPower = Number(p.kW_DHW_Nominal) || 0;
-            const price = Number(p.salesPriceUSD) || 0;
-
-            if (nominalDHWPower === 0 || price === 0) return false;
+            const priceUSD = Number(p.salesPriceUSD) || 0;
+            if (nominalDHWPower === 0 || priceUSD === 0) return false;
             
-            // Filter 1: Refrigerant Type Check (The user selected the type)
             if (inputs.heatPumpType !== 'all') {
                 const productRef = (p.Refrigerant || '').toUpperCase();
                 const requiredRef = inputs.heatPumpType.toUpperCase();
-                
-                // Special handling for CO2 (R744)
                 if (requiredRef === 'R744') {
                      if (productRef !== 'R744' && productRef !== 'CO2') return false;
                 } else if (productRef !== requiredRef) {
                     return false;
                 }
             }
-
-            // Filter 2: Cooling Requirement Check
             if (inputs.includeCooling && !p.isReversible) return false;
-
             return true;
         })
-        
-        // 2. Select Suitable Models
         .filter(m => {
             const nominalDHWPower = Number(m.kW_DHW_Nominal) || 0;
             const maxTemp = Number(m.max_temp_c) || 60;
-
-            // Match 1: Max Temperature must be sufficient.
             if (inputs.targetTemp > maxTemp) return false;
-
-            // Match 2: Nominal Power must be equal to or greater than the required power.
-            // We use a 95% tolerance (i.e., allowing a small shortfall if it's the next size up).
             return nominalDHWPower >= (requiredThermalPowerKW * 0.95); 
         })
-        
-        // 3. Sort by Price (Cheapest first)
         .sort((a, b) => Number(a.salesPriceUSD) - Number(b.salesPriceUSD));
 
-
     if (availableModels.length === 0) { 
-        // Refined error message to reflect the user's filter choice
         const refFilter = inputs.heatPumpType !== 'all' ? ` (Filtered by ${inputs.heatPumpType})` : '';
         return { error: `No suitable model found in inventory${refFilter}. Required heating capacity: ${requiredThermalPowerKW.toFixed(1)} kW.` }; 
     }
     
     const heatPumpSystem = availableModels[0];
     
-    // --- 4. FINANCIAL CALCULATIONS ---
-    const fxRate = CONFIG.FX[inputs.currency];
+    // --- 4. FINANCIAL CALCULATIONS & CURRENCY CONVERSION ---
+    const fxRate = CONFIG.FX[inputs.currency] || 1;
     const symbol = CONFIG.SYMBOLS[inputs.currency];
     
     const heatPumpCOP = Number(heatPumpSystem.COP_DHW) || 3.5;
-    
-    // Energy In = Energy Out / COP
     const karnotDailyElecKwh = dailyThermalEnergyKWH / heatPumpCOP; 
     const karnotPowerDrawKw = karnotDailyElecKwh / hoursPerDay;
 
-    // Convert only the USD-based hardware prices to local currency
-    const heatPumpCost = Number(heatPumpSystem.salesPriceUSD) * fxRate;
+    // Convert USD Equipment prices to the selected currency
+    const heatPumpCostConverted = Number(heatPumpSystem.salesPriceUSD) * fxRate;
+    
     let karnotAnnualCost = 0, solarCost = 0, inverterCost = 0, karnotPanelCount = 0;
 
-    // Solar Offset Logic
-    // inputs.elecRate is already in local currency
     if (inputs.systemType === 'grid-only') {
         karnotAnnualCost = karnotDailyElecKwh * 365 * inputs.elecRate;
-    } else { // Grid + Solar
+    } else { 
         const sunHours = Number(inputs.sunHours) || 5.5;
         const solarPoweredHours = Math.min(hoursPerDay, sunHours);
         const gridPoweredHours = Math.max(0, hoursPerDay - solarPoweredHours);
         karnotAnnualCost = (karnotPowerDrawKw * gridPoweredHours) * 365 * inputs.elecRate;
         
         karnotPanelCount = Math.ceil(karnotPowerDrawKw / CONFIG.SOLAR_PANEL_KW_RATED);
+        // Hardware conversion
         solarCost = karnotPanelCount * CONFIG.SOLAR_PANEL_COST_USD * fxRate;
         inverterCost = (karnotPanelCount * CONFIG.SOLAR_PANEL_KW_RATED * 1000 * CONFIG.INVERTER_COST_PER_WATT_USD) * fxRate;
     }
 
-    // Free Cooling Savings
     let coolSavings = 0;
     if (inputs.includeCooling && heatPumpSystem.isReversible) {
         const nominalCoolingPower = Number(heatPumpSystem.kW_Cooling_Nominal) || heatPumpSystem.kW_DHW_Nominal * 1.2;
         const dailyCoolingKwh = nominalCoolingPower * hoursPerDay;
-        // inputs.elecRate is in local currency
         coolSavings = dailyCoolingKwh * 365 * inputs.elecRate * CONFIG.COOLING_COP;
     }
     
-    const totalCapex = heatPumpCost + solarCost + inverterCost;
+    const totalCapex = heatPumpCostConverted + solarCost + inverterCost;
     const totalAnnualSavings = (annualCostOld - karnotAnnualCost) + coolSavings;
     const paybackYears = totalAnnualSavings > 0 && totalCapex > 0 ? (totalCapex / totalAnnualSavings).toFixed(1) : "N/A";
 
@@ -162,7 +137,7 @@ export function calculateHeatPump(inputs, dbProducts) {
         financials: {
             symbol, annualCostOld, karnotAnnualCost, totalSavings: totalAnnualSavings, coolSavings,
             paybackYears,
-            capex: { heatPump: heatPumpCost, solar: solarCost, inverter: inverterCost, total: totalCapex }
+            capex: { heatPump: heatPumpCostConverted, solar: solarCost, inverter: inverterCost, total: totalCapex }
         }
     };
 }
