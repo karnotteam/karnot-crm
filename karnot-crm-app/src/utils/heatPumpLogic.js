@@ -69,7 +69,12 @@ export function calculateHeatPump(inputs, dbProducts) {
                 const productRef = (p.Refrigerant || '').toUpperCase();
                 const requiredRef = inputs.heatPumpType.toUpperCase();
                 
-                if (productRef !== requiredRef) return false;
+                // Special handling for CO2 (R744)
+                if (requiredRef === 'R744') {
+                     if (productRef !== 'R744' && productRef !== 'CO2') return false;
+                } else if (productRef !== requiredRef) {
+                    return false;
+                }
             }
 
             // Filter 2: Cooling Requirement Check
@@ -96,7 +101,9 @@ export function calculateHeatPump(inputs, dbProducts) {
 
 
     if (availableModels.length === 0) { 
-        return { error: `No suitable model found in inventory. Required heating capacity: ${requiredThermalPowerKW.toFixed(1)} kW.` }; 
+        // Refined error message to reflect the user's filter choice
+        const refFilter = inputs.heatPumpType !== 'all' ? ` (Filtered by ${inputs.heatPumpType})` : '';
+        return { error: `No suitable model found in inventory${refFilter}. Required heating capacity: ${requiredThermalPowerKW.toFixed(1)} kW.` }; 
     }
     
     const heatPumpSystem = availableModels[0];
