@@ -19,16 +19,16 @@ export const calculateHeatPump = (inputs, products = []) => {
             heatPumpType, includeCooling, currency 
         } = inputs;
 
-        // 1. Calculate Daily Demand
+        // 1. Calculate Daily Liters (Restored User Types)
         let dailyLiters = 0;
         if (userType === 'home') dailyLiters = occupants * 50;
         else if (userType === 'restaurant') dailyLiters = mealsPerDay * 7;
         else if (userType === 'resort') dailyLiters = (roomsOccupied * 50) + (mealsPerDay * 7);
         else dailyLiters = dailyLitersInput;
 
-        // 2. Thermodynamic Calculations
+        // 2. Thermal Math
         const deltaT = Math.max(1, targetTemp - inletTemp);
-        const specificHeatWater = 4.187; // kJ/kg°C
+        const specificHeatWater = 4.187; 
         const kwhPerLiter = (deltaT * 1.163) / 1000;
         const dailyThermalEnergyKWH = dailyLiters * kwhPerLiter;
 
@@ -38,79 +38,63 @@ export const calculateHeatPump = (inputs, products = []) => {
         else if (heatingType === 'diesel') currentRateKWH = fuelPrice / 10.7;
         const annualCostOld = dailyThermalEnergyKWH * 365 * currentRateKWH;
 
-        // 4. Model Filtering with Mapping
+        // 4. Advanced Model Filtering (Storage vs Flow)
         const peakLitersPerHour = dailyLiters / hoursPerDay;
+        const perfFactor = (1 + ((ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015));
 
         let availableModels = products.filter(p => {
             const pType = (p.Refrigerant || p.type || '').toLowerCase();
             const matchesType = heatPumpType === 'all' || pType.includes(heatPumpType.toLowerCase());
             const matchesCooling = !includeCooling || p.isReversible === true;
             
-            // Dynamic Flow: (kW * 3600) / (4.187 * deltaT)
+            // Delta-T Performance Logic
             const nominalKW = parseFloat(p.kW_DHW_Nominal) || 0;
             const calculatedLhr = (nominalKW * 3600) / (specificHeatWater * deltaT);
-            
-            // Adjust for Ambient Temp performance (1.5% per degree from 20C)
-            const adjLhr = calculatedLhr * (1 + ((ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015));
+            const adjLhr = calculatedLhr * perfFactor;
 
-            return matchesType && 
-                   matchesCooling && 
-                   targetTemp <= (p.max_temp_c || 60) && 
-                   peakLitersPerHour <= adjLhr &&
-                   nominalKW > 0;
+            // AquaHERO Storage Logic: If unit has a tank, check daily capacity
+            // We assume a storage unit can handle 3x its tank volume per day
+            if (p.category === 'AquaHERO' || p.integral_storage_L) {
+                const tankSize = parseFloat(p.integral_storage_L) || 200;
+                const dailyCapacity = tankSize * 3 * perfFactor; 
+                return matchesType && targetTemp <= (p.max_temp_c || 70) && dailyLiters <= dailyCapacity;
+            }
+
+            // Standard Unit: Check hourly flow
+            return matchesType && matchesCooling && targetTemp <= (p.max_temp_c || 60) && peakLitersPerHour <= adjLhr && nominalKW > 0;
         });
 
-        if (availableModels.length === 0) {
-            return { error: "No suitable models found. Try reducing Target Temp or increasing Operating Hours." };
-        }
+        if (availableModels.length === 0) return { error: "No suitable models found." };
 
-        // Sort by salesPriceUSD
-        const suitable = availableModels.sort((a, b) => (parseFloat(a.salesPriceUSD) || 999999) - (parseFloat(b.salesPriceUSD) || 999999));
-        const system = suitable[0];
+        const system = availableModels.sort((a, b) => (parseFloat(a.salesPriceUSD) || 999999) - (parseFloat(b.salesPriceUSD) || 999999))[0];
 
-        // 5. Karnot Operation Costs
+        // 5. ROI Math
         const sysCop = parseFloat(system.COP_DHW) || 3.8;
-        const sysPrice = parseFloat(system.salesPriceUSD) || 0;
-        
         const karnotDailyElecKwh = dailyThermalEnergyKWH / sysCop;
         const karnotPowerDrawKw = karnotDailyElecKwh / hoursPerDay;
         
-        let annualKarnotCost = 0;
-        if (systemType === 'grid-only') {
-            annualKarnotCost = karnotDailyElecKwh * 365 * elecRate;
-        } else {
-            const solarPoweredHours = Math.min(hoursPerDay, sunHours || 5.5);
-            const gridPoweredHours = Math.max(0, hoursPerDay - solarPoweredHours);
-            annualKarnotCost = (karnotPowerDrawKw * gridPoweredHours) * 365 * elecRate;
-        }
+        let annualKarnotCost = (systemType === 'grid-only') 
+            ? karnotDailyElecKwh * 365 * elecRate 
+            : (karnotPowerDrawKw * Math.max(0, hoursPerDay - (sunHours || 5.5))) * 365 * elecRate;
 
-        // 6. Savings & ROI
-        let coolSavings = 0;
-        if (includeCooling && system.isReversible) {
-            const dailyCoolingKwh = (dailyThermalEnergyKWH / sysCop) * CONFIG.COOLING_COP;
-            coolSavings = dailyCoolingKwh * 365 * elecRate;
-        }
-
-        const totalSavings = (annualCostOld - annualKarnotCost) + coolSavings;
+        let coolSavings = (includeCooling && system.isReversible) 
+            ? (dailyThermalEnergyKWH / sysCop) * CONFIG.COOLING_COP * 365 * elecRate 
+            : 0;
 
         return {
             system,
             financials: {
                 symbol: CONFIG.SYMBOLS[currency] || '$',
-                annualCostOld,
-                annualKarnotCost,
-                coolSavings,
-                totalSavings,
-                paybackYears: totalSavings > 0 ? (sysPrice / totalSavings).toFixed(1) : "N/A",
-                capex: { total: sysPrice }
+                annualCostOld, annualKarnotCost, coolSavings,
+                totalSavings: (annualCostOld - annualKarnotCost) + coolSavings,
+                paybackYears: ((annualCostOld - annualKarnotCost) + coolSavings) > 0 ? (parseFloat(system.salesPriceUSD) / ((annualCostOld - annualKarnotCost) + coolSavings)).toFixed(1) : "N/A",
+                capex: { total: parseFloat(system.salesPriceUSD) }
             },
             metrics: {
-                adjFlowLhr: (parseFloat(system.kW_DHW_Nominal) * 3600 / (specificHeatWater * deltaT)) * (1 + ((ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015)),
+                adjFlowLhr: (parseFloat(system.kW_DHW_Nominal) * 3600 / (specificHeatWater * deltaT)) * perfFactor,
                 emissionsSaved: (dailyThermalEnergyKWH * 365 * 0.5), 
                 panels: Math.ceil(karnotPowerDrawKw / 0.425)
             }
         };
-    } catch (e) {
-        return { error: e.message };
-    }
+    } catch (e) { return { error: e.message }; }
 };
