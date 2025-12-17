@@ -93,6 +93,13 @@ const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuote
                             <div className="flex items-center gap-2">
                                 <div className="flex flex-col gap-1 mr-2">
                                     <button 
+                                        onClick={() => onUpdateQuoteStatus(quote.id, 'SENT')}
+                                        className={`p-1.5 rounded-lg transition-all border ${quote.status === 'SENT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-600 hover:text-white'}`}
+                                        title="Mark as Sent"
+                                    >
+                                        <Send size={16}/>
+                                    </button>
+                                    <button 
                                         onClick={() => onUpdateQuoteStatus(quote.id, 'WON')}
                                         className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all border border-green-100"
                                         title="Mark as Won"
