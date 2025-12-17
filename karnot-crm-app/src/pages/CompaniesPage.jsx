@@ -5,7 +5,7 @@ import Papa from 'papaparse';
 import { 
     Plus, X, Edit, Trash2, Building, Globe, Upload, Search, 
     MapPin, CheckSquare, Clock, FileText, 
-    Link as LinkIcon, UserCheck, Mail, PlusCircle, ExternalLink, Download, Send
+    Link as LinkIcon, UserCheck, Mail, PlusCircle, ExternalLink, Download, Send, RotateCcw, Handshake
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, PRICING_TIERS } from '../data/constants.jsx';
 
@@ -23,7 +23,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-// --- 2. CompanyModal Component (With Clickable Quotes & Full Log) ---
+// --- 2. Company Modal Component (Restored with Quote Links & Customer Flag) ---
 const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote }) => {
     const [activeTab, setActiveTab] = useState('ACTIVITY');
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
@@ -34,6 +34,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
     const [isVerified, setIsVerified] = useState(companyToEdit?.isVerified || false);
     const [isTarget, setIsTarget] = useState(companyToEdit?.isTarget || false);
     const [isEmailed, setIsEmailed] = useState(companyToEdit?.isEmailed || false);
+    const [isCustomer, setIsCustomer] = useState(companyToEdit?.isCustomer || false); // New Customer Flag
     const [notes, setNotes] = useState(companyToEdit?.notes || '');
     const [interactions, setInteractions] = useState(companyToEdit?.interactions || []);
     const [newLogType, setNewLogType] = useState('Call');
@@ -72,17 +73,22 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                         <Input label="Industry" value={industry} onChange={e => setIndustry(e.target.value)} />
                     </div>
                     <Textarea label="Address" value={address} onChange={e => setAddress(e.target.value)} rows="2" />
-                    <div className="grid grid-cols-3 gap-2 p-3 bg-gray-50 rounded-lg border">
+                    
+                    {/* Status Toggles */}
+                    <div className="grid grid-cols-2 gap-2 p-3 bg-gray-50 rounded-lg border">
                         <Checkbox label="Verified" checked={isVerified} onChange={e => setIsVerified(e.target.checked)} />
-                        <Checkbox label="Target" checked={isTarget} onChange={e => setIsTarget(e.target.checked)} />
                         <Checkbox label="Emailed" checked={isEmailed} onChange={e => setIsEmailed(e.target.checked)} />
+                        <Checkbox label="Target Account" checked={isTarget} onChange={e => setIsTarget(e.target.checked)} />
+                        <Checkbox label={<span className="text-teal-700 font-bold">Existing Customer</span>} checked={isCustomer} onChange={e => setIsCustomer(e.target.checked)} />
                     </div>
+
                     <Textarea label="General Notes" value={notes} onChange={e => setNotes(e.target.value)} rows="3" />
                 </div>
+
                 <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden">
                     <div className="flex border-b bg-white">
                         <button onClick={() => setActiveTab('ACTIVITY')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest ${activeTab === 'ACTIVITY' ? 'text-orange-600 border-b-4 border-orange-600' : 'text-gray-400'}`}>Activity Log</button>
-                        <button onClick={() => setActiveTab('DATA')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest ${activeTab === 'DATA' ? 'text-blue-600 border-b-4 border-blue-600' : 'text-gray-400'}`}>Linked Quotes ({relevantQuotes.length})</button>
+                        <button onClick={() => setActiveTab('DATA')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-widest ${activeTab === 'DATA' ? 'text-blue-600 border-b-4 border-blue-600' : 'text-gray-400'}`}>Quotes ({relevantQuotes.length})</button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4">
                         {activeTab === 'ACTIVITY' ? (
@@ -95,7 +101,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                                         </select>
                                     </div>
                                     {relevantQuotes.length > 0 && (
-                                        <select value={selectedQuoteId} onChange={e => setSelectedQuoteId(e.target.value)} className="w-full text-[10px] border p-1 rounded font-black uppercase">
+                                        <select value={selectedQuoteId} onChange={e => setSelectedQuoteId(e.target.value)} className="w-full text-[10px] border p-1 rounded font-bold uppercase">
                                             <option value="">Attach Quote Link (Optional)</option>
                                             {relevantQuotes.map(q => <option key={q.id} value={q.id}>{q.id} - ${q.finalSalesPrice?.toLocaleString()}</option>)}
                                         </select>
@@ -137,7 +143,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                     </div>
                     <div className="p-4 bg-white border-t flex justify-end gap-2">
                         <Button onClick={onClose} variant="secondary">Cancel</Button>
-                        <Button onClick={() => onSave({ companyName, website, industry, address, tier, isVerified, isTarget, isEmailed, notes, interactions })} variant="primary">Save Changes</Button>
+                        <Button onClick={() => onSave({ companyName, website, industry, address, tier, isVerified, isTarget, isEmailed, isCustomer, notes, interactions })} variant="primary">Save Changes</Button>
                     </div>
                 </div>
             </Card>
@@ -153,6 +159,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
     const [activeFilter, setActiveFilter] = useState('ALL');
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [isImporting, setIsImporting] = useState(false);
+    const [showTrash, setShowTrash] = useState(false);
     const fileInputRef = useRef(null);
 
     const activeCompanies = useMemo(() => (companies || []).filter(c => !c.isDeleted), [companies]);
@@ -160,49 +167,41 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
     const stats = useMemo(() => ({
         total: activeCompanies.length,
         targets: activeCompanies.filter(c => c.isTarget).length,
-        emailed: activeCompanies.filter(c => c.isEmailed).length,
+        customers: activeCompanies.filter(c => c.isCustomer).length,
     }), [activeCompanies]);
 
     const filtered = useMemo(() => {
         const term = searchTerm.toLowerCase();
         let list = activeCompanies.filter(c => 
             c.companyName.toLowerCase().includes(term) || 
-            (c.industry || '').toLowerCase().includes(term)
+            (c.industry || '').toLowerCase().includes(term) ||
+            (c.notes || '').toLowerCase().includes(term)
         );
         if (activeFilter === 'TARGETS') list = list.filter(c => c.isTarget);
-        if (activeFilter === 'EMAILED') list = list.filter(c => c.isEmailed);
+        if (activeFilter === 'CUSTOMERS') list = list.filter(c => c.isCustomer);
         return list;
     }, [activeCompanies, searchTerm, activeFilter]);
 
     const checkHasQuotes = (compName) => quotes.some(q => (q.customer?.name || '').toLowerCase().includes(compName?.toLowerCase().trim()));
 
-    // --- BULK ACTION HANDLERS ---
-    const handleBulkEmail = () => {
-        const selected = activeCompanies.filter(c => selectedIds.has(c.id) && c.phone); // Assuming 'phone' or adding 'email' logic
-        alert("Email function ready for selection.");
-    };
-
     const handleBulkExport = () => {
         const selected = activeCompanies.filter(c => selectedIds.has(c.id));
-        const exportData = selected.map(c => ({
-            "Company": c.companyName,
-            "Industry": c.industry,
-            "Website": c.website,
-            "Phone": c.phone,
-            "Verified": c.isVerified ? 'YES' : 'NO'
-        }));
-        const csv = Papa.unparse(exportData);
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const csv = Papa.unparse(selected.map(c => ({ "Company": c.companyName, "Industry": c.industry, "Website": c.website, "Address": c.address })));
         const link = document.createElement("a");
-        link.setAttribute("href", URL.createObjectURL(blob));
-        link.setAttribute("download", `karnot_companies_${new Date().toISOString().split('T')[0]}.csv`);
+        link.setAttribute("href", URL.createObjectURL(new Blob([csv], { type: 'text/csv' })));
+        link.setAttribute("download", `karnot_companies_export.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
 
+    const handleBulkEmail = () => {
+        const emails = activeCompanies.filter(c => selectedIds.has(c.id) && c.website).map(c => c.companyName);
+        alert(`BCC Email function ready for ${emails.length} companies.`);
+    };
+
     const handleBulkDelete = async () => {
-        if (!confirm(`Delete ${selectedIds.size} accounts?`)) return;
+        if (!confirm(`Move ${selectedIds.size} accounts to Trash?`)) return;
         const batch = writeBatch(db);
         selectedIds.forEach(id => batch.update(doc(db, "users", user.uid, "companies", id), { isDeleted: true }));
         await batch.commit();
@@ -222,6 +221,9 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                     batch.set(ref, { 
                         companyName: row.Company || row.CompanyName || 'New Co', 
                         industry: row.Industry || '', 
+                        address: row.Address || '',
+                        website: row.Website || '',
+                        isCustomer: false,
                         interactions: [], 
                         createdAt: serverTimestamp() 
                     });
@@ -254,9 +256,9 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
             {showModal && <CompanyModal onClose={() => setShowModal(false)} onSave={handleSave} companyToEdit={editingCompany} quotes={quotes} onOpenQuote={onOpenQuote} />}
             
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <StatBadge icon={Building} label="Total Accounts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
+                <StatBadge icon={Building} label="Total Directory" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
+                <StatBadge icon={Handshake} label="Existing Customers" count={stats.customers} total={stats.total} color="teal" active={activeFilter === 'CUSTOMERS'} onClick={() => setActiveFilter('CUSTOMERS')} />
                 <StatBadge icon={CheckSquare} label="Targets" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveFilter('TARGETS')} />
-                <StatBadge icon={Mail} label="Emailed" count={stats.emailed} total={stats.total} color="blue" active={activeFilter === 'EMAILED'} onClick={() => setActiveFilter('EMAILED')} />
             </div>
 
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
@@ -270,7 +272,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" className="hidden" />
 
             <div className="relative">
-                <Input placeholder="Search accounts, industry, or notes..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
+                <Input placeholder="Search accounts, sector, or notes..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
 
@@ -290,10 +292,11 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                             </div>
                             <Button onClick={() => { setEditingCompany(c); setShowModal(true); }} variant="secondary" className="w-full !py-2 text-[9px] font-black uppercase tracking-widest mb-4">View History</Button>
                         </div>
-                        <div className="pt-3 border-t grid grid-cols-3 gap-1 text-[9px] text-gray-500 text-center font-black">
-                            <div className={`p-1 rounded uppercase tracking-tighter ${c.isVerified ? 'bg-green-50 text-green-700 font-black' : ''}`}><UserCheck size={14} className={`mx-auto mb-1 ${c.isVerified ? 'text-green-600' : 'text-gray-300'}`}/> Verified</div>
-                            <div className={`p-1 rounded uppercase tracking-tighter ${c.isEmailed ? 'bg-purple-50 text-purple-700 font-black' : ''}`}><Mail size={14} className={`mx-auto mb-1 ${c.isEmailed ? 'text-purple-600' : 'text-gray-300'}`}/> Emailed</div>
-                            <div className={`p-1 rounded uppercase tracking-tighter ${checkHasQuotes(c.companyName) ? 'bg-orange-50 text-orange-700 font-black' : ''}`}><CheckSquare size={14} className={`mx-auto mb-1 ${checkHasQuotes(c.companyName) ? 'text-orange-600' : 'text-gray-300'}`}/> Quoted</div>
+                        <div className="pt-3 border-t grid grid-cols-4 gap-1 text-[8px] text-gray-500 text-center font-black">
+                            <div className={`p-1 rounded uppercase ${c.isCustomer ? 'bg-teal-50 text-teal-700' : ''}`}><Handshake size={14} className={`mx-auto mb-1 ${c.isCustomer ? 'text-teal-600' : 'text-gray-300'}`}/> Customer</div>
+                            <div className={`p-1 rounded uppercase ${checkHasQuotes(c.companyName) ? 'bg-orange-50 text-orange-700' : ''}`}><CheckSquare size={14} className={`mx-auto mb-1 ${checkHasQuotes(c.companyName) ? 'text-orange-600' : 'text-gray-300'}`}/> Quoted</div>
+                            <div className={`p-1 rounded uppercase ${c.isEmailed ? 'bg-purple-50 text-purple-700' : ''}`}><Mail size={14} className={`mx-auto mb-1 ${c.isEmailed ? 'text-purple-600' : 'text-gray-300'}`}/> Emailed</div>
+                            <div className={`p-1 rounded uppercase ${c.isVerified ? 'bg-green-50 text-green-700' : ''}`}><UserCheck size={14} className={`mx-auto mb-1 ${c.isVerified ? 'text-green-600' : 'text-gray-300'}`}/> Verified</div>
                         </div>
                     </Card>
                 ))}
