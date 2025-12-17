@@ -1,191 +1,296 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase'; 
-import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { getAuth } from "firebase/auth";
 import { calculateHeatPump, CONFIG } from '../utils/heatPumpLogic'; 
 import { Card, Section, Input, Button } from '../data/constants.jsx'; 
-import { Calculator, RefreshCw, X, Printer, Save, Sun, Zap, TrendingUp, CheckCircle, Droplets } from 'lucide-react';
+import { 
+  Calculator, RefreshCw, X, Printer, Sun, Zap, 
+  TrendingUp, CheckCircle, Droplets, Snowflake, ShieldCheck 
+} from 'lucide-react';
 
-const HeatPumpCalculator = ({ leadId }) => {  
+const HeatPumpCalculator = () => {
+  // 1. Initial State
   const [inputs, setInputs] = useState({
-    currency: 'PHP', userType: 'home', occupants: 4, dailyLitersInput: 500, mealsPerDay: 0,
-    roomsOccupied: 0, hoursPerDay: 12, heatingType: 'electric', fuelPrice: 12.25, tankSize: 11,
-    elecRate: 12.25, ambientTemp: 30, inletTemp: 15, targetTemp: 55, systemType: 'grid-solar',
-    sunHours: 5.5, heatPumpType: 'all', includeCooling: false
+    currency: 'PHP',
+    userType: 'home',
+    occupants: 4,
+    dailyLitersInput: 500,
+    mealsPerDay: 0,
+    roomsOccupied: 0,
+    hoursPerDay: 12,
+    heatingType: 'electric',
+    fuelPrice: 12.25,
+    tankSize: 11,
+    elecRate: 12.25,
+    ambientTemp: 30,
+    inletTemp: 15,
+    targetTemp: 55,
+    systemType: 'grid-solar',
+    sunHours: 5.5,
+    heatPumpType: 'all',
+    includeCooling: false
   });
 
-  const [showModal, setShowModal] = useState(false);
-  const [fixtures, setFixtures] = useState({ showers: 0, basins: 0, sinks: 0, people: 0, hours: 8 });
-  const [result, setResult] = useState(null);
   const [dbProducts, setDbProducts] = useState([]);
+  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [showFixtureModal, setShowFixtureModal] = useState(false);
+  const [fixtures, setFixtures] = useState({ showers: 0, basins: 0, sinks: 0, people: 0, hours: 8 });
 
+  // 2. Load Inventory from Firebase
   useEffect(() => {
-    const fetch = async () => {
+    const fetchInventory = async () => {
+      try {
         const auth = getAuth();
         if (!auth.currentUser) return;
-        const querySnapshot = await getDocs(collection(db, "users", auth.currentUser.uid, "products"));
-        setDbProducts(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const snap = await getDocs(collection(db, "users", auth.currentUser.uid, "products"));
+        setDbProducts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setLoading(false);
+      } catch (err) {
+        console.error("Inventory load failed:", err);
+        setLoading(false);
+      }
     };
-    fetch();
+    fetchInventory();
   }, []);
 
-  // CURRENCY SYNC: Critical for ROI correctness
+  // 3. Currency/Fuel Default Sync
   useEffect(() => {
-      const defaults = CONFIG.defaultRate[inputs.currency];
-      if (defaults) {
-          const newFuel = inputs.heatingType === 'propane' ? defaults.lpgPrice : (inputs.heatingType === 'diesel' ? defaults.diesel : defaults.grid);
-          setInputs(p => ({ ...p, elecRate: defaults.grid, fuelPrice: newFuel, tankSize: defaults.lpgSize || 11 }));
-      }
+    const defaults = CONFIG.defaultRate[inputs.currency];
+    if (defaults) {
+      setInputs(prev => ({
+        ...prev,
+        elecRate: defaults.grid,
+        fuelPrice: inputs.heatingType === 'propane' ? defaults.lpgPrice : (inputs.heatingType === 'diesel' ? defaults.diesel : defaults.grid)
+      }));
+    }
   }, [inputs.currency, inputs.heatingType]);
 
+  // 4. Real-time Calculation
   useEffect(() => {
     if (!loading && dbProducts.length > 0) {
-        setResult(calculateHeatPump(inputs, dbProducts));
+      const calcResult = calculateHeatPump(inputs, dbProducts);
+      setResult(calcResult);
     }
   }, [inputs, dbProducts, loading]);
 
+  // 5. Fixture Estimator Logic
   const applyFixtures = () => {
-      const total = Math.round((50 * fixtures.showers * 0.4) + (284 * fixtures.people * 0.15 * 0.25 * 0.4) + (20 * fixtures.basins * 0.4) + (114 * fixtures.sinks * 0.3 * fixtures.hours * 0.4));
-      setInputs(p => ({ ...p, dailyLitersInput: total }));
-      setShowModal(false);
+    const total = Math.round(
+      (50 * fixtures.showers * 0.4) + 
+      (284 * fixtures.people * 0.15 * 0.25 * 0.4) + 
+      (20 * fixtures.basins * 0.4) + 
+      (114 * fixtures.sinks * 0.3 * fixtures.hours * 0.4)
+    );
+    setInputs(prev => ({ ...prev, dailyLitersInput: total, userType: 'office' }));
+    setShowFixtureModal(false);
   };
 
   const fmt = n => (+n).toLocaleString(undefined, { maximumFractionDigits: 0 });
   const sym = CONFIG.SYMBOLS[inputs.currency];
 
   return (
-    <div className="space-y-6 pb-24">
-        <Card>
-            <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-2xl font-black text-orange-600 flex items-center gap-2 uppercase tracking-tighter"><Calculator size={28}/> ROI Calculator</h2>
-                {loading && <RefreshCw className="animate-spin text-gray-400" size={18}/>}
-            </div>
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 min-h-screen bg-slate-50">
+      
+      {/* HEADER */}
+      <div className="flex justify-between items-end border-b-4 border-orange-600 pb-6">
+        <div>
+          <h1 className="text-5xl font-black text-slate-900 italic tracking-tighter uppercase flex items-center gap-4">
+            <Calculator size={48} className="text-orange-600" /> Karnot ROI
+          </h1>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-xs mt-2">Professional CRM Sizing & Savings Tool</p>
+        </div>
+        <div className="hidden md:block">
+           <Button variant="outline" className="rounded-full px-8 border-2 font-black italic uppercase tracking-widest flex gap-2">
+             <Printer size={18} /> Print Report
+           </Button>
+        </div>
+      </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <Section title="1. Your Demand">
-                    <div className="space-y-4">
-                        <select className="w-full border p-3 rounded-lg bg-white shadow-sm font-bold" value={inputs.userType} onChange={e=>setInputs(p=>({...p, userType:e.target.value}))}>
-                            <option value="home">Home / Villa</option><option value="restaurant">Restaurant / F&B</option><option value="resort">Hotels & Resorts</option><option value="school">Schools</option><option value="office">Offices</option><option value="spa">Spa / Clinics</option>
-                        </select>
-                        {['school','office','spa'].includes(inputs.userType) && (
-                            <div>
-                                <Input label="Liters Required / Day" type="number" value={inputs.dailyLitersInput} onChange={e=>setInputs(p=>({...p, dailyLitersInput:+e.target.value}))} />
-                                <button onClick={()=>setShowModal(true)} className="flex items-center gap-1 text-xs text-blue-600 font-black uppercase mt-2 italic underline"><Droplets size={12}/> Estimate via Fixtures</button>
-                            </div>
-                        )}
-                        {inputs.userType === 'home' && <Input label="Occupants" type="number" value={inputs.occupants} onChange={e=>setInputs(p=>({...p, occupants:+e.target.value}))} />}
-                        {['restaurant','resort'].includes(inputs.userType) && <Input label="Meals Served / Day" type="number" value={inputs.mealsPerDay} onChange={e=>setInputs(p=>({...p, mealsPerDay:+e.target.value}))} />}
-                        <Input label="Operating Hours" type="number" value={inputs.hoursPerDay} onChange={e=>setInputs(p=>({...p, hoursPerDay:+e.target.value}))} />
-                    </div>
-                </Section>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* LEFT COLUMN: INPUTS */}
+        <div className="lg:col-span-4 space-y-6">
+          <Card className="p-6 border-2 border-slate-200 shadow-xl bg-white rounded-[2rem]">
+            <Section title="1. Demand Profile">
+              <select 
+                className="w-full p-4 border-2 rounded-2xl bg-slate-50 font-black text-slate-700 mb-4 outline-none focus:border-orange-500 transition-all"
+                value={inputs.userType} 
+                onChange={e => setInputs({...inputs, userType: e.target.value})}
+              >
+                <option value="home">Private Villa / Home</option>
+                <option value="restaurant">Restaurant / F&B</option>
+                <option value="resort">Hotel / Resort</option>
+                <option value="office">Commercial Office</option>
+              </select>
 
-                <Section title="2. Market Costs">
-                    <div className="space-y-4">
-                        <select className="w-full border p-3 rounded-lg bg-white shadow-sm font-bold" value={inputs.currency} onChange={e=>setInputs(p=>({...p, currency:e.target.value}))}>
-                            <option value="PHP">₱ PHP</option><option value="USD">$ USD</option><option value="GBP">£ GBP</option>
-                        </select>
-                        <select className="w-full border p-3 rounded-lg bg-white shadow-sm font-bold" value={inputs.heatingType} onChange={e=>setInputs(p=>({...p, heatingType:e.target.value}))}>
-                            <option value="electric">Electric</option><option value="propane">LPG</option><option value="diesel">Diesel</option>
-                        </select>
-                        <Input label={`Fuel Rate (${sym})`} type="number" value={inputs.fuelPrice} onChange={e=>setInputs(p=>({...p, fuelPrice:+e.target.value}))} />
-                        <Input label={`Elec Rate (${sym}/kWh)`} type="number" value={inputs.elecRate} onChange={e=>setInputs(p=>({...p, elecRate:+e.target.value}))} />
-                    </div>
-                </Section>
-                
-                <Section title="3. Local Environment">
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <Input label="Air Temp (°C)" type="number" value={inputs.ambientTemp} onChange={e=>setInputs(p=>({...p, ambientTemp:+e.target.value}))} />
-                            <Input label="Inlet Temp (°C)" type="number" value={inputs.inletTemp} onChange={e=>setInputs(p=>({...p, inletTemp:+e.target.value}))} />
-                        </div>
-                        <Input label="Target Temp (°C)" type="number" value={inputs.targetTemp} onChange={e=>setInputs(p=>({...p, targetTemp:+e.target.value}))} />
-                        <select className="w-full border p-3 rounded-lg bg-white shadow-sm font-bold" value={inputs.systemType} onChange={e=>setInputs(p=>({...p, systemType:e.target.value}))}>
-                            <option value="grid-only">Grid Only</option><option value="grid-solar">Grid + Solar</option>
-                        </select>
-                        {inputs.systemType === 'grid-solar' && <Input label="Peak Sun Hours" type="number" value={inputs.sunHours} onChange={e=>setInputs(p=>({...p, sunHours:+e.target.value}))} />}
-                    </div>
-                </Section>
-            </div>
-
-            {result && !result.error && (
-                <div className="mt-12 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                    <div className="bg-slate-50 p-10 rounded-[2.5rem] border border-slate-200 shadow-2xl">
-                        <div className="flex justify-between items-end mb-10 border-b pb-6">
-                            <div>
-                                <h3 className="text-3xl font-black text-orange-600 uppercase italic tracking-tighter">{result.system.n}</h3>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Optimal Selection ({result.system.refrig})</p>
-                            </div>
-                            <div className="text-right">
-                                <div className="text-6xl font-black text-green-600 tracking-tighter">{sym}{fmt(result.financials.totalSavings)}</div>
-                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mt-1">Projected Annual Savings</p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
-                            <div className="bg-white p-6 rounded-2xl border shadow-sm text-center">
-                                <TrendingUp className="mx-auto mb-3 text-orange-500" size={32}/>
-                                <div className="text-[10px] font-black text-slate-400 uppercase mb-1">Payback</div>
-                                <div className="text-3xl font-black text-slate-800">{result.financials.paybackYears} <span className="text-xs font-bold text-slate-400">Yrs</span></div>
-                            </div>
-                            <div className="bg-white p-6 rounded-2xl border shadow-sm text-center">
-                                <Sun className="mx-auto mb-3 text-amber-500" size={32}/>
-                                <div className="text-[10px] font-black text-slate-400 uppercase mb-1">Solar Panels</div>
-                                <div className="text-3xl font-black text-slate-800">{result.metrics.panelCount} <span className="text-xs font-bold text-slate-400">Units</span></div>
-                            </div>
-                            <div className="bg-white p-6 rounded-2xl border shadow-sm text-center">
-                                <Zap className="mx-auto mb-3 text-blue-500" size={32}/>
-                                <div className="text-[10px] font-black text-slate-400 uppercase mb-1">Avg Power</div>
-                                <div className="text-3xl font-black text-slate-800">{result.metrics.powerKW} <span className="text-xs font-bold text-slate-400">kW</span></div>
-                            </div>
-                            <div className="bg-white p-6 rounded-2xl border shadow-sm text-center">
-                                <CheckCircle className="mx-auto mb-3 text-green-500" size={32}/>
-                                <div className="text-[10px] font-black text-slate-400 uppercase mb-1">CO2 Savings</div>
-                                <div className="text-3xl font-black text-slate-800">-{fmt(result.metrics.co2Saved)} <span className="text-xs font-bold text-slate-400">kg</span></div>
-                            </div>
-                        </div>
-
-                        <div className="bg-white rounded-3xl border p-10 space-y-4 shadow-sm">
-                            <h4 className="font-black text-slate-300 uppercase text-xs mb-6 tracking-widest border-b pb-3">Investment Breakdown</h4>
-                            <div className="flex justify-between items-center text-slate-600 font-bold"><span>Heat Pump Main Unit:</span><span className="text-xl font-black">{sym}{fmt(result.financials.capex.system)}</span></div>
-                            {result.metrics.panelCount > 0 && (
-                                <>
-                                    <div className="flex justify-between items-center text-slate-600 font-bold"><span>Solar PV System ({result.metrics.panelCount} Panels):</span><span className="text-xl font-black">{sym}{fmt(result.financials.capex.solar)}</span></div>
-                                    <div className="flex justify-between items-center text-slate-600 font-bold"><span>Inverter & Intelligent BOS:</span><span className="text-xl font-black">{sym}{fmt(result.financials.capex.inverter)}</span></div>
-                                </>
-                            )}
-                            <div className="flex justify-between items-center text-3xl font-black border-t-2 border-slate-100 pt-6 mt-6 text-slate-900 uppercase">
-                                <span>TOTAL ESTIMATED CAPEX:</span>
-                                <span className="text-orange-600 tracking-tighter">{sym}{fmt(result.financials.capex.total)}</span>
-                            </div>
-                        </div>
-                    </div>
+              {inputs.userType === 'home' && (
+                <Input label="Number of Occupants" type="number" value={inputs.occupants} onChange={e => setInputs({...inputs, occupants: +e.target.value})} />
+              )}
+              {inputs.userType !== 'home' && (
+                <div className="space-y-4">
+                  <Input label="Liters Required / Day" type="number" value={inputs.dailyLitersInput} onChange={e => setInputs({...inputs, dailyLitersInput: +e.target.value})} />
+                  <button 
+                    onClick={() => setShowFixtureModal(true)}
+                    className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-600 underline tracking-widest italic"
+                  >
+                    <Droplets size={12}/> Use Fixture Profiler
+                  </button>
                 </div>
-            )}
-        </Card>
+              )}
+              <Input label="Operating Hours (per day)" type="number" value={inputs.hoursPerDay} onChange={e => setInputs({...inputs, hoursPerDay: +e.target.value})} />
+            </Section>
 
-        {showModal && (
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-[999] p-4">
-                <div className="bg-white p-12 rounded-[2.5rem] max-w-lg w-full relative shadow-2xl animate-in zoom-in-95 border border-slate-100">
-                    <button onClick={()=>setShowModal(false)} className="absolute top-10 right-10 text-slate-300 hover:text-orange-600 transition-colors"><X size={36}/></button>
-                    <div className="text-center mb-10">
-                        <Droplets className="mx-auto mb-6 text-blue-500" size={64}/>
-                        <h3 className="text-4xl font-black text-slate-800 uppercase tracking-tighter">Usage Profiler</h3>
+            <Section title="2. Market & Costs">
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <select className="p-4 border-2 rounded-2xl bg-white font-bold" value={inputs.currency} onChange={e => setInputs({...inputs, currency: e.target.value})}>
+                  {Object.keys(CONFIG.FX).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select className="p-4 border-2 rounded-2xl bg-white font-bold" value={inputs.heatingType} onChange={e => setInputs({...inputs, heatingType: e.target.value})}>
+                  <option value="electric">Electric</option>
+                  <option value="propane">LPG / Gas</option>
+                  <option value="diesel">Diesel</option>
+                </select>
+              </div>
+              <Input label={`Current Fuel Rate (${sym})`} type="number" value={inputs.fuelPrice} onChange={e => setInputs({...inputs, fuelPrice: +e.target.value})} />
+              <Input label={`Electric Rate (${sym}/kWh)`} type="number" value={inputs.elecRate} onChange={e => setInputs({...inputs, elecRate: +e.target.value})} />
+            </Section>
+
+            <Section title="3. Local Environment">
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Air Temp °C" type="number" value={inputs.ambientTemp} onChange={e => setInputs({...inputs, ambientTemp: +e.target.value})} />
+                <Input label="Target °C" type="number" value={inputs.targetTemp} onChange={e => setInputs({...inputs, targetTemp: +e.target.value})} />
+              </div>
+              <div className="mt-6 space-y-4">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 block">Heat Pump Tech Selection</label>
+                <select 
+                  className="w-full p-4 border-2 rounded-2xl font-black bg-white" 
+                  value={inputs.heatPumpType} 
+                  onChange={e => setInputs({...inputs, heatPumpType: e.target.value})}
+                >
+                  <option value="all">⭐ Best Price Option</option>
+                  <option value="R32">R32 Series (Efficient)</option>
+                  <option value="R290">R290 Series (Propane / High Temp)</option>
+                  <option value="CO2">CO2 Series (Extreme Performance)</option>
+                </select>
+                <label className="flex items-center gap-3 p-4 border-2 rounded-2xl cursor-pointer hover:bg-slate-50 transition-colors">
+                  <input type="checkbox" className="w-5 h-5 accent-orange-600" checked={inputs.includeCooling} onChange={e => setInputs({...inputs, includeCooling: e.target.checked})} />
+                  <span className="font-bold text-slate-700">Include Free Cooling</span>
+                </label>
+              </div>
+            </Section>
+          </Card>
+        </div>
+
+        {/* RIGHT COLUMN: RESULTS */}
+        <div className="lg:col-span-8">
+          {result && !result.error ? (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-10 duration-500">
+              
+              {/* HERO CARD */}
+              <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden border-b-8 border-orange-600">
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+                  <div>
+                    <div className="flex items-center gap-2 text-orange-500 font-black uppercase tracking-[0.3em] text-[10px] mb-2">
+                       <ShieldCheck size={14} /> Karnot Certified Recommendation
                     </div>
-                    <div className="space-y-6">
-                        <Input label="Shower Units" type="number" value={fixtures.showers} onChange={e=>setFixtures(p=>({...p, showers:+e.target.value}))} />
-                        <Input label="Industrial Sinks" type="number" value={fixtures.sinks} onChange={e=>setFixtures(p=>({...p, sinks:+e.target.value}))} />
-                        <Input label="Basins" type="number" value={fixtures.basins} onChange={e=>setFixtures(p=>({...p, basins:+e.target.value}))} />
-                        <Input label="Daily Occupants" type="number" value={fixtures.people} onChange={e=>setFixtures(p=>({...p, people:+e.target.value}))} />
-                        <Button onClick={applyFixtures} className="w-full bg-orange-600 text-white py-6 rounded-2xl font-black uppercase tracking-widest shadow-2xl mt-10">Apply Profiler Data</Button>
-                    </div>
+                    <h2 className="text-5xl font-black italic tracking-tighter uppercase leading-none">{result.system.n}</h2>
+                    <p className="text-slate-400 font-bold mt-2 uppercase tracking-widest text-sm">Category: {result.system.refrig} Refrigerant</p>
+                  </div>
+                  <div className="text-left md:text-right bg-white/5 p-6 rounded-3xl backdrop-blur-md border border-white/10">
+                    <div className="text-6xl font-black text-green-400 tracking-tighter leading-none">{sym}{fmt(result.financials.totalSavings)}</div>
+                    <p className="text-slate-300 font-black uppercase text-[10px] tracking-[0.2em] mt-2">Estimated Annual Savings</p>
+                  </div>
                 </div>
+              </div>
+
+              {/* METRIC GRID */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <ResultCard icon={<TrendingUp size={32} className="text-orange-500"/>} label="ROI Payback" value={`${result.financials.paybackYears} Yrs`} />
+                <ResultCard icon={<Sun size={32} className="text-amber-500"/>} label="Solar Offset" value={`${result.metrics.panelCount} Panels`} />
+                <ResultCard icon={<Zap size={32} className="text-blue-500"/>} label="Avg Power Draw" value={`${result.metrics.powerKW} kW`} />
+                <ResultCard icon={<CheckCircle size={32} className="text-green-500"/>} label="Carbon Saved" value={`${fmt(result.metrics.co2Saved)} kg`} />
+              </div>
+
+              {/* DETAILED BREAKDOWN */}
+              <div className="bg-white rounded-[2.5rem] border-2 border-slate-200 p-10 shadow-sm">
+                 <h3 className="font-black text-slate-300 uppercase tracking-[0.2em] text-xs border-b pb-4 mb-6">Investment & Operational Breakdown</h3>
+                 <div className="space-y-4">
+                    <DetailRow label="Baseline Annual Cost (Current System)" value={`${sym}${fmt(result.financials.annualCostOld)}`} />
+                    <DetailRow label="New Operational Cost (Karnot)" value={`${sym}${fmt(result.financials.karnotAnnualCost)}`} isGreen />
+                    {result.financials.coolSavings > 0 && (
+                      <DetailRow label="Value of Free Cooling (Offset)" value={`${sym}${fmt(result.financials.coolSavings)}`} isGreen />
+                    )}
+                    <div className="pt-6 border-t-2 border-slate-100 mt-6">
+                       <div className="flex justify-between items-end">
+                          <div>
+                            <p className="font-black text-slate-400 uppercase text-[10px] tracking-widest">Total Estimated System Capex</p>
+                            <p className="text-3xl font-black text-slate-900 uppercase">Project Investment</p>
+                          </div>
+                          <div className="text-4xl font-black text-orange-600 tracking-tighter">
+                            {sym}{fmt(result.financials.capex.total)}
+                          </div>
+                       </div>
+                    </div>
+                 </div>
+              </div>
             </div>
-        )}
+          ) : (
+            <div className="h-full flex items-center justify-center border-4 border-dashed border-slate-200 rounded-[3rem] p-20 text-center">
+               <div>
+                <RefreshCw size={64} className="mx-auto text-slate-200 animate-spin-slow mb-6" />
+                <h3 className="text-2xl font-black text-slate-300 uppercase italic tracking-tighter">
+                  {result?.error || "Adjust inputs to generate ROI"}
+                </h3>
+               </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* FIXTURE MODAL */}
+      {showFixtureModal && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3rem] p-10 max-w-xl w-full shadow-2xl relative border-2 border-orange-500">
+            <button onClick={() => setShowFixtureModal(false)} className="absolute top-8 right-8 text-slate-300 hover:text-orange-600 transition-colors">
+              <X size={32} />
+            </button>
+            <div className="text-center mb-8">
+              <Droplets size={48} className="mx-auto text-blue-500 mb-4" />
+              <h3 className="text-3xl font-black uppercase italic tracking-tighter">Demand Profiler</h3>
+              <p className="text-slate-400 font-bold text-sm">Estimate water usage based on building fixtures</p>
+            </div>
+            <div className="grid grid-cols-2 gap-6">
+              <Input label="Showers" type="number" value={fixtures.showers} onChange={e => setFixtures({...fixtures, showers: +e.target.value})} />
+              <Input label="Kitchen Sinks" type="number" value={fixtures.sinks} onChange={e => setFixtures({...fixtures, sinks: +e.target.value})} />
+              <Input label="Wash Basins" type="number" value={fixtures.basins} onChange={e => setFixtures({...fixtures, basins: +e.target.value})} />
+              <Input label="Occupancy" type="number" value={fixtures.people} onChange={e => setFixtures({...fixtures, people: +e.target.value})} />
+            </div>
+            <Button onClick={applyFixtures} className="w-full mt-8 py-5 rounded-2xl bg-orange-600 font-black uppercase italic tracking-widest text-white shadow-xl">
+              Calculate & Apply
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+// HELPER COMPONENTS
+const ResultCard = ({ icon, label, value }) => (
+  <div className="bg-white p-6 rounded-[2rem] border-2 border-slate-100 shadow-sm text-center flex flex-col items-center hover:scale-105 transition-transform duration-300">
+    <div className="mb-4 bg-slate-50 p-4 rounded-full">{icon}</div>
+    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+    <p className="text-2xl font-black text-slate-900">{value}</p>
+  </div>
+);
+
+const DetailRow = ({ label, value, isGreen = false }) => (
+  <div className="flex justify-between items-center py-2 border-b border-slate-50">
+    <span className="font-bold text-slate-500 text-sm">{label}</span>
+    <span className={`font-black text-lg ${isGreen ? 'text-green-600' : 'text-slate-800'}`}>{value}</span>
+  </div>
+);
 
 export default HeatPumpCalculator;
