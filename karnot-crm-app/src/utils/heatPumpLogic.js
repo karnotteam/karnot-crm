@@ -19,18 +19,17 @@ export const calculateHeatPump = (inputs, products = []) => {
             heatPumpType, includeCooling, currency 
         } = inputs;
 
-        // 1. Calculate Daily Liters (Restored User Types)
+        // 1. Calculate Daily Liters (Restored schools/spas/offices)
         let dailyLiters = 0;
         if (userType === 'home') dailyLiters = occupants * 50;
         else if (userType === 'restaurant') dailyLiters = mealsPerDay * 7;
         else if (userType === 'resort') dailyLiters = (roomsOccupied * 50) + (mealsPerDay * 7);
         else dailyLiters = dailyLitersInput;
 
-        // 2. Thermal Math
+        // 2. Thermodynamic Math
         const deltaT = Math.max(1, targetTemp - inletTemp);
         const specificHeatWater = 4.187; 
-        const kwhPerLiter = (deltaT * 1.163) / 1000;
-        const dailyThermalEnergyKWH = dailyLiters * kwhPerLiter;
+        const dailyThermalEnergyKWH = (dailyLiters * deltaT * 1.163) / 1000;
 
         // 3. Baseline Costs
         let currentRateKWH = elecRate;
@@ -38,62 +37,53 @@ export const calculateHeatPump = (inputs, products = []) => {
         else if (heatingType === 'diesel') currentRateKWH = fuelPrice / 10.7;
         const annualCostOld = dailyThermalEnergyKWH * 365 * currentRateKWH;
 
-        // 4. Advanced Model Filtering (Storage vs Flow)
+        // 4. Filtering with Storage Detection
         const peakLitersPerHour = dailyLiters / hoursPerDay;
         const perfFactor = (1 + ((ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015));
 
         let availableModels = products.filter(p => {
-            const pType = (p.Refrigerant || p.type || '').toLowerCase();
-            const matchesType = heatPumpType === 'all' || pType.includes(heatPumpType.toLowerCase());
-            const matchesCooling = !includeCooling || p.isReversible === true;
+            const pName = (p.name || '').toLowerCase();
+            const pCat = (p.category || '').toLowerCase();
+            const pRefrig = (p.Refrigerant || '').toLowerCase();
             
-            // Delta-T Performance Logic
-            const nominalKW = parseFloat(p.kW_DHW_Nominal) || 0;
-            const calculatedLhr = (nominalKW * 3600) / (specificHeatWater * deltaT);
-            const adjLhr = calculatedLhr * perfFactor;
+            const matchesType = heatPumpType === 'all' || pRefrig.includes(heatPumpType.toLowerCase());
+            const matchesCooling = !includeCooling || p.isReversible === true;
 
-            // AquaHERO Storage Logic: If unit has a tank, check daily capacity
-            // We assume a storage unit can handle 3x its tank volume per day
-            if (p.category === 'AquaHERO' || p.integral_storage_L) {
-                const tankSize = parseFloat(p.integral_storage_L) || 200;
-                const dailyCapacity = tankSize * 3 * perfFactor; 
-                return matchesType && targetTemp <= (p.max_temp_c || 70) && dailyLiters <= dailyCapacity;
+            // AquaHERO Logic: Tank detection from name
+            if (pCat.includes('aquahero') || pName.includes('aquahero')) {
+                let storageL = parseFloat(p.integral_storage_L) || (pName.includes('300l') ? 300 : 200);
+                const dailyCap = storageL * 3 * perfFactor;
+                return matchesType && targetTemp <= (p.max_temp_c || 70) && dailyLiters <= dailyCap;
             }
 
-            // Standard Unit: Check hourly flow
-            return matchesType && matchesCooling && targetTemp <= (p.max_temp_c || 60) && peakLitersPerHour <= adjLhr && nominalKW > 0;
+            // Monoblock Logic: Flow based
+            const nominalKW = parseFloat(p.kW_DHW_Nominal) || 0;
+            const calculatedLhr = (nominalKW * 3600) / (specificHeatWater * deltaT);
+            return matchesType && matchesCooling && targetTemp <= (p.max_temp_c || 60) && peakLitersPerHour <= (calculatedLhr * perfFactor) && nominalKW > 0;
         });
 
-        if (availableModels.length === 0) return { error: "No suitable models found." };
+        if (availableModels.length === 0) return { error: "No suitable models found for this demand." };
 
         const system = availableModels.sort((a, b) => (parseFloat(a.salesPriceUSD) || 999999) - (parseFloat(b.salesPriceUSD) || 999999))[0];
 
-        // 5. ROI Math
+        // 5. ROI
         const sysCop = parseFloat(system.COP_DHW) || 3.8;
+        const sysPrice = parseFloat(system.salesPriceUSD) || 0;
         const karnotDailyElecKwh = dailyThermalEnergyKWH / sysCop;
-        const karnotPowerDrawKw = karnotDailyElecKwh / hoursPerDay;
-        
-        let annualKarnotCost = (systemType === 'grid-only') 
-            ? karnotDailyElecKwh * 365 * elecRate 
-            : (karnotPowerDrawKw * Math.max(0, hoursPerDay - (sunHours || 5.5))) * 365 * elecRate;
-
-        let coolSavings = (includeCooling && system.isReversible) 
-            ? (dailyThermalEnergyKWH / sysCop) * CONFIG.COOLING_COP * 365 * elecRate 
-            : 0;
+        const totalSavings = (annualCostOld - (karnotDailyElecKwh * 365 * elecRate));
 
         return {
             system,
             financials: {
                 symbol: CONFIG.SYMBOLS[currency] || '$',
-                annualCostOld, annualKarnotCost, coolSavings,
-                totalSavings: (annualCostOld - annualKarnotCost) + coolSavings,
-                paybackYears: ((annualCostOld - annualKarnotCost) + coolSavings) > 0 ? (parseFloat(system.salesPriceUSD) / ((annualCostOld - annualKarnotCost) + coolSavings)).toFixed(1) : "N/A",
-                capex: { total: parseFloat(system.salesPriceUSD) }
+                annualCostOld, totalSavings,
+                paybackYears: totalSavings > 0 ? (sysPrice / totalSavings).toFixed(1) : "N/A",
+                capex: { total: sysPrice }
             },
             metrics: {
                 adjFlowLhr: (parseFloat(system.kW_DHW_Nominal) * 3600 / (specificHeatWater * deltaT)) * perfFactor,
                 emissionsSaved: (dailyThermalEnergyKWH * 365 * 0.5), 
-                panels: Math.ceil(karnotPowerDrawKw / 0.425)
+                panels: Math.ceil((karnotDailyElecKwh / hoursPerDay) / 0.425)
             }
         };
     } catch (e) { return { error: e.message }; }
