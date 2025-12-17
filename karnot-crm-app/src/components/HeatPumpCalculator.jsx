@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { getAuth } from "firebase/auth";
 import { calculateHeatPump, CONFIG } from '../utils/heatPumpLogic';
 import { Card, Section, Input, Button } from '../data/constants';
 import { 
   Calculator, Printer, Sun, Zap, TrendingUp, CheckCircle, 
-  Droplets, Snowflake, X, Thermometer, Box, Package, Filter, User, Building, Save
+  Droplets, Snowflake, X, Thermometer, Box, Package, Filter
 } from 'lucide-react';
 
 const CATEGORY_MAP = {
@@ -27,7 +27,6 @@ const StatBadge = ({ icon: Icon, label, count, color, active, onClick }) => (
 
 const HeatPumpCalculator = () => {
   const [inputs, setInputs] = useState({
-    customerName: '', companyName: '',
     currency: 'PHP', userType: 'home', occupants: 4, dailyLitersInput: 500, mealsPerDay: 0,
     roomsOccupied: 0, hoursPerDay: 12, heatingType: 'electric', fuelPrice: 12.25, tankSize: 11,
     elecRate: 12.25, ambientTemp: 30, inletTemp: 15, targetTemp: 55, systemType: 'grid-solar',
@@ -39,8 +38,6 @@ const HeatPumpCalculator = () => {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('Heat Pump');
   const [showModal, setShowModal] = useState(false);
-  
-  // FIXTURE ESTIMATOR STATE
   const [fixtures, setFixtures] = useState({ showers: 0, basins: 0, sinks: 0, people: 0, hours: 8 });
 
   useEffect(() => {
@@ -63,47 +60,13 @@ const HeatPumpCalculator = () => {
     }
   }, [inputs, filteredInventory, loading]);
 
-  // APPLY FIXTURE DATA TO MAIN INPUTS
   const applyFixtures = () => {
-    const total = Math.round(
-      (50 * fixtures.showers * 0.4) + 
-      (284 * fixtures.people * 0.15 * 0.25 * 0.4) + 
-      (20 * fixtures.basins * 0.4) + 
-      (114 * fixtures.sinks * 0.3 * fixtures.hours * 0.4)
-    );
+    const total = Math.round((50 * fixtures.showers * 0.4) + (284 * fixtures.people * 0.15 * 0.25 * 0.4) + (20 * fixtures.basins * 0.4) + (114 * fixtures.sinks * 0.3 * fixtures.hours * 0.4));
     setInputs(prev => ({ ...prev, dailyLitersInput: total, userType: 'office' }));
     setShowModal(false);
   };
 
-  const handleSaveToLead = async () => {
-    const auth = getAuth();
-    if (!auth.currentUser || !result) return;
-    try {
-      await addDoc(collection(db, "users", auth.currentUser.uid, "leads"), {
-        ...inputs,
-        recommendation: result.system.n,
-        annualSavings: result.financials.totalSavings,
-        payback: result.financials.paybackYears,
-        capex: result.financials.capex,
-        timestamp: serverTimestamp()
-      });
-      alert("ROI calculation saved to Leads!");
-    } catch (e) { alert("Error: " + e.message); }
-  };
-
-  const handlePrint = () => {
-    if (!result) return;
-    const win = window.open('', '_blank');
-    win.document.write(`<html><body style="font-family:sans-serif;padding:50px;">
-      <h1>Karnot ROI Report</h1>
-      <p>Client: ${inputs.customerName} | Company: ${inputs.companyName}</p><hr>
-      <h2>Recommended: ${result.system.n}</h2>
-      <h3>Annual Savings: ${result.financials.symbol}${result.financials.totalSavings.toLocaleString()}</h3>
-      </body></html>`);
-    win.document.close();
-    win.print();
-  };
-
+  const fmt = n => (+n).toLocaleString(undefined, { maximumFractionDigits: 0 });
   const sym = CONFIG.SYMBOLS[inputs.currency];
 
   return (
@@ -118,14 +81,7 @@ const HeatPumpCalculator = () => {
       <div className="flex flex-col lg:flex-row gap-10">
         <div className="w-full lg:w-[400px] space-y-8">
           <Card className="p-8 shadow-2xl border-none bg-white rounded-[2.5rem]">
-            <Section title="Lead Details">
-              <div className="space-y-4">
-                <Input label="Customer Name" value={inputs.customerName} onChange={e=>setInputs({...inputs, customerName: e.target.value})} icon={<User size={16}/>} />
-                <Input label="Company Name" value={inputs.companyName} onChange={e=>setInputs({...inputs, companyName: e.target.value})} icon={<Building size={16}/>} />
-              </div>
-            </Section>
-
-            <Section title="Step 1: Water Demand">
+            <Section title="1. Demand Profile">
               <select className="w-full p-4 border-2 border-slate-100 rounded-2xl font-black bg-slate-50 mb-6" value={inputs.userType} onChange={e=>setInputs({...inputs, userType: e.target.value})}>
                 <option value="home">Residential Villa</option>
                 <option value="restaurant">Restaurant / Café</option>
@@ -136,19 +92,17 @@ const HeatPumpCalculator = () => {
                 {(inputs.userType === 'restaurant' || inputs.userType === 'resort') && <Input label="Average Meals / Day" type="number" value={inputs.mealsPerDay} onChange={e=>setInputs({...inputs, mealsPerDay: +e.target.value})} />}
                 {inputs.userType === 'home' && <Input label="Occupants" type="number" value={inputs.occupants} onChange={e=>setInputs({...inputs, occupants: +e.target.value})} />}
                 {inputs.userType === 'resort' && <Input label="Rooms Occupied" type="number" value={inputs.roomsOccupied} onChange={e=>setInputs({...inputs, roomsOccupied: +e.target.value})} />}
-                {inputs.userType === 'office' && (
+                {(inputs.userType === 'office' || inputs.userType === 'commercial') && (
                   <div>
                     <Input label="Liters / Day" type="number" value={inputs.dailyLitersInput} onChange={e=>setInputs({...inputs, dailyLitersInput: +e.target.value})} />
-                    <button onClick={()=>setShowModal(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-600 underline tracking-widest italic mt-2">
-                        <Droplets size={12}/> Estimate via Fixtures
-                    </button>
+                    <button onClick={()=>setShowModal(true)} className="flex items-center gap-2 text-[10px] font-black uppercase text-blue-600 underline tracking-widest italic mt-2"><Droplets size={12}/> Estimate via Fixtures</button>
                   </div>
                 )}
                 <Input label="Operating Hours/Day" type="number" value={inputs.hoursPerDay} onChange={e=>setInputs({...inputs, hoursPerDay: +e.target.value})} />
               </div>
             </Section>
 
-            <Section title="Step 2: Market Rates">
+            <Section title="2. Market Rates">
               <div className="flex gap-2 mb-6">
                 <select className="flex-1 p-3 border rounded-xl font-bold text-xs" value={inputs.currency} onChange={e=>setInputs({...inputs, currency: e.target.value})}>
                   {Object.keys(CONFIG.FX).map(c => <option key={c} value={c}>{c}</option>)}
@@ -161,10 +115,7 @@ const HeatPumpCalculator = () => {
               <Input label="Fuel/Energy Price" type="number" value={inputs.fuelPrice} onChange={e=>setInputs({...inputs, fuelPrice: +e.target.value})} />
             </Section>
           </Card>
-          <div className="space-y-4">
-            <Button onClick={handleSaveToLead} className="w-full py-5 bg-green-600 text-white flex justify-center gap-3 shadow-xl"><Save size={20}/> Save result to Lead</Button>
-            <Button onClick={handlePrint} variant="secondary" className="w-full py-5 flex justify-center gap-3 shadow-xl"><Printer size={20} /> Export Quote PDF</Button>
-          </div>
+          <Button onClick={() => window.print()} variant="secondary" className="w-full py-5 shadow-xl flex justify-center gap-3"><Printer size={20} /> Export Quote PDF</Button>
         </div>
 
         <div className="flex-1 space-y-10">
@@ -175,20 +126,19 @@ const HeatPumpCalculator = () => {
                   <div className="space-y-6">
                     <div className="bg-[#F56600] inline-block px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] italic">Karnot Certified Recommendation</div>
                     <h2 className="text-6xl font-black italic uppercase tracking-tighter leading-[0.9] max-w-sm">{result.system.n}</h2>
-                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">For: {inputs.customerName || 'Lead'}</p>
+                    <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Technology: {result.system.refrig} Refrigerant System</p>
                   </div>
-                  <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[3rem] p-10 text-center min-w-[320px]">
-                    <div className="text-7xl font-black text-[#4ade80] drop-shadow-[0_0_25px_rgba(74,222,128,0.4)] tracking-tighter leading-none">{result.financials.symbol}${Math.round(result.financials.totalSavings).toLocaleString()}</div>
+                  <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[3rem] p-10 text-center min-w-[320px] shadow-inner">
+                    <div className="text-7xl font-black text-[#4ade80] drop-shadow-[0_0_25px_rgba(74,222,128,0.4)] tracking-tighter leading-none">{sym}{fmt(result.financials.totalSavings)}</div>
                     <p className="text-slate-400 font-black uppercase text-[10px] tracking-[0.2em] mt-4">Projected Annual Savings</p>
                   </div>
                 </div>
               </div>
-
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <MetricBox icon={<TrendingUp className="text-orange-500"/>} label="ROI Payback" value={`${result.financials.paybackYears} Yrs`} />
                 <MetricBox icon={<Zap className="text-blue-500"/>} label="Power KW" value={`${result.metrics.powerKW}`} />
-                <MetricBox icon={<Sun className="text-amber-500"/>} label="Solar Support" value={`${result.metrics.panelCount} Panels`} />
-                <MetricBox icon={<CheckCircle className="text-green-500"/>} label="CO2 Reduction" value={`${result.metrics.co2Saved} kg`} />
+                <MetricBox icon={<Sun className="text-amber-500"/>} label="Solar Panels" value={`${result.metrics.panelCount}`} />
+                <MetricBox icon={<CheckCircle className="text-green-500"/>} label="CO2 Reduction" value={`${fmt(result.metrics.co2Saved)} kg`} />
               </div>
             </div>
           ) : (
@@ -197,7 +147,6 @@ const HeatPumpCalculator = () => {
         </div>
       </div>
 
-      {/* 🛠 FIXTURE ESTIMATOR MODAL */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[999] flex items-center justify-center p-6">
           <div className="bg-white p-16 rounded-[4rem] max-w-2xl w-full relative shadow-2xl border-4 border-[#F56600]">
@@ -212,7 +161,7 @@ const HeatPumpCalculator = () => {
               <Input label="Occupants" type="number" value={fixtures.people} onChange={e=>setFixtures({...fixtures, people: +e.target.value})} />
               <Input label="Basins" type="number" value={fixtures.basins} onChange={e=>setFixtures({...fixtures, basins: +e.target.value})} />
             </div>
-            <Button onClick={applyFixtures} className="w-full mt-12 py-6 bg-[#F56600] rounded-3xl font-black uppercase italic text-white text-xl shadow-2xl">Apply Demand Settings</Button>
+            <Button onClick={applyFixtures} className="w-full mt-12 py-6 bg-[#F56600] rounded-3xl font-black uppercase italic text-white text-xl tracking-widest shadow-2xl">Apply Demand Settings</Button>
           </div>
         </div>
       )}
@@ -224,7 +173,7 @@ const MetricBox = ({ icon, label, value }) => (
   <div className="bg-white p-8 rounded-[2.5rem] border-2 border-slate-50 shadow-sm text-center flex flex-col items-center hover:scale-105 transition-all">
     <div className="mb-4 bg-slate-50 p-4 rounded-full">{icon}</div>
     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{label}</p>
-    <p className="text-3xl font-black text-slate-800 tracking-tighter leading-none">{value}</p>
+    <p className="text-3xl font-black text-slate-800 tracking-tighter">{value}</p>
   </div>
 );
 
