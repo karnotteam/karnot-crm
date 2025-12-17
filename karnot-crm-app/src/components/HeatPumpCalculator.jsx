@@ -6,7 +6,7 @@ import { calculateHeatPump, CONFIG } from '../utils/heatPumpLogic';
 import { Card, Section, Input, Button } from '../data/constants.jsx'; 
 import { Save, Calculator, RefreshCw, Printer, X, Check } from 'lucide-react';
 
-const HeatPumpCalculator = ({ leadId }) => { 
+const HeatPumpCalculator = ({ leadId }) => {  
   
   // --- MAIN STATE ---
   const [inputs, setInputs] = useState({
@@ -65,7 +65,6 @@ const HeatPumpCalculator = ({ leadId }) => {
   }, []);
 
   // --- 2. AUTO CALCULATE ---
-  // Recalculates whenever inputs change or the product list updates
   useEffect(() => {
     if (!loading && dbProducts.length > 0) {
         const res = calculateHeatPump(inputs, dbProducts);
@@ -76,10 +75,21 @@ const HeatPumpCalculator = ({ leadId }) => {
   // --- HANDLERS ---
   const handleChange = (field, isNumber = false) => (e) => {
     const val = isNumber ? parseFloat(e.target.value) || 0 : e.target.value;
-    // Special handling for heatingType to reset default rates
-    if (field === 'heatingType') {
-        const currency = inputs.currency;
-        const defaults = CONFIG.defaultRate[currency];
+    
+    // UPDATED: Proper currency and heating type switching logic
+    if (field === 'currency') {
+        const defaults = CONFIG.defaultRate[val];
+        const hType = inputs.heatingType;
+        // Reset local rates to the new currency defaults
+        let newFuelPrice = hType === 'propane' ? defaults.lpgPrice : (hType === 'diesel' ? defaults.diesel : (hType === 'gas' ? defaults.gas : defaults.grid));
+        setInputs(prev => ({ 
+            ...prev, 
+            currency: val, 
+            fuelPrice: newFuelPrice, 
+            elecRate: defaults.grid 
+        }));
+    } else if (field === 'heatingType') {
+        const defaults = CONFIG.defaultRate[inputs.currency];
         let newFuelPrice = val === 'propane' ? defaults.lpgPrice : (val === 'diesel' ? defaults.diesel : (val === 'gas' ? defaults.gas : defaults.grid));
         setInputs(prev => ({ ...prev, [field]: val, fuelPrice: newFuelPrice }));
     } else {
@@ -93,7 +103,6 @@ const HeatPumpCalculator = ({ leadId }) => {
 
   const applyFixtureCalculation = () => {
       const { showers, basins, sinks, people, hours } = fixtureInputs;
-      // Formula ported from original HTML: (Showers * 50 * 0.4) + (People * 284 * 0.15 * 0.25 * 0.4) + ...
       const totalLiters = Math.round(
           (50 * showers * 0.4) + 
           (284 * people * 0.15 * 0.25 * 0.4) + 
@@ -104,14 +113,12 @@ const HeatPumpCalculator = ({ leadId }) => {
       setShowModal(false);
   };
   
-  // Handlers for dynamic UI fields visibility
   const isShowerFieldVisible = ['office','school','spa'].includes(inputs.userType);
   const isMealFieldVisible = ['restaurant','resort'].includes(inputs.userType);
   const isRoomFieldVisible = inputs.userType === 'resort';
   const isOccupantFieldVisible = inputs.userType === 'home';
   const isSunHoursVisible = inputs.systemType === 'grid-solar';
   
-  // Dynamic Rate Label
   const getRateLabel = (type, symbol) => {
       if (type === 'electric') return `Electricity Rate (${symbol}/kWh)`;
       if (type === 'gas') return `Natural Gas Rate (${symbol}/kWh)`;
@@ -122,14 +129,12 @@ const HeatPumpCalculator = ({ leadId }) => {
 
   const symbol = CONFIG.SYMBOLS[inputs.currency] || '$';
 
-  // --- REPORT GENERATION (FIXED SYNTAX) ---
+  // --- REPORT GENERATION ---
   const fmt = n => (+n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
   const generateReport = () => {
       if (!result || result.error) return;
       const q = result;
-      
-      // Fix for the build error: prepare conditional row outside of the template
       const coolSavingsRow = q.financials.coolSavings > 0 
           ? `<tr><td>Annual Free Cooling Savings</td><td class="cooling-details">${q.financials.symbol}${fmt(q.financials.coolSavings)}</td></tr>` 
           : '';
@@ -162,7 +167,6 @@ const HeatPumpCalculator = ({ leadId }) => {
       const win = window.open("", "_blank");
       win.document.write(reportHTML);
   };
-  // --- END REPORT GENERATION ---
 
   const handleSave = async () => {
     if (!result || result.error) return;
@@ -186,10 +190,8 @@ const HeatPumpCalculator = ({ leadId }) => {
     }
   };
 
-
   return (
     <Card>
-        {/* --- HEADER --- */}
         <div className="flex justify-between items-center mb-6 border-b pb-4">
             <h2 className="text-2xl font-bold text-orange-600 flex items-center gap-2">
                 <Calculator size={24}/> ROI Calculator
@@ -197,10 +199,7 @@ const HeatPumpCalculator = ({ leadId }) => {
             {loading && <span className="text-sm text-gray-500 flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> Syncing...</span>}
         </div>
 
-        {/* --- INPUT FORM --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* COLUMN 1: DEMAND */}
             <Section title="1. Your Demand">
                 <div className="space-y-4">
                     <div>
@@ -238,26 +237,25 @@ const HeatPumpCalculator = ({ leadId }) => {
                 </div>
             </Section>
 
-            {/* COLUMN 2: COSTS */}
             <Section title="2. Your Costs">
                 <div className="space-y-4">
-                    <label htmlFor="currency">Select Currency</label>
-                    <select id="currency" value={inputs.currency} onChange={handleChange('currency')}>
+                    <label htmlFor="currency" className="block text-sm font-medium text-gray-700 mb-1">Select Currency</label>
+                    <select id="currency" className="w-full border p-2 rounded mb-2" value={inputs.currency} onChange={handleChange('currency')}>
                         <option value="PHP">₱ PHP</option>
                         <option value="USD">$ USD</option>
                         <option value="GBP">£ GBP</option>
                         <option value="EUR">€ EUR</option>
                     </select>
 
-                    <label htmlFor="heatingType">Current Heating Type</label>
-                    <select id="heatingType" value={inputs.heatingType} onChange={handleChange('heatingType')}>
+                    <label htmlFor="heatingType" className="block text-sm font-medium text-gray-700 mb-1">Current Heating Type</label>
+                    <select id="heatingType" className="w-full border p-2 rounded mb-2" value={inputs.heatingType} onChange={handleChange('heatingType')}>
                         <option value="electric">Electric</option>
                         <option value="gas">Natural Gas</option>
                         <option value="propane">LPG (Propane)</option>
                         <option value="diesel">Diesel</option>
                     </select>
 
-                    <label htmlFor="fuelPrice">{getRateLabel(inputs.heatingType, symbol)}</label>
+                    <label htmlFor="fuelPrice" className="block text-sm font-medium text-gray-700 mb-1">{getRateLabel(inputs.heatingType, symbol)}</label>
                     {inputs.heatingType === 'propane' ? (
                         <div className="flex gap-2 items-center">
                             <Input type="number" value={inputs.fuelPrice} onChange={handleChange('fuelPrice', true)} />
@@ -273,15 +271,14 @@ const HeatPumpCalculator = ({ leadId }) => {
                 </div>
             </Section>
             
-            {/* COLUMN 3: CONDITIONS & OPTIONS */}
             <Section title="3. Conditions & Options">
                 <div className="space-y-4">
                     <Input label="Average Ambient Air Temp (°C)" type="number" value={inputs.ambientTemp} onChange={handleChange('ambientTemp', true)} />
                     <Input label="Cold Water Inlet Temp (°C)" type="number" value={inputs.inletTemp} onChange={handleChange('inletTemp', true)} />
                     <Input label="Target Hot Water Temp (°C)" type="number" value={inputs.targetTemp} onChange={handleChange('targetTemp', true)} />
 
-                    <label htmlFor="systemType">System Type</label>
-                    <select id="systemType" value={inputs.systemType} onChange={handleChange('systemType')}>
+                    <label htmlFor="systemType" className="block text-sm font-medium text-gray-700 mb-1">System Type</label>
+                    <select id="systemType" className="w-full border p-2 rounded mb-2" value={inputs.systemType} onChange={handleChange('systemType')}>
                         <option value="grid-only">Grid Only</option>
                         <option value="grid-solar">Grid + Solar (Offset)</option>
                     </select>
@@ -290,16 +287,16 @@ const HeatPumpCalculator = ({ leadId }) => {
                         <Input label="Average Daily Sun Hours" type="number" value={inputs.sunHours} onChange={handleChange('sunHours', true)} />
                     )}
                     
-                    <label htmlFor="heatPumpType">Heat Pump Type / Refrigerant</label>
-                    <select id="heatPumpType" value={inputs.heatPumpType} onChange={handleChange('heatPumpType')}>
+                    <label htmlFor="heatPumpType" className="block text-sm font-medium text-gray-700 mb-1">Heat Pump Type / Refrigerant</label>
+                    <select id="heatPumpType" className="w-full border p-2 rounded mb-2" value={inputs.heatPumpType} onChange={handleChange('heatPumpType')}>
                         <option value="all">Best Price (All Models)</option>
                         <option value="R290">R290 Models Only</option>
                         <option value="R744">CO2 (R744) Models Only</option>
                         <option value="R32">R32 Models Only</option>
                     </select>
                     
-                    <label htmlFor="includeCooling">Require Cooling?</label>
-                    <select id="includeCooling" value={inputs.includeCooling ? 'yes' : 'no'} onChange={(e) => setInputs(p => ({...p, includeCooling: e.target.value === 'yes'}))}>
+                    <label htmlFor="includeCooling" className="block text-sm font-medium text-gray-700 mb-1">Require Cooling?</label>
+                    <select id="includeCooling" className="w-full border p-2 rounded" value={inputs.includeCooling ? 'yes' : 'no'} onChange={(e) => setInputs(p => ({...p, includeCooling: e.target.value === 'yes'}))}>
                         <option value="no">No</option>
                         <option value="yes">Yes</option>
                     </select>
@@ -311,8 +308,6 @@ const HeatPumpCalculator = ({ leadId }) => {
             <Button id="calcBtn" onClick={() => setResult(calculateHeatPump(inputs, dbProducts))} variant="primary">Calculate Savings</Button>
         </div>
 
-
-        {/* --- RESULTS AREA --- */}
         {result && !result.error && (
             <div className="mt-8 bg-slate-50 p-6 rounded-xl border border-slate-200">
                 <div className="flex justify-between items-end mb-6">
@@ -328,7 +323,6 @@ const HeatPumpCalculator = ({ leadId }) => {
                     </div>
                 </div>
 
-                {/* COOLING BONUS */}
                 {result.financials.coolSavings > 0 && (
                     <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
                         <h4 className="text-blue-700 font-bold text-sm">Free Cooling Bonus!</h4>
@@ -370,7 +364,6 @@ const HeatPumpCalculator = ({ leadId }) => {
             </div>
         )}
 
-        {/* --- FIXTURE MODAL --- */}
         {showModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
                 <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
