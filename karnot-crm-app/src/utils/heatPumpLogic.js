@@ -1,6 +1,6 @@
 /**
- * KARNOT CRM - FULL PHYSICS & ROI UTILITY
- * Handles: Thermal Load, Ambient Derating, Fuel Conversions, and Solar Sizing.
+ * KARNOT CRM - COMPLETE PHYSICS & ROI UTILITY
+ * Maintained with all features: LPG math, Fixture logic, and Environmental derating.
  */
 export const CONFIG = {
     FX: { PHP: 58.5, USD: 1, GBP: 0.79, EUR: 0.92 },
@@ -24,109 +24,67 @@ export const CONFIG = {
 export function calculateHeatPump(inputs, dbProducts) {
     if (!dbProducts || dbProducts.length === 0) return { error: "Inventory empty." };
 
-    // 1. Demand Calculation (Residential, Restaurant, Resort, Commercial)
+    // 1. Demand Calculation (Restored all types)
     let dailyLiters = 0;
-    const type = inputs.userType || 'home';
-    
-    if (type === 'home') {
-        dailyLiters = (parseFloat(inputs.occupants) || 0) * 50;
-    } else if (type === 'restaurant') {
-        // Industry standard: 7 Liters of hot water per meal served
-        dailyLiters = (parseFloat(inputs.mealsPerDay) || 0) * 7;
-    } else if (type === 'resort') {
-        // Combination of guest rooms (50L) and meals (7L)
-        dailyLiters = ((parseFloat(inputs.roomsOccupied) || 0) * 50) + ((parseFloat(inputs.mealsPerDay) || 0) * 7);
-    } else {
-        dailyLiters = parseFloat(inputs.dailyLitersInput) || 0;
-    }
+    if (inputs.userType === 'home') dailyLiters = (inputs.occupants || 0) * 50;
+    else if (inputs.userType === 'restaurant') dailyLiters = (inputs.mealsPerDay || 0) * 7;
+    else if (inputs.userType === 'resort') dailyLiters = ((inputs.roomsOccupied || 0) * 50) + ((inputs.mealsPerDay || 0) * 7);
+    else dailyLiters = inputs.dailyLitersInput || 0;
 
     if (dailyLiters <= 0) return { error: "Liters required" };
 
-    const hours = Math.max(1, parseFloat(inputs.hoursPerDay) || 12);
-    const target = parseFloat(inputs.targetTemp) || 55;
-    const inlet = parseFloat(inputs.inletTemp) || 15;
-    const deltaT = Math.max(1, target - inlet);
+    const hours = Math.max(1, inputs.hoursPerDay || 12);
+    const deltaT = Math.max(1, (inputs.targetTemp || 55) - (inputs.inletTemp || 15));
 
-    // Thermal physics: (L * ΔT * 1.163) / 1000 = kWh
     const kwhPerLiter = (deltaT * 1.163) / 1000;
     const dailyThermalEnergyKWH = dailyLiters * kwhPerLiter;
-    const requiredPowerKW = dailyThermalEnergyKWH / hours;
+    const requiredThermalPowerKW = dailyThermalEnergyKWH / hours;
 
-    // 2. Baseline Costs (Including LPG/Diesel energy density math)
-    let rateKWH = parseFloat(inputs.elecRate) || 12.25;
+    // 2. Baseline Costs (Including LPG/Diesel math)
+    let rateKWH = inputs.elecRate || 12.25;
     if (inputs.heatingType === 'propane') {
-        const pricePerKg = (parseFloat(inputs.fuelPrice) || 950) / (parseFloat(inputs.tankSize) || 11);
-        rateKWH = pricePerKg / CONFIG.KWH_PER_KG_LPG;
+        rateKWH = ((inputs.fuelPrice || 950) / (inputs.tankSize || 11)) / CONFIG.KWH_PER_KG_LPG;
     } else if (inputs.heatingType === 'diesel') {
-        rateKWH = (parseFloat(inputs.fuelPrice) || 60) / CONFIG.DIESEL_KWH_PER_LITER;
+        rateKWH = (inputs.fuelPrice || 60) / CONFIG.DIESEL_KWH_PER_LITER;
     }
     const annualCostOld = dailyThermalEnergyKWH * 365 * rateKWH;
 
-    // 3. Environmental Scaling (Performance Factor)
-    const ambient = parseFloat(inputs.ambientTemp) || 30;
-    const perfFactor = (CONFIG.RATED_LIFT_C / deltaT) * (1 + ((ambient - CONFIG.RATED_AMBIENT_C) * 0.015));
+    // 3. Performance Factor (The Derating Logic)
+    const perfFactor = (CONFIG.RATED_LIFT_C / deltaT) * (1 + (((inputs.ambientTemp || 30) - CONFIG.RATED_AMBIENT_C) * 0.015));
 
-    // 4. Model Selection (Filtering and Sorting)
-    let available = dbProducts.filter(p => {
+    // 4. Selection (R32, R290, CO2, Best Price)
+    let availableModels = dbProducts.filter(p => {
         const pRefrig = (p.Refrigerant || '').toUpperCase();
-        // Technology filter (R32, R290, CO2)
         if (inputs.heatPumpType !== 'all' && !pRefrig.includes(inputs.heatPumpType.toUpperCase())) return false;
-        
-        // Capability filters
         if (inputs.includeCooling && !p.isReversible) return false;
-        if (target > (p.max_temp_c || 65)) return false;
+        if (inputs.targetTemp > (p.max_temp_c || 65)) return false;
 
-        // Sizing logic
         const nominalKW = parseFloat(p.kW_DHW_Nominal) || 0;
-        return requiredPowerKW <= (nominalKW * perfFactor);
+        return requiredThermalPowerKW <= (nominalKW * perfFactor);
     });
 
-    // Sort by Sales Price to find the most cost-effective match
-    available.sort((a, b) => (parseFloat(a.salesPriceUSD) || 0) - (parseFloat(b.salesPriceUSD) || 0));
+    availableModels.sort((a, b) => (parseFloat(a.salesPriceUSD) || 0) - (parseFloat(b.salesPriceUSD) || 0));
 
-    if (available.length === 0) return { error: "No suitable models found." };
-    const system = available[0];
+    if (availableModels.length === 0) return { error: "No model fits specs" };
+    const system = availableModels[0];
 
-    // 5. Financials, ROI, and Solar PV Sizing
+    // 5. Financials & Solar
     const fx = CONFIG.FX[inputs.currency] || 1;
-    const sysPrice = (parseFloat(system.salesPriceUSD) || 0) * fx;
+    const sysPriceLocal = (parseFloat(system.salesPriceUSD) || 0) * fx;
     const sysCop = parseFloat(system.COP_DHW) || 3.8;
     
     const karnotDailyKwh = dailyThermalEnergyKWH / sysCop;
-    const isSolar = inputs.systemType === 'grid-solar';
-    const gridHours = Math.max(0, hours - (isSolar ? (parseFloat(inputs.sunHours) || 5.5) : 0));
-    
-    const karnotAnnualCost = (karnotDailyKwh / hours * gridHours) * 365 * (parseFloat(inputs.elecRate) || 12.25);
+    const gridHours = Math.max(0, hours - (inputs.systemType === 'grid-solar' ? (inputs.sunHours || 5.5) : 0));
+    const karnotAnnualCost = (karnotDailyKwh / hours * gridHours) * 365 * (inputs.elecRate || 12.25);
 
-    // Free Cooling Bonus Math
-    const coolSavings = (inputs.includeCooling) ? (karnotDailyKwh * CONFIG.COOLING_COP * 365 * (parseFloat(inputs.elecRate) || 12.25)) : 0;
-    
-    const panelCount = Math.ceil((karnotDailyKwh / hours) / CONFIG.SOLAR_PANEL_KW_RATED);
-    const solarCapex = isSolar ? (panelCount * CONFIG.SOLAR_PANEL_COST_USD * fx * 1.5) : 0; // Includes BOS/Inverter
-    
-    const totalCapex = sysPrice + solarCapex;
+    const coolSavings = (inputs.includeCooling) ? (karnotDailyKwh * CONFIG.COOLING_COP * 365 * (inputs.elecRate || 12.25)) : 0;
     const totalSavings = (annualCostOld - karnotAnnualCost) + coolSavings;
+    const panelCount = Math.ceil((karnotDailyKwh / hours) / CONFIG.SOLAR_PANEL_KW_RATED);
+    const totalCapex = sysPriceLocal + (inputs.systemType === 'grid-solar' ? (panelCount * CONFIG.SOLAR_PANEL_COST_USD * fx * 1.5) : 0);
 
     return {
-        system: { 
-            n: system.name, 
-            refrig: system.Refrigerant, 
-            cop: sysCop,
-            id: system.id 
-        },
-        metrics: { 
-            dailyLiters: Math.round(dailyLiters), 
-            powerKW: (karnotDailyKwh / hours).toFixed(2), 
-            panelCount: isSolar ? panelCount : 0, 
-            co2Saved: (dailyThermalEnergyKWH * 365 * 0.52).toFixed(0) 
-        },
-        financials: { 
-            symbol: CONFIG.SYMBOLS[inputs.currency], 
-            totalSavings: Math.round(totalSavings), 
-            paybackYears: totalSavings > 0 ? (totalCapex / totalSavings).toFixed(1) : "N/A", 
-            capex: Math.round(totalCapex),
-            annualCostOld: Math.round(annualCostOld),
-            karnotAnnualCost: Math.round(karnotAnnualCost)
-        }
+        system: { n: system.name, refrig: system.Refrigerant, cop: sysCop },
+        metrics: { dailyLiters: Math.round(dailyLiters), powerKW: (karnotDailyKwh / hours).toFixed(2), panelCount, co2Saved: (dailyThermalEnergyKWH * 365 * 0.52).toFixed(0) },
+        financials: { symbol: CONFIG.SYMBOLS[inputs.currency], annualCostOld, karnotAnnualCost, coolSavings, totalSavings, paybackYears: (totalCapex / totalSavings).toFixed(1), capex: totalCapex }
     };
 }
