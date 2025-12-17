@@ -148,6 +148,12 @@ const FunnelPage = ({ opportunities = [], user, companies = [], contacts = [], q
         await setDoc(doc(db, "users", user.uid, "companies", companyId), { interactions: filtered }, { merge: true });
     };
 
+    const handleDeleteOpportunity = async (oppId) => {
+        if (window.confirm("Are you sure you want to delete this opportunity?")) {
+            await deleteDoc(doc(db, "users", user.uid, "opportunities", oppId));
+        }
+    };
+
     return (
         <div className="w-full">
             {showDetailModal && selectedOpp && (
@@ -170,8 +176,14 @@ const FunnelPage = ({ opportunities = [], user, companies = [], contacts = [], q
                                 {stageOpps.map(opp => {
                                     const currIdx = STAGE_ORDER.indexOf(opp.stage);
                                     return (
-                                        <Card key={opp.id} className="p-5 rounded-2xl shadow-sm bg-white hover:border-orange-400 group">
-                                            <h4 className="font-black text-gray-800 uppercase text-sm mb-1">{opp.customerName}</h4>
+                                        <Card key={opp.id} className="p-5 rounded-2xl shadow-sm bg-white hover:border-orange-400 group relative">
+                                            <button 
+                                                onClick={() => handleDeleteOpportunity(opp.id)}
+                                                className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                            <h4 className="font-black text-gray-800 uppercase text-sm mb-1 pr-6">{opp.customerName}</h4>
                                             <p className="text-[10px] text-gray-400 font-bold uppercase mb-4">{opp.project}</p>
                                             <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl mb-3">
                                                 <span className="text-xs font-black">${(Number(opp.estimatedValue) || 0).toLocaleString()}</span>
