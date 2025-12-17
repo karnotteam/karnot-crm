@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, writeBatch, query, getDocs, updateDoc } from "firebase/firestore";
 import Papa from 'papaparse'; 
-import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, MessageCircle, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, Database, Send, Download, FileCheck, Handshake, RotateCcw } from 'lucide-react';
+import { Plus, X, Edit, Trash2, Building, Upload, Search, User, Mail, Phone, ShieldCheck, AlertTriangle, CheckSquare, Wand2, Calendar, MessageSquare, MessageCircle, Square, Filter, Clock, FileText, Link as LinkIcon, Check, ChevronDown, Linkedin, Database, Send, Download, FileCheck, Handshake } from 'lucide-react'; // <--- Added Handshake
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
 // --- 1. Helper: WhatsApp Link Generator ---
@@ -123,7 +123,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-// --- 4. Import Settings Modal ---
+// --- 4. Import Settings Modal (NEW) ---
 const ImportSettingsModal = ({ onClose, onProceed }) => {
     const [note, setNote] = useState('Responded to Email Campaign');
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -165,6 +165,7 @@ const ImportSettingsModal = ({ onClose, onProceed }) => {
 const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => {
     const isEditMode = Boolean(contactToEdit);
     
+    // Core Data
     const [firstName, setFirstName] = useState(contactToEdit?.firstName || '');
     const [lastName, setLastName] = useState(contactToEdit?.lastName || '');
     const [jobTitle, setJobTitle] = useState(contactToEdit?.jobTitle || '');
@@ -174,19 +175,26 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     const [companyId, setCompanyId] = useState(contactToEdit?.companyId || '');
     const [companyName, setCompanyName] = useState(contactToEdit?.companyName || ''); 
     
+    // Activity Tracking
     const [isVerified, setIsVerified] = useState(contactToEdit?.isVerified || false);
     const [isEmailed, setIsEmailed] = useState(contactToEdit?.isEmailed || false);
     const [isContacted, setIsContacted] = useState(contactToEdit?.isContacted || false);
+    const [contactDate, setContactDate] = useState(contactToEdit?.contactDate || '');
     const [isVisited, setIsVisited] = useState(contactToEdit?.isVisited || false);
+    const [visitDate, setVisitDate] = useState(contactToEdit?.visitDate || '');
     const [notes, setNotes] = useState(contactToEdit?.notes || '');
+    
+    // --- NEW: Partner/Investor Flag ---
     const [isPartner, setIsPartner] = useState(contactToEdit?.isPartner || false);
 
+    // Interaction History
     const [interactions, setInteractions] = useState(contactToEdit?.interactions || []);
     const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
     const [newLogType, setNewLogType] = useState('Call');
     const [newLogOutcome, setNewLogOutcome] = useState('');
     const [selectedQuoteId, setSelectedQuoteId] = useState('');
 
+    // --- Searchable Company State ---
     const [companySearch, setCompanySearch] = useState('');
     const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
@@ -231,7 +239,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
         const selectedCompany = companies.find(c => c.id === companyId);
         if (!selectedCompany) return [];
         const cName = selectedCompany.companyName.toLowerCase();
-        return quotes.filter(q => q.customer?.name?.toLowerCase().includes(cName));
+        return quotes.filter(q => q.customer?.name?.toLowerCase() === cName || q.customer?.name?.toLowerCase().includes(cName));
     }, [quotes, companyId, companies]);
 
     const handleAddInteraction = () => {
@@ -261,7 +269,7 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
         
         const contactData = {
             firstName, lastName, jobTitle, email, phone, linkedIn, companyId, companyName: finalCompanyName, 
-            isVerified, isEmailed, isContacted, isVisited, isPartner, notes, interactions 
+            isVerified, isEmailed, isContacted, isVisited, isPartner, notes, interactions // Added isPartner
         };
         onSave(contactData);
     };
@@ -269,15 +277,20 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 flex justify-center items-center p-4">
             <Card className="w-full max-w-4xl max-h-[95vh] overflow-y-auto flex flex-col md:flex-row gap-6">
+                
+                {/* LEFT: Contact Details */}
                 <div className="flex-1 space-y-4">
                       <div className="flex justify-between items-center mb-2">
                         <h3 className="text-2xl font-bold text-gray-800">{isEditMode ? 'Edit Contact' : 'New Contact'}</h3>
                         <button onClick={onClose} className="md:hidden text-gray-500"><X /></button>
                     </div>
+
                     <div className="flex gap-4">
                         <Input label="First Name" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
                         <Input label="Last Name" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
                     </div>
+
+                    {/* SEARCHABLE COMPANY INPUT */}
                     <div className="relative" ref={dropdownRef}>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
                         <div className="relative">
@@ -290,33 +303,49 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
                                 placeholder="Search Company..."
                             />
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}/>
-                            {companyId && <Check className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={16}/>}
+                            {companyId && <Check className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={16} title="Linked to Company DB"/>}
                         </div>
+                        
                         {isCompanyDropdownOpen && (
                             <div className="absolute z-50 w-full mt-1 bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
                                 {filteredCompanies.length === 0 ? (
                                     <div className="py-2 px-4 text-gray-500 italic">No companies found.</div>
                                 ) : (
                                     filteredCompanies.map((company) => (
-                                        <div key={company.id} className="cursor-pointer py-2 pl-3 pr-9 hover:bg-orange-50 text-gray-900 border-b border-gray-50 last:border-0" onClick={() => handleSelectCompany(company)}>
+                                        <div
+                                            key={company.id}
+                                            className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-orange-50 text-gray-900 border-b border-gray-50 last:border-0"
+                                            onClick={() => handleSelectCompany(company)}
+                                        >
                                             <span className="block truncate font-medium">{company.companyName}</span>
+                                            {company.address && <span className="block truncate text-xs text-gray-500">{company.address}</span>}
                                         </div>
                                     ))
                                 )}
                             </div>
                         )}
                     </div>
+
                     <Input label="Job Title" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} />
                     <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
                     <div className="grid grid-cols-2 gap-4">
-                        <Input label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-                        <Input label="LinkedIn" type="url" value={linkedIn} onChange={(e) => setLinkedIn(e.target.value)} />
+                        <Input label="Phone (Mobile)" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0917..." />
+                        <Input label="LinkedIn URL" type="url" value={linkedIn} onChange={(e) => setLinkedIn(e.target.value)} placeholder="https://linkedin.com/in/..." />
                     </div>
-                    <Textarea label="Notes" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    
+                    <Textarea label="General Notes" rows="3" value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    
+                    {/* --- NEW PARTNER CHECKBOX --- */}
                     <div className="p-3 bg-teal-50 border border-teal-200 rounded-lg">
-                        <Checkbox id="isPartner" label={<span className="font-bold text-teal-800 flex items-center gap-2"><Handshake size={16}/> Investor / Partner</span>} checked={isPartner} onChange={(e) => setIsPartner(e.target.checked)} />
+                        <Checkbox 
+                            id="isPartner" 
+                            label={<span className="font-bold text-teal-800 flex items-center gap-2"><Handshake size={16}/> Investor / Strategic Partner (15% Off)</span>}
+                            checked={isPartner} 
+                            onChange={(e) => setIsPartner(e.target.checked)} 
+                        />
                     </div>
-                    <div className="grid grid-cols-2 gap-2 p-4 bg-gray-50 rounded-lg">
+
+                    <div className="grid grid-cols-2 gap-2 mt-2 p-4 bg-gray-50 rounded-lg">
                         <Checkbox id="isVerified" label="Verified" checked={isVerified} onChange={(e) => setIsVerified(e.target.checked)} />
                         <Checkbox id="isEmailed" label="Emailed" checked={isEmailed} onChange={(e) => setIsEmailed(e.target.checked)} />
                         <Checkbox id="isContacted" label="Call/Met" checked={isContacted} onChange={(e) => setIsContacted(e.target.checked)} />
@@ -324,36 +353,65 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
                     </div>
                 </div>
 
+                {/* RIGHT: Log */}
                 <div className="flex-1 border-l border-gray-200 pl-0 md:pl-6 flex flex-col">
                     <div className="flex justify-between items-center mb-4">
                         <h4 className="font-bold text-gray-700 flex items-center gap-2"><Clock size={18}/> Interaction Log</h4>
-                        <button onClick={onClose} className="hidden md:block text-gray-500"><X /></button>
+                        <button onClick={onClose} className="hidden md:block text-gray-500 hover:text-gray-800"><X /></button>
                     </div>
+
                     <div className="bg-orange-50 p-3 rounded-lg border border-orange-100 mb-4 space-y-2">
                         <div className="flex gap-2">
                             <Input type="date" value={newLogDate} onChange={e => setNewLogDate(e.target.value)} className="text-sm w-1/3" />
-                            <select value={newLogType} onChange={e => setNewLogType(e.target.value)} className="block w-2/3 px-2 py-2 bg-white border-gray-300 rounded-md text-sm">
-                                <option value="Call">Call</option><option value="Visit">Visit</option><option value="Email">Email</option><option value="Note">Note</option>
+                            <select value={newLogType} onChange={e => setNewLogType(e.target.value)} className="block w-2/3 px-2 py-2 bg-white border-gray-300 rounded-md shadow-sm text-sm">
+                                <option value="Call">Call</option>
+                                <option value="Visit">Visit</option>
+                                <option value="Email">Email</option>
+                                <option value="Event">Event</option>
+                                <option value="Note">Note</option>
                             </select>
                         </div>
+                        
+                        {relevantQuotes.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <LinkIcon size={14} className="text-gray-500"/>
+                                <select value={selectedQuoteId} onChange={(e) => setSelectedQuoteId(e.target.value)} className="block w-full px-2 py-1 bg-white border border-gray-300 rounded text-xs">
+                                    <option value="">-- Attach Quote (Optional) --</option>
+                                    {relevantQuotes.map(q => <option key={q.id} value={q.id}>{q.id} - ${q.finalSalesPrice?.toLocaleString()} ({q.status})</option>)}
+                                </select>
+                            </div>
+                        )}
+
                         <div className="flex gap-2">
-                            <input type="text" value={newLogOutcome} onChange={e => setNewLogOutcome(e.target.value)} placeholder="Outcome..." className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                            <input type="text" value={newLogOutcome} onChange={e => setNewLogOutcome(e.target.value)} placeholder="Outcome / Details..." className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm" />
                             <Button onClick={handleAddInteraction} variant="secondary" className="px-3"><Plus size={16}/></Button>
                         </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto space-y-3" style={{maxHeight: '400px'}}>
+
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-2" style={{minHeight: '200px', maxHeight: '500px'}}>
                         {interactions.map((log) => (
                             <div key={log.id} className="bg-white border border-gray-200 p-3 rounded-lg shadow-sm group relative">
                                 <div className="flex justify-between items-start mb-1">
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${log.type === 'Visit' ? 'bg-green-500' : 'bg-blue-500'}`}>{log.type}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded text-white ${log.type === 'Visit' ? 'bg-green-500' : log.type === 'Call' ? 'bg-blue-500' : 'bg-purple-500'}`}>{log.type}</span>
+                                        <span className="text-xs text-gray-500">{log.date}</span>
+                                    </div>
                                     <button onClick={() => handleDeleteInteraction(log.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><X size={14}/></button>
                                 </div>
                                 <p className="text-sm text-gray-800">{log.outcome}</p>
+                                {log.linkedQuote && (
+                                    <div className="mt-2 flex items-center gap-2 bg-blue-50 border border-blue-100 rounded p-1.5 w-fit">
+                                        <FileText size={14} className="text-blue-600"/>
+                                        <span className="text-xs font-semibold text-blue-800">{log.linkedQuote.id} (${log.linkedQuote.total?.toLocaleString()})</span>
+                                    </div>
+                                )}
                             </div>
                         ))}
+                        {interactions.length === 0 && <p className="text-center text-gray-400 italic text-sm">No interactions logged yet.</p>}
                     </div>
+
                     <div className="mt-4 pt-4 border-t flex justify-end">
-                        <Button onClick={handleSave} variant="primary">Save Changes</Button>
+                        <Button onClick={handleSave} variant="primary" className="w-full md:w-auto"><Plus className="mr-2" size={16} /> Save Changes</Button>
                     </div>
                 </div>
             </Card>
@@ -361,50 +419,90 @@ const ContactModal = ({ onClose, onSave, contactToEdit, companies, quotes }) => 
     );
 };
 
-// --- 6. ContactCard ---
-const ContactCard = ({ contact, onEdit, onSoftDelete, selected, onToggleSelect }) => {
+// --- 6. ContactCard (Updated with Checkbox) ---
+const ContactCard = ({ contact, onEdit, onDelete, selected, onToggleSelect }) => {
     const lastActivity = contact.interactions && contact.interactions.length > 0 ? contact.interactions[0] : null;
     const whatsappLink = getWhatsAppLink(contact.phone);
 
     return (
-        <Card className={`p-4 rounded-lg shadow border transition-colors relative ${selected ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'}`}>
+        <Card className={`p-4 rounded-lg shadow border transition-colors relative ${selected ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-400' : 'border-gray-200 hover:border-orange-300'}`}>
+            
             <div className="absolute top-4 left-4 z-10">
-                <input type="checkbox" checked={selected} onChange={() => onToggleSelect(contact.id)} className="w-5 h-5 text-orange-600 rounded cursor-pointer" />
+                <input 
+                    type="checkbox" 
+                    checked={selected} 
+                    onChange={() => onToggleSelect(contact.id)}
+                    className="w-5 h-5 text-orange-600 rounded border-gray-300 focus:ring-orange-500 cursor-pointer"
+                />
             </div>
+
             <div className="pl-8"> 
                 <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-bold text-lg text-gray-800">{contact.firstName} {contact.lastName} {contact.isPartner && <Handshake size={18} className="inline text-teal-600 ml-1"/>}</h4>
-                    <div className="flex gap-1">
-                        <Button onClick={() => onEdit(contact)} variant="secondary" className="p-1 h-auto"><Edit size={14}/></Button>
-                        <Button onClick={() => onSoftDelete(contact.id)} variant="danger" className="p-1 h-auto"><Trash2 size={14}/></Button>
+                    <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-lg text-gray-800 leading-tight">{contact.firstName} {contact.lastName}</h4>
+                        {/* --- NEW PARTNER BADGE --- */}
+                        {contact.isPartner && <Handshake size={20} className="text-teal-600" title="Investor / Strategic Partner"/>}
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                        <Button onClick={() => onEdit(contact)} variant="secondary" className="p-1 h-auto w-auto"><Edit size={14}/></Button>
+                        <Button onClick={() => onDelete(contact.id)} variant="danger" className="p-1 h-auto w-auto"><Trash2 size={14}/></Button>
                     </div>
                 </div>
-                <p className="text-sm text-orange-600 font-medium mb-1 truncate">{contact.jobTitle || 'No Title'}</p>
-                <div className="text-xs text-gray-500 mb-3 truncate">{contact.companyName}</div>
-                <div className="flex gap-3 mb-3 justify-center py-2 border-y border-gray-50">
-                    {contact.email && <a href={`mailto:${contact.email}`} className="text-gray-400 hover:text-orange-600"><Mail size={16}/></a>}
-                    {contact.phone && <a href={`tel:${contact.phone}`} className="text-gray-400 hover:text-blue-600"><Phone size={16}/></a>}
-                    {whatsappLink && <a href={whatsappLink} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-green-600"><MessageCircle size={16}/></a>}
+                
+                <p className="text-sm text-orange-600 font-medium mb-1">{contact.jobTitle || 'No Job Title'}</p>
+                <div className="text-sm text-gray-600 flex items-center gap-2 mb-3"><Building size={14} className="flex-shrink-0" /><span className="truncate">{contact.companyName}</span></div>
+
+                <div className="flex gap-3 mb-3 border-t border-b border-gray-100 py-2 justify-center">
+                    {contact.email && <a href={`mailto:${contact.email}`} className="text-gray-500 hover:text-orange-600" title="Email"><Mail size={18}/></a>}
+                    {contact.phone && <a href={`tel:${contact.phone}`} className="text-gray-500 hover:text-blue-600" title="Call"><Phone size={18}/></a>}
+                    {whatsappLink && <a href={whatsappLink} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-green-600" title="WhatsApp"><MessageCircle size={18}/></a>}
+                    {contact.linkedIn && <a href={contact.linkedIn} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-blue-800" title="LinkedIn"><Linkedin size={18}/></a>}
                 </div>
+
+                {lastActivity ? (
+                    <div className="mb-3 bg-blue-50 p-2 rounded border border-blue-100">
+                        <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs font-bold text-blue-800 flex items-center gap-1">
+                                {lastActivity.type === 'Visit' ? <Building size={10}/> : <Phone size={10}/>} {lastActivity.type}
+                            </span>
+                            <span className="text-[10px] text-gray-500">{lastActivity.date}</span>
+                        </div>
+                        <p className="text-xs text-gray-700 truncate">{lastActivity.outcome}</p>
+                    </div>
+                ) : (
+                    <div className="mb-3 p-2 text-xs text-gray-400 italic">No recent activity</div>
+                )}
+            </div>
+
+            <div className="pt-3 border-t border-gray-100 grid grid-cols-4 gap-1 text-[10px] text-gray-500 text-center">
+                <div className={`p-1 rounded ${contact.isVerified ? 'bg-gray-100 text-green-700 font-bold' : ''}`}><CheckSquare size={14} className={`mx-auto mb-1 ${contact.isVerified ? 'text-green-600' : 'text-gray-300'}`}/> Verified</div>
+                <div className={`p-1 rounded ${contact.isEmailed ? 'bg-purple-50 text-purple-700 font-bold' : ''}`}><Mail size={14} className={`mx-auto mb-1 ${contact.isEmailed ? 'text-purple-600' : 'text-gray-300'}`}/> Emailed</div>
+                <div className={`p-1 rounded ${contact.isContacted ? 'bg-blue-50 text-blue-700 font-bold' : ''}`}><Phone size={14} className={`mx-auto mb-1 ${contact.isContacted ? 'text-blue-600' : 'text-gray-300'}`}/> Call</div>
+                <div className={`p-1 rounded ${contact.isVisited ? 'bg-green-50 text-green-700 font-bold' : ''}`}><Building size={14} className={`mx-auto mb-1 ${contact.isVisited ? 'text-green-600' : 'text-gray-300'}`}/> Visit</div>
             </div>
         </Card>
     );
 };
 
 // --- Main Page Component ---
-const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initialContactToEdit, onRestoreContact }) => { 
+const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initialContactToEdit }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingContact, setEditingContact] = useState(null);
     const [isImporting, setIsImporting] = useState(false);
-    const [importMode, setImportMode] = useState('CREATE');
+    const [importMode, setImportMode] = useState('CREATE'); 
+    
+    // FIX 2: Define missing duplicate logic state variables
     const [showDuplicateModal, setShowDuplicateModal] = useState(false);
     const [duplicateGroups, setDuplicateGroups] = useState([]);
+
+    // --- NEW: Custom Response Import Settings ---
     const [showImportSettings, setShowImportSettings] = useState(false);
     const [importConfig, setImportConfig] = useState({ note: '', date: '' });
-    const [showTrash, setShowTrash] = useState(false);
+
     const fileInputRef = useRef(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState('ALL'); 
+    
     const [selectedIds, setSelectedIds] = useState(new Set());
 
     useEffect(() => {
@@ -414,93 +512,468 @@ const ContactsPage = ({ contacts = [], companies = [], user, quotes = [], initia
         }
     }, [initialContactToEdit]);
 
-    const activeContacts = useMemo(() => (contacts || []).filter(c => !c.isDeleted), [contacts]);
-    const trashedContacts = useMemo(() => (contacts || []).filter(c => c.isDeleted), [contacts]);
-
+    // --- CRASH PROOF STATS CALCULATION ---
     const stats = useMemo(() => {
-        const list = activeContacts;
-        return {
-            total: list.length,
-            contacted: list.filter(c => c.isContacted).length,
-            visited: list.filter(c => c.isVisited).length,
-            emailed: list.filter(c => c.isEmailed).length,
-            partners: list.filter(c => c.isPartner).length
-        };
-    }, [activeContacts]);
+        if (!contacts) return { total: 0, contacted: 0, visited: 0, emailed: 0, esco: 0, partners: 0 };
+        const total = contacts.length;
+        const contacted = contacts.filter(c => c.isContacted).length;
+        const visited = contacts.filter(c => c.isVisited).length;
+        const emailed = contacts.filter(c => c.isEmailed).length;
+        const partners = contacts.filter(c => c.isPartner).length; // <--- Count Partners
+        // SAFE NOTE CHECK
+        const esco = contacts.filter(c => c.notes && (c.notes || '').includes('ESCO')).length;
+        return { total, contacted, visited, emailed, esco, partners };
+    }, [contacts]);
 
+    // --- Handlers ---
+    const handleScanForDuplicates = () => { 
+        // Simple client-side duplicate check (Name based)
+        const groups = {};
+        contacts.forEach(c => {
+            const key = `${c.firstName} ${c.lastName}`.toLowerCase().trim();
+            if(!groups[key]) groups[key] = [];
+            groups[key].push(c);
+        });
+        
+        const conflicts = Object.keys(groups)
+            .filter(key => groups[key].length > 1)
+            .map(key => ({ key, items: groups[key] }));
+
+        if(conflicts.length > 0) {
+            setDuplicateGroups(conflicts);
+            setShowDuplicateModal(true);
+        } else {
+            alert("No duplicates found based on Full Name.");
+        }
+    };
+    
+    const handleResolveDuplicates = async (idsToDelete) => { 
+        if(!user) return;
+        const batch = writeBatch(db);
+        idsToDelete.forEach(id => {
+            const ref = doc(db, "users", user.uid, "contacts", id);
+            batch.delete(ref);
+        });
+        try {
+            await batch.commit();
+            setShowDuplicateModal(false);
+            setDuplicateGroups([]);
+            alert("Duplicates resolved.");
+        } catch(err) {
+            console.error(err);
+            alert("Error deleting duplicates.");
+        }
+    };
+
+    const handleSaveContact = async (contactData) => { 
+        if(!user) return;
+        try {
+            await addDoc(collection(db, "users", user.uid, "contacts"), {
+                ...contactData,
+                createdAt: serverTimestamp()
+            });
+            setShowModal(false);
+        } catch(err) {
+            console.error(err);
+            alert("Error saving contact.");
+        }
+    };
+
+    const handleUpdateContact = async (contactData) => { 
+        if(!user || !editingContact) return;
+        try {
+            const ref = doc(db, "users", user.uid, "contacts", editingContact.id);
+            await updateDoc(ref, {
+                ...contactData,
+                lastModified: serverTimestamp()
+            });
+            setShowModal(false);
+            setEditingContact(null);
+        } catch(err) {
+            console.error(err);
+            alert("Error updating contact.");
+        }
+    };
+
+    const handleDeleteContact = async (contactId) => { 
+        if(!user || !confirm("Delete this contact?")) return;
+        try {
+            await deleteDoc(doc(db, "users", user.uid, "contacts", contactId));
+        } catch(err) {
+            console.error(err);
+        }
+    };
+
+    const handleSave = (data) => editingContact ? handleUpdateContact(data) : handleSaveContact(data);
+    const handleOpenNewModal = () => { setEditingContact(null); setShowModal(true); };
+    const handleOpenEditModal = (c) => { setEditingContact(c); setShowModal(true); };
+    const handleCloseModal = () => { setEditingContact(null); setShowModal(false); };
+    
+    const handleImportClick = () => {
+        setImportMode('CREATE');
+        fileInputRef.current.click();
+    };
+
+    // --- OPEN SETTINGS MODAL FIRST ---
+    const handleResponseImportClick = () => {
+        setImportMode('UPDATE');
+        setShowImportSettings(true); 
+    };
+
+    // --- PROCEED AFTER MODAL ---
+    const handleProceedWithResponseImport = (note, date) => {
+        setImportConfig({ note, date });
+        setShowImportSettings(false);
+        fileInputRef.current.click(); 
+    };
+    
+    // --- BULK ACTION HANDLERS ---
+    const toggleSelection = (id) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedIds(newSet);
+    };
+
+    const handleSelectAll = () => {
+        const allVisibleIds = filteredContacts.map(c => c.id);
+        const allSelected = allVisibleIds.every(id => selectedIds.has(id));
+        if (allSelected) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(allVisibleIds));
+        }
+    };
+
+    const handleBulkEmail = () => {
+        const emails = contacts.filter(c => selectedIds.has(c.id) && c.email).map(c => c.email);
+        if (emails.length === 0) return alert("No valid email addresses found.");
+        
+        const mailtoLink = `mailto:?bcc=${emails.join(',')}`;
+        if (mailtoLink.length > 2000) {
+            if(!window.confirm("That's a lot of emails! The link might break. Try exporting to CSV instead?")) return;
+        }
+        window.location.href = mailtoLink;
+    };
+
+    const handleBulkExport = () => {
+        const selectedContacts = contacts.filter(c => selectedIds.has(c.id));
+        if (selectedContacts.length === 0) return;
+
+        const exportData = selectedContacts.map(c => ({
+            "First Name": c.firstName,
+            "Last Name": c.lastName,
+            "Email Address": c.email,
+            "Phone Number": c.phone,
+            "Company": c.companyName,
+            "Job Title": c.jobTitle,
+            "LinkedIn": c.linkedIn || '',
+            "Notes": c.notes || ''
+        }));
+
+        const csv = Papa.unparse(exportData);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute("href", url);
+        link.setAttribute("download", `karnot_contacts_export_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const handleBulkDelete = async () => {
+        if (!window.confirm(`Permanently delete ${selectedIds.size} contacts?`)) return;
+        const batch = writeBatch(db);
+        selectedIds.forEach(id => {
+            const ref = doc(db, "users", user.uid, "contacts", id);
+            batch.delete(ref);
+        });
+        try {
+            await batch.commit();
+            setSelectedIds(new Set());
+            alert("Contacts deleted.");
+        } catch (error) {
+            console.error(error);
+            alert("Failed to delete.");
+        }
+    };
+
+    const handleFileChange = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        setIsImporting(true);
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: async (results) => {
+                const dataRows = results.data;
+                const batch = writeBatch(db);
+                
+                // --- UPDATE MODE (RESPONSE IMPORT) ---
+                if (importMode === 'UPDATE') {
+                    let updatedCount = 0;
+                    const logNote = importConfig.note || 'Responded to Email'; 
+                    const logDate = importConfig.date || new Date().toISOString().split('T')[0]; 
+
+                    dataRows.forEach(row => {
+                        const email = (row['EMAIL'] || row['Email'] || row['Email Address'])?.trim();
+                        if (!email) return;
+
+                        const match = contacts.find(c => c.email && c.email.toLowerCase() === email.toLowerCase());
+                        if (match) {
+                            const ref = doc(db, "users", user.uid, "contacts", match.id);
+                            
+                            const newInteraction = {
+                                id: Date.now(),
+                                date: logDate, 
+                                type: 'Email',
+                                outcome: logNote, 
+                                linkedQuote: null
+                            };
+                            const updatedInteractions = [newInteraction, ...(match.interactions || [])];
+
+                            batch.update(ref, {
+                                isVerified: true,
+                                isEmailed: true,
+                                interactions: updatedInteractions,
+                                lastModified: serverTimestamp()
+                            });
+                            updatedCount++;
+                        }
+                    });
+
+                    try {
+                        await batch.commit();
+                        alert(`Success! Updated ${updatedCount} contacts with "${logNote}".`);
+                    } catch (error) {
+                        console.error("Update Error:", error);
+                        alert("Failed to update contacts.");
+                    }
+                    setIsImporting(false);
+                    event.target.value = null;
+                    return;
+                }
+
+                // ... (Create mode logic unchanged) ...
+                // --- CREATE MODE (STANDARD IMPORT) ---
+                let importCount = 0;
+                let duplicateCount = 0;
+                const existingNames = new Set(contacts.map(c => `${c.firstName} ${c.lastName}`.toLowerCase().trim()));
+                const contactsRef = collection(db, "users", user.uid, "contacts");
+
+                const firstRow = dataRows[0] || {};
+                const isESCO = 'Name of Representative' in firstRow;
+
+                if (isESCO) {
+                    // (Same ESCO logic as before)
+                    dataRows.forEach(row => {
+                        const rawNames = row['Name of Representative'] ? row['Name of Representative'].split('/') : [];
+                        const rawPositions = row['Position'] ? row['Position'].split('/') : [];
+                        const rawEmails = (row['E-Mail Address'] || row['Email Address']) ? (row['E-Mail Address'] || row['Email Address']).split(/[\s/\n,]+/) : [];
+                        const companyName = row['Company Name'] ? row['Company Name'].trim() : '';
+                        const validEmails = rawEmails.filter(e => e.includes('@'));
+
+                        rawNames.forEach((fullName, index) => {
+                            const cleanName = fullName.trim();
+                            if (!cleanName) return;
+                            const nameParts = cleanName.split(' ');
+                            const lastName = nameParts.pop();
+                            const firstName = nameParts.join(' ');
+                            const position = rawPositions[index] ? rawPositions[index].trim() : (rawPositions[0] || '');
+                            
+                            let email = '';
+                            if (validEmails.length === rawNames.length) email = validEmails[index];
+                            else if (validEmails.length === 1) email = validEmails[0]; 
+                            else email = validEmails[index] || '';
+
+                            if (existingNames.has(`${firstName} ${lastName}`.toLowerCase())) { duplicateCount++; return; }
+
+                            let companyMatch = null;
+                            if (companies.length && companyName) {
+                                 const lowerC = companyName.toLowerCase().trim();
+                                 companyMatch = companies.find(c => c.companyName.toLowerCase().trim() === lowerC) || companies.find(c => c.companyName.toLowerCase().includes(lowerC));
+                            }
+
+                            batch.set(doc(contactsRef), {
+                                firstName, lastName, jobTitle: position,
+                                email: email || '', phone: '', 
+                                companyId: companyMatch ? companyMatch.id : null,
+                                companyName: companyMatch ? companyMatch.companyName : (companyName || 'N/A'),
+                                isVerified: false, isEmailed: false, isContacted: false, isVisited: false, notes: 'Imported from ESCO List', interactions: [],
+                                createdAt: serverTimestamp()
+                            });
+                            importCount++;
+                        });
+                    });
+                } else {
+                    // (Same Standard logic as before)
+                    dataRows.forEach(row => {
+                        const firstName = (row['FirstName'] || row['First Name'] || '').trim();
+                        const lastName = (row['LastName'] || row['Last Name'] || '').trim();
+                        const email = (row['Email'] || row['EmailAddress'] || row['Email Address'] || '').trim();
+                        const companyName = (row['Company'] || row['Organization'] || '').trim();
+                        const jobTitle = (row['Job Title'] || row['Position'] || row['Title'] || '').trim();
+
+                        if (!firstName || !lastName) return; 
+                        if (existingNames.has(`${firstName} ${lastName}`.toLowerCase())) { duplicateCount++; return; }
+
+                        let companyMatch = null;
+                        if (companies.length && companyName) {
+                             const lowerC = companyName.toLowerCase().trim();
+                             companyMatch = companies.find(c => c.companyName.toLowerCase().trim() === lowerC) || companies.find(c => c.companyName.toLowerCase().includes(lowerC));
+                        }
+
+                        batch.set(doc(contactsRef), {
+                            firstName, lastName, jobTitle,
+                            email, phone: '', companyId: companyMatch ? companyMatch.id : null,
+                            companyName: companyMatch ? companyMatch.companyName : (companyName || 'N/A'),
+                            isVerified: false, isEmailed: false, isContacted: false, isVisited: false, notes: '', interactions: [],
+                            createdAt: serverTimestamp()
+                        });
+                        importCount++;
+                    });
+                }
+
+                try { await batch.commit(); alert(`Import Complete!\n✅ Added: ${importCount}\n🚫 Skipped (Duplicates): ${duplicateCount}`); } 
+                catch (error) { console.error("Import Error: ", error); alert("An error occurred during import."); }
+                setIsImporting(false);
+                event.target.value = null;
+            },
+            error: () => { alert("Failed to parse CSV."); setIsImporting(false); }
+        });
+    };
+
+    const handleDeleteAllContacts = async () => {
+         if (!window.confirm("WARNING: Delete ALL contacts? This cannot be undone.")) return;
+         const q = query(collection(db, "users", user.uid, "contacts"));
+         const snapshot = await getDocs(q);
+         const batch = writeBatch(db);
+         snapshot.forEach(doc => batch.delete(doc.ref));
+         await batch.commit();
+         alert("All contacts deleted.");
+    };
+
+    // --- CRASH PROOF FILTER LOGIC ---
     const filteredContacts = useMemo(() => {
-        let list = activeContacts;
+        const lowerSearchTerm = (searchTerm || '').toLowerCase(); // Safety check
+        let list = contacts || []; // Safety check
+
         if (activeFilter === 'EMAILED') list = list.filter(c => c.isEmailed);
         if (activeFilter === 'CONTACTED') list = list.filter(c => c.isContacted);
         if (activeFilter === 'VISITED') list = list.filter(c => c.isVisited);
-        if (activeFilter === 'PARTNERS') list = list.filter(c => c.isPartner);
+        if (activeFilter === 'ESCO') list = list.filter(c => c.notes && (c.notes || '').includes('ESCO')); 
+        if (activeFilter === 'PARTNERS') list = list.filter(c => c.isPartner); // <--- NEW PARTNER FILTER
         
-        const term = searchTerm.toLowerCase();
-        return list.filter(c => `${c.firstName} ${c.lastName} ${c.companyName} ${c.email} ${c.notes}`.toLowerCase().includes(term));
-    }, [activeContacts, searchTerm, activeFilter]);
+        return list.filter(c => {
+            const first = (c.firstName || '').toLowerCase();
+            const last = (c.lastName || '').toLowerCase();
+            const email = (c.email || '').toLowerCase();
+            const comp = (c.companyName || '').toLowerCase();
+            const title = (c.jobTitle || '').toLowerCase();
+            const note = (c.notes || '').toLowerCase();
 
-    const handleSoftDelete = async (id) => {
-        if (!user || !confirm("Move to Trash?")) return;
-        await updateDoc(doc(db, "users", user.uid, "contacts", id), { isDeleted: true, deletedAt: serverTimestamp() });
-    };
-
-    const handleSave = async (data) => {
-        if (!user) return;
-        if (editingContact) {
-            await updateDoc(doc(db, "users", user.uid, "contacts", editingContact.id), { ...data, lastModified: serverTimestamp() });
-        } else {
-            await addDoc(collection(db, "users", user.uid, "contacts"), { ...data, createdAt: serverTimestamp() });
-        }
-        setShowModal(false);
-    };
+            return (
+                first.includes(lowerSearchTerm) ||
+                last.includes(lowerSearchTerm) ||
+                email.includes(lowerSearchTerm) ||
+                comp.includes(lowerSearchTerm) ||
+                title.includes(lowerSearchTerm) ||
+                note.includes(lowerSearchTerm)
+            );
+        });
+    }, [contacts, searchTerm, activeFilter]);
 
     return (
-        <div className="w-full pb-20 space-y-8"> 
-            {showModal && <ContactModal onSave={handleSave} onClose={() => setShowModal(false)} contactToEdit={editingContact} companies={companies} quotes={quotes} />}
+        <div className="w-full pb-20"> 
+            {showModal && <ContactModal onSave={handleSave} onClose={handleCloseModal} contactToEdit={editingContact} companies={companies} quotes={quotes} />}
+            {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={handleResolveDuplicates} />}
             
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <StatBadge icon={User} label="Total" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
-                <StatBadge icon={Handshake} label="Partners" count={stats.partners} total={stats.total} color="teal" active={activeFilter === 'PARTNERS'} onClick={() => setActiveFilter('PARTNERS')} />
-                <StatBadge icon={Mail} label="Emailed" count={stats.emailed} total={stats.total} color="purple" active={activeFilter === 'EMAILED'} onClick={() => setActiveFilter('EMAILED')} />
-                <StatBadge icon={Phone} label="Contacted" count={stats.contacted} total={stats.total} color="blue" active={activeFilter === 'CONTACTED'} onClick={() => setActiveFilter('CONTACTED')} />
-                <StatBadge icon={Building} label="Visited" count={stats.visited} total={stats.total} color="green" active={activeFilter === 'VISITED'} onClick={() => setActiveFilter('VISITED')} />
+            {/* NEW: Import Settings Modal */}
+            {showImportSettings && <ImportSettingsModal onClose={() => setShowImportSettings(false)} onProceed={handleProceedWithResponseImport} />}
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+                <StatBadge icon={User} label="Total Contacts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
+                <StatBadge icon={Handshake} label="Partners" count={stats.partners} total={stats.total} color="teal" active={activeFilter === 'PARTNERS'} onClick={() => setActiveFilter(activeFilter === 'PARTNERS' ? 'ALL' : 'PARTNERS')} />
+                <StatBadge icon={Mail} label="Emailed" count={stats.emailed} total={stats.total} color="purple" active={activeFilter === 'EMAILED'} onClick={() => setActiveFilter(activeFilter === 'EMAILED' ? 'ALL' : 'EMAILED')} />
+                <StatBadge icon={Phone} label="Contacted" count={stats.contacted} total={stats.total} color="blue" active={activeFilter === 'CONTACTED'} onClick={() => setActiveFilter(activeFilter === 'CONTACTED' ? 'ALL' : 'CONTACTED')} />
+                <StatBadge icon={Building} label="Visited" count={stats.visited} total={stats.total} color="green" active={activeFilter === 'VISITED'} onClick={() => setActiveFilter(activeFilter === 'VISITED' ? 'ALL' : 'VISITED')} />
             </div>
 
-            <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold text-gray-800">Contacts ({filteredContacts.length})</h2>
-                <div className="flex gap-2">
-                    <Button onClick={() => setShowTrash(!showTrash)} variant="secondary" className="text-xs">{showTrash ? 'Hide Trash' : 'View Trash'}</Button>
-                    <Button onClick={() => { setEditingContact(null); setShowModal(true); }} variant="primary"><Plus size={16} /> New</Button>
+            <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 whitespace-nowrap">
+                        {activeFilter !== 'ALL' && <Filter size={20} className="text-orange-600"/>}
+                        {activeFilter === 'ALL' ? 'All Contacts' : `${activeFilter.charAt(0) + activeFilter.slice(1).toLowerCase()} List`}
+                        <span className="text-gray-400 font-normal text-base ml-2">({filteredContacts.length})</span>
+                    </h2>
+                    
+                    {filteredContacts.length > 0 && (
+                        <button 
+                            onClick={handleSelectAll}
+                            className="text-xs font-bold text-orange-600 hover:text-orange-800 underline"
+                        >
+                            {selectedIds.size === filteredContacts.length ? 'Deselect All' : 'Select All'}
+                        </button>
+                    )}
+                </div>
+
+                <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
+                    <Button onClick={handleResponseImportClick} variant="secondary" title="Update Status from CSV"><FileCheck className="mr-2" size={16}/> Upload Responses</Button>
+                    <Button onClick={handleScanForDuplicates} variant="secondary" title="Find duplicate contacts"><CheckSquare className="mr-2" size={16}/> Dedupe</Button>
+                    <Button onClick={handleDeleteAllContacts} variant="danger">Reset</Button>
+                    <Button onClick={handleImportClick} variant="secondary" disabled={isImporting}><Upload className="mr-2" size={16} /> Import</Button>
+                    <Button onClick={handleOpenNewModal} variant="primary"><Plus className="mr-2" size={16} /> New</Button>
                 </div>
             </div>
 
-            <div className="relative">
-                <Input placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" style={{ display: 'none' }} />
+
+            <div className="mb-4 relative">
+                <Input type="text" placeholder="Search by Name, Company, or Job Title (e.g. 'CEM')..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredContacts.map(c => (
-                    <ContactCard key={c.id} contact={c} onEdit={handleOpenEditModal} onSoftDelete={handleSoftDelete} selected={selectedIds.has(c.id)} onToggleSelect={(id) => {
-                        const newSet = new Set(selectedIds);
-                        newSet.has(id) ? newSet.delete(id) : newSet.add(id);
-                        setSelectedIds(newSet);
-                    }} />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredContacts.sort((a, b) => a.lastName.localeCompare(b.lastName)).map(contact => (
+                    <ContactCard 
+                        key={contact.id} 
+                        contact={contact} 
+                        onEdit={handleOpenEditModal} 
+                        onDelete={handleDeleteContact} 
+                        selected={selectedIds.has(contact.id)}
+                        onToggleSelect={toggleSelection}
+                    />
                 ))}
             </div>
+            {contacts.length === 0 && <div className="text-center py-10"><User size={48} className="mx-auto text-gray-400"/><p>No contacts yet.</p></div>}
 
-            {/* TRASH SECTION */}
-            {showTrash && trashedContacts.length > 0 && (
-                <div className="mt-12 pt-8 border-t border-dashed">
-                    <h3 className="text-lg font-bold text-gray-400 mb-4 uppercase tracking-widest flex items-center gap-2"><Trash2 size={18}/> Recently Trashed Contacts</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {trashedContacts.map(c => (
-                            <div key={c.id} className="p-4 bg-gray-50 border rounded-xl flex justify-between items-center opacity-60">
-                                <span className="font-bold text-gray-700">{c.firstName} {c.lastName} ({c.companyName})</span>
-                                <Button onClick={() => onRestoreContact(c.id)} variant="primary" className="bg-green-600 text-xs"><RotateCcw size={14} className="mr-1"/> Restore</Button>
-                            </div>
-                        ))}
-                    </div>
+            {selectedIds.size > 0 && (
+                <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-in fade-in slide-in-from-bottom-4">
+                    <span className="font-bold text-sm">{selectedIds.size} Selected</span>
+                    
+                    <div className="h-4 w-px bg-gray-600"></div>
+                    
+                    <button onClick={handleBulkEmail} className="flex items-center gap-2 hover:text-orange-400 transition-colors">
+                        <Send size={18} />
+                        <span className="text-sm font-bold">Email App</span>
+                    </button>
+
+                    <button onClick={handleBulkExport} className="flex items-center gap-2 hover:text-green-400 transition-colors">
+                        <Download size={18} />
+                        <span className="text-sm font-bold">Export CSV</span>
+                    </button>
+
+                    <button onClick={handleBulkDelete} className="flex items-center gap-2 hover:text-red-400 transition-colors">
+                        <Trash2 size={18} />
+                        <span className="text-sm font-bold">Delete</span>
+                    </button>
+
+                    <button onClick={() => setSelectedIds(new Set())} className="ml-2 text-gray-400 hover:text-white">
+                        <X size={18}/>
+                    </button>
                 </div>
             )}
         </div>
