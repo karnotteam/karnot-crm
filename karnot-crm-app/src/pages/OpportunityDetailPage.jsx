@@ -1,173 +1,145 @@
-import React, { useState, useEffect } from 'react';
-import { 
-    Mail, Phone, Hash, ArrowLeft, DollarSign, List, Calendar, 
-    Edit, Plus, FileText, User, Layout, Activity
-} from 'lucide-react';
-import { db } from '../firebase'; 
-import { 
-    collection, addDoc, serverTimestamp, 
-    query, onSnapshot, orderBy 
-} from "firebase/firestore";
-
-import { Card, Button, Section, Input, Textarea } from '../data/constants.jsx';
-
-const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, onOpenQuote, user }) => {
+const OpportunityDetailModal = ({ opp, onClose, onSaveInteraction, onUpdateProb, onUpdateNotes, quotes = [], contacts = [], companies = [], onOpenQuote }) => {
+    const [activeTab, setActiveTab] = useState('ACTIVITY');
+    const [logType, setLogType] = useState('Call');
+    const [logOutcome, setLogOutcome] = useState('');
+    const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
     
-    const [newNoteText, setNewNoteText] = useState('');
-    const [notes, setNotes] = useState([]); 
-    
-    const formatProb = (p) => {
-        if (p >= 90) return 'text-green-600';
-        if (p >= 50) return 'text-yellow-600';
-        return 'text-red-600';
-    };
+    // Internal state for the Lead Summary to ensure it's editable instantly
+    const [localNotes, setLocalNotes] = useState(opp.notes || '');
 
-    useEffect(() => {
-        if (!opportunity?.id || !user?.uid) {
-            setNotes([]); 
-            return;
-        }
+    const company = (companies || []).find(c => c.id === opp.companyId || c.companyName === opp.customerName);
+    const interactions = company?.interactions || [];
 
-        const notesRef = collection(db, "users", user.uid, "opportunities", opportunity.id, "notes");
-        const q = query(notesRef, orderBy('createdAt', 'desc'));
-
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const notesList = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setNotes(notesList);
+    // RELAXED MATCHING: This ensures "Malay Resources Inc." matches even with small differences
+    const relevantQuotes = useMemo(() => {
+        const targetName = (opp?.customerName || "").toLowerCase().trim();
+        return (quotes || []).filter(q => {
+            const quoteName = (q.customer?.name || "").toLowerCase().trim();
+            // Match if names are similar OR if there is a direct ID link
+            return quoteName.includes(targetName) || targetName.includes(quoteName) || q.leadId === opp.id;
         });
+    }, [quotes, opp]);
 
-        return () => unsubscribe();
-    }, [opportunity, user]); 
-
-    
-    const handleSaveNote = async () => {
-        if (!newNoteText.trim()) return; 
-        if (!user?.uid) return alert("Error: User not logged in.");
-
-        try {
-            const notesRef = collection(db, "users", user.uid, "opportunities", opportunity.id, "notes");
-            await addDoc(notesRef, {
-                text: newNoteText,
-                createdAt: serverTimestamp(),
-                authorName: user.displayName || user.email 
-            });
-            setNewNoteText('');
-        } catch (error) {
-            console.error("Error adding note: ", error);
-            alert("Failed to save note.");
-        }
+    const handleAddLog = () => {
+        if (!logOutcome || !company) return alert("Log data missing.");
+        onSaveInteraction(company.id, { id: Date.now(), date: logDate, type: logType, outcome: logOutcome });
+        setLogOutcome('');
     };
 
-    if (!opportunity) {
-        return (
-            <div className="flex flex-col items-center justify-center p-20">
-                <Layout size={48} className="text-gray-200 mb-4" />
-                <p className="text-gray-500 font-bold uppercase tracking-widest">Opportunity data not loaded.</p>
-                <Button onClick={onBack} variant="secondary" className="mt-4">Return to Funnel</Button>
-            </div>
-        );
-    }
-
-    const relatedQuotes = quotes.filter(q => 
-        (q.customer?.name && q.customer.name.toLowerCase().includes(opportunity.customerName.toLowerCase())) || (q.leadId === opportunity.id)
-    );
+    // Auto-save notes when you stop typing
+    const handleNotesBlur = () => {
+        onUpdateNotes(opp.id, localNotes);
+    };
 
     return (
-        <div className="max-w-6xl mx-auto space-y-6 pb-10">
-            <div className="flex justify-between items-center">
-                <Button onClick={onBack} variant="secondary" className="group">
-                    <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform"/> Back to Funnel
-                </Button>
-                <Button onClick={() => alert('Edit feature coming soon!')} variant="primary" className="shadow-lg shadow-orange-100">
-                    <Edit size={16} className="mr-2"/> Edit Lead Details
-                </Button>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 space-y-6">
-                    <Card className="border-t-4 border-t-orange-500">
-                        <div className="mb-6">
-                            <h2 className="text-4xl font-black text-gray-800 uppercase tracking-tighter leading-none">{opportunity.customerName}</h2>
-                            <div className="mt-2 inline-block px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-black uppercase tracking-widest">{opportunity.project}</div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <Card className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row shadow-2xl bg-white p-0">
+                <div className="flex-1 p-6 overflow-y-auto space-y-4 border-r">
+                    <div className="flex justify-between items-center border-b pb-4">
+                        <h3 className="text-2xl font-black text-gray-800 uppercase tracking-tighter leading-none">{opp.customerName}</h3>
+                        <button onClick={onClose}><X /></button>
+                    </div>
+                    
+                    <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 font-bold text-gray-800">{opp.project}</div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-gray-50 rounded-lg border">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deal Value</p>
+                            <p className="text-xl font-black text-gray-800">${(opp.estimatedValue || 0).toLocaleString()}</p>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deal Value</p>
-                                <p className="text-3xl font-black text-gray-800">${(opportunity.estimatedValue || 0).toLocaleString()}</p>
+                        <div className="p-3 bg-gray-50 rounded-lg border relative">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Win Probability</p>
+                            <div className="flex items-center gap-1">
+                                <input 
+                                    type="number" 
+                                    value={opp.probability} 
+                                    onChange={(e) => onUpdateProb(opp.id, e.target.value)}
+                                    className="text-xl font-black text-orange-600 bg-transparent border-none w-16 focus:ring-0 p-0"
+                                />
+                                <span className="text-xl font-black text-orange-600">%</span>
                             </div>
-                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Stage</p>
-                                <p className={`text-xl font-black uppercase ${formatProb(opportunity.probability)}`}>{opportunity.stage} <span className="text-sm opacity-60">({opportunity.probability}%)</span></p>
-                            </div>
+                            <Target size={14} className="absolute top-3 right-3 text-gray-200" />
                         </div>
-                    </Card>
+                    </div>
 
-                    <Card>
-                        <div className="flex justify-between items-center mb-6">
-                            <div className="flex items-center gap-2">
-                                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><FileText size={20}/></div>
-                                <h3 className="text-xl font-black text-gray-800 uppercase tracking-tight">Proposals ({relatedQuotes.length})</h3>
-                            </div>
-                            <Button onClick={onAddQuote} variant="primary" className="text-xs !py-2"><Plus size={16} className="mr-2"/> New Quote</Button>
-                        </div>
-                        {relatedQuotes.length > 0 ? (
-                            <div className="grid gap-3">
-                                {relatedQuotes.map(q => (
-                                    <div key={q.id} onClick={() => onOpenQuote(q)} className="p-4 bg-white border border-gray-100 rounded-xl flex justify-between items-center hover:border-orange-400 hover:shadow-md transition-all cursor-pointer group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 group-hover:text-orange-500 transition-colors"><FileText size={18}/></div>
-                                            <div>
-                                                <p className="font-black text-gray-800 uppercase text-sm tracking-tight">{q.id}</p>
-                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Click to view details</p>
-                                            </div>
+                    {/* FIXED SUMMARY BOX: Now uses local state and is fully editable */}
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Lead Summary</label>
+                        <textarea 
+                            rows="8" 
+                            value={localNotes} 
+                            onChange={(e) => setLocalNotes(e.target.value)}
+                            onBlur={handleNotesBlur}
+                            className="w-full p-4 bg-white text-sm font-medium border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none transition-all"
+                            placeholder="Type deal notes here... (Saves on click-away)"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden font-sans">
+                    <div className="flex border-b bg-white">
+                        <button onClick={() => setActiveTab('ACTIVITY')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${activeTab === 'ACTIVITY' ? 'text-orange-600 border-b-4 border-orange-600' : 'text-gray-400'}`}>Activity Log</button>
+                        <button onClick={() => setActiveTab('DATA')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all ${activeTab === 'DATA' ? 'text-blue-600 border-b-4 border-blue-600' : 'text-gray-400'}`}>Quotes ({relevantQuotes.length})</button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6">
+                        {activeTab === 'ACTIVITY' ? (
+                            <div className="space-y-4">
+                                <div className="bg-white p-4 rounded-xl border shadow-sm space-y-3">
+                                    <div className="flex gap-2">
+                                        <Input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} className="text-xs" />
+                                        <select value={logType} onChange={e => setLogType(e.target.value)} className="text-xs border rounded-xl p-1 flex-1 font-black uppercase bg-gray-50">
+                                            <option value="Call">Call</option><option value="Visit">Site Visit</option><option value="Email">Email</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input type="text" value={logOutcome} onChange={e => setLogOutcome(e.target.value)} placeholder="Summary..." className="flex-1 text-sm p-2 border rounded-xl" />
+                                        <Button onClick={handleAddLog} variant="primary"><PlusCircle size={20}/></Button>
+                                    </div>
+                                </div>
+                                {interactions.map(log => (
+                                    <div key={log.id} className="bg-white p-4 rounded-xl border shadow-sm mb-2">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full text-white uppercase tracking-widest ${log.type === 'Visit' ? 'bg-green-500' : 'bg-blue-500'}`}>{log.type}</span>
+                                            <span className="text-[10px] text-gray-400 font-bold">{log.date}</span>
                                         </div>
-                                        <div className="text-right">
-                                            <p className="text-lg font-black text-orange-600">${(q.finalSalesPrice || 0).toLocaleString()}</p>
-                                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-700 uppercase tracking-widest">{q.status || 'Draft'}</span>
-                                        </div>
+                                        <p className="text-sm text-gray-700 font-bold">{log.outcome}</p>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="text-center py-10 border-2 border-dashed rounded-2xl"><p className="text-sm font-bold text-gray-300 uppercase tracking-[0.2em]">No quotes created yet</p></div>
-                        )}
-                    </Card>
-                </div>
-
-                <div className="space-y-6">
-                    <Card className="bg-slate-900 text-white">
-                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-orange-400 mb-4 flex items-center gap-2"><User size={14}/> Decision Maker</h3>
-                        <div className="space-y-4">
-                            <div><p className="text-lg font-black leading-none">{opportunity.contactName || 'Unassigned'}</p><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Primary Contact</p></div>
-                            <div className="pt-4 border-t border-slate-800 space-y-3">
-                                <a href={`mailto:${opportunity.contactEmail}`} className="flex items-center gap-3 text-sm hover:text-orange-400 transition-colors"><Mail size={16} className="text-slate-500"/><span className="truncate">{opportunity.contactEmail || 'No Email'}</span></a>
-                                <div className="flex items-center gap-3 text-sm"><Phone size={16} className="text-slate-500"/><span>{opportunity.contactPhone || 'No Phone'}</span></div>
+                            <div className="space-y-4">
+                                <h5 className="font-black text-[10px] text-gray-400 uppercase tracking-[0.2em] mb-4">Associated Quotes</h5>
+                                {relevantQuotes.length === 0 ? (
+                                    <div className="text-center py-12 border-2 border-dashed rounded-2xl bg-white/50">
+                                        <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">No Quotes Linked</p>
+                                    </div>
+                                ) : (
+                                    relevantQuotes.map(q => (
+                                        <div 
+                                            key={q.id} 
+                                            onClick={() => {
+                                                console.log("Opening Quote:", q.id);
+                                                onOpenQuote(q);
+                                            }} 
+                                            className="flex justify-between items-center p-5 mb-3 bg-white border border-slate-200 rounded-2xl cursor-pointer hover:border-orange-500 hover:shadow-xl hover:-translate-y-0.5 transition-all group"
+                                        >
+                                            <div className="flex flex-col">
+                                                <span className="text-gray-800 uppercase tracking-widest font-black text-xs group-hover:text-orange-600 transition-colors">{q.id}</span>
+                                                <span className="text-[9px] text-gray-400 font-bold uppercase mt-1">View Full Proposal →</span>
+                                            </div>
+                                            <span className="text-orange-600 font-black text-lg">${Number(q.finalSalesPrice || 0).toLocaleString()}</span>
+                                        </div>
+                                    ))
+                                )}
                             </div>
-                        </div>
-                    </Card>
-
-                    <Card className="max-h-[500px] flex flex-col">
-                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4">Activity Log</h3>
-                        <div className="space-y-3 mb-4">
-                            <Textarea rows="3" placeholder="Write a note..." className="text-sm border-slate-200 rounded-xl focus:ring-orange-500" value={newNoteText} onChange={(e) => setNewNoteText(e.target.value)}/>
-                            <Button className="w-full text-xs font-black uppercase tracking-widest" variant="secondary" onClick={handleSaveNote}>Post Activity</Button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                            {notes.length > 0 ? notes.map(note => (
-                                <div key={note.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                    <p className="text-sm text-gray-700 font-medium leading-relaxed">{note.text}</p>
-                                    <div className="mt-2 flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-gray-400"><span className="text-orange-600">{note.authorName?.split(' ')[0]}</span><span>{note.createdAt ? note.createdAt.toDate().toLocaleDateString() : 'Just now'}</span></div> 
-                                </div>
-                            )) : <p className="text-[10px] text-gray-300 font-black uppercase tracking-widest text-center py-4">No recent history</p>}
-                        </div>
-                    </Card>
+                        )}
+                    </div>
+                    <div className="p-4 bg-white border-t flex justify-end">
+                        <Button onClick={onClose} variant="secondary" className="font-black uppercase text-[10px] tracking-widest">Close</Button>
+                    </div>
                 </div>
-            </div>
+            </Card>
         </div>
     );
 };
-
-export default OpportunityDetailPage;
