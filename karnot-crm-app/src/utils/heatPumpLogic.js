@@ -19,14 +19,14 @@ export const calculateHeatPump = (inputs, products = []) => {
             heatPumpType, includeCooling, currency 
         } = inputs;
 
-        // 1. Calculate Daily Liters
+        // 1. Calculate Daily Demand
         let dailyLiters = 0;
         if (userType === 'home') dailyLiters = occupants * 50;
         else if (userType === 'restaurant') dailyLiters = mealsPerDay * 7;
         else if (userType === 'resort') dailyLiters = (roomsOccupied * 50) + (mealsPerDay * 7);
         else dailyLiters = dailyLitersInput;
 
-        // 2. Thermodynamic Constants
+        // 2. Thermodynamic Calculations
         const deltaT = Math.max(1, targetTemp - inletTemp);
         const specificHeatWater = 4.187; // kJ/kg°C
         const kwhPerLiter = (deltaT * 1.163) / 1000;
@@ -38,20 +38,19 @@ export const calculateHeatPump = (inputs, products = []) => {
         else if (heatingType === 'diesel') currentRateKWH = fuelPrice / 10.7;
         const annualCostOld = dailyThermalEnergyKWH * 365 * currentRateKWH;
 
-        // 4. Model Filtering with Dynamic Flow Mapping
+        // 4. Model Filtering with Mapping
         const peakLitersPerHour = dailyLiters / hoursPerDay;
 
         let availableModels = products.filter(p => {
-            // Field Mapping from your Product Manager CSV
             const pType = (p.Refrigerant || p.type || '').toLowerCase();
             const matchesType = heatPumpType === 'all' || pType.includes(heatPumpType.toLowerCase());
             const matchesCooling = !includeCooling || p.isReversible === true;
             
-            // Dynamic Flow Calculation: (kW * 3600) / (4.187 * deltaT)
-            const nominalKW = p.kW_DHW_Nominal || 0;
+            // Dynamic Flow: (kW * 3600) / (4.187 * deltaT)
+            const nominalKW = parseFloat(p.kW_DHW_Nominal) || 0;
             const calculatedLhr = (nominalKW * 3600) / (specificHeatWater * deltaT);
             
-            // Apply Ambient Performance Adjustment (1.5% per degree from 20C)
+            // Adjust for Ambient Temp performance (1.5% per degree from 20C)
             const adjLhr = calculatedLhr * (1 + ((ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015));
 
             return matchesType && 
@@ -61,15 +60,17 @@ export const calculateHeatPump = (inputs, products = []) => {
                    nominalKW > 0;
         });
 
-        if (availableModels.length === 0) return { error: "No suitable models found. Try reducing Target Temp or increasing Operating Hours." };
+        if (availableModels.length === 0) {
+            return { error: "No suitable models found. Try reducing Target Temp or increasing Operating Hours." };
+        }
 
-        // Sort by cheapest salesPriceUSD
-        const suitable = availableModels.sort((a, b) => (a.salesPriceUSD || 999999) - (b.salesPriceUSD || 999999));
+        // Sort by salesPriceUSD
+        const suitable = availableModels.sort((a, b) => (parseFloat(a.salesPriceUSD) || 999999) - (parseFloat(b.salesPriceUSD) || 999999));
         const system = suitable[0];
 
         // 5. Karnot Operation Costs
-        const sysCop = system.COP_DHW || system.cop || 3.8;
-        const sysPrice = system.salesPriceUSD || 0;
+        const sysCop = parseFloat(system.COP_DHW) || 3.8;
+        const sysPrice = parseFloat(system.salesPriceUSD) || 0;
         
         const karnotDailyElecKwh = dailyThermalEnergyKWH / sysCop;
         const karnotPowerDrawKw = karnotDailyElecKwh / hoursPerDay;
@@ -104,7 +105,7 @@ export const calculateHeatPump = (inputs, products = []) => {
                 capex: { total: sysPrice }
             },
             metrics: {
-                adjFlowLhr: (system.kW_DHW_Nominal * 3600 / (specificHeatWater * deltaT)) * (1 + ((ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015)),
+                adjFlowLhr: (parseFloat(system.kW_DHW_Nominal) * 3600 / (specificHeatWater * deltaT)) * (1 + ((ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015)),
                 emissionsSaved: (dailyThermalEnergyKWH * 365 * 0.5), 
                 panels: Math.ceil(karnotPowerDrawKw / 0.425)
             }
