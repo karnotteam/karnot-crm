@@ -21,115 +21,102 @@ export const CONFIG = {
 };
 
 export function calculateHeatPump(inputs, dbProducts) {
-    if (!dbProducts || dbProducts.length === 0) return { error: "Inventory empty." };
+    if (!dbProducts || dbProducts.length === 0) return { error: "No products loaded from inventory." };
 
-    // --- 1. DEMAND MATH (Same as HTML) ---
+    // --- 1. DEMAND & REQUIRED POWER ---
     let dailyLiters = 0;
     if (inputs.userType === 'home') dailyLiters = inputs.occupants * 50;
     else if (inputs.userType === 'restaurant') dailyLiters = inputs.mealsPerDay * 7;
     else if (inputs.userType === 'resort') dailyLiters = (inputs.roomsOccupied * 50) + (inputs.mealsPerDay * 7);
     else dailyLiters = inputs.dailyLitersInput;
 
+    if (dailyLiters <= 0) return { error: "Please enter valid demand (Liters/Day)." };
+
+    const hoursPerDay = Math.max(1, inputs.hoursPerDay);
     const deltaT = Math.max(1, inputs.targetTemp - inputs.inletTemp);
-    const dailyThermalEnergyKWH = (dailyLiters * deltaT * 1.163) / 1000;
-    const peakPowerRequired = dailyThermalEnergyKWH / Math.max(1, inputs.hoursPerDay);
 
-    // --- 2. OLD SYSTEM COST (In Local Currency) ---
-    let rateKWH = 0;
+    // Required Thermal Energy (Energy Out)
+    const kwhPerLiter = (deltaT * 1.163) / 1000;
+    const dailyThermalEnergyKWH = dailyLiters * kwhPerLiter;
+    const requiredThermalPowerKW = dailyThermalEnergyKWH / hoursPerDay;
+
+    // --- 2. BASELINE (OLD SYSTEM) COST ---
+    let currentRateKWH = 0;
     if (inputs.heatingType === 'propane') {
-        rateKWH = (inputs.fuelPrice / (inputs.tankSize || 11)) / CONFIG.KWH_PER_KG_LPG;
+        currentRateKWH = (inputs.fuelPrice / (inputs.tankSize || 11)) / CONFIG.KWH_PER_KG_LPG;
     } else if (inputs.heatingType === 'diesel') {
-        rateKWH = inputs.fuelPrice / CONFIG.DIESEL_KWH_PER_LITER;
+        currentRateKWH = inputs.fuelPrice / CONFIG.DIESEL_KWH_PER_LITER;
     } else {
-        rateKWH = inputs.fuelPrice; 
+        currentRateKWH = inputs.fuelPrice; 
     }
-    
-    // Total annual cost of legacy system in chosen currency
-    const annualCostOld = (dailyThermalEnergyKWH / CONFIG.COP_STANDARD) * 365 * rateKWH;
+    const annualCostOld = dailyThermalEnergyKWH * 365 * currentRateKWH;
 
-    // --- 3. SELECTION (Corrected Perf Factors) ---
+    // --- 3. SELECTION (AquaHERO Storage vs Monoblock Flow) ---
     const perfFactor = (1 + ((inputs.ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015));
     
-    let suitable = dbProducts.filter(p => {
+    let availableModels = dbProducts.filter(p => {
         const pName = (p.name || '').toLowerCase();
+        const pCat = (p.category || '').toLowerCase();
         const pRefrig = (p.Refrigerant || '').toUpperCase();
-        const matchesType = inputs.heatPumpType === 'all' || pRefrig.includes(inputs.heatPumpType.toUpperCase());
-        const matchesCooling = !inputs.includeCooling || p.isReversible;
         
-        // AquaHERO Storage Logic (Uses names like 200L / 300L)
-        if (p.category === 'AquaHERO' || pName.includes('aquahero')) {
-            const tank = parseFloat(p.integral_storage_L) || (pName.includes('300l') ? 300 : 200);
-            const dailyCap = tank * 3 * perfFactor;
-            return matchesType && inputs.targetTemp <= (p.max_temp_c || 75) && dailyLiters <= dailyCap;
+        // Refrigerant Type Filter
+        if (inputs.heatPumpType !== 'all' && !pRefrig.includes(inputs.heatPumpType.toUpperCase())) return false;
+
+        // Cooling Requirement Check
+        if (inputs.includeCooling && !(p.isReversible === true || p.isReversible === "true")) return false;
+
+        // Selection Logic
+        if (pCat.includes('aquahero') || pName.includes('aquahero')) {
+            const tank = pName.includes('300l') ? 300 : 200;
+            return inputs.targetTemp <= (p.max_temp_c || 75) && dailyLiters <= (tank * 3 * perfFactor);
         }
         
-        // Monoblock Logic (Power Check)
         const nominalKW = parseFloat(p.kW_DHW_Nominal) || 0;
-        const adjKW = nominalKW * perfFactor;
-        return matchesType && matchesCooling && inputs.targetTemp <= (p.max_temp_c || 65) && peakPowerRequired <= adjKW;
+        return inputs.targetTemp <= (p.max_temp_c || 65) && requiredThermalPowerKW <= (nominalKW * perfFactor);
     }).sort((a, b) => (parseFloat(a.salesPriceUSD) || 99999) - (parseFloat(b.salesPriceUSD) || 99999));
 
-    if (suitable.length === 0) return { error: "No matching model found for this demand." };
-    const system = suitable[0];
+    if (availableModels.length === 0) return { error: `No suitable model found for ${requiredThermalPowerKW.toFixed(1)} kW load.` };
+    
+    const system = availableModels[0];
 
-    // --- 4. NEW SYSTEM MATH (In Local Currency) ---
+    // --- 4. FINANCIAL CALCULATIONS ---
     const fx = CONFIG.FX[inputs.currency] || 1;
+    const sysPriceLocal = (parseFloat(system.salesPriceUSD) || 0) * fx;
     const sysCop = parseFloat(system.COP_DHW) || 3.8;
     
-    // Purchase cost converted to local currency
-    const sysPriceLocal = (parseFloat(system.salesPriceUSD) || 0) * fx;
-    
     const karnotDailyKwh = dailyThermalEnergyKWH / sysCop;
+    const karnotPowerDrawKw = karnotDailyKwh / hoursPerDay;
+    
     let karnotAnnualCost = 0;
-    let karnotPanelCount = 0;
     let solarCost = 0;
     let inverterCost = 0;
+    let panelCount = 0;
     
     if (inputs.systemType === 'grid-only') {
         karnotAnnualCost = karnotDailyKwh * 365 * inputs.elecRate;
     } else {
-        const solarHours = Math.min(inputs.hoursPerDay, inputs.sunHours || 5.5);
-        const gridHours = Math.max(0, inputs.hoursPerDay - solarHours);
-        const powerDraw = karnotDailyKwh / inputs.hoursPerDay;
+        const sunHours = inputs.sunHours || 5.5;
+        const gridHours = Math.max(0, hoursPerDay - sunHours);
+        karnotAnnualCost = (karnotPowerDrawKw * gridHours) * 365 * inputs.elecRate;
         
-        karnotAnnualCost = (powerDraw * gridHours) * 365 * inputs.elecRate;
-        
-        // Solar Hardware Costs
-        karnotPanelCount = Math.ceil(powerDraw / CONFIG.SOLAR_PANEL_KW_RATED);
-        solarCost = karnotPanelCount * CONFIG.SOLAR_PANEL_COST_USD * fx;
-        inverterCost = (karnotPanelCount * CONFIG.SOLAR_PANEL_KW_RATED * 1000 * CONFIG.INVERTER_COST_PER_WATT_USD) * fx;
+        panelCount = Math.ceil(karnotPowerDrawKw / CONFIG.SOLAR_PANEL_KW_RATED);
+        solarCost = panelCount * CONFIG.SOLAR_PANEL_COST_USD * fx;
+        inverterCost = (panelCount * CONFIG.SOLAR_PANEL_KW_RATED * 1000 * CONFIG.INVERTER_COST_PER_WATT_USD) * fx;
     }
 
-    // Cooling Savings
-    let coolSavings = 0;
-    if (inputs.includeCooling && system.isReversible) {
-        coolSavings = (dailyThermalEnergyKWH / sysCop) * CONFIG.COOLING_COP * 365 * inputs.elecRate;
-    }
-
+    let coolSavings = (inputs.includeCooling && system.isReversible) ? (karnotDailyKwh * CONFIG.COOLING_COP * 365 * inputs.elecRate) : 0;
     const totalCapex = sysPriceLocal + solarCost + inverterCost;
-    const totalSavings = (annualCostOld - karnotAnnualCost) + coolSavings;
-    const payback = totalSavings > 0 ? (totalCapex / totalSavings).toFixed(1) : "N/A";
+    const totalAnnualSavings = (annualCostOld - karnotAnnualCost) + coolSavings;
+    const co2Saved = (dailyThermalEnergyKWH * 365 * 0.5).toFixed(0);
 
     return {
-        system: { n: system.name },
-        metrics: { 
-            dailyLiters, 
-            requiredPower: peakPowerRequired.toFixed(1),
-            panelCount: karnotPanelCount
-        },
+        system: { n: system.name, id: system.id, price: sysPriceLocal },
+        metrics: { dailyLiters, powerKW: karnotPowerDrawKw.toFixed(2), panelCount, co2Saved },
         financials: {
             symbol: CONFIG.SYMBOLS[inputs.currency],
-            annualCostOld, 
-            karnotAnnualCost, 
-            coolSavings, 
-            totalSavings,
-            paybackYears: payback,
-            capex: { 
-                heatPump: sysPriceLocal, 
-                solar: solarCost, 
-                inverter: inverterCost, 
-                total: totalCapex 
-            }
+            annualCostOld, karnotAnnualCost, coolSavings, totalSavings,
+            paybackYears: totalAnnualSavings > 0 ? (totalCapex / totalAnnualSavings).toFixed(1) : "N/A",
+            capex: { system: sysPriceLocal, solar: solarCost, inverter: inverterCost, total: totalCapex }
         }
     };
 }
