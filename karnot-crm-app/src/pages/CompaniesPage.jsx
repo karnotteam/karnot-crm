@@ -7,7 +7,7 @@ import {
     MapPin, ShieldCheck, AlertTriangle, CheckSquare, Wand2, 
     Calendar, MessageSquare, Filter, Clock, FileText, 
     Link as LinkIcon, Users, User, ArrowRight, Navigation, 
-    ClipboardCheck, Linkedin, Phone 
+    ClipboardCheck, Linkedin, Phone, RotateCcw
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, PRICING_TIERS } from '../data/constants.jsx';
 
@@ -103,8 +103,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
     const handleAddInteraction = () => {
         if (!newLogOutcome) return;
         const newInteraction = { id: Date.now(), date: newLogDate, type: newLogType, outcome: newLogOutcome };
-        const sorted = [newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date));
-        setInteractions(sorted);
+        setInteractions([newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date)));
         setNewLogOutcome('');
     };
 
@@ -204,7 +203,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
     );
 };
 
-const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpenQuote }) => {
+const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpenQuote, onRestoreCompany }) => {
     const [showModal, setShowModal] = useState(false);
     const [editingCompany, setEditingCompany] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -213,27 +212,29 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
     const [userLocation, setUserLocation] = useState(null);
     const [showDuplicateModal, setShowDuplicateModal] = useState(false);
     const [duplicateGroups, setDuplicateGroups] = useState([]);
+    const [showTrash, setShowTrash] = useState(false);
     const fileInputRef = useRef(null);
 
-    const stats = useMemo(() => {
-        const active = (companies || []).filter(c => !c.isDeleted);
-        return {
-            total: active.length,
-            targets: active.filter(c => c.isTarget).length,
-            active: active.filter(c => (c.interactions || []).length > 0).length,
-            nearMe: userLocation ? active.filter(c => c.latitude && getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude) <= 20).length : 0
-        };
-    }, [companies, userLocation]);
+    // Filter data logic
+    const activeCompanies = useMemo(() => companies.filter(c => !c.isDeleted), [companies]);
+    const trashedCompanies = useMemo(() => companies.filter(c => c.isDeleted), [companies]);
+
+    const stats = useMemo(() => ({
+        total: activeCompanies.length,
+        targets: activeCompanies.filter(c => c.isTarget).length,
+        active: activeCompanies.filter(c => (c.interactions || []).length > 0).length,
+        nearMe: userLocation ? activeCompanies.filter(c => c.latitude && getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude) <= 20).length : 0
+    }), [activeCompanies, userLocation]);
 
     const filtered = useMemo(() => {
         const term = searchTerm.toLowerCase();
-        let list = (companies || []).filter(c => !c.isDeleted && (c.companyName.toLowerCase().includes(term) || (c.industry || '').toLowerCase().includes(term)));
+        let list = activeCompanies.filter(c => c.companyName.toLowerCase().includes(term) || (c.industry || '').toLowerCase().includes(term));
         if (activeFilter === 'TARGETS') list = list.filter(c => c.isTarget);
         if (activeFilter === 'NEARBY' && userLocation) {
             list = list.filter(c => c.latitude && getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude) <= 20);
         }
         return list;
-    }, [companies, searchTerm, activeFilter, userLocation]);
+    }, [activeCompanies, searchTerm, activeFilter, userLocation]);
 
     const handleFileChange = (event) => {
         const file = event.target.files[0];
@@ -280,13 +281,13 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
 
     const handleSoftDelete = async (companyId) => {
         if (!user) return;
-        if (window.confirm("Move to Trash? This will remove it from targets and search.")) {
+        if (window.confirm("Move to Trash?")) {
             await setDoc(doc(db, "users", user.uid, "companies", companyId), { isDeleted: true, deletedAt: serverTimestamp() }, { merge: true });
         }
     };
 
     return (
-        <div className="w-full">
+        <div className="w-full space-y-8">
             {showModal && (
                 <CompanyModal 
                     onClose={() => setShowModal(false)} 
@@ -304,19 +305,19 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                 await batch.commit(); setShowDuplicateModal(false);
             }} />}
 
-            <div className="flex flex-wrap gap-4 mb-8">
+            <div className="flex flex-wrap gap-4">
                 <StatBadge icon={Building} label="Total Accounts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
                 <StatBadge icon={Navigation} label="Near Me (20km)" count={stats.nearMe} total={stats.total} color="orange" active={activeFilter === 'NEARBY'} onClick={handleNearMe} />
                 <StatBadge icon={CheckSquare} label="Target Accounts" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveFilter('TARGETS')} />
                 <StatBadge icon={Clock} label="Active Interactions" count={stats.active} total={stats.total} color="blue" active={activeFilter === 'ACTIVE'} onClick={() => setActiveFilter('ACTIVE')} />
             </div>
 
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Companies ({filtered.length})</h1>
                 <div className="flex gap-2">
                     <Button onClick={() => {
                         const groups = {};
-                        companies.forEach(c => { const key = c.companyName.toLowerCase().trim(); if(!groups[key]) groups[key] = []; groups[key].push(c); });
+                        activeCompanies.forEach(c => { const key = c.companyName.toLowerCase().trim(); if(!groups[key]) groups[key] = []; groups[key].push(c); });
                         const conflicts = Object.keys(groups).filter(k => groups[k].length > 1).map(k => ({ key: k, items: groups[k] }));
                         if(conflicts.length > 0) { setDuplicateGroups(conflicts); setShowDuplicateModal(true); } else alert("No duplicates!");
                     }} variant="secondary"><CheckSquare className="mr-1" size={16}/> Dedupe</Button>
@@ -327,7 +328,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
 
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" className="hidden" />
 
-            <div className="relative mb-6">
+            <div className="relative">
                 <input type="text" placeholder="Search accounts..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 outline-none" />
                 <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
@@ -358,6 +359,32 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                     </Card>
                 ))}
             </div>
+
+            {/* --- TRASH BIN SECTION --- */}
+            {trashedCompanies.length > 0 && (
+                <div className="mt-20 pt-10 border-t border-dashed border-gray-300">
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-gray-400 flex items-center gap-2 uppercase tracking-widest"><Trash2 size={20}/> Recently Trashed ({trashedCompanies.length})</h2>
+                        <Button onClick={() => setShowTrash(!showTrash)} variant="secondary">{showTrash ? 'Hide Trash' : 'Show Trash'}</Button>
+                    </div>
+                    
+                    {showTrash && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {trashedCompanies.map(c => (
+                                <div key={c.id} className="p-4 bg-gray-50 border border-gray-200 rounded-xl flex justify-between items-center grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all">
+                                    <div>
+                                        <p className="font-bold text-gray-700">{c.companyName}</p>
+                                        <p className="text-[10px] text-gray-400 uppercase font-black">Deleted ID: {c.id.slice(0,8)}</p>
+                                    </div>
+                                    <Button onClick={() => onRestoreCompany(c.id)} variant="primary" className="!py-1.5 !px-3 text-xs flex items-center gap-1 bg-green-600">
+                                        <RotateCcw size={14}/> Undo / Restore
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };
