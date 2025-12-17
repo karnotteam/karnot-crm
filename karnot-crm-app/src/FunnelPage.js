@@ -1,217 +1,197 @@
-// src/App.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { auth, db } from './firebase'; // Import your new firebase config
-import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth"; // For login/logout
-import { collection, onSnapshot, query, doc, addDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"; // For the database
+import { db } from '../firebase'; 
+import { 
+    collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, updateDoc
+} from "firebase/firestore";
+import { 
+    Plus, X, Edit, Trash2, FileText, MessageSquare, 
+    ChevronLeft, ChevronRight, Phone, PlusCircle, Target
+} from 'lucide-react';
+import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
-// --- Import Pages & Components ---
-import LoginPage from './pages/LoginPage';
-import FunnelPage from './pages/FunnelPage'; // Your new funnel page
-import DashboardPage from './pages/DashboardPage';
-import QuotesListPage from './pages/QuotesListPage';
-import QuoteCalculator from './components/QuoteCalculator';
+const STAGE_ORDER = [
+    'Lead',
+    'Qualifying',
+    'Site Visit / Demo',
+    'Proposal Sent',
+    'Negotiation',
+    'Closed-Won',
+    'Closed-Lost'
+];
 
-// --- Import Constants & Header ---
-import { KARNOT_LOGO_BASE64, Button } from './data/constants';
-import { BarChart2, FileText, List, HardHat, LogOut } from 'lucide-react'; // Added Funnel (HardHat) and Logout icons
+// ----------------------------------------------------------------------
+// 1. OPPORTUNITY DETAIL MODAL (With Delete Interaction & Summary)
+// ----------------------------------------------------------------------
+const OpportunityDetailModal = ({ opp, onClose, onSaveInteraction, onDeleteInteraction, onUpdateProb, onUpdateNotes, quotes = [], companies = [], onOpenQuote }) => {
+    const [activeTab, setActiveTab] = useState('ACTIVITY');
+    const [logType, setLogType] = useState('Call');
+    const [logOutcome, setLogOutcome] = useState('');
+    const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
+    const [localNotes, setLocalNotes] = useState(opp.notes || '');
 
-// --- Header Component ---
-// This is your new navigation bar
-const Header = ({ activeView, setActiveView, quoteCount, onLogout }) => (
-    <header className="bg-white shadow-md sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-                <img src={KARNOT_LOGO_BASE64} alt="Karnot Logo" style={{height: '40px'}}/>
-                <h1 className="text-2xl font-bold text-orange-600">Funnel CRM</h1>
-            </div>
-            <nav className="flex flex-wrap gap-2 justify-end">
-                <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'}><HardHat className="mr-2" size={16} /> Funnel</Button>
-                <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'}><BarChart2 className="mr-2" size={16} /> Dashboard</Button>
-                <Button onClick={() => setActiveView('calculator')} variant={activeView === 'calculator' ? 'primary' : 'secondary'}><FileText className="mr-2" size={16} /> New Quote</Button>
-                <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'}><List className="mr-2" size={16} /> Quotes ({quoteCount})</Button>
-                <Button onClick={onLogout} variant="secondary"><LogOut className="mr-2" size={16} />Logout</Button>
-            </nav>
-        </div>
-    </header>
-);
+    const company = (companies || []).find(c => c.id === opp.companyId || c.companyName === opp.customerName);
+    const interactions = company?.interactions || [];
 
-// --- Main App Component ---
-export default function App() {
-    const [user, setUser] = useState(null); // This tracks the logged-in user
-    const [activeView, setActiveView] =useState('funnel');
-    const [quoteToEdit, setQuoteToEdit] = useState(null);
-    
-    // --- State from Firebase ---
-    const [opportunities, setOpportunities] = useState([]);
-    const [quotes, setQuotes] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    // This hook checks if you are logged in
-    useEffect(() => {
-        setLoading(true);
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            if (user) {
-                setUser(user); // User is logged in
-            } else {
-                setUser(null); // User is logged out
-                setLoading(false);
-            }
+    const relevantQuotes = useMemo(() => {
+        const targetName = (opp?.customerName || "").toLowerCase().trim();
+        return (quotes || []).filter(q => {
+            const quoteName = (q.customer?.name || "").toLowerCase().trim();
+            return quoteName.includes(targetName) || targetName.includes(quoteName) || q.leadId === opp.id;
         });
-        return () => unsubscribe(); // Cleanup on unmount
-    }, []);
+    }, [quotes, opp]);
 
-    // This hook syncs all your data from Firebase *after* you log in
-    useEffect(() => {
-        if (user) {
-            setLoading(true);
-            
-            // 1. Sync Quotes
-            // This is safer: it saves quotes under a "users" collection, then your user ID
-            const quotesQuery = query(collection(db, "users", user.uid, "quotes"));
-            const unsubQuotes = onSnapshot(quotesQuery, (snapshot) => {
-                const liveQuotes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setQuotes(liveQuotes);
-                setLoading(false); // We have quotes, so stop loading
-            });
-
-            // 2. Sync Opportunities
-            const oppsQuery = query(collection(db, "users", user.uid, "opportunities"));
-            const unsubOpps = onSnapshot(oppsQuery, (snapshot) => {
-                const liveOpps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setOpportunities(liveOpps);
-            });
-            
-            // This stops listening when you log out
-            return () => {
-                unsubQuotes();
-                unsubOpps();
-            };
-        }
-    }, [user]); // Re-run this effect when the user object changes
-
-    // --- Firebase Login/Logout ---
-    const handleLogin = (email, password) => {
-        signInWithEmailAndPassword(auth, email, password)
-            .catch((error) => alert("Login Failed: " + error.message));
+    const handleAddLog = () => {
+        if (!logOutcome || !company) return alert("Log data missing.");
+        onSaveInteraction(company.id, { id: Date.now(), date: logDate, type: logType, outcome: logOutcome });
+        setLogOutcome('');
     };
 
-    const handleLogout = () => {
-        signOut(auth);
-    };
-
-    // --- Firebase Database Functions (Replaces your old localStorage) ---
-    const handleSaveQuote = async (quoteData) => {
-        const quoteRef = doc(db, "users", user.uid, "quotes", quoteData.id);
-        try {
-            await setDoc(quoteRef, {
-                ...quoteData,
-                // Use serverTimestamp for accuracy
-                createdAt: quoteData.createdAt || serverTimestamp(), 
-                lastModified: serverTimestamp()
-            }, { merge: true }); // 'merge: true' creates new or updates existing
-            
-            alert(`Quote ${quoteData.id} has been saved to the cloud!`);
-            setActiveView('list');
-            setQuoteToEdit(null);
-        } catch (error) {
-            console.error("Error saving quote: ", error);
-            alert("Error saving quote. See console.");
-        }
-    };
-    
-    const handleUpdateQuoteStatus = async (quoteId, newStatus) => {
-        const quoteRef = doc(db, "users", user.uid, "quotes", quoteId);
-        try {
-            await setDoc(quoteRef, { status: newStatus }, { merge: true });
-        } catch (error) {
-            console.error("Error updating status: ", error);
-        }
-    };
-    
-    const handleDeleteQuote = async (quoteId) => {
-        if (window.confirm("Are you sure you want to permanently delete this quote?")) {
-            const quoteRef = doc(db, "users", user.uid, "quotes", quoteId);
-            try {
-                await deleteDoc(quoteRef);
-            } catch (error) {
-                console.error("Error deleting quote: ", error);
-            }
-        }
-    };
-    
-    // --- Navigation Functions ---
-    const handleEditQuote = (quote) => {
-        setQuoteToEdit(quote);
-        setActiveView('calculator');
-    };
-
-    const handleNewQuote = () => {
-        setQuoteToEdit(null); // Clear any quote being edited
-        setActiveView('calculator');
-    };
-
-    // --- Logic from your old app, now powered by Firebase state ---
-    const nextQuoteNumber = useMemo(() => {
-        if (quotes.length === 0) return 2501;
-        const lastQuoteNum = quotes
-           .map(q => parseInt(q.id.split('/')[0].replace('QN', ''), 10))
-           .filter(num => !isNaN(num))
-           .reduce((max, num) => Math.max(max, num), 0);
-        return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
-    }, [quotes]); // Recalculates when 'quotes' from Firebase changes
-
-    // --- RENDER ---
-
-    // 1. If not logged in, show Login Page
-    if (!user) {
-        return <LoginPage onLogin={handleLogin} />;
-    }
-
-    // 2. If logged in but data is loading, show loading screen
-    if (loading) {
-        return <div className="text-center p-10 font-semibold">Loading Karnot CRM...</div>;
-    }
-
-    // 3. If logged in and loaded, show the main app
     return (
-        <div className="bg-gray-100 min-h-screen font-sans text-gray-900">
-            <Header 
-                activeView={activeView} 
-                setActiveView={setActiveView} 
-                quoteCount={quotes.length} 
-                onLogout={handleLogout}
-            />
-            
-            <main className="container mx-auto p-4 md:p-8">
-                
-                {activeView === 'funnel' && (
-                    <FunnelPage 
-                        opportunities={opportunities} 
-                        // We will pass Firebase functions to this later
-                    />
-                )}
-                
-                {activeView === 'dashboard' && <DashboardPage quotes={quotes} />}
-                
-                {activeView === 'calculator' && (
-                    <QuoteCalculator 
-                        onSaveQuote={handleSaveQuote} 
-                        nextQuoteNumber={nextQuoteNumber}
-                        key={quoteToEdit ? quoteToEdit.id : 'new'} // This trick forces component to reset for a new quote
-                        initialData={quoteToEdit} 
-                    />
-                )}
-                
-                {activeView === 'list' && (
-                    <QuotesListPage 
-                        quotes={quotes} 
-                        onUpdateQuoteStatus={handleUpdateQuoteStatus} 
-                        onDeleteQuote={handleDeleteQuote} 
-                        onEditQuote={handleEditQuote} 
-                    />
-                )}
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <Card className="w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row shadow-2xl bg-white p-0">
+                <div className="flex-1 p-6 overflow-y-auto space-y-4 border-r">
+                    <div className="flex justify-between items-center border-b pb-4">
+                        <h3 className="text-2xl font-black text-gray-800 uppercase tracking-tighter leading-none">{opp.customerName}</h3>
+                        <button onClick={onClose}><X /></button>
+                    </div>
+                    <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 font-bold text-gray-800">{opp.project}</div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-gray-50 rounded-lg border">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deal Value</p>
+                            <p className="text-xl font-black text-gray-800">${(opp.estimatedValue || 0).toLocaleString()}</p>
+                        </div>
+                        <div className="p-3 bg-gray-50 rounded-lg border relative">
+                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Win Prob %</p>
+                            <input type="number" value={opp.probability} onChange={(e) => onUpdateProb(opp.id, e.target.value)} className="text-xl font-black text-orange-600 bg-transparent border-none w-full focus:ring-0 p-0" />
+                        </div>
+                    </div>
 
-            </main>
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Lead Summary</label>
+                    <textarea 
+                        rows="8" value={localNotes} 
+                        onChange={(e) => setLocalNotes(e.target.value)}
+                        onBlur={() => onUpdateNotes(opp.id, localNotes)}
+                        className="w-full p-4 bg-white text-sm font-medium border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+                        placeholder="Type deal notes here..."
+                    />
+                </div>
+
+                <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden">
+                    <div className="flex border-b bg-white">
+                        <button onClick={() => setActiveTab('ACTIVITY')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] ${activeTab === 'ACTIVITY' ? 'text-orange-600 border-b-4 border-orange-600' : 'text-gray-400'}`}>Activity Log</button>
+                        <button onClick={() => setActiveTab('DATA')} className={`flex-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] ${activeTab === 'DATA' ? 'text-blue-600 border-b-4 border-blue-600' : 'text-gray-400'}`}>Quotes ({relevantQuotes.length})</button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6">
+                        {activeTab === 'ACTIVITY' ? (
+                            <div className="space-y-4">
+                                <div className="bg-white p-4 rounded-xl border space-y-3">
+                                    <div className="flex gap-2">
+                                        <Input type="date" value={logDate} onChange={e => setLogDate(e.target.value)} className="text-xs" />
+                                        <select value={logType} onChange={e => setLogType(e.target.value)} className="text-xs border rounded-xl p-1 flex-1 font-black uppercase bg-gray-50">
+                                            <option value="Call">Call</option><option value="Visit">Site Visit</option><option value="Email">Email</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input type="text" value={logOutcome} onChange={e => setLogOutcome(e.target.value)} placeholder="Summary..." className="flex-1 text-sm p-2 border rounded-xl" />
+                                        <Button onClick={handleAddLog} variant="primary"><PlusCircle size={20}/></Button>
+                                    </div>
+                                </div>
+                                {interactions.map(log => (
+                                    <div key={log.id} className="bg-white p-4 rounded-xl border shadow-sm mb-2 flex justify-between items-start group">
+                                        <div className="flex-1">
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full text-white uppercase tracking-widest ${log.type === 'Visit' ? 'bg-green-500' : 'bg-blue-500'}`}>{log.type}</span>
+                                                <span className="text-[10px] text-gray-400 font-bold">{log.date}</span>
+                                            </div>
+                                            <p className="text-sm text-gray-700 font-bold">{log.outcome}</p>
+                                        </div>
+                                        <button onClick={() => onDeleteInteraction(company.id, log.id)} className="ml-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {relevantQuotes.map(q => (
+                                    <div key={q.id} onClick={() => onOpenQuote(q)} className="p-4 bg-white border border-slate-200 rounded-2xl cursor-pointer hover:border-orange-500 transition-all flex justify-between items-center">
+                                        <div><p className="text-gray-800 font-black text-xs uppercase">{q.id}</p><p className="text-[9px] text-gray-400 font-bold">VIEW PROPOSAL →</p></div>
+                                        <span className="text-orange-600 font-black text-lg">${Number(q.finalSalesPrice || 0).toLocaleString()}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </Card>
         </div>
     );
-}
+};
+
+const FunnelPage = ({ opportunities = [], user, companies = [], contacts = [], quotes = [], onOpenQuote }) => { 
+    const [showDetailModal, setShowDetailModal] = useState(false);
+    const [selectedOpp, setSelectedOpp] = useState(null);
+
+    const handleUpdateStage = async (oppId, next) => {
+        const probs = { 'Lead': 10, 'Qualifying': 25, 'Site Visit / Demo': 50, 'Proposal Sent': 75, 'Negotiation': 85, 'Closed-Won': 100, 'Closed-Lost': 0 };
+        await setDoc(doc(db, "users", user.uid, "opportunities", oppId), { stage: next, probability: probs[next] || 0, lastModified: serverTimestamp() }, { merge: true });
+    };
+
+    const handleSaveInteraction = async (companyId, newLog) => {
+        const company = companies.find(c => c.id === companyId);
+        await setDoc(doc(db, "users", user.uid, "companies", companyId), { interactions: [newLog, ...(company.interactions || [])] }, { merge: true });
+    };
+
+    const handleDeleteInteraction = async (companyId, logId) => {
+        const company = companies.find(c => c.id === companyId);
+        const filtered = (company.interactions || []).filter(i => i.id !== logId);
+        await setDoc(doc(db, "users", user.uid, "companies", companyId), { interactions: filtered }, { merge: true });
+    };
+
+    return (
+        <div className="w-full">
+            {showDetailModal && selectedOpp && (
+                <OpportunityDetailModal 
+                    opp={selectedOpp} companies={companies} quotes={quotes} onOpenQuote={onOpenQuote} 
+                    onSaveInteraction={handleSaveInteraction} onDeleteInteraction={handleDeleteInteraction}
+                    onUpdateProb={(id, val) => setDoc(doc(db, "users", user.uid, "opportunities", id), { probability: Number(val) }, { merge: true })}
+                    onUpdateNotes={(id, notes) => setDoc(doc(db, "users", user.uid, "opportunities", id), { notes }, { merge: true })}
+                    onClose={() => setShowDetailModal(false)} 
+                />
+            )}
+
+            <div className="flex gap-4 overflow-x-auto pb-6" style={{ minHeight: '80vh' }}>
+                {STAGE_ORDER.map(stage => {
+                    const stageOpps = (opportunities || []).filter(o => o.stage === stage);
+                    return (
+                        <div key={stage} className="flex-shrink-0 w-80 bg-gray-200/50 p-4 rounded-3xl border border-gray-200/50">
+                            <h3 className="font-black text-slate-500 text-[10px] uppercase tracking-[0.3em] mb-4">{stage} ({stageOpps.length})</h3>
+                            <div className="space-y-4">
+                                {stageOpps.map(opp => {
+                                    const currIdx = STAGE_ORDER.indexOf(opp.stage);
+                                    return (
+                                        <Card key={opp.id} className="p-5 rounded-2xl shadow-sm bg-white hover:border-orange-400 group">
+                                            <h4 className="font-black text-gray-800 uppercase text-sm mb-1">{opp.customerName}</h4>
+                                            <p className="text-[10px] text-gray-400 font-bold uppercase mb-4">{opp.project}</p>
+                                            <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl mb-3">
+                                                <span className="text-xs font-black">${(Number(opp.estimatedValue) || 0).toLocaleString()}</span>
+                                                <span className="text-[10px] font-black text-orange-600">{opp.probability}%</span>
+                                            </div>
+                                            <Button onClick={() => { setSelectedOpp(opp); setShowDetailModal(true); }} variant="secondary" className="w-full !py-2 text-[9px] font-black uppercase tracking-widest mb-3">Interactions</Button>
+                                            <div className="flex gap-2">
+                                                {currIdx > 0 && <button onClick={() => handleUpdateStage(opp.id, STAGE_ORDER[currIdx - 1])} className="flex-1 py-2 text-[9px] font-black text-gray-400 bg-gray-50 rounded-lg uppercase border">Back</button>}
+                                                {currIdx < STAGE_ORDER.length - 1 && <button onClick={() => handleUpdateStage(opp.id, STAGE_ORDER[currIdx + 1])} className="flex-1 py-2 text-[9px] font-black text-blue-600 bg-blue-50 rounded-lg uppercase border border-blue-100">Forward</button>}
+                                            </div>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+export default FunnelPage;
