@@ -3,7 +3,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { calculateHeatPump, CONFIG } from '../utils/heatPumpLogic'; 
 import { Card, Section, Input, Button } from '../data/constants.jsx'; 
-import { Calculator, Snowflake, RefreshCw, Printer, AlertCircle } from 'lucide-react';
+import { Calculator, Snowflake, RefreshCw, Printer, Info, PackageSearch } from 'lucide-react';
 
 const HeatPumpCalculator = ({ user }) => {  
   const [inputs, setInputs] = useState({
@@ -16,9 +16,10 @@ const HeatPumpCalculator = ({ user }) => {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // --- REAL-TIME DB LINK ---
+  // --- 1. SYNC WITH PRODUCT MANAGER ---
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
+    setLoading(true);
     const unsub = onSnapshot(collection(db, "users", user.uid, "products"), (snap) => {
         setDbProducts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         setLoading(false);
@@ -26,6 +27,7 @@ const HeatPumpCalculator = ({ user }) => {
     return () => unsub();
   }, [user]);
 
+  // --- 2. CALCULATE ---
   useEffect(() => {
     if (dbProducts.length > 0) {
         setResult(calculateHeatPump(inputs, dbProducts));
@@ -40,40 +42,46 @@ const HeatPumpCalculator = ({ user }) => {
 
   const fmt = n => (+n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-  if (loading) return <div className="p-20 text-center font-bold text-orange-500 uppercase animate-pulse">Syncing with Product Manager...</div>;
+  if (loading) return (
+    <div className="p-20 text-center flex flex-col items-center">
+        <RefreshCw className="animate-spin text-orange-500 mb-4" size={48} />
+        <p className="font-black text-orange-500 uppercase tracking-widest">Syncing Live Inventory...</p>
+    </div>
+  );
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
-      <Card className="p-8 shadow-2xl border-t-4 border-orange-500">
+      <Card className="p-8 shadow-xl border-t-4 border-orange-500">
         <div className="flex items-center gap-3 mb-8">
             <div className="bg-orange-100 p-3 rounded-2xl text-orange-600"><Calculator size={32}/></div>
-            <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">Heat Pump ROI Engine</h2>
+            <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">ROI ENGINE</h2>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-          <Section title="1. Site Demand">
-            <select className="w-full border-2 p-3 rounded-xl font-bold mb-4 bg-gray-50" value={inputs.userType} onChange={handleChange('userType')}>
+          <Section title="1. Your Demand">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">User Type</label>
+              <select className="w-full border-2 p-3 rounded-xl font-bold mb-4" value={inputs.userType} onChange={handleChange('userType')}>
                 <option value="home">Home / Villa</option><option value="restaurant">F&B / Kitchen</option><option value="resort">Hotels / Resort</option>
-            </select>
-            <Input label="Occupants / Units" type="number" value={inputs.occupants} onChange={handleChange('occupants', true)} />
+              </select>
+              <Input label="Occupants / Units" type="number" value={inputs.occupants} onChange={handleChange('occupants', true)} />
           </Section>
 
-          <Section title="2. Local Utility Costs">
+          <Section title="2. Costs">
              <select className="w-full border-2 p-3 rounded-xl font-bold mb-4 bg-gray-50" value={inputs.currency} onChange={handleChange('currency')}>
                 <option value="PHP">₱ PHP</option><option value="USD">$ USD</option>
              </select>
-             <Input label="Electricity Rate / kWh" type="number" value={inputs.elecRate} onChange={handleChange('elecRate', true)} />
+             <Input label="Elec Rate / kWh" type="number" value={inputs.elecRate} onChange={handleChange('elecRate', true)} />
           </Section>
 
-          <Section title="3. Technology Choice">
-            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Database Filter</label>
+          <Section title="3. DB Selection">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">HP Filter</label>
             <select className="w-full border-2 p-3 rounded-xl font-bold mb-4" value={inputs.heatPumpType} onChange={handleChange('heatPumpType')}>
                 <option value="all">Best Price (Any Refrigerant)</option>
                 <option value="r32">R32 Models Only</option>
                 <option value="r290">R290 Models Only</option>
                 <option value="co2">CO2 Models Only</option>
             </select>
-            <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Enable Free Cooling?</label>
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cooling?</label>
             <select className="w-full border-2 p-3 rounded-xl font-bold" value={inputs.includeCooling.toString()} onChange={handleChange('includeCooling')}>
                 <option value="false">No (Heating Only)</option><option value="true">Yes (Reversible)</option>
             </select>
@@ -82,34 +90,34 @@ const HeatPumpCalculator = ({ user }) => {
       </Card>
 
       {result?.error ? (
-          <div className="bg-red-50 border-2 border-red-200 p-6 rounded-3xl flex items-center gap-4 text-red-700 font-bold">
-              <AlertCircle /> {result.error} (Check Product Manager)
-          </div>
+          <Card className="p-10 text-center border-dashed border-2">
+              <PackageSearch className="mx-auto text-gray-300 mb-4" size={48} />
+              <p className="font-bold text-gray-500">{result.error}</p>
+          </Card>
       ) : result && (
-        <Card className="p-8 border-2 border-orange-500 bg-white overflow-hidden relative">
-            <div className="flex justify-between items-start mb-8 border-b pb-6">
+        <Card className="p-8 border-2 border-orange-500 bg-white">
+            <div className="flex justify-between items-start mb-8">
                 <div>
-                    <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-1">Recommended from Product Manager</p>
-                    <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">{result.system.name}</h3>
-                    <p className="text-xs font-bold text-gray-400 uppercase">HP Ref: {result.system.Refrigerant || 'N/A'}</p>
+                    <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">{result.system.name}</h3>
+                    <p className="text-xs font-bold text-orange-500 uppercase mt-2">Inventory System Recommendation</p>
                 </div>
                 <div className="text-right">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Estimated Annual Savings</p>
-                    <p className="text-5xl font-black text-green-600">{result.financials.symbol}{fmt(result.financials.totalAnnualSavings)}</p>
+                    <p className="text-5xl font-black text-green-600 leading-none">{result.financials.symbol}{fmt(result.financials.totalAnnualSavings)}</p>
                 </div>
             </div>
 
             {inputs.includeCooling && result.financials.coolSavings > 0 && (
-                <div className="mb-8 p-6 bg-blue-50 border-l-8 border-blue-500 rounded-r-3xl flex items-center gap-6 animate-pulse">
+                <div className="mb-8 p-6 bg-blue-50 border-l-8 border-blue-500 rounded-r-3xl flex items-center gap-6">
                     <Snowflake className="text-blue-500" size={40} />
                     <div>
-                        <p className="text-blue-800 font-black uppercase text-sm">Free Cooling Bonus Activated</p>
-                        <p className="text-blue-600 font-bold text-lg">Value Added: {result.financials.symbol}{fmt(result.financials.coolSavings)} / Year</p>
+                        <p className="text-blue-800 font-black uppercase text-xs">Free Cooling Bonus Activated</p>
+                        <p className="text-blue-600 font-bold text-lg leading-none">Value Added: {result.financials.symbol}{fmt(result.financials.coolSavings)} / Year</p>
                     </div>
                 </div>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
                 <div className="bg-slate-50 p-6 rounded-2xl border text-center">
                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">ROI Payback</p>
                     <p className="text-2xl font-black text-orange-600">{result.financials.paybackYears} Yrs</p>
@@ -123,13 +131,9 @@ const HeatPumpCalculator = ({ user }) => {
                     <p className="text-2xl font-black text-amber-500">{result.metrics.panelCount} Panels</p>
                 </div>
                 <div className="bg-slate-50 p-6 rounded-2xl border text-center">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">System Capex</p>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Capex</p>
                     <p className="text-2xl font-black text-slate-800">{result.financials.symbol}{fmt(result.financials.capex.total)}</p>
                 </div>
-            </div>
-
-            <div className="mt-10 flex justify-end">
-                <Button variant="primary" className="px-10 py-4 text-lg font-black uppercase tracking-widest"><Printer size={20} className="mr-2"/> Generate ROI Report</Button>
             </div>
         </Card>
       )}
