@@ -4,7 +4,7 @@ import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, updateDoc 
 import { Plus, X, Edit, Trash2, Building, Search, Mail, Phone, CheckSquare, Clock, Globe, MapPin, UserCheck, PlusCircle, Link as LinkIcon, FileText, ExternalLink } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants.jsx'; 
 
-// --- 1. Company Modal Component (Restored Clickable Quotes) ---
+// --- 1. Company Modal Component (Quotes explicitly Clickable now) ---
 const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote }) => {
     const isEditMode = Boolean(companyToEdit);
     
@@ -35,8 +35,9 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
         
         let linkedQuote = null;
         if (selectedQuoteId) {
+            // Find the full quote object to ensure it is clickable in the timeline
             const q = relevantQuotes.find(rq => rq.id === selectedQuoteId);
-            if (q) linkedQuote = { ...q }; // Store full quote data for clicking
+            if (q) linkedQuote = q; 
         }
 
         const newLog = { 
@@ -132,10 +133,14 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                                     </div>
                                     <p className="text-sm text-gray-700 font-bold">{log.outcome}</p>
                                     
-                                    {/* --- RESTORED: Clickable Quote link in timeline --- */}
+                                    {/* CLICKABLE QUOTE ACTION */}
                                     {log.linkedQuote && (
                                         <button 
-                                            onClick={() => onOpenQuote(log.linkedQuote)}
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onOpenQuote(log.linkedQuote);
+                                            }}
                                             className="mt-2 flex items-center gap-2 text-blue-600 bg-blue-50 p-1.5 rounded-lg border border-blue-100 w-fit hover:bg-blue-100 transition-colors"
                                         >
                                             <FileText size={12}/>
