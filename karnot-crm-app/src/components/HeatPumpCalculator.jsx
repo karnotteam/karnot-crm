@@ -122,6 +122,47 @@ const HeatPumpCalculator = ({ leadId }) => {
 
   const symbol = CONFIG.SYMBOLS[inputs.currency] || '$';
 
+  // --- REPORT GENERATION (FIXED SYNTAX) ---
+  const fmt = n => (+n).toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+  const generateReport = () => {
+      if (!result || result.error) return;
+      const q = result;
+      
+      // Fix for the build error: prepare conditional row outside of the template
+      const coolSavingsRow = q.financials.coolSavings > 0 
+          ? `<tr><td>Annual Free Cooling Savings</td><td class="cooling-details">${q.financials.symbol}${fmt(q.financials.coolSavings)}</td></tr>` 
+          : '';
+
+      const reportHTML = `
+        <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Karnot Savings Report</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <style> 
+        body { font-family: 'Inter', sans-serif; margin: 0; padding: 40px; color: #1d1d1f; } .report-container { max-width: 800px; margin: auto; } .header { text-align: center; border-bottom: 2px solid #F56600; padding-bottom: 20px; margin-bottom: 30px; } .header h1 { color: #F56600; font-size: 32px; margin: 0; } .header p { font-size: 16px; color: #6e6e73; margin: 5px 0 0 0; } h2 { font-size: 22px; color: #1d1d1f; border-bottom: 1px solid #d2d2d7; padding-bottom: 10px; margin-top: 40px; } .summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center; margin: 30px 0; } .metric .value { font-size: 28px; font-weight: 700; color: #F56600; } .metric .label { font-size: 14px; color: #6e6e73; } .details-table { width: 100%; border-collapse: collapse; font-size: 16px; } .details-table td { padding: 12px 0; border-bottom: 1px solid #d2d2d7; } .details-table td:last-child { text-align: right; font-weight: 600; } .cooling-details { color: #007aff; } footer { text-align: center; margin-top: 50px; font-size: 12px; color: #aaa; } 
+        </style>
+        </head><body><div class="report-container">
+            <div class="header"><h1>Karnot Savings Report</h1><p>Internal Estimate for ${q.system.n}</p></div>
+            <h2>System Recommendation: <strong>${q.system.n}</strong></h2>
+            <div class="summary-grid"> 
+                <div class="metric"><div class="value">${q.financials.symbol}${fmt(q.financials.totalSavings)}</div><div class="label">Total Annual Savings</div></div> 
+                <div class="metric"><div class="value">${q.financials.paybackYears} Yrs</div><div class="label">Estimated Payback</div></div> 
+                <div class="metric"><div class="value">Active</div><div class="label">Emission Reduction</div></div> 
+            </div>
+            <h2>Financial Breakdown</h2>
+            <table class="details-table"> 
+                <tr><td>Annual Cost (Current Heating)</td><td>${q.financials.symbol}${fmt(q.financials.annualCostOld)}</td></tr> 
+                <tr><td>Annual Cost (New Heat Pump)</td><td>${q.financials.symbol}${fmt(q.financials.karnotAnnualCost)}</td></tr> 
+                ${coolSavingsRow}
+                <tr><td>Total Annual Savings</td><td>${q.financials.symbol}${fmt(q.financials.totalSavings)}</td></tr>
+            </table>
+            <p>This report assumes a system cost of ${q.financials.symbol}${fmt(q.financials.capex.total)} and an estimated payback period of ${q.financials.paybackYears} years.</p>
+            <footer><p>&copy; ${new Date().getFullYear()} Karnot. All Rights Reserved. This is a preliminary estimate.</p></footer>
+        </div></body></html>`;
+      
+      const win = window.open("", "_blank");
+      win.document.write(reportHTML);
+  };
+  // --- END REPORT GENERATION ---
 
   const handleSave = async () => {
     if (!result || result.error) return;
@@ -143,40 +184,6 @@ const HeatPumpCalculator = ({ leadId }) => {
     } finally {
         setIsSaving(false);
     }
-  };
-
-  const fmt = n => (+n).toLocaleString(undefined, { maximumFractionDigits: 0 });
-
-  const generateReport = () => {
-      if (!result || result.error) return;
-      const q = result;
-      const reportHTML = `
-        <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Karnot Savings Report</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-        <style> /* ... (Your previous CSS styles for report here) ... */
-        body { font-family: 'Inter', sans-serif; margin: 0; padding: 40px; color: #1d1d1f; } .report-container { max-width: 800px; margin: auto; } .header { text-align: center; border-bottom: 2px solid #F56600; padding-bottom: 20px; margin-bottom: 30px; } .header h1 { color: #F56600; font-size: 32px; margin: 0; } .header p { font-size: 16px; color: #6e6e73; margin: 5px 0 0 0; } h2 { font-size: 22px; color: #1d1d1f; border-bottom: 1px solid #d2d2d7; padding-bottom: 10px; margin-top: 40px; } .summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center; margin: 30px 0; } .metric .value { font-size: 28px; font-weight: 700; color: #F56600; } .metric .label { font-size: 14px; color: #6e6e73; } .details-table { width: 100%; border-collapse: collapse; font-size: 16px; } .details-table td { padding: 12px 0; border-bottom: 1px solid #d2d2d7; } .details-table td:last-child { text-align: right; font-weight: 600; } .cooling-details { color: #007aff; } footer { text-align: center; margin-top: 50px; font-size: 12px; color: #aaa; } 
-        </style>
-        </head><body><div class="report-container">
-            <div class="header"><h1>Karnot Savings Report</h1><p>Internal Estimate for {q.system.n}</p></div>
-            <h2>System Recommendation: <strong>{q.system.n}</strong></h2>
-            <div class="summary-grid"> 
-                <div class="metric"><div class="value">{q.financials.symbol}{Math.round(q.financials.totalSavings).toLocaleString()}</div><div class="label">Total Annual Savings</div></div> 
-                <div class="metric"><div class="value">{q.financials.paybackYears} Yrs</div><div class="label">Estimated Payback</div></div> 
-                <div class="metric"><div class="value">Active</div><div class="label">Emission Reduction</div></div> 
-            </div>
-            <h2>Financial Breakdown</h2>
-            <table class="details-table"> 
-                <tr><td>Annual Cost (Current Heating)</td><td>{q.financials.symbol}{Math.round(q.financials.annualCostOld).toLocaleString()}</td></tr> 
-                <tr><td>Annual Cost (New Heat Pump)</td><td>{q.financials.symbol}{Math.round(q.financials.karnotAnnualCost).toLocaleString()}</td></tr> 
-                {q.financials.coolSavings > 0 ? `<tr class="cooling-details"><td>Annual Free Cooling Savings</td><td>{q.financials.symbol}{Math.round(q.financials.coolSavings).toLocaleString()}</td></tr>` : ''}
-                <tr><td>Total Annual Savings</td><td>{q.financials.symbol}{Math.round(q.financials.totalSavings).toLocaleString()}</td></tr>
-            </table>
-            <p>This report assumes a system cost of {q.financials.symbol}{Math.round(q.financials.capex.total).toLocaleString()} and an estimated payback period of {q.financials.paybackYears} years.</p>
-            <footer><p>&copy; {new Date().getFullYear()} Karnot. All Rights Reserved. This is a preliminary estimate.</p></footer>
-        </div></body></html>`;
-      
-      const win = window.open("", "_blank");
-      win.document.write(reportHTML);
   };
 
 
