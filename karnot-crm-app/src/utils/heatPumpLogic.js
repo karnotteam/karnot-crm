@@ -35,27 +35,35 @@ export function calculateHeatPump(inputs, dbProducts) {
     const hoursPerDay = Math.max(1, inputs.hoursPerDay);
     const requiredThermalPowerKW = dailyThermalEnergyKWH / hoursPerDay;
 
-    // --- 2. BASELINE COSTS (Old System) ---
+    // --- 2. BASELINE COSTS ---
     let rateKWH = 0;
     if (inputs.heatingType === 'propane') rateKWH = (inputs.fuelPrice / (inputs.tankSize || 11)) / CONFIG.KWH_PER_KG_LPG;
     else if (inputs.heatingType === 'diesel') rateKWH = inputs.fuelPrice / CONFIG.DIESEL_KWH_PER_LITER;
     else rateKWH = inputs.fuelPrice; 
     const annualCostOld = dailyThermalEnergyKWH * 365 * rateKWH;
 
-    // --- 3. SELECTION LOGIC ---
+    // --- 3. SELECTION & REFRIGERANT FILTERS ---
     const perfFactor = (1 + ((inputs.ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015));
     
-    let suitable = dbProducts.filter(p => {
+    let availableModels = dbProducts.filter(p => {
         const pName = (p.name || '').toLowerCase();
         const pCat = (p.category || '').toLowerCase();
         const pRefrig = (p.Refrigerant || '').toUpperCase();
         
-        // Filter by Refrigerant Type
-        if (inputs.heatPumpType !== 'all' && !pRefrig.includes(inputs.heatPumpType.toUpperCase())) return false;
-        // Filter by Cooling
-        if (inputs.includeCooling && !p.isReversible) return false;
+        // Filter: HP Type / Refrigerant (R290, CO2/R744, R32)
+        if (inputs.heatPumpType !== 'all') {
+            const searchTag = inputs.heatPumpType.toUpperCase();
+            if (searchTag === 'CO2' || searchTag === 'R744') {
+                if (!pRefrig.includes('CO2') && !pRefrig.includes('R744')) return false;
+            } else if (!pRefrig.includes(searchTag)) {
+                return false;
+            }
+        }
 
-        // Selection: Storage Units (AquaHERO) vs Monoblocks
+        // Filter: Cooling Requirement
+        if (inputs.includeCooling && !(p.isReversible === true || p.isReversible === "true")) return false;
+
+        // Selection logic: Storage vs Monoblock
         if (pCat.includes('aquahero') || pName.includes('aquahero')) {
             const tank = pName.includes('300l') ? 300 : 200;
             return inputs.targetTemp <= (p.max_temp_c || 75) && dailyLiters <= (tank * 3 * perfFactor);
@@ -63,54 +71,44 @@ export function calculateHeatPump(inputs, dbProducts) {
         
         const nominalKW = parseFloat(p.kW_DHW_Nominal) || 0;
         return inputs.targetTemp <= (p.max_temp_c || 65) && requiredThermalPowerKW <= (nominalKW * perfFactor);
-    }).sort((a, b) => (parseFloat(a.salesPriceUSD) || 99999) - (parseFloat(b.salesPriceUSD) || 99999));
+    });
 
-    if (suitable.length === 0) return { error: "No suitable models found." };
-    const system = suitable[0];
+    // Best Price Sorting: Sort by salesPriceUSD ascending
+    availableModels.sort((a, b) => (parseFloat(a.salesPriceUSD) || 99999) - (parseFloat(b.salesPriceUSD) || 99999));
 
-    // --- 4. FINANCIAL & HARDWARE OUTPUTS ---
+    if (availableModels.length === 0) return { error: "No matching models found. Please adjust filters or demand." };
+    const system = availableModels[0];
+
+    // --- 4. OUTPUTS ---
     const fx = CONFIG.FX[inputs.currency] || 1;
     const sysPriceLocal = (parseFloat(system.salesPriceUSD) || 0) * fx;
     const sysCop = parseFloat(system.COP_DHW) || 3.8;
     const karnotDailyKwh = dailyThermalEnergyKWH / sysCop;
-    const karnotPowerDrawKw = karnotDailyKwh / hoursPerDay;
+    const powerDraw = karnotDailyKwh / hoursPerDay;
     
-    let karnotAnnualCost = 0;
-    let panelCount = 0;
-    let solarCost = 0;
-    let inverterCost = 0;
+    let karnotAnnualCost = 0, solarCost = 0, inverterCost = 0, panelCount = 0;
     
     if (inputs.systemType === 'grid-only') {
         karnotAnnualCost = karnotDailyKwh * 365 * inputs.elecRate;
     } else {
-        const sunHours = inputs.sunHours || 5.5;
-        const gridHours = Math.max(0, hoursPerDay - sunHours);
-        karnotAnnualCost = (karnotPowerDrawKw * gridHours) * 365 * inputs.elecRate;
-        
-        // Solar Hardware Calculations
-        panelCount = Math.ceil(karnotPowerDrawKw / CONFIG.SOLAR_PANEL_KW_RATED);
+        const gridHours = Math.max(0, hoursPerDay - (inputs.sunHours || 5.5));
+        karnotAnnualCost = (powerDraw * gridHours) * 365 * inputs.elecRate;
+        panelCount = Math.ceil(powerDraw / CONFIG.SOLAR_PANEL_KW_RATED);
         solarCost = panelCount * CONFIG.SOLAR_PANEL_COST_USD * fx;
         inverterCost = (panelCount * CONFIG.SOLAR_PANEL_KW_RATED * 1000 * CONFIG.INVERTER_COST_PER_WATT_USD) * fx;
     }
 
+    let coolSavings = (inputs.includeCooling && system.isReversible) ? (karnotDailyKwh * CONFIG.COOLING_COP * 365 * inputs.elecRate) : 0;
     const totalCapex = sysPriceLocal + solarCost + inverterCost;
-    const totalSavings = (annualCostOld - karnotAnnualCost);
-    const payback = totalSavings > 0 ? (totalCapex / totalSavings).toFixed(1) : "N/A";
+    const totalSavings = (annualCostOld - karnotAnnualCost) + coolSavings;
 
     return {
-        system: { n: system.name, id: system.id, price: sysPriceLocal },
-        metrics: { 
-            dailyLiters, 
-            panelCount, 
-            powerKW: karnotPowerDrawKw.toFixed(2),
-            co2Saved: (dailyThermalEnergyKWH * 365 * 0.5).toFixed(0) 
-        },
+        system: { n: system.name, id: system.id, refrig: system.Refrigerant },
+        metrics: { dailyLiters, powerKW: powerDraw.toFixed(2), panelCount, co2Saved: (dailyThermalEnergyKWH * 365 * 0.5).toFixed(0) },
         financials: {
             symbol: CONFIG.SYMBOLS[inputs.currency],
-            annualCostOld, 
-            karnotAnnualCost, 
-            totalSavings,
-            paybackYears: payback,
+            annualCostOld, karnotAnnualCost, coolSavings, totalSavings,
+            paybackYears: totalSavings > 0 ? (totalCapex / totalSavings).toFixed(1) : "N/A",
             capex: { system: sysPriceLocal, solar: solarCost, inverter: inverterCost, total: totalCapex }
         }
     };
