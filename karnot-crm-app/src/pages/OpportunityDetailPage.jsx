@@ -1,12 +1,9 @@
-// src/pages/OpportunityDetailPage.jsx
-
 import React, { useState, useEffect } from 'react';
-// 'Link' import is removed
 import { 
     Mail, Phone, Hash, ArrowLeft, DollarSign, List, Calendar, 
-    Edit, Plus, FileText 
+    Edit, Plus, FileText, User, Layout, Activity
 } from 'lucide-react';
-import { db } from '../firebase'; // Corrected import path
+import { db } from '../firebase'; 
 import { 
     collection, addDoc, serverTimestamp, 
     query, onSnapshot, orderBy 
@@ -14,8 +11,7 @@ import {
 
 import { Card, Button, Section, Input, Textarea } from '../data/constants.jsx';
 
-// 'onEdit' is removed from the props list
-const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote, user }) => {
+const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, onOpenQuote, user }) => {
     
     const [newNoteText, setNewNoteText] = useState('');
     const [notes, setNotes] = useState([]); 
@@ -26,8 +22,9 @@ const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote, user }
         return 'text-red-600';
     };
 
+    // Real-time Notes Listener
     useEffect(() => {
-        if (!opportunity || !opportunity.id || !user || !user.uid) {
+        if (!opportunity?.id || !user?.uid) {
             setNotes([]); 
             return;
         }
@@ -49,7 +46,7 @@ const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote, user }
     
     const handleSaveNote = async () => {
         if (!newNoteText.trim()) return; 
-        if (!user || !user.uid) return alert("Error: User not logged in.");
+        if (!user?.uid) return alert("Error: User not logged in.");
 
         try {
             const notesRef = collection(db, "users", user.uid, "opportunities", opportunity.id, "notes");
@@ -69,126 +66,188 @@ const OpportunityDetailPage = ({ opportunity, quotes, onBack, onAddQuote, user }
 
 
     if (!opportunity) {
-        return <div className="text-center p-10">Opportunity data not loaded.</div>;
+        return (
+            <div className="flex flex-col items-center justify-center p-20">
+                <Layout size={48} className="text-gray-200 mb-4" />
+                <p className="text-gray-500 font-bold uppercase tracking-widest">Opportunity data not loaded.</p>
+                <Button onClick={onBack} variant="secondary" className="mt-4">Return to Funnel</Button>
+            </div>
+        );
     }
 
-    const relatedQuotes = quotes.filter(q => q.customer && q.customer.name === opportunity.customerName);
+    // Filter quotes related to this specific client/opportunity
+    const relatedQuotes = quotes.filter(q => 
+        (q.customer?.name === opportunity.customerName) || (q.leadId === opportunity.id)
+    );
 
 
     return (
-        <div className="space-y-6">
+        <div className="max-w-6xl mx-auto space-y-6 pb-10">
             
-            <div className="flex justify-between items-center mb-4">
-                <Button onClick={onBack} variant="secondary">
-                    <ArrowLeft size={16} className="mr-2"/> Back to Funnel
+            {/* Header Actions */}
+            <div className="flex justify-between items-center">
+                <Button onClick={onBack} variant="secondary" className="group">
+                    <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform"/> Back to Funnel
                 </Button>
                 
-                <Button onClick={() => alert('Edit feature coming soon!')} variant="primary">
-                    <Edit size={16} className="mr-2"/> Edit Opportunity
+                <Button onClick={() => alert('Edit feature coming soon!')} variant="primary" className="shadow-lg shadow-orange-100">
+                    <Edit size={16} className="mr-2"/> Edit Lead Details
                 </Button>
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                <Card className="lg:col-span-2">
-                    <h2 className="text-3xl font-bold text-gray-800 mb-2">{opportunity.customerName}</h2>
-                    <p className="text-xl font-semibold text-orange-600 mb-6">{opportunity.project}</p>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="p-3 bg-gray-50 rounded-lg">
-                            <p className="text-sm text-gray-500">Estimated Value</p>
-                            <p className="text-2xl font-bold text-green-700">${opportunity.estimatedValue.toLocaleString()}</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 rounded-lg">
-                            <p className="text-sm text-gray-500">Current Stage / Win Chance</p>
-                            <p className={`text-2xl font-bold ${formatProb(opportunity.probability)}`}>{opportunity.stage} ({opportunity.probability}%)</p>
-                        </div>
-                        <div className="p-3 bg-gray-50 rounded-lg col-span-2">
-                            <p className="text-sm text-gray-500">Created At</p>
-                            <p className="text-base font-medium">
-                                {opportunity.createdAt && opportunity.createdAt.toDate().toLocaleString()}
-                            </p>
-                        </div>
-                    </div>
-                </Card>
-
-                <Card>
-                    <h3 className="text-xl font-bold text-gray-800 flex items-center mb-4">Contact Info</h3>
-                    
-                    <div className="space-y-3">
-                        <div className="flex items-center gap-2">
-                            <Hash size={18} className="text-orange-500"/>
-                            <span className="font-medium">{opportunity.contactName}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Mail size={18} className="text-orange-500"/>
-                            <span className="text-sm text-gray-600">{opportunity.contactEmail}</span>
+                {/* Main Deal Info */}
+                <div className="lg:col-span-2 space-y-6">
+                    <Card className="border-t-4 border-t-orange-500">
+                        <div className="mb-6">
+                            <h2 className="text-4xl font-black text-gray-800 uppercase tracking-tighter leading-none">{opportunity.customerName}</h2>
+                            <div className="mt-2 inline-block px-3 py-1 bg-orange-50 text-orange-600 rounded-full text-xs font-black uppercase tracking-widest">
+                                {opportunity.project}
+                            </div>
                         </div>
                         
-                        <Section title="Activity/Notes">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Deal Value</p>
+                                <p className="text-3xl font-black text-gray-800">${(opportunity.estimatedValue || 0).toLocaleString()}</p>
+                            </div>
+                            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Stage</p>
+                                <p className={`text-xl font-black uppercase ${formatProb(opportunity.probability)}`}>
+                                    {opportunity.stage} <span className="text-sm opacity-60">({opportunity.probability}%)</span>
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 pt-6 border-t flex items-center gap-6 text-gray-400">
+                            <div className="flex items-center gap-2">
+                                <Calendar size={14}/>
+                                <span className="text-xs font-bold uppercase tracking-tighter">
+                                    Created: {opportunity.createdAt?.toDate().toLocaleDateString()}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Activity size={14}/>
+                                <span className="text-xs font-bold uppercase tracking-tighter">
+                                    ID: {opportunity.id?.slice(0,8)}
+                                </span>
+                            </div>
+                        </div>
+                    </Card>
+
+                    {/* Related Quotes Section */}
+                    <Card>
+                        <div className="flex justify-between items-center mb-6">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-blue-50 text-blue-600 rounded-lg"><FileText size={20}/></div>
+                                <h3 className="text-xl font-black text-gray-800 uppercase tracking-tight">Proposals ({relatedQuotes.length})</h3>
+                            </div>
+                            <Button onClick={onAddQuote} variant="primary" className="text-xs !py-2">
+                                <Plus size={16} className="mr-2"/> New Quote
+                            </Button>
+                        </div>
+                        
+                        {relatedQuotes.length > 0 ? (
+                            <div className="grid gap-3">
+                                {relatedQuotes.map(q => (
+                                    <div 
+                                        key={q.id} 
+                                        onClick={() => onOpenQuote(q)}
+                                        className="p-4 bg-white border border-gray-100 rounded-xl flex justify-between items-center hover:border-orange-400 hover:shadow-md transition-all cursor-pointer group"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 group-hover:text-orange-500 transition-colors">
+                                                <FileText size={18}/>
+                                            </div>
+                                            <div>
+                                                <p className="font-black text-gray-800 uppercase text-sm tracking-tight">{q.id}</p>
+                                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Click to view details</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-lg font-black text-orange-600">${(q.finalSalesPrice || 0).toLocaleString()}</p>
+                                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-green-100 text-green-700 uppercase tracking-widest">
+                                                {q.status || 'Draft'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-10 border-2 border-dashed rounded-2xl">
+                                <p className="text-sm font-bold text-gray-300 uppercase tracking-[0.2em]">No quotes created yet</p>
+                            </div>
+                        )}
+                    </Card>
+                </div>
+
+                {/* Sidebar: Contact & Notes */}
+                <div className="space-y-6">
+                    <Card className="bg-slate-900 text-white">
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-orange-400 mb-4 flex items-center gap-2">
+                            <User size={14}/> Decision Maker
+                        </h3>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-lg font-black leading-none">{opportunity.contactName || 'Unassigned'}</p>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Primary Contact</p>
+                            </div>
+                            
+                            <div className="pt-4 border-t border-slate-800 space-y-3">
+                                <a href={`mailto:${opportunity.contactEmail}`} className="flex items-center gap-3 text-sm hover:text-orange-400 transition-colors">
+                                    <Mail size={16} className="text-slate-500"/>
+                                    <span className="truncate">{opportunity.contactEmail || 'No Email'}</span>
+                                </a>
+                                <div className="flex items-center gap-3 text-sm">
+                                    <Phone size={16} className="text-slate-500"/>
+                                    <span>{opportunity.contactPhone || 'No Phone'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card className="max-h-[500px] flex flex-col">
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4">Activity Log</h3>
+                        
+                        <div className="space-y-3 mb-4">
                             <Textarea 
-                                rows="4" 
-                                placeholder="Add a new activity log or note..." 
+                                rows="3" 
+                                placeholder="Write a note..." 
+                                className="text-sm border-slate-200 rounded-xl focus:ring-orange-500"
                                 value={newNoteText}
                                 onChange={(e) => setNewNoteText(e.target.value)}
                             />
                             <Button 
-                                className="mt-2 w-full" 
+                                className="w-full text-xs font-black uppercase tracking-widest" 
                                 variant="secondary"
                                 onClick={handleSaveNote}
                             >
-                                Add Note
+                                Post Activity
                             </Button>
-                        </Section>
+                        </div>
 
-                        <div className="space-y-3 pt-3 max-h-60 overflow-y-auto">
+                        <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                             {notes.length > 0 ? (
                                 notes.map(note => (
-                                    <div key={note.id} className="text-sm p-3 bg-gray-50 rounded-lg">
-                                        <p className="text-gray-700">{note.text}</p>
-                                        <p className="text-xs text-gray-400 text-right mt-2">
-                                            {note.authorName} - {note.createdAt ? note.createdAt.toDate().toLocaleString() : 'Just now'}
-                                        </p> 
+                                    <div key={note.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                        <p className="text-sm text-gray-700 font-medium leading-relaxed">{note.text}</p>
+                                        <div className="mt-2 flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-gray-400">
+                                            <span className="text-orange-600">{note.authorName?.split(' ')[0]}</span>
+                                            <span>{note.createdAt ? note.createdAt.toDate().toLocaleDateString() : 'Just now'}</span>
+                                        </div> 
                                     </div>
                                 ))
                             ) : (
-                                <p className="text-sm text-gray-400 italic text-center">No notes yet.</p>
+                                <p className="text-[10px] text-gray-300 font-black uppercase tracking-widest text-center py-4">No recent history</p>
                             )}
                         </div>
-                    </div>
-                </Card>
+                    </Card>
+                </div>
             </div>
-
-            <Card>
-                <Section title="Related Quotes">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-xl font-bold text-gray-800">Quotes ({relatedQuotes.length})</h3>
-                        <Button onClick={onAddQuote} variant="primary">
-                            <Plus size={16} className="mr-2"/> Create New Quote
-                        </Button>
-                    </div>
-                    
-                    {relatedQuotes.length > 0 ? (
-                        <ul className="space-y-2">
-                            {relatedQuotes.map(q => (
-                                <li key={q.id} className="p-3 bg-gray-100 rounded-lg flex justify-between items-center">
-                                    <span className="font-medium text-gray-700 flex items-center gap-2"><FileText size={16}/> Quote: {q.id}</span>
-                                    <span className={`px-2 py-1 text-xs font-semibold text-white rounded-full ${q.status === 'APPROVED' ? 'bg-green-500' : 'bg-blue-500'}`}>
-                                        ${(q.finalSalesPrice || 0).toLocaleString()}
-                                    </span>
-                                </li>
-                            ))}
-                        </ul>
-                    ) : (
-                        <p className="text-gray-500 italic">No quotes created for this opportunity yet.</p>
-                    )}
-                </Section>
-            </Card>
-
         </div>
     );
 };
 
-// --- THIS IS THE CRITICAL LINE ---
-// Make sure this line is at the very end of your file.
 export default OpportunityDetailPage;
