@@ -81,7 +81,7 @@ const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
     );
 };
 
-const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = [], onOpenQuote }) => {
+const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = [], onOpenQuote, onDeleteInteraction }) => {
     const [activeTab, setActiveTab] = useState('ACTIVITY');
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
@@ -105,6 +105,15 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
         const newInteraction = { id: Date.now(), date: newLogDate, type: newLogType, outcome: newLogOutcome };
         setInteractions([newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date)));
         setNewLogOutcome('');
+    };
+
+    const handleRemoveInteraction = (id) => {
+        const updated = interactions.filter(i => i.id !== id);
+        setInteractions(updated);
+        // If we are editing an existing company, we call the parent delete function
+        if (companyToEdit?.id) {
+            onDeleteInteraction(companyToEdit.id, id);
+        }
     };
 
     return (
@@ -150,12 +159,18 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                     </div>
                                 </div>
                                 {interactions.map(log => (
-                                    <div key={log.id} className="bg-white p-3 rounded border shadow-sm">
+                                    <div key={log.id} className="bg-white p-3 rounded border shadow-sm group relative">
                                         <div className="flex justify-between items-center mb-1">
                                             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded text-white ${log.type === 'Visit' ? 'bg-green-500' : 'bg-blue-500'}`}>{log.type}</span>
                                             <span className="text-[10px] text-gray-400 font-bold">{log.date}</span>
                                         </div>
-                                        <p className="text-xs text-gray-700 font-medium">{log.outcome}</p>
+                                        <p className="text-xs text-gray-700 font-medium pr-6">{log.outcome}</p>
+                                        <button 
+                                            onClick={() => handleRemoveInteraction(log.id)}
+                                            className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <Trash2 size={12}/>
+                                        </button>
                                     </div>
                                 ))}
                             </div>
@@ -255,9 +270,27 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
         setShowModal(false); setEditingCompany(null);
     };
 
+    const handleDeleteInteraction = async (companyId, logId) => {
+        if (!user) return;
+        const company = companies.find(c => c.id === companyId);
+        if (!company) return;
+        const updatedLogs = (company.interactions || []).filter(i => i.id !== logId);
+        await setDoc(doc(db, "users", user.uid, "companies", companyId), { interactions: updatedLogs }, { merge: true });
+    };
+
     return (
         <div className="w-full">
-            {showModal && <CompanyModal onClose={() => setShowModal(false)} onSave={handleSave} companyToEdit={editingCompany} quotes={quotes} contacts={contacts} onOpenQuote={onOpenQuote} />}
+            {showModal && (
+                <CompanyModal 
+                    onClose={() => setShowModal(false)} 
+                    onSave={handleSave} 
+                    onDeleteInteraction={handleDeleteInteraction}
+                    companyToEdit={editingCompany} 
+                    quotes={quotes} 
+                    contacts={contacts} 
+                    onOpenQuote={onOpenQuote} 
+                />
+            )}
             {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={async (ids) => {
                 const batch = writeBatch(db);
                 ids.forEach(id => batch.delete(doc(db, "users", user.uid, "companies", id)));
@@ -267,7 +300,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
             <div className="flex flex-wrap gap-4 mb-8">
                 <StatBadge icon={Building} label="Total Accounts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
                 <StatBadge icon={Navigation} label="Near Me (20km)" count={stats.nearMe} total={stats.total} color="orange" active={activeFilter === 'NEARBY'} onClick={handleNearMe} />
-                <StatBadge icon={CheckSquare} label="Target Accounts" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveFilter('TARGETS')} />
+                <StatBadge icon={CheckSquare} label="Target Accounts" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveView('TARGETS')} />
                 <StatBadge icon={Clock} label="Active Interactions" count={stats.active} total={stats.total} color="blue" active={activeFilter === 'ACTIVE'} onClick={() => setActiveFilter('ACTIVE')} />
             </div>
 
