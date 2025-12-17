@@ -11,13 +11,14 @@ import {
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, PRICING_TIERS } from '../data/constants.jsx';
 
+// --- DISTANCE HELPER ---
 const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371; 
     const dLat = (lat2 - lat1) * (Math.PI/180);  
     const dLon = (lon2 - lon1) * (Math.PI/180); 
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
               Math.cos(lat1 * (Math.PI/180)) * Math.cos(lat2 * (Math.PI/180)) * Math.sin(dLon/2) * Math.sin(dLon/2); 
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    const c = 2 * Math.atan2(Math.sqrt(1-a), Math.sqrt(1-a)); 
     return R * c; 
 };
 
@@ -34,53 +35,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-const DuplicateResolverModal = ({ duplicates, onClose, onResolve }) => {
-    const [selectedToDelete, setSelectedToDelete] = useState(new Set());
-    const toggleSelection = (id) => {
-        const newSet = new Set(selectedToDelete);
-        if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
-        setSelectedToDelete(newSet);
-    };
-    const handleAutoSelect = () => {
-        const newSet = new Set();
-        duplicates.forEach(group => {
-            const sortedItems = [...group.items].sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
-            for (let i = 1; i < sortedItems.length; i++) newSet.add(sortedItems[i].id);
-        });
-        setSelectedToDelete(newSet);
-    };
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-            <Card className="w-full max-w-3xl max-h-[80vh] flex flex-col">
-                <div className="flex justify-between items-center mb-4 border-b pb-2">
-                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2"><AlertTriangle className="text-orange-500"/> Duplicate Groups</h3>
-                    <button onClick={onClose}><X /></button>
-                </div>
-                <div className="overflow-y-auto flex-1 space-y-4">
-                    {duplicates.map((group, i) => (
-                        <div key={i} className="border rounded-lg overflow-hidden">
-                            <div className="bg-orange-100 px-4 py-2 text-sm font-semibold text-orange-800 uppercase">{group.key}</div>
-                            {group.items.map(c => (
-                                <div key={c.id} className="flex items-center justify-between p-3 border-t">
-                                    <div className="flex items-center gap-3">
-                                        <input type="checkbox" checked={selectedToDelete.has(c.id)} onChange={() => toggleSelection(c.id)} />
-                                        <span className="text-sm font-medium">{c.companyName} ({c.address})</span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ))}
-                </div>
-                <div className="mt-4 pt-4 border-t flex justify-end gap-2">
-                    <Button onClick={onClose} variant="secondary">Cancel</Button>
-                    <Button onClick={handleAutoSelect} variant="secondary">Auto-Select Newer</Button>
-                    <Button onClick={() => onResolve(Array.from(selectedToDelete))} variant="danger">Delete Selected ({selectedToDelete.size})</Button>
-                </div>
-            </Card>
-        </div>
-    );
-};
-
+// --- MODAL ---
 const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = [], onOpenQuote, onDeleteInteraction }) => {
     const [activeTab, setActiveTab] = useState('ACTIVITY');
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
@@ -105,14 +60,6 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
         const newInteraction = { id: Date.now(), date: newLogDate, type: newLogType, outcome: newLogOutcome };
         setInteractions([newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date)));
         setNewLogOutcome('');
-    };
-
-    const handleRemoveInteraction = (id) => {
-        const updated = interactions.filter(i => i.id !== id);
-        setInteractions(updated);
-        if (companyToEdit?.id) {
-            onDeleteInteraction(companyToEdit.id, id);
-        }
     };
 
     return (
@@ -164,32 +111,18 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                             <span className="text-[10px] text-gray-400 font-bold">{log.date}</span>
                                         </div>
                                         <p className="text-xs text-gray-700 font-medium pr-6">{log.outcome}</p>
-                                        <button onClick={() => handleRemoveInteraction(log.id)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Trash2 size={12}/>
-                                        </button>
+                                        <button onClick={() => onDeleteInteraction(companyToEdit.id, log.id)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={12}/></button>
                                     </div>
                                 ))}
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div className="bg-white p-3 rounded border shadow-sm">
-                                    <h5 className="font-bold text-[10px] text-gray-400 uppercase mb-2 flex items-center gap-1"><Users size={12}/> Contacts</h5>
-                                    {companyContacts.map(c => (
-                                        <div key={c.id} className="flex justify-between items-center text-xs py-1 border-b last:border-0 font-bold">
-                                            <span>{c.firstName} {c.lastName}</span>
-                                            <a href={`tel:${c.phone}`} className="text-blue-600"><Phone size={12}/></a>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="bg-white p-3 rounded border shadow-sm">
-                                    <h5 className="font-bold text-[10px] text-gray-400 uppercase mb-2 flex items-center gap-1"><FileText size={12}/> Quotes</h5>
-                                    {relevantQuotes.map(q => (
-                                        <div key={q.id} onClick={() => onOpenQuote(q)} className="flex justify-between items-center text-xs py-2 border-b last:border-0 cursor-pointer hover:bg-gray-50">
-                                            <span className="font-bold">{q.id}</span>
-                                            <span className="text-orange-600 font-bold">${q.finalSalesPrice?.toLocaleString()}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                                {relevantQuotes.map(q => (
+                                    <div key={q.id} onClick={() => onOpenQuote(q)} className="flex justify-between items-center text-xs py-2 px-3 border rounded-lg bg-white hover:border-orange-500 cursor-pointer">
+                                        <span className="font-bold">{q.id}</span>
+                                        <span className="text-orange-600 font-bold">${q.finalSalesPrice?.toLocaleString()}</span>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
@@ -203,62 +136,34 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
     );
 };
 
+// --- MAIN PAGE ---
 const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpenQuote, onRestoreCompany }) => {
     const [showModal, setShowModal] = useState(false);
     const [editingCompany, setEditingCompany] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState('ALL');
-    const [isImporting, setIsImporting] = useState(false);
-    const [userLocation, setUserLocation] = useState(null);
-    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
-    const [duplicateGroups, setDuplicateGroups] = useState([]);
     const [showTrash, setShowTrash] = useState(false);
-    const fileInputRef = useRef(null);
 
-    // Filter data logic
-    const activeCompanies = useMemo(() => companies.filter(c => !c.isDeleted), [companies]);
-    const trashedCompanies = useMemo(() => companies.filter(c => c.isDeleted), [companies]);
+    const activeCompanies = useMemo(() => (companies || []).filter(c => !c.isDeleted), [companies]);
+    const trashedCompanies = useMemo(() => (companies || []).filter(c => c.isDeleted), [companies]);
 
     const stats = useMemo(() => ({
         total: activeCompanies.length,
         targets: activeCompanies.filter(c => c.isTarget).length,
         active: activeCompanies.filter(c => (c.interactions || []).length > 0).length,
-        nearMe: userLocation ? activeCompanies.filter(c => c.latitude && getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude) <= 20).length : 0
-    }), [activeCompanies, userLocation]);
+        nearMe: 0
+    }), [activeCompanies]);
 
     const filtered = useMemo(() => {
         const term = searchTerm.toLowerCase();
         let list = activeCompanies.filter(c => c.companyName.toLowerCase().includes(term) || (c.industry || '').toLowerCase().includes(term));
         if (activeFilter === 'TARGETS') list = list.filter(c => c.isTarget);
-        if (activeFilter === 'NEARBY' && userLocation) {
-            list = list.filter(c => c.latitude && getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude) <= 20);
-        }
         return list;
-    }, [activeCompanies, searchTerm, activeFilter, userLocation]);
+    }, [activeCompanies, searchTerm, activeFilter]);
 
-    const handleFileChange = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-        setIsImporting(true);
-        Papa.parse(file, {
-            header: true, skipEmptyLines: true,
-            complete: async (results) => {
-                const batch = writeBatch(db);
-                results.data.forEach(row => {
-                    if (!row.companyName) return;
-                    batch.set(doc(collection(db, "users", user.uid, "companies")), { ...row, createdAt: serverTimestamp(), interactions: [], tier: 'STANDARD' });
-                });
-                await batch.commit(); setIsImporting(false); alert("Imported!");
-            }
-        });
-    };
-
-    const handleNearMe = () => {
-        if (activeFilter === 'NEARBY') { setActiveFilter('ALL'); setUserLocation(null); return; }
-        navigator.geolocation.getCurrentPosition((pos) => {
-            setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-            setActiveFilter('NEARBY');
-        }, () => alert("GPS error."));
+    const handleSoftDelete = async (companyId) => {
+        if (!user || !window.confirm("Move to Trash?")) return;
+        await setDoc(doc(db, "users", user.uid, "companies", companyId), { isDeleted: true, deletedAt: serverTimestamp() }, { merge: true });
     };
 
     const handleSave = async (data) => {
@@ -274,115 +179,62 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
     const handleDeleteInteraction = async (companyId, logId) => {
         if (!user) return;
         const company = companies.find(c => c.id === companyId);
-        if (!company) return;
-        const updatedLogs = (company.interactions || []).filter(i => i.id !== logId);
-        await setDoc(doc(db, "users", user.uid, "companies", companyId), { interactions: updatedLogs }, { merge: true });
-    };
-
-    const handleSoftDelete = async (companyId) => {
-        if (!user) return;
-        if (window.confirm("Move to Trash?")) {
-            await setDoc(doc(db, "users", user.uid, "companies", companyId), { isDeleted: true, deletedAt: serverTimestamp() }, { merge: true });
-        }
+        const filteredLogs = (company.interactions || []).filter(i => i.id !== logId);
+        await setDoc(doc(db, "users", user.uid, "companies", companyId), { interactions: filteredLogs }, { merge: true });
     };
 
     return (
-        <div className="w-full space-y-8">
-            {showModal && (
-                <CompanyModal 
-                    onClose={() => setShowModal(false)} 
-                    onSave={handleSave} 
-                    onDeleteInteraction={handleDeleteInteraction}
-                    companyToEdit={editingCompany} 
-                    quotes={quotes} 
-                    contacts={contacts} 
-                    onOpenQuote={onOpenQuote} 
-                />
-            )}
-            {showDuplicateModal && <DuplicateResolverModal duplicates={duplicateGroups} onClose={() => setShowDuplicateModal(false)} onResolve={async (ids) => {
-                const batch = writeBatch(db);
-                ids.forEach(id => batch.delete(doc(db, "users", user.uid, "companies", id)));
-                await batch.commit(); setShowDuplicateModal(false);
-            }} />}
+        <div className="w-full space-y-6">
+            {showModal && <CompanyModal onClose={() => setShowModal(false)} onSave={handleSave} onDeleteInteraction={handleDeleteInteraction} companyToEdit={editingCompany} quotes={quotes} contacts={contacts} onOpenQuote={onOpenQuote} />}
 
             <div className="flex flex-wrap gap-4">
-                <StatBadge icon={Building} label="Total Accounts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
-                <StatBadge icon={Navigation} label="Near Me (20km)" count={stats.nearMe} total={stats.total} color="orange" active={activeFilter === 'NEARBY'} onClick={handleNearMe} />
-                <StatBadge icon={CheckSquare} label="Target Accounts" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveFilter('TARGETS')} />
-                <StatBadge icon={Clock} label="Active Interactions" count={stats.active} total={stats.total} color="blue" active={activeFilter === 'ACTIVE'} onClick={() => setActiveFilter('ACTIVE')} />
+                <StatBadge icon={Building} label="Active Accounts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
+                <StatBadge icon={CheckSquare} label="Targets" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveFilter('TARGETS')} />
             </div>
 
             <div className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Companies ({filtered.length})</h1>
                 <div className="flex gap-2">
-                    <Button onClick={() => {
-                        const groups = {};
-                        activeCompanies.forEach(c => { const key = c.companyName.toLowerCase().trim(); if(!groups[key]) groups[key] = []; groups[key].push(c); });
-                        const conflicts = Object.keys(groups).filter(k => groups[k].length > 1).map(k => ({ key: k, items: groups[k] }));
-                        if(conflicts.length > 0) { setDuplicateGroups(conflicts); setShowDuplicateModal(true); } else alert("No duplicates!");
-                    }} variant="secondary"><CheckSquare className="mr-1" size={16}/> Dedupe</Button>
-                    <Button onClick={() => fileInputRef.current.click()} variant="secondary" disabled={isImporting}><Upload className="mr-1" size={16}/> Import CSV</Button>
+                    <Button onClick={() => setShowTrash(!showTrash)} variant="secondary" className="text-xs uppercase font-black">{showTrash ? 'Hide Trash' : 'View Trash'}</Button>
                     <Button onClick={() => { setEditingCompany(null); setShowModal(true); }} variant="primary"><Plus className="mr-1" size={16}/> New Company</Button>
                 </div>
             </div>
 
-            <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" className="hidden" />
-
             <div className="relative">
-                <input type="text" placeholder="Search accounts..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-orange-500 outline-none" />
-                <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Input placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10" />
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filtered.map(c => (
-                    <Card key={c.id} className="p-5 rounded-lg border border-gray-200 hover:border-orange-400 transition-all group shadow-sm bg-white relative">
-                        <div className="flex justify-between items-start mb-2">
+                    <Card key={c.id} className="p-5 border-gray-200 hover:border-orange-400 transition-all bg-white relative">
+                        <div className="flex justify-between items-start mb-4">
                             <div>
                                 <h4 className="font-bold text-lg text-gray-800 leading-tight">{c.companyName}</h4>
-                                <p className="text-xs font-bold text-orange-600 uppercase tracking-widest">{c.industry || 'Account'}</p>
+                                <p className="text-xs font-bold text-orange-600 uppercase">{c.industry || 'Account'}</p>
                             </div>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-                                <button onClick={() => { setEditingCompany(c); setShowModal(true); }} className="p-1 text-gray-400 hover:text-indigo-600"><Edit size={16}/></button>
-                                <button onClick={() => handleSoftDelete(c.id)} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={16}/></button>
+                            <div className="flex gap-2">
+                                <button onClick={() => { setEditingCompany(c); setShowModal(true); }} className="p-2 bg-slate-50 text-gray-400 hover:text-indigo-600 rounded-lg border border-slate-100"><Edit size={16}/></button>
+                                <button onClick={() => handleSoftDelete(c.id)} className="p-2 bg-slate-50 text-gray-400 hover:text-red-600 rounded-lg border border-slate-100"><Trash2 size={16}/></button>
                             </div>
                         </div>
-                        <p className="text-xs text-gray-500 mb-4 truncate font-medium"><MapPin size={12} className="inline mr-1 text-gray-300"/>{c.address || 'No address'}</p>
-                        
-                        {(c.interactions || []).length > 0 ? (
-                            <div className="bg-slate-50 p-2 rounded border border-slate-100 text-xs flex justify-between items-center">
-                                <span><Clock size={10} className="inline mr-1 text-blue-500"/> {c.interactions[0].date}</span>
-                                <span className="font-bold text-gray-600 truncate w-32 text-right">{c.interactions[0].outcome}</span>
-                            </div>
-                        ) : (
-                            <div className="text-[10px] font-bold text-gray-300 uppercase text-center border border-dashed rounded p-2 tracking-widest">No History</div>
-                        )}
+                        <p className="text-xs text-gray-500 mb-4 truncate"><MapPin size={12} className="inline mr-1"/>{c.address || 'No address'}</p>
                     </Card>
                 ))}
             </div>
 
-            {/* --- TRASH BIN SECTION --- */}
-            {trashedCompanies.length > 0 && (
-                <div className="mt-20 pt-10 border-t border-dashed border-gray-300">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-gray-400 flex items-center gap-2 uppercase tracking-widest"><Trash2 size={20}/> Recently Trashed ({trashedCompanies.length})</h2>
-                        <Button onClick={() => setShowTrash(!showTrash)} variant="secondary">{showTrash ? 'Hide Trash' : 'Show Trash'}</Button>
+            {/* TRASH SECTION */}
+            {showTrash && trashedCompanies.length > 0 && (
+                <div className="mt-12 pt-12 border-t border-dashed border-gray-300">
+                    <h2 className="text-xl font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2"><Trash2 size={20}/> Trash Bin</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {trashedCompanies.map(c => (
+                            <div key={c.id} className="p-4 bg-gray-50 border rounded-xl flex justify-between items-center opacity-60">
+                                <span className="font-bold text-gray-700">{c.companyName}</span>
+                                <Button onClick={() => onRestoreCompany(c.id)} variant="primary" className="bg-green-600 text-xs"><RotateCcw size={14} className="mr-1"/> Restore</Button>
+                            </div>
+                        ))}
                     </div>
-                    
-                    {showTrash && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {trashedCompanies.map(c => (
-                                <div key={c.id} className="p-4 bg-gray-50 border border-gray-200 rounded-xl flex justify-between items-center grayscale opacity-60 hover:grayscale-0 hover:opacity-100 transition-all">
-                                    <div>
-                                        <p className="font-bold text-gray-700">{c.companyName}</p>
-                                        <p className="text-[10px] text-gray-400 uppercase font-black">Deleted ID: {c.id.slice(0,8)}</p>
-                                    </div>
-                                    <Button onClick={() => onRestoreCompany(c.id)} variant="primary" className="!py-1.5 !px-3 text-xs flex items-center gap-1 bg-green-600">
-                                        <RotateCcw size={14}/> Undo / Restore
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
             )}
         </div>
