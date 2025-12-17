@@ -24,7 +24,6 @@ export const CONFIG = {
 export function calculateHeatPump(inputs, dbProducts) {
     if (!dbProducts || dbProducts.length === 0) return { error: "Inventory empty." };
 
-    // 1. Demand Calculation (Residential, Restaurant, Resort, Commercial)
     let dailyLiters = 0;
     const type = inputs.userType || 'home';
     
