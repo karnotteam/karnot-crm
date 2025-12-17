@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, db } from './firebase'; 
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { collection, onSnapshot, query, doc, setDoc, deleteDoc, serverTimestamp, addDoc } from "firebase/firestore"; 
+import { collection, onSnapshot, query, doc, setDoc, deleteDoc, serverTimestamp, addDoc, updateDoc } from "firebase/firestore"; 
 
 // --- Import Pages & Components ---
 import LoginPage from './pages/LoginPage.jsx';
@@ -36,8 +36,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><HardHat className="mr-1" size={14} /> Funnel</Button>
                 <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><BarChart2 className="mr-1" size={14} /> Dashboard</Button>
                 <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Building className="mr-1" size={14} /> Companies</Button>
-                
-                {/* RESTORED CONTACTS BUTTON */}
                 <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Users className="mr-1" size={14} /> Contacts</Button>
                 
                 <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
@@ -143,6 +141,17 @@ export default function App() {
         } catch (error) { console.error(error); alert("Delete failed"); }
     };
 
+    // RESTORE COMPANY HANDLER (UNDO)
+    const handleRestoreCompany = async (companyId) => {
+        if (!user) return;
+        try {
+            const companyRef = doc(db, "users", user.uid, "companies", companyId);
+            await updateDoc(companyRef, { isDeleted: false });
+        } catch (error) {
+            console.error("Restore failed:", error);
+        }
+    };
+
     const handleUpdateQuoteStatus = async (quoteId, newStatus) => {
         if (!user) return;
         await setDoc(doc(db, "users", user.uid, "quotes", quoteId), { status: newStatus, lastModified: serverTimestamp() }, { merge: true });
@@ -181,11 +190,17 @@ export default function App() {
                         onAddQuote={() => { setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); setActiveView('calculator'); }}
                     />
                 )}
-                {activeView === 'companies' && <CompaniesPage companies={companies} contacts={contacts} quotes={quotes} user={user} onOpenQuote={handleEditQuote} />}
-                
-                {/* RESTORED CONTACTS VIEW BLOCK */}
+                {activeView === 'companies' && (
+                    <CompaniesPage 
+                        companies={companies} 
+                        contacts={contacts} 
+                        quotes={quotes} 
+                        user={user} 
+                        onOpenQuote={handleEditQuote}
+                        onRestoreCompany={handleRestoreCompany} 
+                    />
+                )}
                 {activeView === 'contacts' && <ContactsPage contacts={contacts} companies={companies} user={user} />}
-                
                 {activeView === 'calculator' && <QuoteCalculator onSaveQuote={handleSaveQuote} nextQuoteNumber={nextQuoteNumber} key={quoteToEdit ? quoteToEdit.id : 'new'} initialData={quoteToEdit} companies={companies} contacts={contacts} />}
                 {activeView === 'list' && <QuotesListPage quotes={quotes} onDeleteQuote={handleDeleteQuote} onEditQuote={handleEditQuote} onUpdateQuoteStatus={handleUpdateQuoteStatus} />}
                 {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
