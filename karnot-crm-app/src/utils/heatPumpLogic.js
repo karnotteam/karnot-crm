@@ -19,25 +19,25 @@ export const calculateHeatPump = (inputs, products = []) => {
             heatPumpType, includeCooling, currency 
         } = inputs;
 
-        // 1. Calculate Daily Liters (Restored all User Types)
+        // 1. Calculate Daily Liters (Supports all HTML tool types)
         let dailyLiters = 0;
         if (userType === 'home') dailyLiters = occupants * 50;
         else if (userType === 'restaurant') dailyLiters = mealsPerDay * 7;
         else if (userType === 'resort') dailyLiters = (roomsOccupied * 50) + (mealsPerDay * 7);
         else dailyLiters = dailyLitersInput;
 
-        // 2. Thermodynamic Calculations
+        // 2. Thermodynamic Math (Delta T)
         const deltaT = Math.max(1, targetTemp - inletTemp);
-        const specificHeatWater = 4.187; 
+        const specificHeatWater = 4.187; // kJ/kg°C
         const dailyThermalEnergyKWH = (dailyLiters * deltaT * 1.163) / 1000;
 
-        // 3. Current Heating Costs
+        // 3. Baseline Costs (Electric, LPG, or Diesel)
         let currentRateKWH = elecRate;
         if (heatingType === 'propane') currentRateKWH = (fuelPrice / (tankSize || 11)) / 13.8;
         else if (heatingType === 'diesel') currentRateKWH = fuelPrice / 10.7;
         const annualCostOld = dailyThermalEnergyKWH * 365 * currentRateKWH;
 
-        // 4. Filtering Logic (Flow vs. Storage)
+        // 4. Filtering with Storage Detection (AquaHERO vs Monoblock)
         const peakLitersPerHour = dailyLiters / hoursPerDay;
         const perfFactor = (1 + ((ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015));
 
@@ -49,24 +49,24 @@ export const calculateHeatPump = (inputs, products = []) => {
             const matchesType = heatPumpType === 'all' || pRefrig.includes(heatPumpType.toLowerCase());
             const matchesCooling = !includeCooling || p.isReversible === true;
 
-            // AquaHERO Logic: Detect 200L/300L from Name
+            // AquaHERO Logic: Uses Tank Storage
             if (pCat.includes('aquahero') || pName.includes('aquahero')) {
                 let storageL = parseFloat(p.integral_storage_L) || (pName.includes('300l') ? 300 : 200);
-                const dailyCap = storageL * 3 * perfFactor; // Unit can cycle tank 3x daily
+                const dailyCap = storageL * 3 * perfFactor; // Cycles tank 3x per day
                 return matchesType && targetTemp <= (p.max_temp_c || 70) && dailyLiters <= dailyCap;
             }
 
-            // Monoblock Logic: Standard L/hr check
+            // Monoblock Logic: Uses Flow Rate
             const nominalKW = parseFloat(p.kW_DHW_Nominal) || 0;
             const calculatedLhr = (nominalKW * 3600) / (specificHeatWater * deltaT);
-            return matchesType && matchesCooling && targetTemp <= (p.max_temp_c || 60) && peakLitersPerHour <= (calculatedLhr * perfFactor) && nominalKW > 0;
+            return matchesType && matchesCooling && targetTemp <= (p.max_temp_c || 60) && peakLitersPerHour <= (calculatedLhr * perfFactor);
         });
 
-        if (availableModels.length === 0) return { error: "No suitable models found. Try adjusting temperatures or hours." };
+        if (availableModels.length === 0) return { error: "No suitable models found." };
 
         const system = availableModels.sort((a, b) => (parseFloat(a.salesPriceUSD) || 999999) - (parseFloat(b.salesPriceUSD) || 999999))[0];
 
-        // 5. Final Results Calculation
+        // 5. Final ROI Results
         const sysCop = parseFloat(system.COP_DHW) || 3.8;
         const sysPrice = parseFloat(system.salesPriceUSD) || 0;
         const karnotDailyElecKwh = dailyThermalEnergyKWH / sysCop;
