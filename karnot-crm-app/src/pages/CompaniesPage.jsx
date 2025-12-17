@@ -103,14 +103,14 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
     const handleAddInteraction = () => {
         if (!newLogOutcome) return;
         const newInteraction = { id: Date.now(), date: newLogDate, type: newLogType, outcome: newLogOutcome };
-        setInteractions([newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date)));
+        const sorted = [newInteraction, ...interactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+        setInteractions(sorted);
         setNewLogOutcome('');
     };
 
     const handleRemoveInteraction = (id) => {
         const updated = interactions.filter(i => i.id !== id);
         setInteractions(updated);
-        // If we are editing an existing company, we call the parent delete function
         if (companyToEdit?.id) {
             onDeleteInteraction(companyToEdit.id, id);
         }
@@ -165,10 +165,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                             <span className="text-[10px] text-gray-400 font-bold">{log.date}</span>
                                         </div>
                                         <p className="text-xs text-gray-700 font-medium pr-6">{log.outcome}</p>
-                                        <button 
-                                            onClick={() => handleRemoveInteraction(log.id)}
-                                            className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        >
+                                        <button onClick={() => handleRemoveInteraction(log.id)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <Trash2 size={12}/>
                                         </button>
                                     </div>
@@ -218,16 +215,19 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
     const [duplicateGroups, setDuplicateGroups] = useState([]);
     const fileInputRef = useRef(null);
 
-    const stats = useMemo(() => ({
-        total: companies.length,
-        targets: companies.filter(c => c.isTarget).length,
-        active: companies.filter(c => (c.interactions || []).length > 0).length,
-        nearMe: userLocation ? companies.filter(c => c.latitude && getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude) <= 20).length : 0
-    }), [companies, userLocation]);
+    const stats = useMemo(() => {
+        const active = (companies || []).filter(c => !c.isDeleted);
+        return {
+            total: active.length,
+            targets: active.filter(c => c.isTarget).length,
+            active: active.filter(c => (c.interactions || []).length > 0).length,
+            nearMe: userLocation ? active.filter(c => c.latitude && getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude) <= 20).length : 0
+        };
+    }, [companies, userLocation]);
 
     const filtered = useMemo(() => {
         const term = searchTerm.toLowerCase();
-        let list = (companies || []).filter(c => c.companyName.toLowerCase().includes(term) || (c.industry || '').toLowerCase().includes(term));
+        let list = (companies || []).filter(c => !c.isDeleted && (c.companyName.toLowerCase().includes(term) || (c.industry || '').toLowerCase().includes(term)));
         if (activeFilter === 'TARGETS') list = list.filter(c => c.isTarget);
         if (activeFilter === 'NEARBY' && userLocation) {
             list = list.filter(c => c.latitude && getDistanceFromLatLonInKm(userLocation.lat, userLocation.lng, c.latitude, c.longitude) <= 20);
@@ -278,6 +278,13 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
         await setDoc(doc(db, "users", user.uid, "companies", companyId), { interactions: updatedLogs }, { merge: true });
     };
 
+    const handleSoftDelete = async (companyId) => {
+        if (!user) return;
+        if (window.confirm("Move to Trash? This will remove it from targets and search.")) {
+            await setDoc(doc(db, "users", user.uid, "companies", companyId), { isDeleted: true, deletedAt: serverTimestamp() }, { merge: true });
+        }
+    };
+
     return (
         <div className="w-full">
             {showModal && (
@@ -300,7 +307,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
             <div className="flex flex-wrap gap-4 mb-8">
                 <StatBadge icon={Building} label="Total Accounts" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
                 <StatBadge icon={Navigation} label="Near Me (20km)" count={stats.nearMe} total={stats.total} color="orange" active={activeFilter === 'NEARBY'} onClick={handleNearMe} />
-                <StatBadge icon={CheckSquare} label="Target Accounts" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveView('TARGETS')} />
+                <StatBadge icon={CheckSquare} label="Target Accounts" count={stats.targets} total={stats.total} color="purple" active={activeFilter === 'TARGETS'} onClick={() => setActiveFilter('TARGETS')} />
                 <StatBadge icon={Clock} label="Active Interactions" count={stats.active} total={stats.total} color="blue" active={activeFilter === 'ACTIVE'} onClick={() => setActiveFilter('ACTIVE')} />
             </div>
 
@@ -335,7 +342,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                             </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100">
                                 <button onClick={() => { setEditingCompany(c); setShowModal(true); }} className="p-1 text-gray-400 hover:text-indigo-600"><Edit size={16}/></button>
-                                <button onClick={async () => { if(window.confirm("Delete?")) await deleteDoc(doc(db, "users", user.uid, "companies", c.id)); }} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={16}/></button>
+                                <button onClick={() => handleSoftDelete(c.id)} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={16}/></button>
                             </div>
                         </div>
                         <p className="text-xs text-gray-500 mb-4 truncate font-medium"><MapPin size={12} className="inline mr-1 text-gray-300"/>{c.address || 'No address'}</p>
