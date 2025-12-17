@@ -98,9 +98,9 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies = [
 };
 
 // ----------------------------------------------------------------------
-// 2. INTERACTION MODAL (Adjustable Prob & Smart Quote Linking)
+// 2. INTERACTION MODAL (Fixed Summary & Quote Click)
 // ----------------------------------------------------------------------
-const OpportunityDetailModal = ({ opp, onClose, onSaveInteraction, onUpdateProb, quotes = [], contacts = [], companies = [], onOpenQuote }) => {
+const OpportunityDetailModal = ({ opp, onClose, onSaveInteraction, onUpdateProb, onUpdateNotes, quotes = [], contacts = [], companies = [], onOpenQuote }) => {
     const [activeTab, setActiveTab] = useState('ACTIVITY');
     const [logType, setLogType] = useState('Call');
     const [logOutcome, setLogOutcome] = useState('');
@@ -109,12 +109,14 @@ const OpportunityDetailModal = ({ opp, onClose, onSaveInteraction, onUpdateProb,
     const company = (companies || []).find(c => c.id === opp.companyId || c.companyName === opp.customerName);
     const interactions = company?.interactions || [];
 
-    // SMART QUOTE LINKING: Matches by name, ID, or lead reference
-    const targetName = (opp?.customerName || '').toLowerCase().trim();
-    const relevantQuotes = (quotes || []).filter(q => {
-        const quoteCustName = (q.customer?.name || '').toLowerCase().trim();
-        return quoteCustName === targetName || q.leadId === opp.id || q.companyId === opp.companyId;
-    });
+    // FLEXIBLE QUOTE MATCHING
+    const relevantQuotes = useMemo(() => {
+        const targetName = (opp?.customerName || "").toLowerCase().trim();
+        return (quotes || []).filter(q => {
+            const quoteName = (q.customer?.name || "").toLowerCase().trim();
+            return quoteName.includes(targetName) || targetName.includes(quoteName) || q.leadId === opp.id;
+        });
+    }, [quotes, opp]);
 
     const handleAddLog = () => {
         if (!logOutcome || !company) return alert("Log data missing.");
@@ -150,7 +152,14 @@ const OpportunityDetailModal = ({ opp, onClose, onSaveInteraction, onUpdateProb,
                             <Target size={14} className="absolute top-3 right-3 text-gray-200" />
                         </div>
                     </div>
-                    <Textarea label="Lead Summary" rows="6" value={opp.notes || ''} readOnly className="bg-gray-50 text-sm font-medium" />
+                    {/* FIXED: Lead Summary is no longer readOnly */}
+                    <Textarea 
+                        label="Lead Summary" 
+                        rows="6" 
+                        value={opp.notes || ''} 
+                        onChange={(e) => onUpdateNotes(opp.id, e.target.value)}
+                        className="bg-white text-sm font-medium border-slate-200" 
+                    />
                 </div>
 
                 <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden font-sans">
@@ -189,9 +198,16 @@ const OpportunityDetailModal = ({ opp, onClose, onSaveInteraction, onUpdateProb,
                                 <div className="bg-white p-4 rounded-xl border shadow-sm">
                                     <h5 className="font-black text-[10px] text-gray-400 uppercase tracking-[0.2em] mb-4">Associated Quotes</h5>
                                     {relevantQuotes.length === 0 ? <p className="text-xs font-bold text-gray-300 uppercase py-4 text-center">No quotes linked</p> : relevantQuotes.map(q => (
-                                        <div key={q.id} onClick={() => onOpenQuote(q)} className="flex justify-between items-center text-xs py-3 border-b last:border-0 font-black cursor-pointer hover:bg-slate-50 transition-colors">
-                                            <span className="text-gray-600 uppercase tracking-widest">{q.id}</span>
-                                            <span className="text-orange-600">${Number(q.finalSalesPrice || 0).toLocaleString()}</span>
+                                        <div 
+                                            key={q.id} 
+                                            onClick={() => onOpenQuote(q)} 
+                                            className="flex justify-between items-center p-4 mb-2 bg-white border border-slate-100 rounded-xl cursor-pointer hover:border-orange-500 hover:shadow-md transition-all group"
+                                        >
+                                            <div className="flex flex-col">
+                                                <span className="text-gray-600 uppercase tracking-widest font-black group-hover:text-orange-600">{q.id}</span>
+                                                <span className="text-[9px] text-gray-400 font-bold uppercase">Click to open</span>
+                                            </div>
+                                            <span className="text-orange-600 font-black">${Number(q.finalSalesPrice || 0).toLocaleString()}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -229,6 +245,10 @@ const FunnelPage = ({ opportunities = [], user, companies = [], contacts = [], q
         await setDoc(doc(db, "users", user.uid, "opportunities", oppId), { probability: Number(val) }, { merge: true });
     };
 
+    const handleUpdateNotes = async (oppId, val) => {
+        await setDoc(doc(db, "users", user.uid, "opportunities", oppId), { notes: val }, { merge: true });
+    };
+
     const handleCommit = async (data) => {
         if (!user) return;
         if (editingOpp) await setDoc(doc(db, "users", user.uid, "opportunities", editingOpp.id), { ...data, lastModified: serverTimestamp() }, { merge: true });
@@ -239,7 +259,19 @@ const FunnelPage = ({ opportunities = [], user, companies = [], contacts = [], q
     return (
         <div className="w-full">
             {showCreateModal && <NewOpportunityModal companies={companies} contacts={contacts} opportunityToEdit={editingOpp} onClose={() => setShowCreateModal(false)} onSave={handleCommit} />}
-            {showDetailModal && selectedOpp && <OpportunityDetailModal opp={selectedOpp} companies={companies} quotes={quotes} contacts={contacts} onOpenQuote={onOpenQuote} onSaveInteraction={handleSaveInteraction} onUpdateProb={handleUpdateProb} onClose={() => setShowDetailModal(false)} />}
+            {showDetailModal && selectedOpp && (
+                <OpportunityDetailModal 
+                    opp={selectedOpp} 
+                    companies={companies} 
+                    quotes={quotes} 
+                    contacts={contacts} 
+                    onOpenQuote={onOpenQuote} 
+                    onSaveInteraction={handleSaveInteraction} 
+                    onUpdateProb={handleUpdateProb} 
+                    onUpdateNotes={handleUpdateNotes}
+                    onClose={() => setShowDetailModal(false)} 
+                />
+            )}
 
             <div className="flex justify-between items-center mb-10"><h1 className="text-4xl font-black text-gray-800 uppercase tracking-tighter">Sales Pipeline</h1><Button onClick={() => { setEditingOpp(null); setShowCreateModal(true); }} variant="primary" className="font-black uppercase text-xs tracking-[0.2em] shadow-lg shadow-orange-100"><Plus className="mr-1" size={16} /> New Lead</Button></div>
 
@@ -250,7 +282,7 @@ const FunnelPage = ({ opportunities = [], user, companies = [], contacts = [], q
                     let columnBg = stage === 'Closed-Won' ? "bg-green-50" : stage === 'Closed-Lost' ? "bg-red-50" : "bg-gray-200/60";
 
                     return (
-                        <div key={stage} className={`flex-shrink-0 w-85 ${columnBg} p-4 rounded-3xl shadow-sm border border-gray-200/50`}>
+                        <div key={stage} className={`flex-shrink-0 w-80 ${columnBg} p-4 rounded-3xl shadow-sm border border-gray-200/50`}>
                             <div className="mb-6 flex justify-between items-end px-1 border-b-2 border-slate-300 pb-2">
                                 <div>
                                     <h3 className="font-black text-slate-500 text-[10px] uppercase tracking-[0.3em] leading-none mb-1">{stage}</h3>
@@ -260,46 +292,25 @@ const FunnelPage = ({ opportunities = [], user, companies = [], contacts = [], q
                             </div>
                             
                             <div className="space-y-4">
-                                {stageOpps.map(opp => {
-                                    const currIdx = STAGE_ORDER.indexOf(opp.stage);
-                                    const nextS = STAGE_ORDER[currIdx + 1];
-                                    const prevS = STAGE_ORDER[currIdx - 1];
-
-                                    return (
-                                        <Card key={opp.id} className="p-5 rounded-2xl shadow-sm border border-gray-100 bg-white hover:border-orange-400 transition-all group relative">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h4 className="font-black text-gray-800 leading-tight uppercase text-sm tracking-tight">{opp.customerName}</h4>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100">
-                                                    <button onClick={() => { setEditingOpp(opp); setShowCreateModal(true); }} className="p-1 text-gray-400 hover:text-indigo-600"><Edit size={14}/></button>
-                                                    <button onClick={async () => { if(window.confirm("Delete lead?")) await deleteDoc(doc(db, "users", user.uid, "opportunities", opp.id)); }} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={14}/></button>
-                                                </div>
+                                {stageOpps.map(opp => (
+                                    <Card key={opp.id} className="p-5 rounded-2xl shadow-sm border border-gray-100 bg-white hover:border-orange-400 transition-all group relative">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <h4 className="font-black text-gray-800 leading-tight uppercase text-sm tracking-tight">{opp.customerName}</h4>
+                                            <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                                                <button onClick={() => { setEditingOpp(opp); setShowCreateModal(true); }} className="p-1 text-gray-400 hover:text-indigo-600"><Edit size={14}/></button>
+                                                <button onClick={async () => { if(window.confirm("Delete lead?")) await deleteDoc(doc(db, "users", user.uid, "opportunities", opp.id)); }} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={14}/></button>
                                             </div>
-                                            <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-4 border-l-2 border-orange-200 pl-2">{opp.project}</p>
-                                            
-                                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl mb-4 border border-gray-100">
-                                                <span className="text-sm font-black text-gray-700 font-mono">${(Number(opp.estimatedValue) || 0).toLocaleString()}</span>
-                                                <span className="text-[10px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">{opp.probability}%</span>
-                                            </div>
-
-                                            <Button onClick={() => { setSelectedOpp(opp); setShowDetailModal(true); }} variant="secondary" className="w-full !py-2 text-[10px] font-black uppercase tracking-widest border-slate-200">
-                                                <MessageSquare size={14} className="mr-2 text-orange-500"/> View Interactions
-                                            </Button>
-
-                                            <div className="mt-3 flex gap-2">
-                                                {prevS && (
-                                                    <button onClick={() => handleUpdateStage(opp.id, prevS)} className="flex-1 py-1.5 text-[9px] font-black text-gray-400 hover:text-gray-600 bg-gray-50 border rounded-lg uppercase flex items-center justify-center">
-                                                        <ChevronLeft size={10} className="mr-1"/> Back
-                                                    </button>
-                                                )}
-                                                {nextS && !['Closed-Won', 'Closed-Lost'].includes(opp.stage) && (
-                                                    <button onClick={() => handleUpdateStage(opp.id, nextS)} className="flex-[2] py-1.5 text-[9px] font-black text-blue-600 hover:text-blue-800 bg-blue-50 border border-blue-100 rounded-lg uppercase flex items-center justify-center">
-                                                        Forward <ChevronRight size={10} className="ml-1"/>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </Card>
-                                    );
-                                })}
+                                        </div>
+                                        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-4 border-l-2 border-orange-200 pl-2">{opp.project}</p>
+                                        <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl mb-4 border border-gray-100">
+                                            <span className="text-sm font-black text-gray-700 font-mono">${(Number(opp.estimatedValue) || 0).toLocaleString()}</span>
+                                            <span className="text-[10px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">{opp.probability}%</span>
+                                        </div>
+                                        <Button onClick={() => { setSelectedOpp(opp); setShowDetailModal(true); }} variant="secondary" className="w-full !py-2 text-[10px] font-black uppercase tracking-widest border-slate-200">
+                                            <MessageSquare size={14} className="mr-2 text-orange-500"/> View Interactions
+                                        </Button>
+                                    </Card>
+                                ))}
                             </div>
                         </div>
                     );
