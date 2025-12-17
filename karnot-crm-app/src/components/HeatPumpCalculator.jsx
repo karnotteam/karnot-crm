@@ -1,144 +1,292 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase'; 
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { getAuth } from "firebase/auth";
 import { calculateHeatPump, CONFIG } from '../utils/heatPumpLogic'; 
 import { Card, Section, Input, Button } from '../data/constants.jsx'; 
-import { Calculator, Snowflake, RefreshCw, Printer, Info, PackageSearch } from 'lucide-react';
+import { Save, Calculator, RefreshCw, Printer, X, Check } from 'lucide-react';
 
-const HeatPumpCalculator = ({ user }) => {  
+const HeatPumpCalculator = ({ leadId }) => {  
+  
+  // --- MAIN STATE ---
   const [inputs, setInputs] = useState({
-    currency: 'PHP', userType: 'home', heatingType: 'electric', systemType: 'grid-solar', heatPumpType: 'all',
-    fuelPrice: 12.25, tankSize: 11, elecRate: 12.25, occupants: 4, dailyLitersInput: 500, mealsPerDay: 0,
-    roomsOccupied: 0, hoursPerDay: 12, ambientTemp: 30, inletTemp: 15, targetTemp: 55, sunHours: 5.5, includeCooling: false
+    currency: 'PHP',
+    userType: 'home',
+    occupants: 4,
+    dailyLitersInput: 500,
+    mealsPerDay: 0,
+    roomsOccupied: 0,
+    hoursPerDay: 12,
+    heatingType: 'electric',
+    fuelPrice: 12.25,
+    tankSize: 11,
+    elecRate: 12.25,
+    ambientTemp: 30,
+    inletTemp: 15,
+    targetTemp: 55,
+    systemType: 'grid-only',
+    sunHours: 5.5,
+    heatPumpType: 'all',
+    includeCooling: false
   });
 
-  const [dbProducts, setDbProducts] = useState([]);
+  // --- MODAL & RESULT STATE ---
+  const [showModal, setShowModal] = useState(false);
+  const [fixtureInputs, setFixtureInputs] = useState({
+      showers: 0,
+      basins: 0,
+      sinks: 0,
+      people: 0,
+      hours: 8
+  });
   const [result, setResult] = useState(null);
+  const [dbProducts, setDbProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // --- 1. SYNC WITH PRODUCT MANAGER ---
+  // --- 1. FETCH PRODUCTS ---
   useEffect(() => {
-    if (!user?.uid) return;
-    setLoading(true);
-    const unsub = onSnapshot(collection(db, "users", user.uid, "products"), (snap) => {
-        setDbProducts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        setLoading(false);
-    });
-    return () => unsub();
-  }, [user]);
+    const fetchProducts = async () => {
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user) { setLoading(false); return; }
+        
+        try {
+            const querySnapshot = await getDocs(collection(db, "users", user.uid, "products"));
+            const products = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setDbProducts(products);
+        } catch (error) {
+            console.error("Error fetching inventory:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+    fetchProducts();
+  }, []);
 
-  // --- 2. CALCULATE ---
+  // --- 2. AUTO-UPDATE RATES WHEN CURRENCY CHANGES ---
   useEffect(() => {
-    if (dbProducts.length > 0) {
-        setResult(calculateHeatPump(inputs, dbProducts));
+    const currency = inputs.currency;
+    const defaults = CONFIG.defaultRate[currency];
+    
+    if (defaults) {
+      setInputs(prev => ({
+        ...prev,
+        elecRate: defaults.grid,
+        fuelPrice: prev.heatingType === 'propane' ? defaults.lpgPrice : 
+                   (prev.heatingType === 'diesel' ? defaults.diesel : 
+                   (prev.heatingType === 'gas' ? defaults.gas : defaults.grid))
+      }));
     }
-  }, [inputs, dbProducts]);
+  }, [inputs.currency]);
 
-  const handleChange = (f, isNum = false) => (e) => {
-    let val = isNum ? parseFloat(e.target.value) || 0 : e.target.value;
-    if (f === 'includeCooling') val = (e.target.value === 'true');
-    setInputs(prev => ({ ...prev, [f]: val }));
+  // --- 3. AUTO CALCULATE ---
+  useEffect(() => {
+    if (!loading && dbProducts.length > 0) {
+        const res = calculateHeatPump(inputs, dbProducts);
+        setResult(res);
+    }
+  }, [inputs, dbProducts, loading]);
+
+  // --- HANDLERS ---
+  const handleChange = (field, isNumber = false) => (e) => {
+    const val = isNumber ? parseFloat(e.target.value) || 0 : e.target.value;
+    if (field === 'heatingType') {
+        const currency = inputs.currency;
+        const defaults = CONFIG.defaultRate[currency];
+        let newFuelPrice = val === 'propane' ? defaults.lpgPrice : (val === 'diesel' ? defaults.diesel : (val === 'gas' ? defaults.gas : defaults.grid));
+        setInputs(prev => ({ ...prev, [field]: val, fuelPrice: newFuelPrice }));
+    } else {
+        setInputs(prev => ({ ...prev, [field]: val }));
+    }
   };
 
+  const handleFixtureChange = (field) => (e) => {
+      setFixtureInputs(prev => ({ ...prev, [field]: parseFloat(e.target.value) || 0 }));
+  };
+
+  const applyFixtureCalculation = () => {
+      const { showers, basins, sinks, people, hours } = fixtureInputs;
+      const totalLiters = Math.round(
+          (50 * showers * 0.4) + 
+          (284 * people * 0.15 * 0.25 * 0.4) + 
+          (20 * basins * 0.4) + 
+          (114 * sinks * 0.3 * hours * 0.4)
+      );
+      setInputs(prev => ({ ...prev, dailyLitersInput: totalLiters }));
+      setShowModal(false);
+  };
+  
+  const isShowerFieldVisible = ['office','school','spa'].includes(inputs.userType);
+  const isMealFieldVisible = ['restaurant','resort'].includes(inputs.userType);
+  const isRoomFieldVisible = inputs.userType === 'resort';
+  const isOccupantFieldVisible = inputs.userType === 'home';
+  const isSunHoursVisible = inputs.systemType === 'grid-solar';
+  
+  const getRateLabel = (type, symbol) => {
+      if (type === 'electric') return `Electricity Rate (${symbol}/kWh)`;
+      if (type === 'gas') return `Natural Gas Rate (${symbol}/kWh)`;
+      if (type === 'propane') return `Propane/LPG Cylinder Price (${symbol})`;
+      if (type === 'diesel') return `Diesel Price per Liter (${symbol})`;
+      return `Rate (${symbol})`;
+  };
+
+  const symbol = CONFIG.SYMBOLS[inputs.currency] || '$';
   const fmt = n => (+n).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-  if (loading) return (
-    <div className="p-20 text-center flex flex-col items-center">
-        <RefreshCw className="animate-spin text-orange-500 mb-4" size={48} />
-        <p className="font-black text-orange-500 uppercase tracking-widest">Syncing Live Inventory...</p>
-    </div>
-  );
+  const generateReport = () => {
+      if (!result || result.error) return;
+      const q = result;
+      
+      const reportHTML = `
+        <!DOCTYPE html><html><head><title>Karnot Savings Report</title>
+        <style> body { font-family: sans-serif; padding: 40px; color: #1d1d1f; } .header { text-align: center; border-bottom: 2px solid #F56600; padding-bottom: 20px; margin-bottom: 30px; } h1 { color: #F56600; } .summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center; margin: 30px 0; } .metric-val { font-size: 24px; font-weight: bold; color: #F56600; } .details { width: 100%; border-collapse: collapse; } .details td { padding: 12px; border-bottom: 1px solid #eee; } </style>
+        </head><body><div class="header"><h1>Karnot Savings Report</h1><p>Internal Estimate for ${q.system.n}</p></div>
+        <h2>System Recommendation: ${q.system.n}</h2>
+        <div class="summary">
+            <div><div class="metric-val">${q.financials.symbol}${fmt(q.financials.totalSavings)}</div><div>Annual Savings</div></div>
+            <div><div class="metric-val">${q.financials.paybackYears} Yrs</div><div>Payback Period</div></div>
+            <div><div class="metric-val">${fmt(q.metrics.emissionsSaved)} kg</div><div>CO₂ Reduction</div></div>
+        </div>
+        <table class="details">
+            <tr><td>Annual Cost (Old System)</td><td align="right">${q.financials.symbol}${fmt(q.financials.annualCostOld)}</td></tr>
+            <tr><td>Annual Cost (New HP)</td><td align="right">${q.financials.symbol}${fmt(q.financials.annualKarnotCost)}</td></tr>
+            <tr><td><b>Total Annual Savings</b></td><td align="right"><b>${q.financials.symbol}${fmt(q.financials.totalSavings)}</b></td></tr>
+        </table>
+        </body></html>`;
+      
+      const win = window.open("", "_blank");
+      win.document.write(reportHTML);
+  };
+
+  const handleSave = async () => {
+    if (!result || result.error) return;
+    try {
+        setIsSaving(true);
+        const auth = getAuth();
+        const user = auth.currentUser;
+        const path = leadId ? `users/${user.uid}/leads/${leadId}/calculations` : `users/${user.uid}/calculations`;
+        await addDoc(collection(db, path), {
+            type: 'heat-pump-roi',
+            inputs,
+            results: result,
+            createdAt: serverTimestamp()
+        });
+        alert("Calculation Saved!");
+    } catch (err) {
+        alert("Error saving: " + err.message);
+    } finally {
+        setIsSaving(false);
+    }
+  };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-20">
-      <Card className="p-8 shadow-xl border-t-4 border-orange-500">
-        <div className="flex items-center gap-3 mb-8">
-            <div className="bg-orange-100 p-3 rounded-2xl text-orange-600"><Calculator size={32}/></div>
-            <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">ROI ENGINE</h2>
+    <Card>
+        <div className="flex justify-between items-center mb-6 border-b pb-4">
+            <h2 className="text-2xl font-bold text-orange-600 flex items-center gap-2">
+                <Calculator size={24}/> ROI Calculator
+            </h2>
+            {loading && <span className="text-sm text-gray-500 flex items-center gap-1"><RefreshCw size={12} className="animate-spin"/> Syncing...</span>}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-          <Section title="1. Your Demand">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">User Type</label>
-              <select className="w-full border-2 p-3 rounded-xl font-bold mb-4" value={inputs.userType} onChange={handleChange('userType')}>
-                <option value="home">Home / Villa</option><option value="restaurant">F&B / Kitchen</option><option value="resort">Hotels / Resort</option>
-              </select>
-              <Input label="Occupants / Units" type="number" value={inputs.occupants} onChange={handleChange('occupants', true)} />
-          </Section>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Section title="1. Your Demand">
+                <div className="space-y-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
+                    <select className="w-full border p-2 rounded" value={inputs.userType} onChange={handleChange('userType')}>
+                        <option value="home">Home</option>
+                        <option value="restaurant">Restaurant</option>
+                        <option value="resort">Hotels & Resorts</option>
+                        <option value="school">Schools</option>
+                        <option value="office">Office</option>
+                        <option value="spa">Spa</option>
+                    </select>
+                    {isOccupantFieldVisible && <Input label="Occupants" type="number" value={inputs.occupants} onChange={handleChange('occupants', true)} />}
+                    {isShowerFieldVisible && <div><Input label="Liters / Day" type="number" value={inputs.dailyLitersInput} onChange={handleChange('dailyLitersInput', true)} /><button onClick={() => setShowModal(true)} className="mt-2 text-sm text-blue-600 underline">Estimate via Fixtures</button></div>}
+                    {isMealFieldVisible && <Input label="Meals / Day" type="number" value={inputs.mealsPerDay} onChange={handleChange('mealsPerDay', true)} />}
+                    {isRoomFieldVisible && <Input label="Rooms / Day" type="number" value={inputs.roomsOccupied} onChange={handleChange('roomsOccupied', true)} />}
+                    <Input label="Operating Hours" type="number" value={inputs.hoursPerDay} onChange={handleChange('hoursPerDay', true)} />
+                </div>
+            </Section>
 
-          <Section title="2. Costs">
-             <select className="w-full border-2 p-3 rounded-xl font-bold mb-4 bg-gray-50" value={inputs.currency} onChange={handleChange('currency')}>
-                <option value="PHP">₱ PHP</option><option value="USD">$ USD</option>
-             </select>
-             <Input label="Elec Rate / kWh" type="number" value={inputs.elecRate} onChange={handleChange('elecRate', true)} />
-          </Section>
-
-          <Section title="3. DB Selection">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">HP Filter</label>
-            <select className="w-full border-2 p-3 rounded-xl font-bold mb-4" value={inputs.heatPumpType} onChange={handleChange('heatPumpType')}>
-                <option value="all">Best Price (Any Refrigerant)</option>
-                <option value="r32">R32 Models Only</option>
-                <option value="r290">R290 Models Only</option>
-                <option value="co2">CO2 Models Only</option>
-            </select>
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cooling?</label>
-            <select className="w-full border-2 p-3 rounded-xl font-bold" value={inputs.includeCooling.toString()} onChange={handleChange('includeCooling')}>
-                <option value="false">No (Heating Only)</option><option value="true">Yes (Reversible)</option>
-            </select>
-          </Section>
+            <Section title="2. Your Costs">
+                <div className="space-y-4">
+                    <label>Currency</label>
+                    <select className="w-full border p-2 rounded" value={inputs.currency} onChange={handleChange('currency')}>
+                        <option value="PHP">₱ PHP</option><option value="USD">$ USD</option><option value="GBP">£ GBP</option><option value="EUR">€ EUR</option>
+                    </select>
+                    <label>Current Heating</label>
+                    <select className="w-full border p-2 rounded" value={inputs.heatingType} onChange={handleChange('heatingType')}>
+                        <option value="electric">Electric</option><option value="gas">Gas</option><option value="propane">LPG</option><option value="diesel">Diesel</option>
+                    </select>
+                    <label>{getRateLabel(inputs.heatingType, symbol)}</label>
+                    <Input type="number" value={inputs.fuelPrice} onChange={handleChange('fuelPrice', true)} />
+                    <Input label={`HP Elec Rate (${symbol}/kWh)`} type="number" value={inputs.elecRate} onChange={handleChange('elecRate', true)} />
+                </div>
+            </Section>
+            
+            <Section title="3. Conditions">
+                <div className="space-y-4">
+                    <Input label="Air Temp (°C)" type="number" value={inputs.ambientTemp} onChange={handleChange('ambientTemp', true)} />
+                    <Input label="Inlet Temp (°C)" type="number" value={inputs.inletTemp} onChange={handleChange('inletTemp', true)} />
+                    <Input label="Target Temp (°C)" type="number" value={inputs.targetTemp} onChange={handleChange('targetTemp', true)} />
+                    <label>System Type</label>
+                    <select className="w-full border p-2 rounded" value={inputs.systemType} onChange={handleChange('systemType')}><option value="grid-only">Grid Only</option><option value="grid-solar">Grid + Solar</option></select>
+                </div>
+            </Section>
         </div>
-      </Card>
 
-      {result?.error ? (
-          <Card className="p-10 text-center border-dashed border-2">
-              <PackageSearch className="mx-auto text-gray-300 mb-4" size={48} />
-              <p className="font-bold text-gray-500">{result.error}</p>
-          </Card>
-      ) : result && (
-        <Card className="p-8 border-2 border-orange-500 bg-white">
-            <div className="flex justify-between items-start mb-8">
-                <div>
-                    <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tighter leading-none">{result.system.name}</h3>
-                    <p className="text-xs font-bold text-orange-500 uppercase mt-2">Inventory System Recommendation</p>
-                </div>
-                <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Estimated Annual Savings</p>
-                    <p className="text-5xl font-black text-green-600 leading-none">{result.financials.symbol}{fmt(result.financials.totalAnnualSavings)}</p>
-                </div>
-            </div>
+        <div className="mt-8">
+            <Button onClick={() => setResult(calculateHeatPump(inputs, dbProducts))} variant="primary">Calculate Savings</Button>
+        </div>
 
-            {inputs.includeCooling && result.financials.coolSavings > 0 && (
-                <div className="mb-8 p-6 bg-blue-50 border-l-8 border-blue-500 rounded-r-3xl flex items-center gap-6">
-                    <Snowflake className="text-blue-500" size={40} />
-                    <div>
-                        <p className="text-blue-800 font-black uppercase text-xs">Free Cooling Bonus Activated</p>
-                        <p className="text-blue-600 font-bold text-lg leading-none">Value Added: {result.financials.symbol}{fmt(result.financials.coolSavings)} / Year</p>
+        {result && !result.error && (
+            <div className="mt-8 bg-slate-50 p-6 rounded-xl border border-slate-200">
+                <div className="flex justify-between items-end mb-6">
+                    <div><h3 className="text-xl font-bold text-orange-600">{result.system.n}</h3><p className="text-sm text-gray-500">Flow: {fmt(result.metrics.adjFlowLhr)} L/hr</p></div>
+                    <div className="text-right"><div className="text-3xl font-bold text-green-600">{result.financials.symbol}${fmt(result.financials.totalSavings)}</div><p className="text-xs uppercase font-bold text-gray-400">Annual Savings</p></div>
+                </div>
+                
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="bg-white p-3 rounded border text-center">
+                        <div className="text-[10px] uppercase font-bold text-slate-400">Payback</div>
+                        <div className="text-lg font-bold text-orange-600">{result.financials.paybackYears} Yrs</div>
+                    </div>
+                    <div className="bg-white p-3 rounded border text-center">
+                        <div className="text-[10px] uppercase font-bold text-slate-400">CO₂ Saved</div>
+                        <div className="text-lg font-bold text-green-600">{fmt(result.metrics.emissionsSaved)} kg</div>
+                    </div>
+                    <div className="bg-white p-3 rounded border text-center">
+                        <div className="text-[10px] uppercase font-bold text-slate-400">Solar Panels</div>
+                        <div className="text-lg font-bold text-amber-500">{result.metrics.panels}</div>
+                    </div>
+                    <div className="bg-white p-3 rounded border text-center">
+                        <div className="text-[10px] uppercase font-bold text-slate-400">Total Capex</div>
+                        <div className="text-lg font-bold text-slate-700">{result.financials.symbol}${fmt(result.financials.capex.total)}</div>
                     </div>
                 </div>
-            )}
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-                <div className="bg-slate-50 p-6 rounded-2xl border text-center">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">ROI Payback</p>
-                    <p className="text-2xl font-black text-orange-600">{result.financials.paybackYears} Yrs</p>
-                </div>
-                <div className="bg-slate-50 p-6 rounded-2xl border text-center">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Carbon Saved</p>
-                    <p className="text-2xl font-black text-green-600">{fmt(result.metrics.emissionsSaved)}kg</p>
-                </div>
-                <div className="bg-slate-50 p-6 rounded-2xl border text-center">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Solar Offset</p>
-                    <p className="text-2xl font-black text-amber-500">{result.metrics.panelCount} Panels</p>
-                </div>
-                <div className="bg-slate-50 p-6 rounded-2xl border text-center">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Capex</p>
-                    <p className="text-2xl font-black text-slate-800">{result.financials.symbol}{fmt(result.financials.capex.total)}</p>
+                <div className="flex justify-end gap-3"><Button onClick={generateReport} variant="secondary">Report</Button><Button onClick={handleSave} variant="success" disabled={isSaving}>Save</Button></div>
+            </div>
+        )}
+
+        {showModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white p-6 rounded-lg max-w-md w-full">
+                    <h3 className="text-lg font-bold mb-4">Fixture Estimate</h3>
+                    <div className="space-y-3">
+                        <Input label="Showers" type="number" value={fixtureInputs.showers} onChange={handleFixtureChange('showers')} />
+                        <Input label="Basins" type="number" value={fixtureInputs.basins} onChange={handleFixtureChange('basins')} />
+                        <Input label="Sinks" type="number" value={fixtureInputs.sinks} onChange={handleFixtureChange('sinks')} />
+                        <Input label="Hours" type="number" value={fixtureInputs.hours} onChange={handleFixtureChange('hours')} />
+                    </div>
+                    <div className="mt-6 flex justify-end gap-2"><Button onClick={() => setShowModal(false)} variant="secondary">Cancel</Button><Button onClick={applyFixtureCalculation} variant="primary">Apply</Button></div>
                 </div>
             </div>
-        </Card>
-      )}
-    </div>
+        )}
+    </Card>
   );
 };
 
+// CRITICAL FIX: Add this line to the bottom
 export default HeatPumpCalculator;
