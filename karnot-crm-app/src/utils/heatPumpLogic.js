@@ -1,4 +1,5 @@
 export const CONFIG = {
+    FX: { PHP: 58.5, USD: 1, GBP: 0.79, EUR: 0.92 },
     SYMBOLS: { PHP: "₱", USD: "$", GBP: "£", EUR: "€" },
     defaultRate: {
         PHP: { grid: 12.25, lpgPrice: 950, lpgSize: 11, gas: 7.0, diesel: 60.0 },
@@ -6,78 +7,94 @@ export const CONFIG = {
         GBP: { grid: 0.17, lpgPrice: 20, lpgSize: 13, gas: 0.07, diesel: 1.30 },
         EUR: { grid: 0.19, lpgPrice: 22, lpgSize: 11, gas: 0.11, diesel: 1.40 },
     },
-    RATED_AMBIENT_C: 20,
+    RATED_AMBIENT_C: 20, 
     RATED_LIFT_C: 40,
-    COOLING_COP: 2.6
+    COOLING_COP: 2.6,
+    SOLAR_PANEL_KW_RATED: 0.425,
+    COP_STANDARD: 1,
+    KWH_PER_KG_LPG: 13.8,
+    DIESEL_KWH_PER_LITER: 10.7
 };
 
-export const calculateHeatPump = (inputs, products = []) => {
+export const calculateHeatPump = (inputs, dbProducts = []) => {
     const { 
-        userType, occupants, dailyLitersInput, mealsPerDay, roomsOccupied, 
-        hoursPerDay, heatingType, fuelPrice, tankSize, elecRate, 
-        ambientTemp, inletTemp, targetTemp, systemType, sunHours,
-        heatPumpType, includeCooling 
+        currency, heatingType, userType, systemType, heatPumpType, fuelPrice, tankSize,
+        elecRate, occupants, dailyLitersInput, mealsPerDay, roomsOccupied,
+        hoursPerDay, ambientTemp, inletTemp, targetTemp, sunHours, includeCooling 
     } = inputs;
 
+    // 1. Demand Calculation (HTML logic)
     let dailyLiters = 0;
-    if (userType === 'home') dailyLiters = occupants * 50;
+    if(userType === 'home') dailyLiters = occupants * 50;
     else if (userType === 'restaurant') dailyLiters = mealsPerDay * 7;
     else if (userType === 'resort') dailyLiters = (roomsOccupied * 50) + (mealsPerDay * 7);
     else dailyLiters = dailyLitersInput;
 
+    if (dailyLiters <= 0) return { error: "Demand missing" };
+
+    // 2. Baseline Energy
     const kwhPerLiter = ((targetTemp - inletTemp) * 1.163) / 1000;
     const dailyThermalEnergyKWH = dailyLiters * kwhPerLiter;
-
-    let currentRateKWH = elecRate;
-    if (heatingType === 'propane') currentRateKWH = (fuelPrice / tankSize) / 13.8;
-    else if (heatingType === 'diesel') currentRateKWH = fuelPrice / 10.7;
+    
+    let currentRateKWH = fuelPrice;
+    if (heatingType === 'propane') currentRateKWH = (fuelPrice / tankSize) / CONFIG.KWH_PER_KG_LPG;
+    else if (heatingType === 'diesel') currentRateKWH = fuelPrice / CONFIG.DIESEL_KWH_PER_LITER;
     const annualCostOld = dailyThermalEnergyKWH * 365 * currentRateKWH;
 
-    let availableModels = products;
-    if (heatPumpType !== 'all') {
-        availableModels = availableModels.filter(p => p.type?.toLowerCase() === heatPumpType.toLowerCase());
-    }
-    if (includeCooling) {
-        availableModels = availableModels.filter(p => p.isReversible === true);
-    }
-
+    // 3. Selection Logic (USING PRODUCT MANAGER FIELDS)
     const actualLiftC = Math.max(1, targetTemp - inletTemp);
     const performanceFactor = (CONFIG.RATED_LIFT_C / actualLiftC) * (1 + ((ambientTemp - CONFIG.RATED_AMBIENT_C) * 0.015));
     const peakLitersPerHour = dailyLiters / hoursPerDay;
 
-    const suitable = availableModels.filter(m => {
-        const adjLhr = (m.base_lhr || 0) * performanceFactor;
-        return targetTemp <= (m.max_temp_c || 60) && peakLitersPerHour <= adjLhr;
-    }).sort((a, b) => (a.price || 99999) - (b.price || 99999));
+    // Filter DB products by category and refrigerant
+    let availableModels = dbProducts.filter(p => p.category === 'Heat Pump');
+    
+    if (heatPumpType !== 'all') {
+        availableModels = availableModels.filter(p => p.Refrigerant?.toLowerCase() === heatPumpType.toLowerCase());
+    }
+    
+    // Filter for Reversible units if cooling requested
+    if (includeCooling) {
+        availableModels = availableModels.filter(p => p.isReversible === true);
+    }
 
-    if (suitable.length === 0) return { error: "No suitable models found." };
+    const suitable = availableModels.filter(s => {
+        // base_lhr in your DB usually maps to the capacity calculation
+        const lhrOutput = (Number(s.kW_DHW_Nominal) * 860) / actualLiftC; 
+        return (targetTemp <= (Number(s.max_temp_c) || 65)) && (peakLitersPerHour <= lhrOutput);
+    }).sort((a, b) => (Number(a.salesPriceUSD) || 0) - (Number(b.salesPriceUSD) || 0));
+
+    if (suitable.length === 0) return { error: "No suitable inventory found." };
     const system = suitable[0];
 
-    const karnotDailyElecKwh = dailyThermalEnergyKWH / (system.cop || 3.8);
-    const karnotPowerDrawKw = karnotDailyElecKwh / hoursPerDay;
+    // 4. Financials
+    const fxRate = CONFIG.FX[currency];
+    const systemCOP = Number(system.COP_DHW) || 3.8;
+    const karnotDailyElecKwh = dailyThermalEnergyKWH / systemCOP;
     
     let annualKarnotCost = (systemType === 'grid-only') 
         ? (karnotDailyElecKwh * 365 * elecRate)
-        : (karnotPowerDrawKw * Math.max(0, hoursPerDay - sunHours) * 365 * elecRate);
+        : ((karnotDailyElecKwh / hoursPerDay) * Math.max(0, hoursPerDay - sunHours) * 365 * elecRate);
 
     let coolSavings = 0;
     if (includeCooling && system.isReversible) {
         coolSavings = (karnotDailyElecKwh * CONFIG.COOLING_COP) * 365 * elecRate;
     }
 
-    const totalSavings = (annualCostOld - annualKarnotCost) + coolSavings;
+    const heatPumpCost = Number(system.salesPriceUSD) * fxRate;
+    const totalAnnualSavings = (annualCostOld - annualKarnotCost) + coolSavings;
+
     return {
         system,
         financials: {
-            symbol: CONFIG.SYMBOLS[inputs.currency],
-            annualCostOld, annualKarnotCost, coolSavings, totalSavings,
-            paybackYears: totalSavings > 0 ? (system.price / totalSavings).toFixed(1) : "N/A",
-            capex: { total: system.price || 0 }
+            symbol: CONFIG.SYMBOLS[currency],
+            annualCostOld, annualKarnotCost, coolSavings, totalAnnualSavings,
+            paybackYears: totalAnnualSavings > 0 ? (heatPumpCost / totalAnnualSavings).toFixed(1) : "N/A",
+            capex: { total: heatPumpCost }
         },
         metrics: {
-            adjFlowLhr: (system.base_lhr * performanceFactor),
-            emissionsSaved: (dailyThermalEnergyKWH * 365 * 0.5),
-            panels: Math.ceil(karnotPowerDrawKw / 0.425)
+            dailyLiters,
+            panels: Math.ceil((karnotDailyElecKwh / hoursPerDay) / CONFIG.SOLAR_PANEL_KW_RATED)
         }
     };
 };
