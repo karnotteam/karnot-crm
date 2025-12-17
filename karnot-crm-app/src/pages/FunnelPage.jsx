@@ -20,7 +20,7 @@ const STAGE_ORDER = [
 ];
 
 // ----------------------------------------------------------------------
-// 1. OPPORTUNITY DETAIL MODAL (With Delete Interaction & Summary)
+// 1. OPPORTUNITY DETAIL MODAL (Fixed Performance for Probability Change)
 // ----------------------------------------------------------------------
 const OpportunityDetailModal = ({ opp, onClose, onSaveInteraction, onDeleteInteraction, onUpdateProb, onUpdateNotes, quotes = [], companies = [], onOpenQuote }) => {
     const [activeTab, setActiveTab] = useState('ACTIVITY');
@@ -28,6 +28,9 @@ const OpportunityDetailModal = ({ opp, onClose, onSaveInteraction, onDeleteInter
     const [logOutcome, setLogOutcome] = useState('');
     const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
     const [localNotes, setLocalNotes] = useState(opp.notes || '');
+    
+    // Fix: Local state for probability to remove typing lag
+    const [localProb, setLocalProb] = useState(opp.probability || 0);
 
     const company = (companies || []).find(c => c.id === opp.companyId || c.companyName === opp.customerName);
     const interactions = company?.interactions || [];
@@ -63,7 +66,13 @@ const OpportunityDetailModal = ({ opp, onClose, onSaveInteraction, onDeleteInter
                         </div>
                         <div className="p-3 bg-gray-50 rounded-lg border relative">
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Win Prob %</p>
-                            <input type="number" value={opp.probability} onChange={(e) => onUpdateProb(opp.id, e.target.value)} className="text-xl font-black text-orange-600 bg-transparent border-none w-full focus:ring-0 p-0" />
+                            <input 
+                                type="number" 
+                                value={localProb} 
+                                onChange={(e) => setLocalProb(e.target.value)}
+                                onBlur={() => onUpdateProb(opp.id, localProb)}
+                                className="text-xl font-black text-orange-600 bg-transparent border-none w-full focus:ring-0 p-0" 
+                            />
                         </div>
                     </div>
 
