@@ -45,6 +45,7 @@ export function calculateHeatPump(inputs, dbProducts) {
     const requiredThermalPowerKW = dailyThermalEnergyKWH / hoursPerDay;
 
     // --- 2. BASELINE (OLD SYSTEM) COST ---
+    // Note: inputs.fuelPrice is already in the selected local currency
     let currentRateKWH = 0;
     if (inputs.heatingType === 'propane') {
         currentRateKWH = (inputs.fuelPrice / inputs.tankSize) / CONFIG.KWH_PER_KG_LPG;
@@ -118,10 +119,12 @@ export function calculateHeatPump(inputs, dbProducts) {
     const karnotDailyElecKwh = dailyThermalEnergyKWH / heatPumpCOP; 
     const karnotPowerDrawKw = karnotDailyElecKwh / hoursPerDay;
 
+    // Convert only the USD-based hardware prices to local currency
     const heatPumpCost = Number(heatPumpSystem.salesPriceUSD) * fxRate;
     let karnotAnnualCost = 0, solarCost = 0, inverterCost = 0, karnotPanelCount = 0;
 
     // Solar Offset Logic
+    // inputs.elecRate is already in local currency
     if (inputs.systemType === 'grid-only') {
         karnotAnnualCost = karnotDailyElecKwh * 365 * inputs.elecRate;
     } else { // Grid + Solar
@@ -138,11 +141,9 @@ export function calculateHeatPump(inputs, dbProducts) {
     // Free Cooling Savings
     let coolSavings = 0;
     if (inputs.includeCooling && heatPumpSystem.isReversible) {
-        // Use the product's Nominal Cooling kW, or estimate if missing
         const nominalCoolingPower = Number(heatPumpSystem.kW_Cooling_Nominal) || heatPumpSystem.kW_DHW_Nominal * 1.2;
-        // Daily Cooling kWh is estimated based on nominal cooling power * operating hours
         const dailyCoolingKwh = nominalCoolingPower * hoursPerDay;
-        // Savings = Cooling Energy * Cooling COP (for savings vs old AC) * Cost
+        // inputs.elecRate is in local currency
         coolSavings = dailyCoolingKwh * 365 * inputs.elecRate * CONFIG.COOLING_COP;
     }
     
