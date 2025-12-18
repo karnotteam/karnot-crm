@@ -1,5 +1,3 @@
-// src/utils/heatPumpLogic.js
-
 export const CONFIG = {
     FX: { PHP: 58.5, USD: 1, GBP: 0.79, EUR: 0.92 },
     SYMBOLS: { PHP: "₱", USD: "$", GBP: "£", EUR: "€" },
@@ -16,8 +14,8 @@ export const CONFIG = {
     SOLAR_PANEL_COST_USD: 200, 
     INVERTER_COST_PER_WATT_USD: 0.30,
     COOLING_COP: 2.6,
-    WATER_SPECIFIC_HEAT: 1.163,
-    R290_LOOP_DELTA_T: 7
+    WATER_SPECIFIC_HEAT: 1.163, // Wh/L/°C
+    SUB_CRITICAL_DELTA_T: 7 // Standard loop differential for R290/R32
 };
 
 const extractTankLiters = (name) => {
@@ -27,42 +25,46 @@ const extractTankLiters = (name) => {
 };
 
 export function calculateHeatPump(inputs, dbProducts) {
-    if (!dbProducts || dbProducts.length === 0) return { error: "No products loaded." };
+    if (!dbProducts || dbProducts.length === 0) return { error: "Inventory empty." };
 
-    // --- 1. DEMAND ---
-    let dailyLiters = inputs.userType === 'home' ? 150 : inputs.dailyLitersInput;
+    // --- 1. THERMAL LOAD CALCULATION ---
+    const dailyLiters = inputs.userType === 'home' ? 150 : inputs.dailyLitersInput;
     const deltaT = inputs.targetTemp - inputs.inletTemp;
-    const thermalKWH = (dailyLiters * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / 1000;
-    const requiredKW = thermalKWH / Math.max(1, inputs.hoursPerDay);
+    const totalThermalEnergyKWH = (dailyLiters * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / 1000;
+    const requiredThermalPowerKW = totalThermalEnergyKWH / Math.max(1, inputs.hoursPerDay);
 
-    // --- 2. MATCHING ---
+    // --- 2. FLOW RATE CALCULATION ---
+    // Flow Rate (L/min) = (Power in Watts) / (DeltaT * Specific Heat * 60)
+    const flowRateLpm = (requiredThermalPowerKW * 1000) / (CONFIG.SUB_CRITICAL_DELTA_T * CONFIG.WATER_SPECIFIC_HEAT * 60);
+
+    // --- 3. INVENTORY MATCHING ---
     const matches = dbProducts.filter(p => {
         const power = Number(p.kW_DHW_Nominal) || 0;
-        const price = Number(p.salesPriceUSD) || 0;
-        if (power === 0 || price === 0) return false;
-
+        if (power === 0) return false;
         if (inputs.heatPumpType !== 'all') {
             const pRef = (p.Refrigerant || '').toUpperCase();
             const reqRef = inputs.heatPumpType.toUpperCase();
             if (reqRef === 'R744' && !(pRef === 'R744' || pRef === 'CO2')) return false;
             if (reqRef !== 'R744' && pRef !== reqRef) return false;
         }
-        return power >= (requiredKW * 0.95);
+        return power >= (requiredThermalPowerKW * 0.95);
     }).sort((a, b) => Number(a.salesPriceUSD) - Number(b.salesPriceUSD));
 
-    if (matches.length === 0) return { error: `No ${inputs.heatPumpType} model found for ${requiredKW.toFixed(1)}kW load.` };
+    if (matches.length === 0) return { error: `No model matches the ${requiredThermalPowerKW.toFixed(1)}kW load.` };
 
     const system = matches[0];
     const tankSize = extractTankLiters(system.name) || (inputs.userType === 'home' ? 150 : 0);
-    const fxRate = CONFIG.FX[inputs.currency] || 1;
 
-    // --- 3. PERFORMANCE & WARMUP ---
-    const warmup = (tankSize * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / (Number(system.kW_DHW_Nominal) * 1000);
-    const hpCOP = Number(system.COP_DHW) || 3.5;
-    const dailyElecKwh = thermalKWH / hpCOP;
+    // --- 4. PERFORMANCE & WARMUP ---
+    const warmupTime = tankSize > 0 
+        ? (tankSize * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / (Number(system.kW_DHW_Nominal) * 1000)
+        : 0;
+
+    const fxRate = CONFIG.FX[inputs.currency] || 1;
+    const dailyElecKwh = totalThermalEnergyKWH / (Number(system.COP_DHW) || 3.5);
     const avgDrawKW = dailyElecKwh / inputs.hoursPerDay;
 
-    // --- 4. SOLAR & COSTS ---
+    // --- 5. SOLAR & COSTS ---
     let annualElecCost = 0, solarCost = 0, inverterCost = 0, panelCount = 0;
     if (inputs.systemType === 'grid-only') {
         annualElecCost = dailyElecKwh * 365 * inputs.elecRate;
@@ -75,21 +77,25 @@ export function calculateHeatPump(inputs, dbProducts) {
         inverterCost = (panelCount * CONFIG.SOLAR_PANEL_KW_RATED * 1000 * CONFIG.INVERTER_COST_PER_WATT_USD) * fxRate;
     }
 
-    const annualOld = (thermalKWH / CONFIG.COP_STANDARD) * 365 * inputs.fuelPrice;
-    const hpCost = Number(system.salesPriceUSD) * fxRate;
-    const totalCapex = hpCost + solarCost + inverterCost;
-    const savings = annualOld - annualElecCost;
+    const annualOld = (totalThermalEnergyKWH / CONFIG.COP_STANDARD) * 365 * inputs.fuelPrice;
+    const totalCapex = (Number(system.salesPriceUSD) * fxRate) + solarCost + inverterCost;
+    const annualSavings = annualOld - annualElecCost;
 
     return {
         system: { n: system.name, ref: system.Refrigerant, tankSize },
-        metrics: { warmupTime: warmup.toFixed(1), requiredKW: requiredKW.toFixed(1), panelCount },
+        metrics: { 
+            warmupTime: warmupTime.toFixed(1), 
+            requiredKW: requiredThermalPowerKW.toFixed(1),
+            flowRateLpm: flowRateLpm.toFixed(1),
+            panelCount 
+        },
         financials: {
             symbol: CONFIG.SYMBOLS[inputs.currency],
             annualCostOld: annualOld,
             karnotAnnualCost: annualElecCost,
-            totalSavings: savings,
-            paybackYears: savings > 0 ? (totalCapex / savings).toFixed(1) : "N/A",
-            capex: { total: totalCapex, heatPump: hpCost, solar: solarCost, inverter: inverterCost }
+            totalSavings: annualSavings,
+            paybackYears: annualSavings > 0 ? (totalCapex / annualSavings).toFixed(1) : "N/A",
+            capex: { total: totalCapex }
         }
     };
 }
