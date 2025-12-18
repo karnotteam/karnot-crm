@@ -1,6 +1,4 @@
-// src/utils/heatPumpLogic.js
-
-// CONFIGURATION CONSTANTS (Standardized data from your original HTML)
+// CONFIGURATION CONSTANTS
 export const CONFIG = {
     FX: { PHP: 58.5, USD: 1, GBP: 0.79, EUR: 0.92 },
     SYMBOLS: { PHP: "₱", USD: "$", GBP: "£", EUR: "€" },
@@ -12,12 +10,24 @@ export const CONFIG = {
     },
     KWH_PER_KG_LPG: 13.8, 
     DIESEL_KWH_PER_LITER: 10.7,
-    COP_STANDARD: 1, // Electric resistance or equivalent COP
+    COP_STANDARD: 1, 
     SOLAR_PANEL_KW_RATED: 0.425, 
     SOLAR_PANEL_COST_USD: 200, 
     INVERTER_COST_PER_WATT_USD: 0.30,
-    COOLING_COP: 2.6, // COP used for estimating AC savings
-    RATED_LIFT_C: 40, // Assuming 40C rise (15C to 55C) is the test point
+    COOLING_COP: 2.6, 
+    WATER_SPECIFIC_HEAT: 1.163, // Wh/L/°C
+    // Tank logic constants for R290/R32
+    R290_LOOP_DELTA_T: 7, 
+    COIL_APPROACH_DELTA_T: 10
+};
+
+/**
+ * Extracts numeric Liter value from strings like "Karnot iSTOR Stainless Steel Tank - 1000L"
+ */
+const extractTankLiters = (name) => {
+    if (!name) return 0;
+    const match = name.match(/(\d+)\s*L\b/i);
+    return match ? parseInt(match[1], 10) : 0;
 };
 
 export function calculateHeatPump(inputs, dbProducts) {
@@ -37,13 +47,10 @@ export function calculateHeatPump(inputs, dbProducts) {
     
     if (deltaT <= 0) return { error: "Target Temp must be higher than Inlet Temp." };
 
-    const kwhPerLiter = (deltaT * 1.163) / 1000;
-    const dailyThermalEnergyKWH = dailyLiters * kwhPerLiter;
+    const dailyThermalEnergyKWH = (dailyLiters * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / 1000;
     const requiredThermalPowerKW = dailyThermalEnergyKWH / hoursPerDay;
 
     // --- 2. BASELINE (OLD SYSTEM) COST ---
-    // User inputs for fuelPrice and elecRate are local currency. 
-    // We do NOT multiply these by FX.
     let currentRateKWH = 0;
     if (inputs.heatingType === 'propane') {
         currentRateKWH = (inputs.fuelPrice / inputs.tankSize) / CONFIG.KWH_PER_KG_LPG;
@@ -54,7 +61,7 @@ export function calculateHeatPump(inputs, dbProducts) {
     }
     const annualCostOld = (dailyThermalEnergyKWH / CONFIG.COP_STANDARD) * 365 * currentRateKWH;
 
-    // --- 3. FIND BEST HEAT PUMP ---
+    // --- 3. FIND BEST HEAT PUMP & EXTRACT TANK DATA ---
     let availableModels = dbProducts
         .filter(p => {
             const nominalDHWPower = Number(p.kW_DHW_Nominal) || 0;
@@ -77,6 +84,7 @@ export function calculateHeatPump(inputs, dbProducts) {
             const nominalDHWPower = Number(m.kW_DHW_Nominal) || 0;
             const maxTemp = Number(m.max_temp_c) || 60;
             if (inputs.targetTemp > maxTemp) return false;
+            // Match based on makeup power
             return nominalDHWPower >= (requiredThermalPowerKW * 0.95); 
         })
         .sort((a, b) => Number(a.salesPriceUSD) - Number(b.salesPriceUSD));
@@ -87,8 +95,17 @@ export function calculateHeatPump(inputs, dbProducts) {
     }
     
     const heatPumpSystem = availableModels[0];
-    
-    // --- 4. FINANCIAL CALCULATIONS & CURRENCY CONVERSION ---
+    const isR290orR32 = ['R290', 'R32'].includes(heatPumpSystem.Refrigerant?.toUpperCase());
+    const tankVolume = extractTankLiters(heatPumpSystem.name);
+
+    // --- 4. TANK WARMUP & THERMODYNAMIC CALCS ---
+    // Warmup time for the specific tank found in the title
+    let warmupTime = 0;
+    if (tankVolume > 0) {
+        warmupTime = (tankVolume * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / (Number(heatPumpSystem.kW_DHW_Nominal) * 1000);
+    }
+
+    // --- 5. FINANCIAL CALCULATIONS ---
     const fxRate = CONFIG.FX[inputs.currency] || 1;
     const symbol = CONFIG.SYMBOLS[inputs.currency];
     
@@ -96,7 +113,6 @@ export function calculateHeatPump(inputs, dbProducts) {
     const karnotDailyElecKwh = dailyThermalEnergyKWH / heatPumpCOP; 
     const karnotPowerDrawKw = karnotDailyElecKwh / hoursPerDay;
 
-    // Convert USD Equipment prices to the selected currency
     const heatPumpCostConverted = Number(heatPumpSystem.salesPriceUSD) * fxRate;
     
     let karnotAnnualCost = 0, solarCost = 0, inverterCost = 0, karnotPanelCount = 0;
@@ -110,7 +126,6 @@ export function calculateHeatPump(inputs, dbProducts) {
         karnotAnnualCost = (karnotPowerDrawKw * gridPoweredHours) * 365 * inputs.elecRate;
         
         karnotPanelCount = Math.ceil(karnotPowerDrawKw / CONFIG.SOLAR_PANEL_KW_RATED);
-        // Hardware conversion
         solarCost = karnotPanelCount * CONFIG.SOLAR_PANEL_COST_USD * fxRate;
         inverterCost = (karnotPanelCount * CONFIG.SOLAR_PANEL_KW_RATED * 1000 * CONFIG.INVERTER_COST_PER_WATT_USD) * fxRate;
     }
@@ -127,12 +142,19 @@ export function calculateHeatPump(inputs, dbProducts) {
     const paybackYears = totalAnnualSavings > 0 && totalCapex > 0 ? (totalCapex / totalAnnualSavings).toFixed(1) : "N/A";
 
     return {
-        system: { n: heatPumpSystem.name },
+        system: { 
+            n: heatPumpSystem.name,
+            ref: heatPumpSystem.Refrigerant,
+            tankSize: tankVolume
+        },
         metrics: { 
             dailyLiters, 
             panelCount: karnotPanelCount,
             requiredThermalPowerKW: requiredThermalPowerKW.toFixed(1),
             selectedNominalPowerKW: heatPumpSystem.kW_DHW_Nominal,
+            warmupTime: warmupTime.toFixed(1),
+            loopDeltaT: isR290orR32 ? CONFIG.R290_LOOP_DELTA_T : deltaT,
+            coilApproach: isR290orR32 ? CONFIG.COIL_APPROACH_DELTA_T : 0
         },
         financials: {
             symbol, annualCostOld, karnotAnnualCost, totalSavings: totalAnnualSavings, coolSavings,
