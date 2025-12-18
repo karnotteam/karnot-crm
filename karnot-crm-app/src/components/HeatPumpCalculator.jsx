@@ -4,7 +4,7 @@ import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore
 import { getAuth } from "firebase/auth";
 import { calculateHeatPump, CONFIG } from '../utils/heatPumpLogic'; 
 import { Card, Section, Input, Button } from '../data/constants.jsx'; 
-import { Save, Calculator, RefreshCw, Printer, X, Check, Droplets, Gauge, Thermometer, Sun } from 'lucide-react';
+import { Save, Calculator, RefreshCw, Printer, X, Check, Droplets, Gauge, Sun, Thermometer } from 'lucide-react';
 
 const HeatPumpCalculator = ({ leadId }) => {  
   const [inputs, setInputs] = useState({
@@ -82,8 +82,9 @@ const HeatPumpCalculator = ({ leadId }) => {
             <Section title="3. Solar & Technology">
                 <select className="w-full border p-2 rounded mb-3" value={inputs.heatPumpType} onChange={handleChange('heatPumpType')}>
                     <option value="all">Any Refrigerant</option>
-                    <option value="R290">R290 Models</option>
+                    <option value="R290">R290 Only</option>
                     <option value="R744">CO2 (R744)</option>
+                    <option value="R32">R32 Only</option>
                 </select>
                 <select className="w-full border p-2 rounded mb-3" value={inputs.systemType} onChange={handleChange('systemType')}>
                     <option value="grid-only">Grid Only</option>
@@ -100,15 +101,33 @@ const HeatPumpCalculator = ({ leadId }) => {
         {result && !result.error && result.financials && (
             <div className="mt-8 bg-slate-50 p-6 rounded-xl border border-slate-200 animate-in fade-in duration-300">
                 <div className="flex justify-between items-end mb-6">
-                    <div><h3 className="text-xl font-bold text-orange-600">{result.system.n}</h3><p className="text-xs font-bold text-gray-500 uppercase">Ref: {result.system.ref}</p></div>
-                    <div className="text-right"><div className="text-3xl font-bold text-green-600">{symbol}{fmt(result.financials.totalSavings)}</div><p className="text-xs font-bold text-gray-400 uppercase">Annual Savings</p></div>
+                    <div>
+                        <h3 className="text-xl font-bold text-orange-600">{result.system.n}</h3>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Ref: {result.system.ref}</p>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-3xl font-bold text-green-600">{symbol}{fmt(result.financials.totalSavings)}</div>
+                        <p className="text-xs font-bold text-gray-400 uppercase">Annual Savings</p>
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm"><Droplets className="text-blue-500"/><div><p className="text-xs text-gray-400 font-bold uppercase">Tank Size</p><p className="text-lg font-bold">{result.system.tankSize} L</p></div></div>
-                    <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm"><Gauge className="text-orange-500"/><div><p className="text-xs text-gray-400 font-bold uppercase">Warm-up</p><p className="text-lg font-bold">{result.metrics.warmupTime} Hrs</p></div></div>
-                    <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm"><Thermometer className="text-red-500"/><div><p className="text-xs text-gray-400 font-bold uppercase">Flow Rate</p><p className="text-lg font-bold">{result.metrics.flowRateLpm} LPM</p></div></div>
-                    <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm"><Sun className="text-yellow-500"/><div><p className="text-xs text-gray-400 font-bold uppercase">Panels</p><p className="text-lg font-bold">{result.metrics.panelCount || 0}</p></div></div>
+                    <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm">
+                        <Droplets className="text-blue-500"/>
+                        <div><p className="text-xs text-gray-400 font-bold uppercase">Tank Size</p><p className="text-lg font-bold">{result.system.tankSize} L</p></div>
+                    </div>
+                    <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm">
+                        <Gauge className="text-orange-500"/>
+                        <div><p className="text-xs text-gray-400 font-bold uppercase">Warm-up</p><p className="text-lg font-bold">{result.metrics.warmupTime} Hrs</p></div>
+                    </div>
+                    <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm">
+                        <Thermometer className="text-red-500"/>
+                        <div><p className="text-xs text-gray-400 font-bold uppercase">Peak Hourly</p><p className="text-lg font-bold">{result.metrics.peakDemand} L</p></div>
+                    </div>
+                    <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm">
+                        <Sun className="text-yellow-500"/>
+                        <div><p className="text-xs text-gray-400 font-bold uppercase">Panels</p><p className="text-lg font-bold">{result.metrics.panelCount || 0}</p></div>
+                    </div>
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
@@ -117,6 +136,8 @@ const HeatPumpCalculator = ({ leadId }) => {
                 </div>
             </div>
         )}
+
+        {result?.error && <div className="mt-6 p-4 bg-red-50 text-red-600 rounded border border-red-200 text-sm italic">{result.error}</div>}
     </Card>
   );
 };
