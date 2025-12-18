@@ -4,7 +4,7 @@ import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore
 import { getAuth } from "firebase/auth";
 import { calculateHeatPump, calculateFixtureDemand, CONFIG } from '../utils/heatPumpLogic'; 
 import { Card, Section, Input, Button } from '../data/constants.jsx'; 
-import { Save, Calculator, RefreshCw, Printer, Droplets, Gauge, Sun, Thermometer, Zap, DollarSign, TrendingDown, FileText, X } from 'lucide-react';
+import { Save, Calculator, RefreshCw, Printer, Droplets, Gauge, Sun, Thermometer, Zap, DollarSign, TrendingDown, FileText, X, ChevronDown, ChevronUp, AlertCircle, CheckCircle } from 'lucide-react';
 
 const HeatPumpCalculator = () => {  
   const [inputs, setInputs] = useState({
@@ -32,6 +32,7 @@ const HeatPumpCalculator = () => {
   });
 
   const [showFixtureModal, setShowFixtureModal] = useState(false);
+  const [showCalculations, setShowCalculations] = useState(false);
   const [fixtureInputs, setFixtureInputs] = useState({ 
     showers: 0, 
     basins: 0, 
@@ -142,7 +143,7 @@ const HeatPumpCalculator = () => {
       return;
     }
 
-    const { system, metrics, financials, cooling, emissions } = result;
+    const { system, metrics, financials, cooling, emissions, tankSizing } = result;
     
     const reportHTML = `
       <!DOCTYPE html>
@@ -163,7 +164,8 @@ const HeatPumpCalculator = () => {
           table { width: 100%; border-collapse: collapse; margin: 20px 0; }
           td { padding: 12px 0; border-bottom: 1px solid #d2d2d7; }
           td:last-child { text-align: right; font-weight: 600; }
-          .cooling-box { background: #e6f2ff; border-left: 4px solid #007aff; padding: 20px; margin: 20px 0; }
+          .cooling-box { background: #e6f2ff; border-left: 4px solid #007aff; padding: 20px; margin: 20px 0; border-radius: 8px; }
+          .calc-box { background: #fff9e6; border-left: 4px solid #ffc107; padding: 20px; margin: 20px 0; border-radius: 8px; }
           footer { text-align: center; margin-top: 50px; font-size: 12px; color: #aaa; }
         </style>
       </head>
@@ -174,7 +176,7 @@ const HeatPumpCalculator = () => {
         </div>
         
         <h2>Recommended System: ${system.name}</h2>
-        <p><strong>Refrigerant:</strong> ${system.refrigerant} | <strong>Tank Size:</strong> ${system.tankSize}L | <strong>COP:</strong> ${system.cop}</p>
+        <p><strong>Refrigerant:</strong> ${system.refrigerant} | <strong>Rated Power:</strong> ${system.kW} kW | <strong>Adjusted Power:</strong> ${system.adjustedKW.toFixed(1)} kW | <strong>COP:</strong> ${system.cop}</p>
         
         <div class="summary">
           <div class="metric">
@@ -189,6 +191,22 @@ const HeatPumpCalculator = () => {
             <div class="value">${fmt(emissions.annualSaved)} kg</div>
             <div class="label">Annual CO₂ Reduction</div>
           </div>
+        </div>
+        
+        <div class="calc-box">
+          <h3 style="margin-top:0; color: #f57c00;">Tank Sizing Calculations</h3>
+          <table style="font-size: 14px;">
+            <tr><td>Average Draw Rate</td><td>${tankSizing.avgDrawRate.toFixed(1)} L/hr</td></tr>
+            <tr><td>Peak Draw Rate (with ${(tankSizing.coincidenceFactor * 100).toFixed(0)}% coincidence)</td><td>${tankSizing.peakDrawRateLph.toFixed(1)} L/hr</td></tr>
+            <tr><td>Heat Pump Recovery Rate</td><td>${tankSizing.recoveryRateLph.toFixed(1)} L/hr</td></tr>
+            <tr><td>Gap (Draw - Recovery)</td><td>${tankSizing.gapLph.toFixed(1)} L/hr</td></tr>
+            <tr><td colspan="2"><hr style="border:0; border-top:1px solid #ccc; margin:10px 0;"></td></tr>
+            <tr><td>Method 1: Gap × Peak Duration (${tankSizing.peakDuration} hrs)</td><td>${tankSizing.method1_GapBased.toFixed(0)} L</td></tr>
+            <tr><td>Method 2: Peak Buffer (65%)</td><td>${tankSizing.method2_PeakBuffer.toFixed(0)} L</td></tr>
+            <tr><td>Method 3: Daily Reserve (35%)</td><td>${tankSizing.method3_DailyReserve.toFixed(0)} L</td></tr>
+            <tr><td><strong>Recommended Tank Size</strong></td><td><strong>${tankSizing.recommendedTankSize} L</strong></td></tr>
+            ${system.integralTank ? `<tr><td><strong>Integral Tank Included</strong></td><td><strong>${system.integralTank} L</strong></td></tr>` : ''}
+          </table>
         </div>
         
         <h2>Financial Breakdown</h2>
@@ -210,14 +228,17 @@ const HeatPumpCalculator = () => {
         <h2>System Specifications</h2>
         <table>
           <tr><td>Daily Hot Water Demand</td><td>${metrics.dailyLiters} Liters</td></tr>
-          <tr><td>Peak Hourly Demand</td><td>${metrics.peakHourlyLiters} L/hr</td></tr>
+          <tr><td>Average Draw Rate</td><td>${metrics.avgDrawRate} L/hr</td></tr>
+          <tr><td>Peak Draw Rate</td><td>${metrics.peakDrawRate} L/hr</td></tr>
+          <tr><td>Recovery Rate</td><td>${system.recoveryRate.toFixed(1)} L/hr</td></tr>
           <tr><td>Warm-up Time (Full Tank)</td><td>${metrics.warmupTime} Hours</td></tr>
-          <tr><td>Average Power Draw</td><td>${metrics.avgDrawKW} kW</td></tr>
+          <tr><td>Average Power Draw</td><td>${metrics.avgPowerDrawKW} kW</td></tr>
+          <tr><td>Performance Factor</td><td>${metrics.performanceFactor}x</td></tr>
           ${inputs.systemType === 'grid-solar' ? `<tr><td>Solar Panels Required</td><td>${metrics.panelCount} panels</td></tr>` : ''}
         </table>
         
         <footer>
-          <p>&copy; ${new Date().getFullYear()} Karnot. All Rights Reserved.</p>
+          <p>&copy; ${new Date().getFullYear()} Karnot Energy Solutions Inc. All Rights Reserved.</p>
           <p>This is a preliminary estimate. Contact us for a detailed quotation.</p>
         </footer>
       </body>
@@ -485,7 +506,7 @@ const HeatPumpCalculator = () => {
               <div>
                 <h3 className="text-xl font-bold text-orange-600">{result.system.name}</h3>
                 <p className="text-xs font-bold text-gray-500 uppercase mt-1">
-                  {result.system.refrigerant} • {result.system.tankSize}L Tank • COP {result.system.cop}
+                  {result.system.refrigerant} • {result.system.kW} kW (Adjusted: {result.system.adjustedKW.toFixed(1)} kW) • COP {result.system.cop}
                 </p>
               </div>
               <div className="text-right">
@@ -494,6 +515,128 @@ const HeatPumpCalculator = () => {
                 </div>
                 <p className="text-xs font-bold text-gray-400 uppercase">Total Annual Savings</p>
               </div>
+            </div>
+
+            {/* Tank Sizing Analysis */}
+            <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    {result.tankSizing.gapLph > 0 ? (
+                      <AlertCircle className="text-amber-600" size={20}/>
+                    ) : (
+                      <CheckCircle className="text-green-600" size={20}/>
+                    )}
+                    <h4 className="font-bold text-gray-800">Tank Sizing</h4>
+                  </div>
+                  <p className="text-sm text-gray-700">
+                    {result.system.integralTank ? (
+                      <>
+                        <strong>Integral Tank:</strong> This unit includes a {result.system.integralTank}L built-in tank.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Required Tank:</strong> {result.tankSizing.recommendedTankSize}L external tank needed.
+                      </>
+                    )}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    Recovery: {result.system.recoveryRate.toFixed(1)} L/hr • 
+                    Peak Draw: {result.tankSizing.peakDrawRateLph.toFixed(1)} L/hr
+                    {result.tankSizing.gapLph > 0 && (
+                      <> • Gap: <span className="text-amber-700 font-semibold">{result.tankSizing.gapLph.toFixed(1)} L/hr</span></>
+                    )}
+                  </p>
+                </div>
+                <Button 
+                  variant="secondary" 
+                  onClick={() => setShowCalculations(!showCalculations)}
+                  className="text-sm flex items-center gap-1"
+                >
+                  {showCalculations ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                  {showCalculations ? 'Hide' : 'Show'} Math
+                </Button>
+              </div>
+
+              {/* Detailed Calculations */}
+              {showCalculations && (
+                <div className="mt-4 pt-4 border-t border-amber-200">
+                  <h5 className="font-semibold text-gray-800 mb-3">Tank Sizing Calculations:</h5>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Daily Demand:</span>
+                      <span className="font-mono">{result.metrics.dailyLiters} L</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Operating Hours:</span>
+                      <span className="font-mono">{inputs.hoursPerDay} hrs/day</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Average Draw Rate:</span>
+                      <span className="font-mono">{result.tankSizing.avgDrawRate.toFixed(1)} L/hr</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Coincidence Factor ({inputs.userType}):</span>
+                      <span className="font-mono">{(result.tankSizing.coincidenceFactor * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="flex justify-between font-semibold text-orange-700">
+                      <span>Peak Draw Rate:</span>
+                      <span className="font-mono">{result.tankSizing.peakDrawRateLph.toFixed(1)} L/hr</span>
+                    </div>
+                    
+                    <div className="h-px bg-amber-300 my-3"></div>
+                    
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Heat Pump Power (Adjusted):</span>
+                      <span className="font-mono">{result.system.adjustedKW.toFixed(1)} kW</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Temperature Lift (ΔT):</span>
+                      <span className="font-mono">{inputs.targetTemp - inputs.inletTemp}°C</span>
+                    </div>
+                    <div className="flex justify-between font-semibold text-blue-700">
+                      <span>Recovery Rate:</span>
+                      <span className="font-mono">{result.system.recoveryRate.toFixed(1)} L/hr</span>
+                    </div>
+                    
+                    <div className="h-px bg-amber-300 my-3"></div>
+                    
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Gap (Peak - Recovery):</span>
+                      <span className={`font-mono ${result.tankSizing.gapLph > 0 ? 'text-red-600 font-bold' : 'text-green-600'}`}>
+                        {result.tankSizing.gapLph.toFixed(1)} L/hr
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Peak Duration:</span>
+                      <span className="font-mono">{result.tankSizing.peakDuration} hrs</span>
+                    </div>
+                    
+                    <div className="h-px bg-amber-300 my-3"></div>
+                    
+                    <p className="text-xs text-gray-600 mb-2">Three sizing methods (we use the largest):</p>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-600">Method 1: Gap × Duration</span>
+                      <span className="font-mono">{result.tankSizing.method1_GapBased.toFixed(0)} L</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-600">Method 2: Peak Buffer (65%)</span>
+                      <span className="font-mono">{result.tankSizing.method2_PeakBuffer.toFixed(0)} L</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-600">Method 3: Daily Reserve (35%)</span>
+                      <span className="font-mono">{result.tankSizing.method3_DailyReserve.toFixed(0)} L</span>
+                    </div>
+                    
+                    <div className="h-px bg-amber-300 my-3"></div>
+                    
+                    <div className="flex justify-between font-bold text-lg text-orange-600">
+                      <span>Recommended Tank Size:</span>
+                      <span className="font-mono">{result.tankSizing.recommendedTankSize} L</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Key Metrics Grid */}
@@ -508,8 +651,8 @@ const HeatPumpCalculator = () => {
               <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm">
                 <Droplets className="text-blue-500"/>
                 <div>
-                  <p className="text-xs text-gray-400 font-bold uppercase">Peak Demand</p>
-                  <p className="text-lg font-bold">{result.metrics.peakHourlyLiters} L/hr</p>
+                  <p className="text-xs text-gray-400 font-bold uppercase">Peak Draw</p>
+                  <p className="text-lg font-bold">{result.metrics.peakDrawRate} L/hr</p>
                 </div>
               </div>
               <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm">
