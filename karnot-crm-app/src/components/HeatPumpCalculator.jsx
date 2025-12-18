@@ -4,7 +4,7 @@ import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore
 import { getAuth } from "firebase/auth";
 import { calculateHeatPump, CONFIG } from '../utils/heatPumpLogic'; 
 import { Card, Section, Input, Button } from '../data/constants.jsx'; 
-import { Save, Calculator, RefreshCw, Printer, X, Check } from 'lucide-react';
+import { Save, Calculator, RefreshCw, Printer, X, Check, Droplets, Gauge } from 'lucide-react';
 
 const HeatPumpCalculator = ({ leadId }) => {  
   
@@ -13,7 +13,7 @@ const HeatPumpCalculator = ({ leadId }) => {
     currency: 'PHP',
     userType: 'home',
     occupants: 4,
-    dailyLitersInput: 500,
+    dailyLitersInput: 150, // Default for Home use with iSTOR Integral 150L
     mealsPerDay: 0,
     roomsOccupied: 0,
     hoursPerDay: 12,
@@ -26,7 +26,7 @@ const HeatPumpCalculator = ({ leadId }) => {
     targetTemp: 55,
     systemType: 'grid-solar',
     sunHours: 5.5,
-    heatPumpType: 'all', // 'all', 'R290', 'R744', 'R32'
+    heatPumpType: 'all', 
     includeCooling: false
   });
 
@@ -64,8 +64,13 @@ const HeatPumpCalculator = ({ leadId }) => {
     fetchProducts();
   }, []);
 
-  // --- 2. AUTO CALCULATE ---
+  // --- 2. AUTO CALCULATE & SYNC HOME DEMAND ---
   useEffect(() => {
+    // If Home is selected, lock demand to the 150L standard integral tank volume
+    if (inputs.userType === 'home' && inputs.dailyLitersInput !== 150) {
+        setInputs(prev => ({ ...prev, dailyLitersInput: 150 }));
+    }
+    
     if (!loading && dbProducts.length > 0) {
         const res = calculateHeatPump(inputs, dbProducts);
         setResult(res);
@@ -76,11 +81,9 @@ const HeatPumpCalculator = ({ leadId }) => {
   const handleChange = (field, isNumber = false) => (e) => {
     const val = isNumber ? parseFloat(e.target.value) || 0 : e.target.value;
     
-    // UPDATED: Proper currency and heating type switching logic
     if (field === 'currency') {
         const defaults = CONFIG.defaultRate[val];
         const hType = inputs.heatingType;
-        // Reset local rates to the new currency defaults
         let newFuelPrice = hType === 'propane' ? defaults.lpgPrice : (hType === 'diesel' ? defaults.diesel : (hType === 'gas' ? defaults.gas : defaults.grid));
         setInputs(prev => ({ 
             ...prev, 
@@ -151,7 +154,7 @@ const HeatPumpCalculator = ({ leadId }) => {
             <div class="summary-grid"> 
                 <div class="metric"><div class="value">${q.financials.symbol}${fmt(q.financials.totalSavings)}</div><div class="label">Total Annual Savings</div></div> 
                 <div class="metric"><div class="value">${q.financials.paybackYears} Yrs</div><div class="label">Estimated Payback</div></div> 
-                <div class="metric"><div class="value">Active</div><div class="label">Emission Reduction</div></div> 
+                <div class="metric"><div class="value">${q.metrics.warmupTime} Hrs</div><div class="label">Tank Warm-up Time</div></div> 
             </div>
             <h2>Financial Breakdown</h2>
             <table class="details-table"> 
@@ -176,7 +179,7 @@ const HeatPumpCalculator = ({ leadId }) => {
         const user = auth.currentUser;
         const path = leadId ? `users/${user.uid}/leads/${leadId}/calculations` : `users/${user.uid}/calculations`;
         await addDoc(collection(db, path), {
-            type: 'heat-pump-roi',
+            type: 'heat-pump-roi-storage-v2',
             inputs,
             results: result,
             createdAt: serverTimestamp()
@@ -205,7 +208,7 @@ const HeatPumpCalculator = ({ leadId }) => {
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">User Type</label>
                         <select className="w-full border p-2 rounded" value={inputs.userType} onChange={handleChange('userType')}>
-                            <option value="home">Home</option>
+                            <option value="home">Home (Standard 150L)</option>
                             <option value="restaurant">Restaurant</option>
                             <option value="resort">Hotels & Resorts</option>
                             <option value="school">Schools & Colleges</option>
@@ -214,14 +217,14 @@ const HeatPumpCalculator = ({ leadId }) => {
                         </select>
                     </div>
 
-                    {isOccupantFieldVisible && (
-                        <Input label="Number of Occupants" type="number" value={inputs.occupants} onChange={handleChange('occupants', true)} />
-                    )}
-
-                    {isShowerFieldVisible && (
+                    {isOccupantFieldVisible ? (
+                        <div className="bg-orange-50 p-3 rounded border border-orange-200 text-sm text-orange-800">
+                          [cite_start]<strong>Standard Home Setup:</strong> Prescribing iSTOR Integral 150L tank system[cite: 97].
+                        </div>
+                    ) : (
                         <div>
-                            <Input label="Liters of Hot Water / Day" type="number" value={inputs.dailyLitersInput} onChange={handleChange('dailyLitersInput', true)} />
-                            <button onClick={() => setShowModal(true)} className="mt-2 text-sm text-blue-600 underline">Estimate via Fixtures</button>
+                          <Input label="Liters of Hot Water / Day" type="number" value={inputs.dailyLitersInput} onChange={handleChange('dailyLitersInput', true)} />
+                          <button onClick={() => setShowModal(true)} className="mt-2 text-sm text-blue-600 underline">Estimate via Fixtures</button>
                         </div>
                     )}
 
@@ -313,13 +316,33 @@ const HeatPumpCalculator = ({ leadId }) => {
                 <div className="flex justify-between items-end mb-6">
                     <div>
                         <h3 className="text-xl font-bold text-orange-600">{result.system.n}</h3>
-                        <p className="text-sm text-gray-500">Required Load: {result.metrics.requiredThermalPowerKW} kW</p>
+                        <p className="text-sm text-gray-500">System Ref: {result.system.ref}</p>
                     </div>
                     <div className="text-right">
                         <div className="text-3xl font-bold text-green-600">
                             {result.financials.symbol}{fmt(result.financials.totalSavings)}
                         </div>
                         <p className="text-xs uppercase font-bold text-gray-400">Annual Savings</p>
+                    </div>
+                </div>
+
+                {/* STORAGE SYSTEM DETAILS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div className="bg-white p-4 rounded-lg border flex items-center gap-3">
+                        <Droplets className="text-blue-500" size={24}/>
+                        <div>
+                            <p className="text-xs text-gray-400 uppercase font-bold">Matched Tank Size</p>
+                            <p className="text-lg font-bold text-slate-700">
+                              {result.system.tankSize > 0 ? `${result.system.tankSize} Liters` : 'Not Detected'}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="bg-white p-4 rounded-lg border flex items-center gap-3">
+                        <Gauge className="text-orange-500" size={24}/>
+                        <div>
+                            <p className="text-xs text-gray-400 uppercase font-bold">Estimated Warm-up Time</p>
+                            <p className="text-lg font-bold text-slate-700">{result.metrics.warmupTime} Hours</p>
+                        </div>
                     </div>
                 </div>
 
@@ -339,8 +362,10 @@ const HeatPumpCalculator = ({ leadId }) => {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td className="p-3 border-b">Annual Cost (Old System)</td><td className="p-3 border-b text-right">{result.financials.symbol}{fmt(result.financials.annualCostOld)}</td></tr>
-                            <tr><td className="p-3 border-b">Annual Cost (New HP)</td><td className="p-3 border-b text-right">{result.financials.symbol}{fmt(result.financials.karnotAnnualCost)}</td></tr>
+                            <tr><td className="p-3 border-b">Required Thermal Power</td><td className="p-3 border-b text-right">{result.metrics.requiredThermalPowerKW} kW</td></tr>
+                            <tr><td className="p-3 border-b">Recirculation Delta T</td><td className="p-3 border-b text-right">{result.metrics.loopDeltaT}°C</td></tr>
+                            <tr><td className="p-3 border-b">Annual Cost (Current)</td><td className="p-3 border-b text-right">{result.financials.symbol}{fmt(result.financials.annualCostOld)}</td></tr>
+                            <tr><td className="p-3 border-b">Annual Cost (Karnot)</td><td className="p-3 border-b text-right">{result.financials.symbol}{fmt(result.financials.karnotAnnualCost)}</td></tr>
                             <tr className="font-bold bg-gray-50"><td className="p-3">Total Annual Savings</td><td className="p-3 text-right text-green-600">{result.financials.symbol}{fmt(result.financials.totalSavings)}</td></tr>
                             <tr className="font-bold"><td className="p-3">Estimated Payback</td><td className="p-3 text-right text-orange-600">{result.financials.paybackYears} Yrs</td></tr>
                         </tbody>
