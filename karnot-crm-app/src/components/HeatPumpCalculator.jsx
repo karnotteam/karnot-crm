@@ -13,7 +13,7 @@ const HeatPumpCalculator = ({ leadId }) => {
     currency: 'PHP',
     userType: 'home',
     occupants: 4,
-    dailyLitersInput: 150, // Standardized for iSTOR Integral 150L [cite: 97]
+    dailyLitersInput: 150, // Standardized for iSTOR Integral 150L
     mealsPerDay: 0,
     roomsOccupied: 0,
     hoursPerDay: 12,
@@ -31,18 +31,25 @@ const HeatPumpCalculator = ({ leadId }) => {
   });
 
   const [showModal, setShowModal] = useState(false);
+  
+  // FULL FIXTURE LIST RESTORED
   const [fixtureInputs, setFixtureInputs] = useState({
-      showers: 0, basins: 0, sinks: 0, people: 0, hours: 8
+      showers: 0,
+      basins: 0,
+      sinks: 0,
+      people: 0,
+      hours: 8
   });
+
   const [result, setResult] = useState(null);
   const [dbProducts, setDbProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // DEFENSIVE FIX: Prevents white screen error from missing symbols
+  // DEFENSIVE FIX: Prevents "white screen" crash
   const symbol = CONFIG?.SYMBOLS?.[inputs.currency] || '$';
 
-  // --- 2. FIREBASE SYNC ---
+  // --- 2. FIREBASE INVENTORY FETCH ---
   useEffect(() => {
     const fetchProducts = async () => {
         const auth = getAuth();
@@ -61,9 +68,9 @@ const HeatPumpCalculator = ({ leadId }) => {
     fetchProducts();
   }, []);
 
-  // --- 3. AUTO-CALCULATION LOGIC ---
+  // --- 3. AUTO-CALCULATION ---
   useEffect(() => {
-    // Standardizing Home demand to 150L [cite: 97]
+    // Lock Home to standard 150L Integral Tank
     if (inputs.userType === 'home' && inputs.dailyLitersInput !== 150) {
         setInputs(prev => ({ ...prev, dailyLitersInput: 150 }));
     }
@@ -78,7 +85,7 @@ const HeatPumpCalculator = ({ leadId }) => {
     }
   }, [inputs, dbProducts, loading]);
 
-  // --- 4. UI HANDLERS ---
+  // --- 4. HANDLERS ---
   const handleChange = (field, isNumber = false) => (e) => {
     const val = isNumber ? parseFloat(e.target.value) || 0 : e.target.value;
     
@@ -98,30 +105,42 @@ const HeatPumpCalculator = ({ leadId }) => {
     }
   };
 
+  const handleFixtureChange = (field) => (e) => {
+      setFixtureInputs(prev => ({ ...prev, [field]: parseFloat(e.target.value) || 0 }));
+  };
+
   const applyFixtureCalculation = () => {
       const { showers, basins, sinks, people, hours } = fixtureInputs;
       const totalLiters = Math.round(
-          (50 * showers * 0.4) + (284 * people * 0.15 * 0.25 * 0.4) + (20 * basins * 0.4) + (114 * sinks * 0.3 * hours * 0.4)
+          (50 * showers * 0.4) + 
+          (284 * people * 0.15 * 0.25 * 0.4) + 
+          (20 * basins * 0.4) + 
+          (114 * sinks * 0.3 * hours * 0.4)
       );
       setInputs(prev => ({ ...prev, dailyLitersInput: totalLiters }));
       setShowModal(false);
   };
   
+  const isShowerFieldVisible = ['office','school','spa'].includes(inputs.userType);
+  const isMealFieldVisible = ['restaurant','resort'].includes(inputs.userType);
+  const isRoomFieldVisible = inputs.userType === 'resort';
+  const isOccupantFieldVisible = inputs.userType === 'home';
+  const isSunHoursVisible = inputs.systemType === 'grid-solar';
+  
   const fmt = n => (+n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-  // --- 5. REPORT & SAVE FUNCTIONS ---
+  // --- 5. REPORT & SAVE ---
   const generateReport = () => {
       if (!result || result.error || !result.financials) return;
       const q = result;
-      const coolRow = q.financials.coolSavings > 0 ? `<tr><td>Free Cooling Bonus</td><td>${symbol}${fmt(q.financials.coolSavings)}</td></tr>` : '';
+      const coolRow = q.financials.coolSavings > 0 ? `<tr><td>Free Cooling Savings</td><td>${symbol}${fmt(q.financials.coolSavings)}</td></tr>` : '';
       const reportHTML = `<html><body style="font-family: sans-serif; padding: 40px; color: #1d1d1f;">
-            <h1 style="color: #F56600; text-align: center; border-bottom: 2px solid #F56600;">Karnot ROI Report</h1>
-            <p><strong>System:</strong> ${q.system?.n || 'N/A'}</p>
-            <p><strong>Tank Capacity:</strong> ${q.system?.tankSize || 0}L</p>
-            <p><strong>Warm-up Time:</strong> ${q.metrics?.warmupTime || 0} Hours</p>
+            <h1 style="color: #F56600; text-align: center; border-bottom: 2px solid #F56600;">Karnot Savings Report</h1>
+            <p><strong>Recommended System:</strong> ${q.system?.n || 'N/A'}</p>
+            <p><strong>Tank Size:</strong> ${q.system?.tankSize || 0}L</p>
             <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                <tr style="border-bottom: 1px solid #eee;"><td>Annual Baseline Cost</td><td style="text-align:right;">${symbol}${fmt(q.financials.annualCostOld)}</td></tr>
-                <tr style="border-bottom: 1px solid #eee;"><td>Annual Karnot Cost</td><td style="text-align:right;">${symbol}${fmt(q.financials.karnotAnnualCost)}</td></tr>
+                <tr style="border-bottom: 1px solid #eee;"><td>Baseline Annual Cost</td><td style="text-align:right;">${symbol}${fmt(q.financials.annualCostOld)}</td></tr>
+                <tr style="border-bottom: 1px solid #eee;"><td>Karnot Annual Cost</td><td style="text-align:right;">${symbol}${fmt(q.financials.karnotAnnualCost)}</td></tr>
                 ${coolRow}
                 <tr style="font-weight:bold; font-size: 1.2em; border-top: 2px solid #F56600;"><td>Total Savings</td><td style="text-align:right;">${symbol}${fmt(q.financials.totalSavings)}</td></tr>
             </table>
@@ -137,15 +156,16 @@ const HeatPumpCalculator = ({ leadId }) => {
         const user = getAuth().currentUser;
         const path = leadId ? `users/${user.uid}/leads/${leadId}/calculations` : `users/${user.uid}/calculations`;
         await addDoc(collection(db, path), { type: 'heat-pump-roi-v3', inputs, results: result, createdAt: serverTimestamp() });
-        alert("Calculation Saved Successfully!");
-    } catch (err) { alert("Error Saving: " + err.message); } finally { setIsSaving(false); }
+        alert("Saved!");
+    } catch (err) { alert("Error: " + err.message); } finally { setIsSaving(false); }
   };
 
-  // --- 6. RENDER ---
   return (
     <Card>
         <div className="flex justify-between items-center mb-6 border-b pb-4">
-            <h2 className="text-2xl font-bold text-orange-600 flex items-center gap-2"><Calculator size={24}/> ROI Calculator</h2>
+            <h2 className="text-2xl font-bold text-orange-600 flex items-center gap-2">
+                <Calculator size={24}/> ROI Calculator
+            </h2>
             {loading && <RefreshCw size={12} className="animate-spin text-gray-400"/>}
         </div>
 
@@ -157,9 +177,9 @@ const HeatPumpCalculator = ({ leadId }) => {
                         <option value="restaurant">Restaurant</option>
                         <option value="resort">Hotels & Resorts</option>
                     </select>
-                    {inputs.userType === 'home' ? (
+                    {isOccupantFieldVisible ? (
                         <div className="bg-orange-50 p-3 rounded text-xs text-orange-800 border border-orange-200">
-                          Prescribing standard 150L iSTOR Integral dual-tank setup[cite: 97].
+                          Residential: 150L iSTOR Integral Tank system.
                         </div>
                     ) : (
                         <div>
@@ -198,11 +218,13 @@ const HeatPumpCalculator = ({ leadId }) => {
             </Section>
         </div>
 
-        <div className="mt-8"><Button onClick={() => setResult(calculateHeatPump(inputs, dbProducts))} variant="primary">Calculate Savings</Button></div>
+        <div className="mt-8">
+            <Button onClick={() => setResult(calculateHeatPump(inputs, dbProducts))} variant="primary">Calculate Savings</Button>
+        </div>
 
-        {/* DEFENSIVE UI: Checks result before rendering to avoid crash */}
+        {/* RESULTS SECTION - Guarded against crashes */}
         {result && !result.error && result.financials && (
-            <div className="mt-8 bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-inner animate-in fade-in duration-300">
+            <div className="mt-8 bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-inner">
                 <div className="flex justify-between items-end mb-6">
                     <div>
                         <h3 className="text-xl font-bold text-orange-600">{result.system?.n || 'Recommended System'}</h3>
@@ -218,7 +240,7 @@ const HeatPumpCalculator = ({ leadId }) => {
                     <div className="bg-white p-4 rounded-lg border flex items-center gap-3 shadow-sm">
                         <Droplets className="text-blue-500" size={24}/>
                         <div>
-                            <p className="text-xs text-gray-400 font-bold uppercase">Linked Tank Size</p>
+                            <p className="text-xs text-gray-400 font-bold uppercase">Inventory Tank Capacity</p>
                             <p className="text-lg font-bold">{result.system?.tankSize || 150} Liters</p>
                         </div>
                     </div>
@@ -240,20 +262,24 @@ const HeatPumpCalculator = ({ leadId }) => {
 
         {result?.error && <div className="mt-6 p-4 bg-red-50 text-red-600 rounded border border-red-200 text-sm italic">{result.error}</div>}
 
+        {/* FIXTURE MODAL - FULLY RESTORED */}
         {showModal && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                 <div className="bg-white p-6 rounded-lg shadow-2xl max-w-md w-full">
                     <div className="flex justify-between items-center mb-4 border-b pb-2">
-                        <h3 className="text-lg font-bold">Fixture Estimation</h3>
+                        <h3 className="text-lg font-bold">Estimate Hot Water Use</h3>
                         <button onClick={() => setShowModal(false)}><X size={20}/></button>
                     </div>
                     <div className="space-y-4">
-                        <Input label="Showers" type="number" value={fixtureInputs.showers} onChange={(e) => setFixtureInputs(p => ({...p, showers: parseFloat(e.target.value) || 0}))} />
-                        <Input label="Occupants" type="number" value={fixtureInputs.people} onChange={(e) => setFixtureInputs(p => ({...p, people: parseFloat(e.target.value) || 0}))} />
+                        <Input label="Number of Showers (50L/day)" type="number" value={fixtureInputs.showers} onChange={handleFixtureChange('showers')} />
+                        <Input label="Lavatory Basins (20L/day)" type="number" value={fixtureInputs.basins} onChange={handleFixtureChange('basins')} />
+                        <Input label="Kitchen Sinks (114L/day)" type="number" value={fixtureInputs.sinks} onChange={handleFixtureChange('sinks')} />
+                        <Input label="Total Occupants" type="number" value={fixtureInputs.people} onChange={handleFixtureChange('people')} />
+                        <Input label="Hours per Day" type="number" value={fixtureInputs.hours} onChange={handleFixtureChange('hours')} />
                     </div>
                     <div className="mt-6 flex justify-end gap-2">
                         <Button onClick={() => setShowModal(false)} variant="secondary">Cancel</Button>
-                        <Button onClick={applyFixtureCalculation} variant="primary"><Check size={16} className="mr-2"/> Apply</Button>
+                        <Button onClick={applyFixtureCalculation} variant="primary"><Check size={16} className="mr-2"/> Apply Values</Button>
                     </div>
                 </div>
             </div>
