@@ -23,6 +23,15 @@ export const CONFIG = {
         propane: 0.23, 
         gas: 0.20, 
         diesel: 0.25 
+    },
+    // Coincidence factors - % of fixtures used simultaneously during peak
+    COINCIDENCE_FACTORS: {
+        home: { factor: 1.0, peakDuration: 1.0 }, // Everyone at once
+        restaurant: { factor: 0.5, peakDuration: 3.0 }, // 50% of capacity during lunch/dinner
+        resort: { factor: 0.4, peakDuration: 2.0 }, // 40% of rooms during morning peak
+        spa: { factor: 0.6, peakDuration: 2.0 }, // 60% of facilities during peak
+        school: { factor: 0.3, peakDuration: 1.5 }, // 30% during class change
+        office: { factor: 0.4, peakDuration: 2.0 } // 40% during morning/lunch
     }
 };
 
@@ -113,6 +122,45 @@ export const calculateCurrentCost = (heatingType, inputs, dailyThermalKWH) => {
     };
 };
 
+// Calculate recovery rate and required tank size
+const calculateTankSizing = (heatPumpKW, deltaT, dailyLiters, userType, hoursPerDay) => {
+    // Recovery rate: How many liters/hour the heat pump can heat
+    const recoveryRateLph = (heatPumpKW * 1000) / (deltaT * CONFIG.WATER_SPEC_HEAT);
+    
+    // Get coincidence factor for this building type
+    const coincidence = CONFIG.COINCIDENCE_FACTORS[userType] || { factor: 0.5, peakDuration: 2.0 };
+    
+    // Peak draw rate during busiest period (with coincidence factor applied)
+    const peakDrawRateLph = (dailyLiters / hoursPerDay) * coincidence.factor / (coincidence.factor * 0.5); // Concentrate into peak hours
+    
+    // Gap between draw and recovery
+    const gapLph = Math.max(0, peakDrawRateLph - recoveryRateLph);
+    
+    // Calculate minimum tank sizes using three methods
+    const method1_GapBased = gapLph * coincidence.peakDuration; // Cover the deficit during peak
+    const method2_PeakBuffer = peakDrawRateLph * 0.65; // 65% of peak hourly demand
+    const method3_DailyReserve = dailyLiters * 0.35; // 35% of daily demand as minimum reserve
+    
+    // Required tank is the maximum of all three methods
+    const requiredTankSize = Math.max(method1_GapBased, method2_PeakBuffer, method3_DailyReserve);
+    
+    // Round up to nearest 50L for practical sizing
+    const recommendedTankSize = Math.ceil(requiredTankSize / 50) * 50;
+    
+    return {
+        recoveryRateLph,
+        peakDrawRateLph,
+        gapLph,
+        coincidenceFactor: coincidence.factor,
+        peakDuration: coincidence.peakDuration,
+        method1_GapBased,
+        method2_PeakBuffer,
+        method3_DailyReserve,
+        requiredTankSize,
+        recommendedTankSize
+    };
+};
+
 export function calculateHeatPump(inputs, dbProducts) {
     if (!dbProducts || dbProducts.length === 0) {
         return { error: "Inventory empty. Please add products to your database." };
@@ -126,7 +174,7 @@ export function calculateHeatPump(inputs, dbProducts) {
 
     const deltaT = inputs.targetTemp - inputs.inletTemp;
     const dailyThermalKWH = (dailyLiters * deltaT * CONFIG.WATER_SPEC_HEAT) / 1000;
-    const peakHourlyLiters = dailyLiters / Math.max(1, inputs.hoursPerDay);
+    const avgDrawRateLph = dailyLiters / Math.max(1, inputs.hoursPerDay);
     
     // --- 2. CALCULATE CURRENT SYSTEM COST ---
     const currentSystem = calculateCurrentCost(inputs.heatingType, inputs, dailyThermalKWH);
@@ -138,25 +186,27 @@ export function calculateHeatPump(inputs, dbProducts) {
 
     // --- 4. FILTER AND ADJUST PRODUCTS ---
     let availableProducts = dbProducts.map(p => {
-        const tankSize = extractTankLiters(p.name);
+        const integralTankSize = extractTankLiters(p.name);
         const kW = Number(p.kW_DHW_Nominal) || extractKW(p.name);
         const cop = Number(p.COP_DHW) || 3.5;
         const maxTemp = Number(p.max_temp_c) || 60;
         const reversible = isReversible(p);
         
-        // Calculate adjusted capacity
+        // Calculate adjusted capacity based on actual conditions
         const adjustedKW = kW * performanceFactor;
-        const adjustedHourlyLiters = (adjustedKW * 1000) / (deltaT * CONFIG.WATER_SPEC_HEAT);
+        
+        // Calculate recovery rate for this heat pump
+        const recoveryRateLph = (adjustedKW * 1000) / (deltaT * CONFIG.WATER_SPEC_HEAT);
         
         return {
             ...p,
-            tankSize,
+            integralTankSize,
             kW,
             cop,
             maxTemp,
             reversible,
             adjustedKW,
-            adjustedHourlyLiters
+            recoveryRateLph
         };
     });
 
@@ -174,10 +224,9 @@ export function calculateHeatPump(inputs, dbProducts) {
     // Filter by capacity and temperature
     const suitableProducts = availableProducts.filter(p => {
         const tempOK = inputs.targetTemp <= p.maxTemp;
-        const capacityOK = p.adjustedHourlyLiters >= peakHourlyLiters;
-        const tankOK = !p.tankSize || p.tankSize >= (dailyLiters * 0.3); // Tank should hold at least 30% of daily demand
+        const capacityOK = p.recoveryRateLph >= (avgDrawRateLph * 0.7); // Must handle at least 70% of average demand
         
-        return tempOK && capacityOK && tankOK;
+        return tempOK && capacityOK;
     });
 
     if (suitableProducts.length === 0) {
@@ -186,7 +235,7 @@ export function calculateHeatPump(inputs, dbProducts) {
             : '';
         const coolMsg = inputs.includeCooling ? ' and cooling capability' : '';
         return { 
-            error: `No system found for ${peakHourlyLiters.toFixed(0)} L/hr peak demand at ${inputs.targetTemp}°C${filterMsg}${coolMsg}.` 
+            error: `No system found for ${avgDrawRateLph.toFixed(0)} L/hr average demand at ${inputs.targetTemp}°C${filterMsg}${coolMsg}.` 
         };
     }
 
@@ -199,13 +248,26 @@ export function calculateHeatPump(inputs, dbProducts) {
 
     const selectedProduct = suitableProducts[0];
 
-    // --- 5. CALCULATE NEW SYSTEM COSTS ---
+    // --- 5. CALCULATE REQUIRED TANK SIZE ---
+    const tankSizing = calculateTankSizing(
+        selectedProduct.adjustedKW,
+        deltaT,
+        dailyLiters,
+        inputs.userType,
+        inputs.hoursPerDay
+    );
+
+    // Check if product has integral tank
+    const finalTankSize = selectedProduct.integralTankSize || tankSizing.recommendedTankSize;
+    const needsExternalTank = !selectedProduct.integralTankSize;
+
+    // --- 6. CALCULATE NEW SYSTEM COSTS ---
     const fxRate = CONFIG.FX[inputs.currency] || 1;
     const symbol = CONFIG.SYMBOLS[inputs.currency];
     
     const heatPumpCOP = selectedProduct.cop;
     const dailyElecKwh = dailyThermalKWH / heatPumpCOP;
-    const avgDrawKW = dailyElecKwh / inputs.hoursPerDay;
+    const avgPowerDrawKW = dailyElecKwh / inputs.hoursPerDay;
 
     const heatPumpCost = (Number(selectedProduct.salesPriceUSD) || 0) * fxRate;
     
@@ -217,15 +279,15 @@ export function calculateHeatPump(inputs, dbProducts) {
     } else {
         const solarHours = Math.min(inputs.hoursPerDay, sunHours);
         const gridHours = Math.max(0, inputs.hoursPerDay - solarHours);
-        annualElecCost = (avgDrawKW * gridHours) * 365 * inputs.elecRate;
+        annualElecCost = (avgPowerDrawKW * gridHours) * 365 * inputs.elecRate;
         
-        panelCount = Math.ceil(avgDrawKW / CONFIG.SOLAR_PANEL_KW_RATED);
+        panelCount = Math.ceil(avgPowerDrawKW / CONFIG.SOLAR_PANEL_KW_RATED);
         solarCost = panelCount * CONFIG.SOLAR_PANEL_COST_USD * fxRate;
         inverterCost = (panelCount * CONFIG.SOLAR_PANEL_KW_RATED * 1000 * 
                        CONFIG.INVERTER_COST_PER_WATT_USD) * fxRate;
     }
 
-    // --- 6. COOLING CALCULATIONS ---
+    // --- 7. COOLING CALCULATIONS ---
     let coolingData = null;
     if (inputs.includeCooling && selectedProduct.reversible) {
         const dailyCoolingKwh = dailyThermalKWH / selectedProduct.cop * CONFIG.COOLING_COP;
@@ -239,19 +301,18 @@ export function calculateHeatPump(inputs, dbProducts) {
         };
     }
 
-    // --- 7. EMISSIONS CALCULATIONS ---
+    // --- 8. EMISSIONS CALCULATIONS ---
     const emFactorKey = inputs.heatingType === 'electric' ? 'electric_grid' : inputs.heatingType;
     const emFactorOld = CONFIG.EM_FACTOR[emFactorKey] || 0.7;
     const emFactorNew = CONFIG.EM_FACTOR[inputs.systemType === 'grid-solar' ? 'electric_solar' : 'electric_grid'];
     const emissionsSaved = ((dailyThermalKWH / CONFIG.COP_STANDARD) * 365 * emFactorOld) - 
                           (dailyElecKwh * 365 * emFactorNew);
 
-    // --- 8. WARM-UP TIME ---
-    const tankSize = selectedProduct.tankSize || (dailyLiters * 0.5);
-    const warmupTime = (tankSize * deltaT * CONFIG.WATER_SPEC_HEAT) / 
-                       (selectedProduct.kW * 1000);
+    // --- 9. WARM-UP TIME ---
+    const warmupTime = (finalTankSize * deltaT * CONFIG.WATER_SPEC_HEAT) / 
+                       (selectedProduct.adjustedKW * 1000);
 
-    // --- 9. FINANCIAL SUMMARY ---
+    // --- 10. FINANCIAL SUMMARY ---
     const totalCapex = heatPumpCost + solarCost + inverterCost;
     const heatingSavings = currentSystem.annualCost - annualElecCost;
     const coolingSavings = coolingData ? coolingData.annualSavings : 0;
@@ -264,19 +325,29 @@ export function calculateHeatPump(inputs, dbProducts) {
         system: {
             name: selectedProduct.name,
             refrigerant: selectedProduct.Refrigerant,
-            tankSize: tankSize,
+            tankSize: finalTankSize,
+            integralTank: selectedProduct.integralTankSize,
+            needsExternalTank,
             kW: selectedProduct.kW,
+            adjustedKW: selectedProduct.adjustedKW,
             cop: selectedProduct.cop,
             reversible: selectedProduct.reversible,
-            maxTemp: selectedProduct.maxTemp
+            maxTemp: selectedProduct.maxTemp,
+            recoveryRate: selectedProduct.recoveryRateLph
+        },
+        tankSizing: {
+            ...tankSizing,
+            finalTankSize,
+            avgDrawRate: avgDrawRateLph
         },
         metrics: {
             dailyLiters,
-            peakHourlyLiters: peakHourlyLiters.toFixed(1),
+            avgDrawRate: avgDrawRateLph.toFixed(1),
+            peakDrawRate: tankSizing.peakDrawRateLph.toFixed(1),
             warmupTime: warmupTime.toFixed(1),
-            adjustedCapacity: selectedProduct.adjustedHourlyLiters.toFixed(1),
             panelCount,
-            avgDrawKW: avgDrawKW.toFixed(2)
+            avgPowerDrawKW: avgPowerDrawKW.toFixed(2),
+            performanceFactor: performanceFactor.toFixed(2)
         },
         financials: {
             symbol,
@@ -295,8 +366,8 @@ export function calculateHeatPump(inputs, dbProducts) {
         cooling: coolingData,
         emissions: {
             annualSaved: emissionsSaved,
-            lifetimeSaved: emissionsSaved * 15 // Assuming 15-year lifespan
+            lifetimeSaved: emissionsSaved * 15
         },
-        inputs // Include inputs for report generation
+        inputs
     };
 }
