@@ -20,7 +20,6 @@ export const CONFIG = {
     R290_LOOP_DELTA_T: 7
 };
 
-// Regex to find "1000L", "150L", etc. in product names 
 const extractTankLiters = (name) => {
     if (!name) return 0;
     const match = name.match(/(\d+)\s*L\b/i);
@@ -28,10 +27,9 @@ const extractTankLiters = (name) => {
 };
 
 export function calculateHeatPump(inputs, dbProducts) {
-    if (!dbProducts || dbProducts.length === 0) return { error: "No products in inventory." };
+    if (!dbProducts || dbProducts.length === 0) return { error: "No products loaded." };
 
     // --- 1. DEMAND ---
-    // Home users standardizing to 150L iSTOR Integral [cite: 4]
     let dailyLiters = inputs.userType === 'home' ? 150 : inputs.dailyLitersInput;
     const deltaT = inputs.targetTemp - inputs.inletTemp;
     const thermalKWH = (dailyLiters * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / 1000;
@@ -39,27 +37,59 @@ export function calculateHeatPump(inputs, dbProducts) {
 
     // --- 2. MATCHING ---
     const matches = dbProducts.filter(p => {
-        const pPower = Number(p.kW_DHW_Nominal) || 0;
-        const pPrice = Number(p.salesPriceUSD) || 0;
-        return pPower >= (requiredKW * 0.9) && pPrice > 0;
+        const power = Number(p.kW_DHW_Nominal) || 0;
+        const price = Number(p.salesPriceUSD) || 0;
+        if (power === 0 || price === 0) return false;
+
+        if (inputs.heatPumpType !== 'all') {
+            const pRef = (p.Refrigerant || '').toUpperCase();
+            const reqRef = inputs.heatPumpType.toUpperCase();
+            if (reqRef === 'R744' && !(pRef === 'R744' || pRef === 'CO2')) return false;
+            if (reqRef !== 'R744' && pRef !== reqRef) return false;
+        }
+        return power >= (requiredKW * 0.95);
     }).sort((a, b) => Number(a.salesPriceUSD) - Number(b.salesPriceUSD));
 
-    if (matches.length === 0) return { error: `No system match found for ${requiredKW.toFixed(1)}kW load.` };
+    if (matches.length === 0) return { error: `No ${inputs.heatPumpType} model found for ${requiredKW.toFixed(1)}kW load.` };
 
     const system = matches[0];
     const tankSize = extractTankLiters(system.name) || (inputs.userType === 'home' ? 150 : 0);
+    const fxRate = CONFIG.FX[inputs.currency] || 1;
 
-    // --- 3. PERFORMANCE ---
+    // --- 3. PERFORMANCE & WARMUP ---
     const warmup = (tankSize * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / (Number(system.kW_DHW_Nominal) * 1000);
-    const dailyElec = thermalKWH / (Number(system.COP_DHW) || 3.5);
-    
-    // --- 4. FINANCIALS ---
+    const hpCOP = Number(system.COP_DHW) || 3.5;
+    const dailyElecKwh = thermalKWH / hpCOP;
+    const avgDrawKW = dailyElecKwh / inputs.hoursPerDay;
+
+    // --- 4. SOLAR & COSTS ---
+    let annualElecCost = 0, solarCost = 0, inverterCost = 0, panelCount = 0;
+    if (inputs.systemType === 'grid-only') {
+        annualElecCost = dailyElecKwh * 365 * inputs.elecRate;
+    } else {
+        const sunHours = Number(inputs.sunHours) || 5.5;
+        const gridHours = Math.max(0, inputs.hoursPerDay - sunHours);
+        annualElecCost = (avgDrawKW * gridHours) * 365 * inputs.elecRate;
+        panelCount = Math.ceil(avgDrawKW / CONFIG.SOLAR_PANEL_KW_RATED);
+        solarCost = panelCount * CONFIG.SOLAR_PANEL_COST_USD * fxRate;
+        inverterCost = (panelCount * CONFIG.SOLAR_PANEL_KW_RATED * 1000 * CONFIG.INVERTER_COST_PER_WATT_USD) * fxRate;
+    }
+
     const annualOld = (thermalKWH / CONFIG.COP_STANDARD) * 365 * inputs.fuelPrice;
-    const annualNew = dailyElec * 365 * inputs.elecRate;
+    const hpCost = Number(system.salesPriceUSD) * fxRate;
+    const totalCapex = hpCost + solarCost + inverterCost;
+    const savings = annualOld - annualElecCost;
 
     return {
         system: { n: system.name, ref: system.Refrigerant, tankSize },
-        metrics: { warmupTime: warmup.toFixed(1), requiredKW: requiredKW.toFixed(1), loopDeltaT: CONFIG.R290_LOOP_DELTA_T },
-        financials: { totalSavings: annualOld - annualNew, annualCostOld: annualOld, karnotAnnualCost: annualNew, paybackYears: 1.5 }
+        metrics: { warmupTime: warmup.toFixed(1), requiredKW: requiredKW.toFixed(1), panelCount },
+        financials: {
+            symbol: CONFIG.SYMBOLS[inputs.currency],
+            annualCostOld: annualOld,
+            karnotAnnualCost: annualElecCost,
+            totalSavings: savings,
+            paybackYears: savings > 0 ? (totalCapex / savings).toFixed(1) : "N/A",
+            capex: { total: totalCapex, heatPump: hpCost, solar: solarCost, inverter: inverterCost }
+        }
     };
 }
