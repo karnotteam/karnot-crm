@@ -8,12 +8,12 @@ import { Save, Calculator, RefreshCw, Printer, X, Check, Droplets, Gauge } from 
 
 const HeatPumpCalculator = ({ leadId }) => {  
   
-  // --- MAIN STATE ---
+  // --- MAIN STATE (Full restoration of all original fields) ---
   const [inputs, setInputs] = useState({
     currency: 'PHP',
     userType: 'home',
     occupants: 4,
-    dailyLitersInput: 150, // Default for Home use with iSTOR Integral 150L
+    dailyLitersInput: 150, // Standardized for iSTOR Integral Tank 
     mealsPerDay: 0,
     roomsOccupied: 0,
     hoursPerDay: 12,
@@ -64,20 +64,20 @@ const HeatPumpCalculator = ({ leadId }) => {
     fetchProducts();
   }, []);
 
-  // --- 2. AUTO CALCULATE & SYNC HOME DEMAND ---
+  // --- 2. AUTO CALCULATE ---
   useEffect(() => {
-    // If Home is selected, lock demand to the 150L standard integral tank volume
+    // If Home is selected, we enforce the 150L Standard 
     if (inputs.userType === 'home' && inputs.dailyLitersInput !== 150) {
         setInputs(prev => ({ ...prev, dailyLitersInput: 150 }));
     }
-    
+
     if (!loading && dbProducts.length > 0) {
         const res = calculateHeatPump(inputs, dbProducts);
         setResult(res);
     }
   }, [inputs, dbProducts, loading]);
 
-  // --- HANDLERS ---
+  // --- HANDLERS (Complete Logic Restored) ---
   const handleChange = (field, isNumber = false) => (e) => {
     const val = isNumber ? parseFloat(e.target.value) || 0 : e.target.value;
     
@@ -116,6 +116,7 @@ const HeatPumpCalculator = ({ leadId }) => {
       setShowModal(false);
   };
   
+  // Visibility helpers for cleaner JSX
   const isShowerFieldVisible = ['office','school','spa'].includes(inputs.userType);
   const isMealFieldVisible = ['restaurant','resort'].includes(inputs.userType);
   const isRoomFieldVisible = inputs.userType === 'resort';
@@ -130,7 +131,8 @@ const HeatPumpCalculator = ({ leadId }) => {
       return `Rate (${symbol})`;
   };
 
-  const symbol = CONFIG.SYMBOLS[inputs.currency] || '$';
+  // Safely get symbol to prevent white screen error [cite: 3]
+  const symbol = CONFIG?.SYMBOLS?.[inputs.currency] || '$';
 
   // --- REPORT GENERATION ---
   const fmt = n => (+n).toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -154,7 +156,7 @@ const HeatPumpCalculator = ({ leadId }) => {
             <div class="summary-grid"> 
                 <div class="metric"><div class="value">${q.financials.symbol}${fmt(q.financials.totalSavings)}</div><div class="label">Total Annual Savings</div></div> 
                 <div class="metric"><div class="value">${q.financials.paybackYears} Yrs</div><div class="label">Estimated Payback</div></div> 
-                <div class="metric"><div class="value">${q.metrics.warmupTime} Hrs</div><div class="label">Tank Warm-up Time</div></div> 
+                <div class="metric"><div class="value">${q.metrics.warmupTime} Hrs</div><div class="label">Warm-up time</div></div> 
             </div>
             <h2>Financial Breakdown</h2>
             <table class="details-table"> 
@@ -163,7 +165,7 @@ const HeatPumpCalculator = ({ leadId }) => {
                 ${coolSavingsRow}
                 <tr><td>Total Annual Savings</td><td>${q.financials.symbol}${fmt(q.financials.totalSavings)}</td></tr>
             </table>
-            <p>This report assumes a system cost of ${q.financials.symbol}${fmt(q.financials.capex.total)} and an estimated payback period of ${q.financials.paybackYears} years.</p>
+            <p>Report includes matched Tank Capacity: ${q.system.tankSize}L.</p>
             <footer><p>&copy; ${new Date().getFullYear()} Karnot. All Rights Reserved. This is a preliminary estimate.</p></footer>
         </div></body></html>`;
       
@@ -179,7 +181,7 @@ const HeatPumpCalculator = ({ leadId }) => {
         const user = auth.currentUser;
         const path = leadId ? `users/${user.uid}/leads/${leadId}/calculations` : `users/${user.uid}/calculations`;
         await addDoc(collection(db, path), {
-            type: 'heat-pump-roi-storage-v2',
+            type: 'heat-pump-roi-storage-final',
             inputs,
             results: result,
             createdAt: serverTimestamp()
@@ -219,7 +221,7 @@ const HeatPumpCalculator = ({ leadId }) => {
 
                     {isOccupantFieldVisible ? (
                         <div className="bg-orange-50 p-3 rounded border border-orange-200 text-sm text-orange-800">
-                          [cite_start]<strong>Standard Home Setup:</strong> Prescribing iSTOR Integral 150L tank system[cite: 97].
+                          Standard 150L iSTOR Integral Tank prescribed.
                         </div>
                     ) : (
                         <div>
@@ -270,7 +272,7 @@ const HeatPumpCalculator = ({ leadId }) => {
                         <Input type="number" value={inputs.fuelPrice} onChange={handleChange('fuelPrice', true)} />
                     )}
                     
-                    <Input label={`Grid Electricity Rate (For HP - ${symbol}/kWh)`} type="number" value={inputs.elecRate} onChange={handleChange('elecRate', true)} />
+                    <Input label={`Grid Electricity Rate (${symbol}/kWh)`} type="number" value={inputs.elecRate} onChange={handleChange('elecRate', true)} />
                 </div>
             </Section>
             
@@ -316,7 +318,7 @@ const HeatPumpCalculator = ({ leadId }) => {
                 <div className="flex justify-between items-end mb-6">
                     <div>
                         <h3 className="text-xl font-bold text-orange-600">{result.system.n}</h3>
-                        <p className="text-sm text-gray-500">System Ref: {result.system.ref}</p>
+                        <p className="text-sm text-gray-500">Inventory SKU | Ref: {result.system.ref}</p>
                     </div>
                     <div className="text-right">
                         <div className="text-3xl font-bold text-green-600">
@@ -326,21 +328,20 @@ const HeatPumpCalculator = ({ leadId }) => {
                     </div>
                 </div>
 
-                {/* STORAGE SYSTEM DETAILS */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div className="bg-white p-4 rounded-lg border flex items-center gap-3">
                         <Droplets className="text-blue-500" size={24}/>
                         <div>
-                            <p className="text-xs text-gray-400 uppercase font-bold">Matched Tank Size</p>
+                            <p className="text-xs text-gray-400 uppercase font-bold">Matched Tank Capacity </p>
                             <p className="text-lg font-bold text-slate-700">
-                              {result.system.tankSize > 0 ? `${result.system.tankSize} Liters` : 'Not Detected'}
+                              {result.system.tankSize > 0 ? `${result.system.tankSize} Liters` : 'No Tank Linked'}
                             </p>
                         </div>
                     </div>
                     <div className="bg-white p-4 rounded-lg border flex items-center gap-3">
                         <Gauge className="text-orange-500" size={24}/>
                         <div>
-                            <p className="text-xs text-gray-400 uppercase font-bold">Estimated Warm-up Time</p>
+                            <p className="text-xs text-gray-400 uppercase font-bold">Est. Warm-up Time</p>
                             <p className="text-lg font-bold text-slate-700">{result.metrics.warmupTime} Hours</p>
                         </div>
                     </div>
@@ -363,8 +364,8 @@ const HeatPumpCalculator = ({ leadId }) => {
                         </thead>
                         <tbody>
                             <tr><td className="p-3 border-b">Required Thermal Power</td><td className="p-3 border-b text-right">{result.metrics.requiredThermalPowerKW} kW</td></tr>
-                            <tr><td className="p-3 border-b">Recirculation Delta T</td><td className="p-3 border-b text-right">{result.metrics.loopDeltaT}°C</td></tr>
-                            <tr><td className="p-3 border-b">Annual Cost (Current)</td><td className="p-3 border-b text-right">{result.financials.symbol}{fmt(result.financials.annualCostOld)}</td></tr>
+                            <tr><td className="p-3 border-b">Sub-Critical Delta T</td><td className="p-3 border-b text-right">{result.metrics.loopDeltaT}°C</td></tr>
+                            <tr><td className="p-3 border-b">Annual Cost (Old System)</td><td className="p-3 border-b text-right">{result.financials.symbol}{fmt(result.financials.annualCostOld)}</td></tr>
                             <tr><td className="p-3 border-b">Annual Cost (Karnot)</td><td className="p-3 border-b text-right">{result.financials.symbol}{fmt(result.financials.karnotAnnualCost)}</td></tr>
                             <tr className="font-bold bg-gray-50"><td className="p-3">Total Annual Savings</td><td className="p-3 text-right text-green-600">{result.financials.symbol}{fmt(result.financials.totalSavings)}</td></tr>
                             <tr className="font-bold"><td className="p-3">Estimated Payback</td><td className="p-3 text-right text-orange-600">{result.financials.paybackYears} Yrs</td></tr>
@@ -397,7 +398,7 @@ const HeatPumpCalculator = ({ leadId }) => {
                         <button onClick={() => setShowModal(false)}><X size={20} className="text-gray-500"/></button>
                     </div>
                     <div className="space-y-3">
-                        <Input label="Number of Showers (50L/day)" type="number" value={fixtureInputs.showers} onChange={handleFixtureChange('showers')} />
+                        <Input label="Showers (50L/day)" type="number" value={fixtureInputs.showers} onChange={handleFixtureChange('showers')} />
                         <Input label="Lavatory Basins (20L/day)" type="number" value={fixtureInputs.basins} onChange={handleFixtureChange('basins')} />
                         <Input label="Kitchen Sinks (114L/day)" type="number" value={fixtureInputs.sinks} onChange={handleFixtureChange('sinks')} />
                         <Input label="Occupants (284L/day est.)" type="number" value={fixtureInputs.people} onChange={handleFixtureChange('people')} />
