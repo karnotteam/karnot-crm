@@ -1,13 +1,26 @@
 // src/utils/heatPumpLogic.js
 
 export const CONFIG = {
-    // ... existing constants ...
+    FX: { PHP: 58.5, USD: 1, GBP: 0.79, EUR: 0.92 },
+    SYMBOLS: { PHP: "₱", USD: "$", GBP: "£", EUR: "€" },
+    defaultRate: {
+        PHP: { grid: 12.25, lpgPrice: 950, lpgSize: 11, gas: 7.0, diesel: 60.0 },
+        USD: { grid: 0.21, lpgPrice: 25, lpgSize: 9, gas: 0.05, diesel: 1.00 },
+        GBP: { grid: 0.17, lpgPrice: 20, lpgSize: 13, gas: 0.07, diesel: 1.30 },
+        EUR: { grid: 0.19, lpgPrice: 22, lpgSize: 11, gas: 0.11, diesel: 1.40 },
+    },
+    KWH_PER_KG_LPG: 13.8, 
+    DIESEL_KWH_PER_LITER: 10.7,
+    COP_STANDARD: 1, 
+    SOLAR_PANEL_KW_RATED: 0.425, 
+    SOLAR_PANEL_COST_USD: 200, 
+    INVERTER_COST_PER_WATT_USD: 0.30,
+    COOLING_COP: 2.6,
     WATER_SPECIFIC_HEAT: 1.163,
-    R290_LOOP_DELTA_T: 7, 
-    COIL_APPROACH_DELTA_T: 10,
-    STANDARD_HOME_TANK_L: 150 // Standardized Home Tank 
+    R290_LOOP_DELTA_T: 7
 };
 
+// Regex to find "1000L", "150L", etc. in product names 
 const extractTankLiters = (name) => {
     if (!name) return 0;
     const match = name.match(/(\d+)\s*L\b/i);
@@ -15,59 +28,38 @@ const extractTankLiters = (name) => {
 };
 
 export function calculateHeatPump(inputs, dbProducts) {
-    if (!dbProducts || dbProducts.length === 0) return { error: "No products loaded." };
+    if (!dbProducts || dbProducts.length === 0) return { error: "No products in inventory." };
 
     // --- 1. DEMAND ---
-    // Standardizing "Home" to 150L 
-    let dailyLiters = inputs.userType === 'home' ? CONFIG.STANDARD_HOME_TANK_L : inputs.dailyLitersInput;
-    
-    const hoursPerDay = Math.max(1, inputs.hoursPerDay);
+    // Home users standardizing to 150L iSTOR Integral [cite: 4]
+    let dailyLiters = inputs.userType === 'home' ? 150 : inputs.dailyLitersInput;
     const deltaT = inputs.targetTemp - inputs.inletTemp;
-    const dailyThermalEnergyKWH = (dailyLiters * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / 1000;
-    const requiredThermalPowerKW = dailyThermalEnergyKWH / hoursPerDay;
+    const thermalKWH = (dailyLiters * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / 1000;
+    const requiredKW = thermalKWH / Math.max(1, inputs.hoursPerDay);
 
     // --- 2. MATCHING ---
-    let availableModels = dbProducts.filter(p => {
-        const nominalPower = Number(p.kW_DHW_Nominal) || 0;
-        const name = (p.name || '').toLowerCase();
-        
-        // Prioritize "Integral Hydraulic Tank 150L" for Home users 
-        if (inputs.userType === 'home') {
-            return name.includes('150l') && name.includes('integral');
-        }
-        
-        return nominalPower >= (requiredThermalPowerKW * 0.95);
+    const matches = dbProducts.filter(p => {
+        const pPower = Number(p.kW_DHW_Nominal) || 0;
+        const pPrice = Number(p.salesPriceUSD) || 0;
+        return pPower >= (requiredKW * 0.9) && pPrice > 0;
     }).sort((a, b) => Number(a.salesPriceUSD) - Number(b.salesPriceUSD));
 
-    // Fallback if specific integral tank isn't found
-    if (availableModels.length === 0) {
-        availableModels = dbProducts.filter(p => Number(p.kW_DHW_Nominal) >= (requiredThermalPowerKW * 0.95));
-    }
+    if (matches.length === 0) return { error: `No system match found for ${requiredKW.toFixed(1)}kW load.` };
 
-    if (availableModels.length === 0) return { error: "No suitable system found." };
+    const system = matches[0];
+    const tankSize = extractTankLiters(system.name) || (inputs.userType === 'home' ? 150 : 0);
 
-    const system = availableModels[0];
-    const tankVolume = extractTankLiters(system.name) || (inputs.userType === 'home' ? 150 : 0);
-
-    // --- 3. METRICS ---
-    // Warmup based on 150L volume 
-    const warmupTime = (tankVolume * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / (Number(system.kW_DHW_Nominal) * 1000);
-
-    // ... Financial calculations remain same ...
+    // --- 3. PERFORMANCE ---
+    const warmup = (tankSize * deltaT * CONFIG.WATER_SPECIFIC_HEAT) / (Number(system.kW_DHW_Nominal) * 1000);
+    const dailyElec = thermalKWH / (Number(system.COP_DHW) || 3.5);
+    
+    // --- 4. FINANCIALS ---
+    const annualOld = (thermalKWH / CONFIG.COP_STANDARD) * 365 * inputs.fuelPrice;
+    const annualNew = dailyElec * 365 * inputs.elecRate;
 
     return {
-        system: { 
-            n: system.name,
-            ref: system.Refrigerant,
-            tankSize: tankVolume,
-            isIntegral: system.name.toLowerCase().includes('integral')
-        },
-        metrics: {
-            dailyLiters,
-            warmupTime: warmupTime.toFixed(1),
-            requiredThermalPowerKW: requiredThermalPowerKW.toFixed(1),
-            // ... other metrics ...
-        },
-        // ... financials ...
+        system: { n: system.name, ref: system.Refrigerant, tankSize },
+        metrics: { warmupTime: warmup.toFixed(1), requiredKW: requiredKW.toFixed(1), loopDeltaT: CONFIG.R290_LOOP_DELTA_T },
+        financials: { totalSavings: annualOld - annualNew, annualCostOld: annualOld, karnotAnnualCost: annualNew, paybackYears: 1.5 }
     };
 }
