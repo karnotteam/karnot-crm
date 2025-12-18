@@ -37,8 +37,8 @@ const PASSWORD = "Edmund18931!"; // SECURITY CONSTANT
 
 // --- Default Category Icons and Colors for Stat Badges ---
 const CATEGORY_MAP = {
-  'Heat Pump': { icon: Thermometer, color: 'orange' },
-  'iSTOR systems': { icon: Package, color: 'teal' },
+  'iHEAT': { icon: Thermometer, color: 'orange' },
+  'iSTOR Storage (non-PCM)': { icon: Package, color: 'teal' },
   'iSPA': { icon: Sun, color: 'blue' },
   'iMESH': { icon: Box, color: 'purple' },
   'iCOOL': { icon: Box, color: 'purple' },
