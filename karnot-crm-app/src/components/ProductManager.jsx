@@ -1,310 +1,178 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase';
-import {
-  collection,
-  onSnapshot,
-  doc,
-  setDoc,
-  deleteDoc,
-  serverTimestamp,
-  writeBatch,
-} from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import Papa from 'papaparse';
-import {
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  X,
-  Save,
-  Package,
-  Zap,
-  BarChart3,
-  Ruler,
-  Plug,
-  Upload,
-  AlertTriangle,
-  CheckSquare,
-  Download,
-  Filter,
-  Sun,
-  Thermometer,
-  Box,
-} from 'lucide-react';
+import { Plus, Search, Edit, Trash2, X, Save, Upload, Thermometer, Package, RefreshCw } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants';
 
-const PASSWORD = "Edmund18931!";
-
-// --- Consistently Named Categories ---
-const CATEGORY_MAP = {
-  'Heat Pump': { icon: Thermometer, color: 'orange' },
-  'iCOOL CO2 Refrigeration': { icon: Box, color: 'purple' },
-  'iSTOR Storage (non-PCM)': { icon: Package, color: 'teal' },
-  'iSTOR Storage (with-PCM)': { icon: Package, color: 'blue' },
-  'Solar Panels': { icon: Sun, color: 'amber' }, 
-  'Inverters': { icon: Zap, color: 'indigo' },    
-  'iMESH': { icon: Box, color: 'purple' },
-  'Other Products Miscellaneous': { icon: Filter, color: 'pink' },
-};
-
-// ----------------------------------------------------------------------
-// ✅ HELPERS
-// ----------------------------------------------------------------------
-
-const getCleanCategory = (rawCat) => {
-  if (!rawCat) return 'Uncategorized';
-  if (CATEGORY_MAP[rawCat]) return rawCat; // Return directly if matches preset
-
-  const cat = String(rawCat).toLowerCase();
-  if (cat.includes('icool')) return 'iCOOL CO2 Refrigeration';
-  if (cat.includes('istor') || cat.includes('storage')) {
-    if (cat.includes('pcm')) return 'iSTOR Storage (with-PCM)';
-    return 'iSTOR Storage (non-PCM)';
-  }
-  if (cat.includes('heat pump') || cat.includes('aquahero')) return 'Heat Pump';
-  if (cat.includes('solar')) return 'Solar Panels';
-  if (cat.includes('inverter')) return 'Inverters';
-  if (cat.includes('imesh')) return 'iMESH';
-  return 'Other Products Miscellaneous';
-};
-
-const hpFromKW = (kw) => {
-  const v = parseFloat(kw);
-  if (!isFinite(v) || v <= 0) return '';
-  if (v <= 5.5) return '2HP';
-  if (v <= 9.5) return '4HP';
-  return '10HP';
-};
-
-const ensureHpInName = (productLike) => {
-  const category = (productLike?.category || '').toLowerCase();
-  const name = String(productLike?.name || '');
-  if (!category.includes('icool') && !name.toLowerCase().includes('icool')) return name;
-  if (/\b(2|4|5|7|10|12|15)\s*hp\b/i.test(name)) return name;
-  const hp = hpFromKW(productLike?.kW_Cooling_Nominal || productLike?.kW_DHW_Nominal || 0);
-  if (!hp) return name;
-  if (/karnot\s+icool/i.test(name)) return name.replace(/(karnot\s+icool)\b/i, `$1 ${hp}`);
-  return `Karnot iCOOL ${hp} ${name}`.replace(/\s+/g, ' ').trim();
-};
-
-const makeSafeId = (s) => String(s || '').trim().replace(/[\s/]+/g, '_').replace(/[^\w.-]+/g, '_').toLowerCase();
-
-// ----------------------------------------------------------------------
-// --- 1. Helper: Stat Badge ---
-// ----------------------------------------------------------------------
-const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
-  if (!Icon || !color) return null;
-  const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
-  return (
-    <div
-      onClick={onClick}
-      className={`cursor-pointer flex-1 min-w-[200px] p-3 rounded-xl border transition-all duration-200 flex items-center justify-between gap-3
-        ${active ? `bg-${color}-100 border-${color}-500 ring-2 ring-${color}-400` : 'bg-white border-gray-200 hover:border-orange-300 hover:shadow-md'}
-      `}
-    >
-      <div className={`p-2 rounded-full bg-${color}-100 text-${color}-600`}><Icon size={20} /></div>
-      <div className="text-right">
-        <p className="text-xs text-gray-500 font-bold uppercase">{label}</p>
-        <p className="text-xl font-bold text-gray-800">{count} <span className="text-xs text-gray-400 font-normal">({percentage}%)</span></p>
-      </div>
-    </div>
-  );
-};
-
-// ----------------------------------------------------------------------
-// --- 3. Main Product Manager Component ---
-// ----------------------------------------------------------------------
 const ProductManager = ({ user }) => {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState('ALL');
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [isEditing, setIsEditing] = useState(false);
-  const [editId, setEditId] = useState(null);
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [activeFilter, setActiveFilter] = useState('ALL');
+    const [isEditing, setIsEditing] = useState(false);
+    const [editId, setEditId] = useState(null);
+    const fileInputRef = useRef(null);
 
-  const defaultFormData = {
-    id: '', name: '', category: 'Heat Pump', costPriceUSD: 0, salesPriceUSD: 0, specs: '',
-    kW_DHW_Nominal: 0, COP_DHW: 3.8, kW_Cooling_Nominal: 0, Power_Supply: '380/420 V-50/60 Hz-3 ph', Refrigerant: 'R290',
-  };
-  const [formData, setFormData] = useState(defaultFormData);
+    useEffect(() => {
+        if (!user) return;
+        const unsub = onSnapshot(collection(db, "users", user.uid, "products"), (snap) => {
+            setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+            setLoading(false);
+        });
+        return () => unsub();
+    }, [user]);
 
-  useEffect(() => {
-    if (!user) { setLoading(false); return; }
-    const unsub = onSnapshot(collection(db, "users", user.uid, "products"), (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setProducts(list.sort((a, b) => (a.category || '').localeCompare(b.category || '') || (a.name || '').localeCompare(b.name || '')));
-      setLoading(false);
-    });
-    return () => unsub();
-  }, [user]);
+    const handleImportCSV = (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
 
-  const stats = useMemo(() => {
-    const categories = {};
-    products.forEach(p => { const clean = getCleanCategory(p.category); categories[clean] = (categories[clean] || 0) + 1; });
-    return { total: products.length, categories };
-  }, [products]);
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            transformHeader: (h) => h.trim(), // Cleans hidden spaces in headers
+            complete: async (results) => {
+                const data = results.data;
+                console.log("Parsed rows:", data.length);
+                
+                // Firestore batches have a limit of 500 operations. 
+                // We'll process in chunks to be safe for 300+ lines.
+                const batch = writeBatch(db);
+                
+                data.forEach((row, index) => {
+                    // Robust ID selection: try 'System ID', then 'id', then a generated one
+                    const sysId = row['System ID'] || row['id'] || `PROD_${Date.now()}_${index}`;
+                    const docRef = doc(db, "users", user.uid, "products", sysId.trim());
 
-  const filteredProducts = useMemo(() => {
-    const term = searchTerm.toLowerCase();
-    return products.filter(p => {
-      const matchesSearch = (p.name || '').toLowerCase().includes(term) || (p.category || '').toLowerCase().includes(term);
-      const matchesFilter = activeFilter === 'ALL' || getCleanCategory(p.category) === activeFilter;
-      return matchesSearch && matchesFilter;
-    });
-  }, [products, searchTerm, activeFilter]);
+                    // Mapping EVERY column from your Master File
+                    const productData = {
+                        id: sysId.trim(),
+                        name: row['Product Name'] || 'Unnamed Product',
+                        category: row['Category'] || 'Miscellaneous',
+                        salesPriceUSD: parseFloat(row['Sales Price']) || 0,
+                        costPriceUSD: parseFloat(row['Cost Price']) || 0,
+                        kW_DHW_Nominal: parseFloat(row['kW_DHW_Nominal']) || 0,
+                        kW_Cooling_Nominal: parseFloat(row['kW_Cooling_Nominal']) || 0,
+                        COP_DHW: parseFloat(row['COP_DHW']) || 0,
+                        SCOP_DHW_Avg: row['SCOP_DHW_Avg'] || '',
+                        max_temp_c: parseFloat(row['Max Temp']) || 65,
+                        Refrigerant: row['Refrigerant'] || '',
+                        Power_Supply: row['Power Supply'] || '',
+                        Rated_Power_Input: row['Rated Power Input'] || '',
+                        Max_Running_Current: row['Max Running Current'] || '',
+                        Sound_Power_Level: row['Sound Power Level'] || '',
+                        Outdoor_Air_Temp_Range: row['Outdoor Air Temp Range'] || '',
+                        Recommended_Breaker: row['Recommended Breaker'] || '',
+                        Refrigerant_Charge: row['Refrigerant Charge'] || '',
+                        Rated_Water_Pressure: row['Rated Water Pressure'] || '',
+                        Evaporating_Temp_Nominal: row['Evaporating Temp Nominal'] || '',
+                        Ambient_Temp_Nominal: row['Ambient Temp Nominal'] || '',
+                        Suction_Connection: row['Suction Connection'] || '',
+                        Liquid_Connection: row['Liquid Connection'] || '',
+                        Suitable_Compressor: row['Suitable Compressor'] || '',
+                        Type_of_Oil: row['Type of Oil'] || '',
+                        Receiver_Volume: row['Receiver Volume'] || '',
+                        Fan_Details: row['Fan Details'] || '',
+                        Air_Flow: row['Air Flow'] || '',
+                        Certificates: row['Certificates'] || '',
+                        Net_Weight: row['Net Weight'] || '',
+                        Gross_Weight: row['Gross Weight'] || '',
+                        Unit_Dimensions: row['Unit Dimensions'] || '',
+                        Order_Reference: row['Order Reference'] || '',
+                        Specs: row['Specs'] || '',
+                        isReversible: (row['Refrigerant'] || '').toLowerCase().includes('r32') || (row['Product Name'] || '').toLowerCase().includes('iheat'),
+                        lastModified: serverTimestamp()
+                    };
 
-  const groupedProducts = useMemo(() => {
-    return filteredProducts.reduce((acc, p) => {
-      const key = p.Power_Supply || 'N/A';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(p);
-      return acc;
-    }, {});
-  }, [filteredProducts]);
+                    batch.set(docRef, productData, { merge: true });
+                });
 
-  // --- Handlers ---
-  const handleInputChange = (field) => (e) => {
-    const { value, checked, type } = e.target;
-    setFormData(prev => {
-        let finalValue = type === 'checkbox' ? checked : value;
-        const isNumeric = ['costPriceUSD', 'salesPriceUSD', 'kW_DHW_Nominal', 'COP_DHW', 'kW_Cooling_Nominal', 'max_temp_c'].includes(field);
-        if (isNumeric && type !== 'checkbox') finalValue = value === '' ? 0 : parseFloat(value);
-        return { ...prev, [field]: finalValue };
-    });
-  };
+                try {
+                    await batch.commit();
+                    alert(`IMPORT COMPLETE: ${data.length} items registered.`);
+                } catch (err) {
+                    console.error("Batch Error:", err);
+                    alert("Import failed. Check console for details.");
+                }
+            }
+        });
+    };
 
-  const handleEdit = (p) => {
-    setEditId(p.id);
-    setFormData({ ...defaultFormData, ...p, id: p.id });
-    setIsEditing(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+    const filtered = useMemo(() => {
+        const term = searchTerm.toLowerCase();
+        return products.filter(p => 
+            (p.name?.toLowerCase().includes(term) || p.id?.toLowerCase().includes(term)) &&
+            (activeFilter === 'ALL' || (p.category && p.category.includes(activeFilter)))
+        );
+    }, [products, searchTerm, activeFilter]);
 
-  const handleSave = async () => {
-    if (!user || !formData.name || Number(formData.salesPriceUSD) <= 0) return alert("Please check Product Name and Price.");
-    
-    try {
-      const finalName = ensureHpInName(formData);
-      const docId = editId || makeSafeId(formData.id || finalName);
-      const saveDate = {
-          ...formData,
-          name: finalName,
-          lastModified: serverTimestamp()
-      };
-      
-      if (!editId) saveDate.createdAt = serverTimestamp();
-      delete saveDate.id; // Doc ID is the ID
+    if (loading) return <div className="p-20 text-center font-bold">Synchronizing {products.length} Inventory Items...</div>;
 
-      await setDoc(doc(db, "users", user.uid, "products", docId), saveDate, { merge: true });
-      setIsEditing(false); setEditId(null); setFormData(defaultFormData);
-      alert("Successfully Saved!");
-    } catch (e) {
-      console.error("Save Error:", e);
-      alert("Error saving: " + e.message);
-    }
-  };
-
-  const handleBulkExport = (all = false) => {
-    const list = all ? products : products.filter(p => selectedIds.has(p.id));
-    const csv = Papa.unparse(list);
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    link.download = `inventory_export.csv`; link.click();
-  };
-
-  if (loading) return <div className="p-8 text-center font-bold">Connecting to Inventory...</div>;
-
-  return (
-    <div className="w-full pb-20">
-      {/* STAT GRID */}
-      <div className="flex flex-wrap gap-4 mb-8 pb-3">
-        <StatBadge icon={Package} label="All Assets" count={stats.total} total={stats.total} color="gray" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
-        {Object.keys(CATEGORY_MAP).map(cat => (
-          <StatBadge key={cat} icon={CATEGORY_MAP[cat].icon} label={cat} count={stats.categories[cat] || 0} total={stats.total} color={CATEGORY_MAP[cat].color} active={activeFilter === cat} onClick={() => setActiveFilter(cat)} />
-        ))}
-      </div>
-
-      {/* ACTIONS */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-2">
-        <h3 className="text-xl font-bold text-gray-800">{activeFilter === 'ALL' ? 'Complete Inventory' : activeFilter} ({filteredProducts.length})</h3>
-        <div className="flex gap-2">
-          <Button onClick={() => handleBulkExport(true)} variant="secondary"><Download size={16} className="mr-2" /> Export</Button>
-          <Button onClick={() => { setIsEditing(true); setEditId(null); setFormData(defaultFormData); }} variant="primary"><Plus size={16} className="mr-2" /> Add New</Button>
-        </div>
-      </div>
-
-      {/* EDITOR */}
-      {isEditing && (
-        <Card className="bg-orange-50 border-orange-200 mb-6 p-6 shadow-xl">
-          <h4 className="font-bold text-lg mb-4 text-orange-800">{editId ? 'Modify Product' : 'Register New Asset'}</h4>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 border-b pb-4">
-            <div className="md:col-span-2">
-                <Input label="Product Name" value={formData.name} onChange={handleInputChange('name')} />
+    return (
+        <div className="w-full space-y-6 pb-20">
+            <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">Inventory Manager ({products.length})</h2>
+                <div className="flex gap-2">
+                    <input type="file" ref={fileInputRef} onChange={handleImportCSV} accept=".csv" className="hidden" />
+                    <Button onClick={() => fileInputRef.current.click()} variant="secondary" className="bg-white border-2 border-slate-100 hover:border-orange-500 shadow-sm transition-all"><Upload size={16} className="mr-2"/> Full Master Import</Button>
+                    <Button onClick={() => { setIsEditing(true); setEditId(null); }} variant="primary" className="shadow-lg shadow-orange-200"><Plus size={16} className="mr-2"/> Add Asset</Button>
+                </div>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-black text-orange-700 uppercase tracking-widest ml-1">Category</label>
-              <select className="w-full p-2.5 border border-orange-200 rounded-lg bg-white focus:ring-2 focus:ring-orange-500 text-sm font-bold"
-                value={formData.category} onChange={(e) => setFormData(p => ({...p, category: e.target.value}))}>
-                {Object.keys(CATEGORY_MAP).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-            </div>
-            <Input label="System ID" value={formData.id} disabled={!!editId} onChange={handleInputChange('id')} />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <Input label="Price (USD)" type="number" value={formData.salesPriceUSD} onChange={handleInputChange('salesPriceUSD')} />
-            <Input label="Heating (kW)" type="number" value={formData.kW_DHW_Nominal} onChange={handleInputChange('kW_DHW_Nominal')} />
-            <Input label="Cooling (kW)" type="number" value={formData.kW_Cooling_Nominal} onChange={handleInputChange('kW_Cooling_Nominal')} />
-            <div className="flex items-end gap-2">
-              <Button onClick={() => setIsEditing(false)} variant="secondary" className="w-full">Cancel</Button>
-              <Button onClick={handleSave} variant="success" className="w-full font-bold">Save Changes</Button>
-            </div>
-          </div>
-        </Card>
-      )}
 
-      {/* SEARCH */}
-      <div className="relative mb-4">
-        <input type="text" placeholder="Search product name or refrigerant..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-orange-500 shadow-sm" />
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-      </div>
-
-      {/* TABLE */}
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-200">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Product Details</th>
-              <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Perf (kW)</th>
-              <th className="px-6 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Price</th>
-              <th className="px-6 py-4 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">Edit</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 text-sm">
-            {Object.keys(groupedProducts).sort().map(groupKey => (
-              <React.Fragment key={groupKey}>
-                <tr className="bg-slate-50 sticky top-0 z-10 border-y border-slate-100"><td colSpan="4" className="px-6 py-2 font-black text-slate-500 uppercase text-[10px]">🔌 Power: {groupKey}</td></tr>
-                {groupedProducts[groupKey].map((p) => (
-                  <tr key={p.id} className="hover:bg-orange-50/30">
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-gray-900">{p.name}</div>
-                      <div className="text-[10px] uppercase font-bold text-gray-400">{p.category}</div>
-                    </td>
-                    <td className="px-6 py-4 text-right font-semibold text-gray-700">{p.kW_DHW_Nominal || '-'}</td>
-                    <td className="px-6 py-4 text-right font-mono font-bold text-orange-600">${Number(p.salesPriceUSD)?.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-center">
-                      <button onClick={() => handleEdit(p)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"><Edit size={16} /></button>
-                      <button onClick={() => deleteDoc(doc(db, "users", user.uid, "products", p.id))} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={16} /></button>
-                    </td>
-                  </tr>
+            <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
+                {['ALL', 'Heat Pump', 'iSPA', 'iSTOR', 'Solar', 'Inverter'].map(cat => (
+                    <button key={cat} onClick={() => setActiveFilter(cat)} className={`px-6 py-2 rounded-full text-[10px] font-black tracking-widest transition-all ${activeFilter === cat ? 'bg-orange-600 text-white shadow-xl' : 'bg-white text-slate-400 border border-slate-100 hover:border-orange-200'}`}>{cat.toUpperCase()}</button>
                 ))}
-              </React.Fragment>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+            </div>
+
+            <div className="relative">
+                <input type="text" placeholder="Search 300+ Technical Profiles..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full pl-14 pr-4 py-5 bg-white border-2 border-slate-100 rounded-[1.5rem] shadow-sm focus:border-orange-500 outline-none font-bold text-slate-700" />
+                <Search size={24} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-200" />
+            </div>
+
+            <div className="bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-50">
+                <table className="min-w-full divide-y divide-slate-100">
+                    <thead className="bg-slate-50/50">
+                        <tr>
+                            <th className="px-10 py-6 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Model & Ref</th>
+                            <th className="px-10 py-6 text-left text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Performance Stats</th>
+                            <th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">MSRP (USD)</th>
+                            <th className="px-10 py-6 text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Manage</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                        {filtered.map(p => (
+                            <tr key={p.id} className="hover:bg-orange-50/50 transition-all group">
+                                <td className="px-10 py-8">
+                                    <div className="font-black text-slate-800 text-lg leading-none mb-2">{p.name}</div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[10px] font-black text-orange-600 uppercase tracking-widest">{p.category}</span>
+                                        <span className="text-[10px] font-bold text-slate-300 uppercase">{p.id}</span>
+                                    </div>
+                                </td>
+                                <td className="px-10 py-8">
+                                    <div className="flex gap-2">
+                                        {p.Refrigerant && <span className="bg-white border border-blue-100 text-blue-500 px-2 py-1 rounded text-[10px] font-black">{p.Refrigerant}</span>}
+                                        {p.kW_DHW_Nominal > 0 && <span className="bg-white border border-orange-100 text-orange-500 px-2 py-1 rounded text-[10px] font-black">{p.kW_DHW_Nominal}kW</span>}
+                                        {p.max_temp_c > 0 && <span className="bg-white border border-slate-100 text-slate-400 px-2 py-1 rounded text-[10px] font-black">{p.max_temp_c}°C</span>}
+                                    </div>
+                                </td>
+                                <td className="px-10 py-8 text-right">
+                                    <div className="font-mono font-black text-green-600 text-xl">${p.salesPriceUSD?.toLocaleString()}</div>
+                                    <div className="text-[10px] font-bold text-slate-200 uppercase">Weight: {p.Net_Weight || 'N/A'}</div>
+                                </td>
+                                <td className="px-10 py-8 text-center">
+                                    <button onClick={async () => { if(window.confirm(`Permanently delete ${p.name}?`)) await deleteDoc(doc(db, "users", user.uid, "products", p.id)); }} className="p-3 bg-slate-50 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all">
+                                        <Trash2 size={18}/>
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
 };
 
 export default ProductManager;
