@@ -1,15 +1,21 @@
 import React from 'react';
 import { Button } from '../data/constants.jsx';
-import { Calculator, Sun, Droplets, Wind, Zap, ArrowRight } from 'lucide-react';
+import { Calculator, Sun, Droplets, Wind, Zap, Flame, ArrowRight } from 'lucide-react';
 
 const CalculatorsPage = ({ setActiveView }) => {
-
     const tools = [
         {
-            id: 'heatPumpCalc', // This matches the activeView string in App.jsx
+            id: 'heatPumpCalc',
             title: 'Heat Pump ROI',
             description: 'Calculate savings, payback period, and CO2 reduction for Heat Pump vs. LPG/Diesel.',
             icon: <Calculator className="text-orange-600" size={32} />,
+            status: 'Ready'
+        },
+        {
+            id: 'warmRoomCalc',
+            title: 'Warm Room Heating',
+            description: 'Industrial heat pump sizing for temperature-controlled rooms, replacing steam boiler systems.',
+            icon: <Flame className="text-red-600" size={32} />,
             status: 'Ready'
         },
         {
@@ -46,7 +52,7 @@ const CalculatorsPage = ({ setActiveView }) => {
         <div className="max-w-6xl mx-auto">
             <h2 className="text-3xl font-bold text-gray-800 mb-2">Engineering Tools</h2>
             <p className="text-gray-500 mb-8">Select a calculator to generate reports for your clients.</p>
-
+            
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {tools.map((tool) => (
                     <div 
