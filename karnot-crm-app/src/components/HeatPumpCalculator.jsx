@@ -29,7 +29,6 @@ const HeatPumpCalculator = () => {
     sunHours: 5.5,
     heatPumpType: 'all',
     includeCooling: false,
-    // Enterprise ROI inputs
     enableEnterpriseROI: false,
     enterpriseWACC: 0.07,
     annualRevenue: 0,
@@ -56,7 +55,6 @@ const HeatPumpCalculator = () => {
 
   const symbol = CONFIG?.SYMBOLS?.[inputs.currency] || '$';
 
-  // Fetch products from Firebase
   useEffect(() => {
     const fetchInventory = async () => {
       const user = getAuth().currentUser;
@@ -76,14 +74,12 @@ const HeatPumpCalculator = () => {
     fetchInventory();
   }, []);
 
-  // Auto-calculate when inputs change
   useEffect(() => {
     if (!loading && dbProducts.length > 0) {
       setResult(calculateHeatPump(inputs, dbProducts));
     }
   }, [inputs, dbProducts, loading]);
 
-  // Update rates when currency changes
   useEffect(() => {
     const rates = CONFIG.defaultRate[inputs.currency];
     if (rates) {
@@ -145,6 +141,8 @@ const HeatPumpCalculator = () => {
     }
   };
 
+  const fmt = n => (+n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+
   const generatePDFReport = () => {
     if (!result || result.error) {
       alert('Please run a valid calculation first.');
@@ -153,857 +151,90 @@ const HeatPumpCalculator = () => {
 
     const { system, metrics, financials, cooling, emissions, tankSizing, enterpriseROI } = result;
     const isEnterprise = inputs.enableEnterpriseROI && enterpriseROI;
-    
-    const enterpriseSection = isEnterprise ? `
-      <div class="page-break-before">
-        <h2>Enterprise ROI Analysis (Nestlé-Aligned)</h2>
-        <div class="summary-grid">
-          <div class="metric-box">
-            <div class="metric-value">${financials.symbol}${fmt(enterpriseROI.financial.npv)}</div>
-            <div class="metric-label">Net Present Value (NPV)</div>
-            <div class="metric-sublabel">@ ${(inputs.enterpriseWACC * 100).toFixed(1)}% WACC</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-value">${enterpriseROI.financial.irr.toFixed(1)}%</div>
-            <div class="metric-label">Internal Rate of Return</div>
-            <div class="metric-sublabel">vs. 12% hurdle rate</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-value">${enterpriseROI.csv.strategicROI.toFixed(1)}%</div>
-            <div class="metric-label">Strategic ROI</div>
-            <div class="metric-sublabel">CSV-Weighted</div>
-          </div>
-        </div>
-        
-        <div class="viability-box ${enterpriseROI.viability.isViable ? 'approved' : 'review'}">
-          <h3>Investment Recommendation</h3>
-          <p class="recommendation"><strong>${enterpriseROI.viability.recommendation}</strong></p>
-          <div class="criteria-grid">
-            <div class="criterion">
-              <span class="icon">${enterpriseROI.viability.positiveNPV ? '✓' : '✗'}</span>
-              <span>Positive NPV @ ${(inputs.enterpriseWACC * 100).toFixed(1)}% WACC</span>
-            </div>
-            <div class="criterion">
-              <span class="icon">${enterpriseROI.viability.meetsHurdleRate ? '✓' : '✗'}</span>
-              <span>IRR exceeds 12% hurdle rate</span>
-            </div>
-            <div class="criterion">
-              <span class="icon">${enterpriseROI.viability.strategicallyViable ? '✓' : '✗'}</span>
-              <span>Strategic ROI > 15% with CSV > 7</span>
-            </div>
-          </div>
-        </div>
-        
-        <h3 style="margin-top: 30px;">Creating Shared Value (CSV) Scorecard</h3>
-        <div class="csv-score-box">
-          <div class="csv-overall">
-            <span class="csv-label">Overall CSV Score</span>
-            <span class="csv-value">${enterpriseROI.csv.score.toFixed(1)}/10</span>
-          </div>
-        </div>
-        <table class="data-table" style="margin-top: 15px;">
-          <tbody>
-            <tr>
-              <td>Carbon Reduction Impact</td>
-              <td class="score-cell">${enterpriseROI.csv.breakdown.carbon.toFixed(1)}/10</td>
-              <td class="bar-cell"><div class="bar" style="width: ${(enterpriseROI.csv.breakdown.carbon / 10) * 100}%"></div></td>
-            </tr>
-            <tr>
-              <td>Energy Efficiency Gain</td>
-              <td class="score-cell">${enterpriseROI.csv.breakdown.energy.toFixed(1)}/10</td>
-              <td class="bar-cell"><div class="bar" style="width: ${(enterpriseROI.csv.breakdown.energy / 10) * 100}%"></div></td>
-            </tr>
-            <tr>
-              <td>Water Efficiency</td>
-              <td class="score-cell">${enterpriseROI.csv.breakdown.water.toFixed(1)}/10</td>
-              <td class="bar-cell"><div class="bar" style="width: ${(enterpriseROI.csv.breakdown.water / 10) * 100}%"></div></td>
-            </tr>
-            <tr>
-              <td>System Reliability</td>
-              <td class="score-cell">${enterpriseROI.csv.breakdown.reliability.toFixed(1)}/10</td>
-              <td class="bar-cell"><div class="bar" style="width: ${(enterpriseROI.csv.breakdown.reliability / 10) * 100}%"></div></td>
-            </tr>
-            <tr>
-              <td>Technology Innovation</td>
-              <td class="score-cell">${enterpriseROI.csv.breakdown.innovation.toFixed(1)}/10</td>
-              <td class="bar-cell"><div class="bar" style="width: ${(enterpriseROI.csv.breakdown.innovation / 10) * 100}%"></div></td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="footnote" style="margin-top: 15px;">
-          <strong>CSV Multiplier:</strong> ${enterpriseROI.csv.multiplier.toFixed(2)}x 
-          (adds ${((enterpriseROI.csv.multiplier - 1) * 100).toFixed(1)}% strategic value to financial ROI)
-        </p>
-        
-        ${enterpriseROI.utop.marginImprovement > 0 ? `
-          <div class="info-box" style="margin-top: 20px;">
-            <h4>UTOP Margin Impact</h4>
-            <p><strong>+${enterpriseROI.utop.marginImprovement.toFixed(2)}%</strong> improvement to Underlying Trading Operating Profit margin</p>
-          </div>
-        ` : ''}
-      </div>
-    ` : '';
-    
-    const reportHTML = `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <title>Karnot Heat Pump Report - ${system.name}</title>
-        <style>
-          /* A4 Paper Specifications */
-          @page {
-            size: A4;
-            margin: 20mm;
-          }
-          
-          @media print {
-            body { 
-              margin: 0;
-              padding: 0;
-            }
-            .page-break-before {
-              page-break-before: always;
-            }
-            .page-break-after {
-              page-break-after: always;
-            }
-            .no-break {
-              page-break-inside: avoid;
-            }
-          }
-          
-          body { 
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 10pt;
-            line-height: 1.4;
-            color: #1d1d1f;
-            max-width: 210mm;
-            margin: 0 auto;
-            padding: 20mm;
-          }
-          
-          /* Header */
-          .header { 
-            text-align: center;
-            border-bottom: 3px solid #F56600;
-            padding-bottom: 15px;
-            margin-bottom: 25px;
-          }
-          .header h1 { 
-            color: #F56600;
-            font-size: 24pt;
-            margin: 0 0 5px 0;
-            font-weight: bold;
-          }
-          .header .subtitle {
-            font-size: 10pt;
-            color: #6e6e73;
-            margin: 0;
-          }
-          
-          /* Typography */
-          h2 { 
-            color: #1d1d1f;
-            font-size: 14pt;
-            border-bottom: 2px solid #d2d2d7;
-            padding-bottom: 8px;
-            margin-top: 25px;
-            margin-bottom: 15px;
-            font-weight: bold;
-          }
-          h3 { 
-            color: #1d1d1f;
-            font-size: 12pt;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            font-weight: bold;
-          }
-          h4 {
-            color: #1d1d1f;
-            font-size: 11pt;
-            margin: 10px 0 5px 0;
-            font-weight: bold;
-          }
-          
-          /* Summary Metrics Grid */
-          .summary-grid { 
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-            margin: 20px 0;
-          }
-          .metric-box { 
-            background: #f5f5f7;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-          }
-          .metric-value { 
-            font-size: 18pt;
-            font-weight: bold;
-            color: #F56600;
-            margin-bottom: 5px;
-          }
-          .metric-label { 
-            font-size: 9pt;
-            color: #6e6e73;
-            font-weight: bold;
-            text-transform: uppercase;
-          }
-          .metric-sublabel {
-            font-size: 8pt;
-            color: #8e8e93;
-            margin-top: 3px;
-          }
-          
-          /* Tables */
-          .data-table { 
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-            font-size: 9pt;
-          }
-          .data-table td { 
-            padding: 10px 8px;
-            border-bottom: 1px solid #d2d2d7;
-          }
-          .data-table td:last-child { 
-            text-align: right;
-            font-weight: bold;
-          }
-          .data-table tr:last-child td {
-            border-bottom: none;
-          }
-          .score-cell {
-            text-align: center !important;
-            width: 60px;
-            font-weight: bold;
-            color: #F56600;
-          }
-          .bar-cell {
-            width: 120px;
-            padding: 8px !important;
-          }
-          .bar {
-            height: 12px;
-            background: linear-gradient(90deg, #4a90e2, #5c6bc0);
-            border-radius: 6px;
-            transition: width 0.3s;
-          }
-          
-          /* Info Boxes */
-          .info-box { 
-            background: #fff9e6;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 4px;
-            page-break-inside: avoid;
-          }
-          .cooling-box { 
-            background: #e6f2ff;
-            border-left: 4px solid #007aff;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 4px;
-            page-break-inside: avoid;
-          }
-          .viability-box {
-            padding: 15px;
-            margin: 20px 0;
-            border-radius: 4px;
-            border: 2px solid;
-            page-break-inside: avoid;
-          }
-          .viability-box.approved {
-            background: #e8f5e9;
-            border-color: #4caf50;
-          }
-          .viability-box.review {
-            background: #fff9e6;
-            border-color: #ffc107;
-          }
-          .viability-box h3 {
-            margin-top: 0;
-            font-size: 11pt;
-          }
-          .recommendation {
-            font-size: 10pt;
-            margin: 10px 0;
-          }
-          .criteria-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-top: 15px;
-            font-size: 8pt;
-          }
-          .criterion {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-          }
-          .criterion .icon {
-            font-size: 12pt;
-            font-weight: bold;
-            width: 20px;
-          }
-          
-          /* CSV Score */
-          .csv-score-box {
-            background: #f5f5f7;
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-          }
-          .csv-overall {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-          .csv-label {
-            font-size: 11pt;
-            font-weight: bold;
-            color: #1d1d1f;
-          }
-          .csv-value {
-            font-size: 18pt;
-            font-weight: bold;
-            color: #5c6bc0;
-          }
-          
-          /* System Specs */
-          .system-spec {
-            font-size: 9pt;
-            color: #6e6e73;
-            margin: 10px 0;
-          }
-          .system-spec strong {
-            color: #1d1d1f;
-          }
-          
-          /* Footnotes */
-          .footnote {
-            font-size: 8pt;
-            color: #6e6e73;
-            font-style: italic;
-            margin-top: 10px;
-          }
-          
-          /* Footer */
-          .footer { 
-            text-align: center;
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #d2d2d7;
-            font-size: 8pt;
-            color: #8e8e93;
-          }
-          .footer p {
-            margin: 5px 0;
-          }
-          
-          /* Logo placeholder */
-          .logo {
-            width: 150px;
-            height: auto;
-            margin-bottom: 15px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>Karnot Energy Solutions</h1>
-          <p class="subtitle">${isEnterprise ? 'Enterprise ROI Analysis' : 'Heat Pump Savings Report'}</p>
-          <p class="subtitle">Generated ${new Date().toLocaleDateString('en-US', { 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}</p>
-        </div>
-        
-        ${enterpriseSection}
-        
-        <div class="${isEnterprise ? 'page-break-before' : ''}">
-          <h2>Recommended System: ${system.name}</h2>
-          <p class="system-spec">
-            <strong>Refrigerant:</strong> ${system.refrigerant} • 
-            <strong>Rated Power:</strong> ${system.kW} kW • 
-            <strong>Adjusted Power:</strong> ${system.adjustedKW.toFixed(1)} kW • 
-            <strong>COP:</strong> ${system.cop}
-          </p>
-          
-          ${!isEnterprise ? `
-          <div class="summary-grid no-break">
-            <div class="metric-box">
-              <div class="metric-value">${financials.symbol}${fmt(financials.totalAnnualSavings)}</div>
-              <div class="metric-label">Total Annual Savings</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-value">${financials.paybackYears} Years</div>
-              <div class="metric-label">Payback Period</div>
-            </div>
-            <div class="metric-box">
-              <div class="metric-value">${fmt(emissions.annualSaved)} kg</div>
-              <div class="metric-label">Annual CO₂ Reduction</div>
-            </div>
-          </div>
-          ` : ''}
-          
-          <div class="info-box no-break">
-            <h3 style="margin-top:0; color: #f57c00;">Tank Sizing Analysis</h3>
-            <table class="data-table">
-              <tbody>
-                <tr>
-                  <td>Daily Hot Water Demand</td>
-                  <td>${metrics.dailyLiters} Liters</td>
-                </tr>
-                <tr>
-                  <td>Average Draw Rate</td>
-                  <td>${tankSizing.avgDrawRate.toFixed(1)} L/hr</td>
-                </tr>
-                <tr>
-                  <td>Peak Draw Rate (${(tankSizing.coincidenceFactor * 100).toFixed(0)}% coincidence)</td>
-                  <td>${tankSizing.peakDrawRateLph.toFixed(1)} L/hr</td>
-                </tr>
-                <tr>
-                  <td>Heat Pump Recovery Rate</td>
-                  <td>${tankSizing.recoveryRateLph.toFixed(1)} L/hr</td>
-                </tr>
-                <tr>
-                  <td>Gap (Draw - Recovery)</td>
-                  <td>${tankSizing.gapLph.toFixed(1)} L/hr</td>
-                </tr>
-                <tr>
-                  <td><strong>Recommended Tank Size</strong></td>
-                  <td><strong>${tankSizing.recommendedTankSize} L</strong></td>
-                </tr>
-                ${system.integralTank ? `
-                <tr>
-                  <td><strong>✓ Integral Tank Included</strong></td>
-                  <td><strong>${system.integralTank} L</strong></td>
-                </tr>
-                ` : ''}
-              </tbody>
-            </table>
-            <p class="footnote">
-              Sizing based on ${inputs.userType} usage pattern with ${(tankSizing.coincidenceFactor * 100).toFixed(0)}% 
-              coincidence factor during ${tankSizing.peakDuration}-hour peak period.
-            </p>
-          </div>
-          
-          <h2 style="margin-top: 30px;">Financial Breakdown</h2>
-          <table class="data-table no-break">
-            <tbody>
-              <tr>
-                <td>Current Annual Heating Cost</td>
-                <td>${financials.symbol}${fmt(financials.currentAnnualCost)}</td>
-              </tr>
-              <tr>
-                <td>New Annual Operating Cost</td>
-                <td>${financials.symbol}${fmt(financials.newAnnualCost)}</td>
-              </tr>
-              <tr>
-                <td>Annual Heating Savings</td>
-                <td>${financials.symbol}${fmt(financials.heatingSavings)}</td>
-              </tr>
-              ${cooling ? `
-              <tr>
-                <td>Annual Cooling Savings (Bonus)</td>
-                <td>${financials.symbol}${fmt(cooling.annualSavings)}</td>
-              </tr>
-              ` : ''}
-              <tr style="border-top: 2px solid #1d1d1f;">
-                <td><strong>Total Annual Savings</strong></td>
-                <td><strong>${financials.symbol}${fmt(financials.totalAnnualSavings)}</strong></td>
-              </tr>
-            </tbody>
-          </table>
-          
-          ${cooling ? `
-          <div class="cooling-box no-break">
-            <h3 style="margin-top:0; color: #007aff;">Free Cooling Bonus!</h3>
-            <p>
-              Your reversible heat pump provides <strong>${cooling.coolingKW.toFixed(1)} kW</strong> of cooling capacity, 
-              saving an additional <strong>${financials.symbol}${fmt(cooling.annualSavings)}</strong> annually on air conditioning costs.
-            </p>
-          </div>
-          ` : ''}
-        </div>
-        
-        <div class="page-break-before">
-          <h2>System Specifications</h2>
-          <table class="data-table">
-            <tbody>
-              <tr>
-                <td>Daily Hot Water Demand</td>
-                <td>${metrics.dailyLiters} Liters</td>
-              </tr>
-              <tr>
-                <td>Operating Hours per Day</td>
-                <td>${inputs.hoursPerDay} hours</td>
-              </tr>
-              <tr>
-                <td>Average Draw Rate</td>
-                <td>${metrics.avgDrawRate} L/hr</td>
-              </tr>
-              <tr>
-                <td>Peak Draw Rate</td>
-                <td>${metrics.peakDrawRate} L/hr</td>
-              </tr>
-              <tr>
-                <td>Recovery Rate</td>
-                <td>${system.recoveryRate.toFixed(1)} L/hr</td>
-              </tr>
-              <tr>
-                <td>Warm-up Time (Full Tank)</td>
-                <td>${metrics.warmupTime} Hours</td>
-              </tr>
-              <tr>
-                <td>Average Power Draw</td>
-                <td>${metrics.avgPowerDrawKW} kW</td>
-              </tr>
-              <tr>
-                <td>Performance Factor</td>
-                <td>${metrics.performanceFactor}x</td>
-              </tr>
-              <tr>
-                <td>Temperature Lift (ΔT)</td>
-                <td>${inputs.targetTemp - inputs.inletTemp}°C</td>
-              </tr>
-              <tr>
-                <td>Water Inlet Temperature</td>
-                <td>${inputs.inletTemp}°C</td>
-              </tr>
-              <tr>
-                <td>Target Water Temperature</td>
-                <td>${inputs.targetTemp}°C</td>
-              </tr>
-              <tr>
-                <td>Ambient Air Temperature</td>
-                <td>${inputs.ambientTemp}°C</td>
-              </tr>
-              ${inputs.systemType === 'grid-solar' && metrics.panelCount > 0 ? `
-              <tr>
-                <td>Solar Panels Required</td>
-                <td>${metrics.panelCount} panels (${(metrics.panelCount * 0.425).toFixed(1)} kW system)</td>
-              </tr>
-              <tr>
-                <td>Average Sun Hours</td>
-                <td>${inputs.sunHours} hours/day</td>
-              </tr>
-              ` : ''}
-            </tbody>
-          </table>
-          
-          <h2 style="margin-top: 30px;">Environmental Impact</h2>
-          <table class="data-table">
-            <tbody>
-              <tr>
-                <td>Annual CO₂ Reduction</td>
-                <td>${fmt(emissions.annualSaved)} kg</td>
-              </tr>
-              <tr>
-                <td>15-Year CO₂ Reduction</td>
-                <td>${fmt(emissions.lifetimeSaved)} kg</td>
-              </tr>
-              <tr>
-                <td>Equivalent Trees Planted (per year)</td>
-                <td>${Math.round(emissions.annualSaved / 20)} trees</td>
-              </tr>
-              <tr>
-                <td>Current Heating Type</td>
-                <td>${inputs.heatingType.charAt(0).toUpperCase() + inputs.heatingType.slice(1)}</td>
-              </tr>
-              <tr>
-                <td>New System Type</td>
-                <td>Heat Pump ${inputs.systemType === 'grid-solar' ? '+ Solar' : '(Grid-powered)'}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        
-        <div class="footer">
-          <p><strong>Karnot Energy Solutions Inc.</strong></p>
-          <p>© ${new Date().getFullYear()} All Rights Reserved</p>
-          <p>This is a preliminary estimate based on provided inputs. Contact us for a detailed site assessment and quotation.</p>
-          <p style="margin-top: 10px; font-size: 7pt;">
-            Report ID: KRN-${Date.now().toString(36).toUpperCase()} • 
-            Currency: ${financials.currency} • 
-            Generated: ${new Date().toISOString()}
-          </p>
-        </div>
-      </body>
-      </html>
-    `;
 
-          <div class="metric-box">
-            <div class="metric-value">${financials.paybackYears} Years</div>
-            <div class="metric-label">Payback Period</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-value">${fmt(emissions.annualSaved)} kg</div>
-            <div class="metric-label">Annual CO₂ Reduction</div>
-          </div>
-        </div>
-        ` : ''}
-        
-        <div class="info-box no-break">
-          <h3 style="margin-top:0; color: #f57c00;">Tank Sizing Analysis</h3>
-          <table class="data-table">
-            <tbody>
-              <tr>
-                <td>Daily Hot Water Demand</td>
-                <td>${metrics.dailyLiters} Liters</td>
-              </tr>
-              <tr>
-                <td>Average Draw Rate</td>
-                <td>${tankSizing.avgDrawRate.toFixed(1)} L/hr</td>
-              </tr>
-              <tr>
-                <td>Peak Draw Rate (${(tankSizing.coincidenceFactor * 100).toFixed(0)}% coincidence)</td>
-                <td>${tankSizing.peakDrawRateLph.toFixed(1)} L/hr</td>
-              </tr>
-              <tr>
-                <td>Heat Pump Recovery Rate</td>
-                <td>${tankSizing.recoveryRateLph.toFixed(1)} L/hr</td>
-              </tr>
-              <tr>
-                <td>Gap (Draw - Recovery)</td>
-                <td>${tankSizing.gapLph.toFixed(1)} L/hr</td>
-              </tr>
-              <tr>
-                <td><strong>Recommended Tank Size</strong></td>
-                <td><strong>${tankSizing.recommendedTankSize} L</strong></td>
-              </tr>
-              ${system.integralTank ? `
-              <tr>
-                <td><strong>✓ Integral Tank Included</strong></td>
-                <td><strong>${system.integralTank} L</strong></td>
-              </tr>
-              ` : ''}
-            </tbody>
-          </table>
-          <p class="footnote">
-            Sizing based on ${inputs.userType} usage pattern with ${(tankSizing.coincidenceFactor * 100).toFixed(0)}% 
-            coincidence factor during ${tankSizing.peakDuration}-hour peak period.
-          </p>
-        </div>
-        
-        <h2 style="margin-top: 30px;">Financial Breakdown</h2>
-        <table class="data-table no-break">
-          <tbody>
-            <tr>
-              <td>Current Annual Heating Cost</td>
-              <td>${financials.symbol}${fmt(financials.currentAnnualCost)}</td>
-            </tr>
-            <tr>
-              <td>New Annual Operating Cost</td>
-              <td>${financials.symbol}${fmt(financials.newAnnualCost)}</td>
-            </tr>
-            <tr>
-              <td>Annual Heating Savings</td>
-              <td>${financials.symbol}${fmt(financials.heatingSavings)}</td>
-            </tr>
-            ${cooling ? `
-            <tr>
-              <td>Annual Cooling Savings (Bonus)</td>
-              <td>${financials.symbol}${fmt(cooling.annualSavings)}</td>
-            </tr>
-            ` : ''}
-            <tr style="border-top: 2px solid #1d1d1f;">
-              <td><strong>Total Annual Savings</strong></td>
-              <td><strong>${financials.symbol}${fmt(financials.totalAnnualSavings)}</strong></td>
-            </tr>
-          </tbody>
-        </table>
-        
-        ${cooling ? `
-        <div class="cooling-box no-break">
-          <h3 style="margin-top:0; color: #007aff;">Free Cooling Bonus!</h3>
-          <p>
-            Your reversible heat pump provides <strong>${cooling.coolingKW.toFixed(1)} kW</strong> of cooling capacity, 
-            saving an additional <strong>${financials.symbol}${fmt(cooling.annualSavings)}</strong> annually on air conditioning costs.
-          </p>
-        </div>
-        ` : ''}
-      </div>
-      
-      <div class="page-break-before">
-        <h2>System Specifications</h2>
-        <table class="data-table">
-          <tbody>
-            <tr>
-              <td>Daily Hot Water Demand</td>
-              <td>${metrics.dailyLiters} Liters</td>
-            </tr>
-            <tr>
-              <td>Operating Hours per Day</td>
-              <td>${inputs.hoursPerDay} hours</td>
-            </tr>
-            <tr>
-              <td>Average Draw Rate</td>
-              <td>${metrics.avgDrawRate} L/hr</td>
-            </tr>
-            <tr>
-              <td>Peak Draw Rate</td>
-              <td>${metrics.peakDrawRate} L/hr</td>
-            </tr>
-            <tr>
-              <td>Recovery Rate</td>
-              <td>${system.recoveryRate.toFixed(1)} L/hr</td>
-            </tr>
-            <tr>
-              <td>Warm-up Time (Full Tank)</td>
-              <td>${metrics.warmupTime} Hours</td>
-            </tr>
-            <tr>
-              <td>Average Power Draw</td>
-              <td>${metrics.avgPowerDrawKW} kW</td>
-            </tr>
-            <tr>
-              <td>Performance Factor</td>
-              <td>${metrics.performanceFactor}x</td>
-            </tr>
-            <tr>
-              <td>Temperature Lift (ΔT)</td>
-              <td>${inputs.targetTemp - inputs.inletTemp}°C</td>
-            </tr>
-            <tr>
-              <td>Water Inlet Temperature</td>
-              <td>${inputs.inletTemp}°C</td>
-            </tr>
-            <tr>
-              <td>Target Water Temperature</td>
-              <td>${inputs.targetTemp}°C</td>
-            </tr>
-            <tr>
-              <td>Ambient Air Temperature</td>
-              <td>${inputs.ambientTemp}°C</td>
-            </tr>
-            ${inputs.systemType === 'grid-solar' && metrics.panelCount > 0 ? `
-            <tr>
-              <td>Solar Panels Required</td>
-              <td>${metrics.panelCount} panels (${(metrics.panelCount * 0.425).toFixed(1)} kW system)</td>
-            </tr>
-            <tr>
-              <td>Average Sun Hours</td>
-              <td>${inputs.sunHours} hours/day</td>
-            </tr>
-            ` : ''}
-          </tbody>
-        </table>
-        
-        <h2 style="margin-top: 30px;">Environmental Impact</h2>
-        <table class="data-table">
-          <tbody>
-            <tr>
-              <td>Annual CO₂ Reduction</td>
-              <td>${fmt(emissions.annualSaved)} kg</td>
-            </tr>
-            <tr>
-              <td>15-Year CO₂ Reduction</td>
-              <td>${fmt(emissions.lifetimeSaved)} kg</td>
-            </tr>
-            <tr>
-              <td>Equivalent Trees Planted (per year)</td>
-              <td>${Math.round(emissions.annualSaved / 20)} trees</td>
-            </tr>
-            <tr>
-              <td>Current Heating Type</td>
-              <td>${inputs.heatingType.charAt(0).toUpperCase() + inputs.heatingType.slice(1)}</td>
-            </tr>
-            <tr>
-              <td>New System Type</td>
-              <td>Heat Pump ${inputs.systemType === 'grid-solar' ? '+ Solar' : '(Grid-powered)'}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      
-      <div class="footer">
-        <p><strong>Karnot Energy Solutions Inc.</strong></p>
-        <p>© ${new Date().getFullYear()} All Rights Reserved</p>
-        <p>This is a preliminary estimate based on provided inputs. Contact us for a detailed site assessment and quotation.</p>
-        <p style="margin-top: 10px; font-size: 7pt;">
-          Report ID: KRN-${Date.now().toString(36).toUpperCase()} • 
-          Currency: ${financials.currency} • 
-          Generated: ${new Date().toISOString()}
-        </p>
-      </div>
-    </body>
-    </html>
-  `;
+    const reportHTML = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Karnot Report</title>
+<style>
+@page { size: A4; margin: 20mm; }
+body { font-family: Arial, sans-serif; font-size: 10pt; color: #1d1d1f; max-width: 210mm; margin: 0 auto; padding: 20mm; }
+.header { text-align: center; border-bottom: 3px solid #F56600; padding-bottom: 15px; margin-bottom: 25px; }
+h1 { color: #F56600; font-size: 24pt; margin: 0; }
+h2 { color: #1d1d1f; font-size: 14pt; border-bottom: 2px solid #d2d2d7; padding-bottom: 8px; margin-top: 25px; }
+table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 9pt; }
+td { padding: 10px 8px; border-bottom: 1px solid #d2d2d7; }
+td:last-child { text-align: right; font-weight: bold; }
+.metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+.metric-box { background: #f5f5f7; padding: 15px; border-radius: 8px; text-align: center; }
+.metric-value { font-size: 18pt; font-weight: bold; color: #F56600; }
+.metric-label { font-size: 9pt; color: #6e6e73; margin-top: 5px; }
+.info-box { background: #fff9e6; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; }
+.footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #d2d2d7; font-size: 8pt; color: #8e8e93; }
+@media print { .page-break { page-break-before: always; } }
+</style>
+</head>
+<body>
+<div class="header">
+<h1>Karnot Energy Solutions</h1>
+<p>${isEnterprise ? 'Enterprise ROI Analysis' : 'Heat Pump Savings Report'}</p>
+<p>${new Date().toLocaleDateString()}</p>
+</div>
 
-    // Open print dialog with properly formatted A4 content
+<h2>System: ${system.name}</h2>
+<p><strong>Refrigerant:</strong> ${system.refrigerant} | <strong>Power:</strong> ${system.kW} kW | <strong>COP:</strong> ${system.cop}</p>
+
+<div class="metric-grid">
+<div class="metric-box">
+<div class="metric-value">${financials.symbol}${fmt(financials.totalAnnualSavings)}</div>
+<div class="metric-label">Annual Savings</div>
+</div>
+<div class="metric-box">
+<div class="metric-value">${financials.paybackYears} Yrs</div>
+<div class="metric-label">Payback</div>
+</div>
+<div class="metric-box">
+<div class="metric-value">${fmt(emissions.annualSaved)} kg</div>
+<div class="metric-label">CO₂ Reduction</div>
+</div>
+</div>
+
+<h2>Financial Summary</h2>
+<table>
+<tr><td>Current Annual Cost</td><td>${financials.symbol}${fmt(financials.currentAnnualCost)}</td></tr>
+<tr><td>New Annual Cost</td><td>${financials.symbol}${fmt(financials.newAnnualCost)}</td></tr>
+<tr><td>Annual Savings</td><td>${financials.symbol}${fmt(financials.totalAnnualSavings)}</td></tr>
+</table>
+
+<div class="info-box">
+<h3 style="margin-top:0;">Tank Sizing</h3>
+<table>
+<tr><td>Daily Demand</td><td>${metrics.dailyLiters} L</td></tr>
+<tr><td>Peak Draw Rate</td><td>${tankSizing.peakDrawRateLph.toFixed(1)} L/hr</td></tr>
+<tr><td>Recovery Rate</td><td>${tankSizing.recoveryRateLph.toFixed(1)} L/hr</td></tr>
+<tr><td>Recommended Tank</td><td>${tankSizing.recommendedTankSize} L</td></tr>
+</table>
+</div>
+
+<div class="footer">
+<p><strong>Karnot Energy Solutions Inc.</strong></p>
+<p>© ${new Date().getFullYear()} All Rights Reserved</p>
+</div>
+</body>
+</html>`;
+
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(reportHTML);
       printWindow.document.close();
-      
-      // Wait for content to load, then trigger print
       printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print();
-        }, 250);
+        setTimeout(() => printWindow.print(), 250);
       };
     } else {
       alert('Please allow pop-ups to generate PDF reports.');
     }
-  }; class="value">${financials.paybackYears} Years</div>
-            <div class="label">Payback Period</div>
-          </div>
-          <div class="metric">
-            <div class="value">${fmt(emissions.annualSaved)} kg</div>
-            <div class="label">Annual CO₂ Reduction</div>
-          </div>
-        </div>
-        ` : ''}
-        
-        <div class="calc-box">
-          <h3 style="margin-top:0; color: #f57c00;">Tank Sizing Calculations</h3>
-          <table style="font-size: 14px;">
-            <tr><td>Average Draw Rate</td><td>${tankSizing.avgDrawRate.toFixed(1)} L/hr</td></tr>
-            <tr><td>Peak Draw Rate (with ${(tankSizing.coincidenceFactor * 100).toFixed(0)}% coincidence)</td><td>${tankSizing.peakDrawRateLph.toFixed(1)} L/hr</td></tr>
-            <tr><td>Heat Pump Recovery Rate</td><td>${tankSizing.recoveryRateLph.toFixed(1)} L/hr</td></tr>
-            <tr><td>Gap (Draw - Recovery)</td><td>${tankSizing.gapLph.toFixed(1)} L/hr</td></tr>
-            <tr><td colspan="2"><hr style="border:0; border-top:1px solid #ccc; margin:10px 0;"></td></tr>
-            <tr><td><strong>Recommended Tank Size</strong></td><td><strong>${tankSizing.recommendedTankSize} L</strong></td></tr>
-            ${system.integralTank ? `<tr><td><strong>Integral Tank Included</strong></td><td><strong>${system.integralTank} L</strong></td></tr>` : ''}
-          </table>
-        </div>
-        
-        <h2>Financial Breakdown</h2>
-        <table>
-          <tr><td>Current Annual Heating Cost</td><td>${financials.symbol}${fmt(financials.currentAnnualCost)}</td></tr>
-          <tr><td>New Annual Operating Cost</td><td>${financials.symbol}${fmt(financials.newAnnualCost)}</td></tr>
-          <tr><td>Annual Heating Savings</td><td>${financials.symbol}${fmt(financials.heatingSavings)}</td></tr>
-          ${cooling ? `<tr><td>Annual Cooling Savings (Bonus)</td><td>${financials.symbol}${fmt(cooling.annualSavings)}</td></tr>` : ''}
-          <tr><td><strong>Total Annual Savings</strong></td><td><strong>${financials.symbol}${fmt(financials.totalAnnualSavings)}</strong></td></tr>
-        </table>
-        
-        ${cooling ? `
-        <div class="cooling-box">
-          <h3 style="margin-top:0; color: #007aff;">Free Cooling Bonus!</h3>
-          <p>Your reversible heat pump provides <strong>${cooling.coolingKW.toFixed(1)} kW</strong> of cooling capacity, saving an additional <strong>${financials.symbol}${fmt(cooling.annualSavings)}</strong> annually on air conditioning costs.</p>
-        </div>
-        ` : ''}
-        
-        <footer>
-          <p>&copy; ${new Date().getFullYear()} Karnot Energy Solutions Inc. All Rights Reserved.</p>
-          <p>This is a preliminary estimate. Contact us for a detailed quotation.</p>
-        </footer>
-      </body>
-      </html>
-    `;
-
-    const win = window.open('', '_blank');
-    win.document.write(reportHTML);
-    win.document.close();
   };
-
-  const fmt = n => (+n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 
   const showLitersInput = ['office', 'spa', 'school'].includes(inputs.userType);
   const showMealsInput = ['restaurant', 'resort'].includes(inputs.userType);
@@ -1020,7 +251,6 @@ const HeatPumpCalculator = () => {
           {loading && <RefreshCw className="animate-spin text-gray-400"/>}
         </div>
 
-        {/* Enterprise ROI Toggle */}
         <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -1116,7 +346,6 @@ const HeatPumpCalculator = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* SECTION 1: DEMAND */}
           <Section title="1. Your Demand">
             <label className="block text-sm font-semibold text-gray-600 mb-2">User Type</label>
             <select 
@@ -1185,7 +414,6 @@ const HeatPumpCalculator = () => {
             />
           </Section>
 
-          {/* SECTION 2: COSTS */}
           <Section title="2. Your Costs">
             <label className="block text-sm font-semibold text-gray-600 mb-2">Currency</label>
             <select 
@@ -1258,7 +486,6 @@ const HeatPumpCalculator = () => {
             )}
           </Section>
 
-          {/* SECTION 3: CONDITIONS & OPTIONS */}
           <Section title="3. Conditions & Options">
             <div className="flex gap-2">
               <Input 
@@ -1345,149 +572,13 @@ const HeatPumpCalculator = () => {
           </Button>
         </div>
 
-        {/* ENTERPRISE ROI RESULTS */}
-        {result && !result.error && result.enterpriseROI && (
-          <div className="mt-8 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-300">
-            <div className="flex items-center gap-2 mb-4">
-              <Target className="text-blue-600" size={28}/>
-              <h3 className="text-2xl font-bold text-blue-900">Enterprise ROI Analysis</h3>
-            </div>
-
-            {/* Key Financial Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white p-4 rounded-lg border-2 border-blue-200 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp className="text-green-600" size={20}/>
-                  <p className="text-xs font-bold text-gray-500 uppercase">NPV @ {(inputs.enterpriseWACC * 100).toFixed(1)}%</p>
-                </div>
-                <p className="text-2xl font-bold text-green-600">{symbol}{fmt(result.enterpriseROI.financial.npv)}</p>
-              </div>
-              <div className="bg-white p-4 rounded-lg border-2 border-blue-200 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <BarChart3 className="text-blue-600" size={20}/>
-                  <p className="text-xs font-bold text-gray-500 uppercase">Internal Rate of Return</p>
-                </div>
-                <p className="text-2xl font-bold text-blue-600">{result.enterpriseROI.financial.irr.toFixed(1)}%</p>
-              </div>
-              <div className="bg-white p-4 rounded-lg border-2 border-indigo-200 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <Award className="text-indigo-600" size={20}/>
-                  <p className="text-xs font-bold text-gray-500 uppercase">Strategic ROI</p>
-                </div>
-                <p className="text-2xl font-bold text-indigo-600">{result.enterpriseROI.csv.strategicROI.toFixed(1)}%</p>
-              </div>
-            </div>
-
-            {/* Viability Assessment */}
-            <div className={`p-4 rounded-lg border-2 mb-6 ${
-              result.enterpriseROI.viability.isViable 
-                ? 'bg-green-50 border-green-300' 
-                : 'bg-yellow-50 border-yellow-300'
-            }`}>
-              <div className="flex items-start gap-3">
-                {result.enterpriseROI.viability.isViable ? (
-                  <CheckCircle className="text-green-600 flex-shrink-0" size={24}/>
-                ) : (
-                  <AlertCircle className="text-yellow-600 flex-shrink-0" size={24}/>
-                )}
-                <div>
-                  <h4 className="font-bold text-gray-800 mb-2">Investment Recommendation</h4>
-                  <p className="text-sm text-gray-700 mb-3">{result.enterpriseROI.viability.recommendation}</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                    <div className="flex items-center gap-1">
-                      {result.enterpriseROI.viability.positiveNPV ? '✅' : '❌'}
-                      <span>Positive NPV</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {result.enterpriseROI.viability.meetsHurdleRate ? '✅' : '❌'}
-                      <span>IRR &gt; 12% Hurdle</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {result.enterpriseROI.viability.strategicallyViable ? '✅' : '❌'}
-                      <span>Strategic Criteria</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* CSV Scorecard */}
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-bold text-gray-800">Creating Shared Value (CSV) Scorecard</h4>
-                <div className="text-2xl font-bold text-indigo-600">{result.enterpriseROI.csv.score.toFixed(1)}/10</div>
-              </div>
-              
-              <div className="space-y-2">
-                {Object.entries(result.enterpriseROI.csv.breakdown).map(([key, value]) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <div className="w-32 text-sm text-gray-600 capitalize">{key}</div>
-                    <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
-                      <div 
-                        className="bg-gradient-to-r from-blue-400 to-indigo-500 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${(value / 10) * 100}%` }}
-                      ></div>
-                    </div>
-                    <div className="w-12 text-sm font-bold text-gray-700 text-right">{value.toFixed(1)}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-600">
-                <p><strong>CSV Multiplier:</strong> {result.enterpriseROI.csv.multiplier.toFixed(2)}x (adds {((result.enterpriseROI.csv.multiplier - 1) * 100).toFixed(1)}% strategic value)</p>
-              </div>
-            </div>
-
-            <Button 
-              variant="secondary" 
-              onClick={() => setShowEnterpriseDetails(!showEnterpriseDetails)}
-              className="mt-4 w-full flex items-center justify-center gap-2"
-            >
-              {showEnterpriseDetails ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-              {showEnterpriseDetails ? 'Hide' : 'Show'} Detailed Financials
-            </Button>
-
-            {showEnterpriseDetails && (
-              <div className="mt-4 pt-4 border-t border-blue-200 space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-600">Simple ROI</p>
-                    <p className="font-bold text-lg">{result.enterpriseROI.financial.simpleROI.toFixed(1)}%</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Payback Period</p>
-                    <p className="font-bold text-lg">{result.enterpriseROI.financial.paybackYears.toFixed(1)} yrs</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Discount Rate (WACC)</p>
-                    <p className="font-bold text-lg">{result.enterpriseROI.financial.discountRate.toFixed(1)}%</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Annual Cost Reduction</p>
-                    <p className="font-bold text-lg">{symbol}{fmt(result.enterpriseROI.utop.annualCostReduction)}</p>
-                  </div>
-                </div>
-
-                {result.enterpriseROI.utop.marginImprovement > 0 && (
-                  <div className="bg-blue-50 p-3 rounded border border-blue-200">
-                    <p className="text-sm text-gray-700">
-                      <strong>UTOP Margin Impact:</strong> +{result.enterpriseROI.utop.marginImprovement.toFixed(2)}%
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* STANDARD RESULTS (continues below for non-enterprise) */}
-        {result && !result.error && result.financials && !inputs.enableEnterpriseROI && (
+        {result && !result.error && result.financials && (
           <div className="mt-8 bg-slate-50 p-6 rounded-xl border border-slate-200">
             <div className="flex justify-between items-end mb-6 pb-4 border-b">
               <div>
                 <h3 className="text-xl font-bold text-orange-600">{result.system.name}</h3>
                 <p className="text-xs font-bold text-gray-500 uppercase mt-1">
-                  {result.system.refrigerant} • {result.system.kW} kW (Adjusted: {result.system.adjustedKW.toFixed(1)} kW) • COP {result.system.cop}
+                  {result.system.refrigerant} • {result.system.kW} kW • COP {result.system.cop}
                 </p>
               </div>
               <div className="text-right">
@@ -1498,128 +589,6 @@ const HeatPumpCalculator = () => {
               </div>
             </div>
 
-            {/* Tank Sizing - Same as before */}
-            <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    {result.tankSizing.gapLph > 0 ? (
-                      <AlertCircle className="text-amber-600" size={20}/>
-                    ) : (
-                      <CheckCircle className="text-green-600" size={20}/>
-                    )}
-                    <h4 className="font-bold text-gray-800">Tank Sizing</h4>
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    {result.system.integralTank ? (
-                      <>
-                        <strong>Integral Tank:</strong> This unit includes a {result.system.integralTank}L built-in tank.
-                      </>
-                    ) : (
-                      <>
-                        <strong>Required Tank:</strong> {result.tankSizing.recommendedTankSize}L external tank needed.
-                      </>
-                    )}
-                  </p>
-                  <p className="text-xs text-gray-600 mt-1">
-                    Recovery: {result.system.recoveryRate.toFixed(1)} L/hr • 
-                    Peak Draw: {result.tankSizing.peakDrawRateLph.toFixed(1)} L/hr
-                    {result.tankSizing.gapLph > 0 && (
-                      <> • Gap: <span className="text-amber-700 font-semibold">{result.tankSizing.gapLph.toFixed(1)} L/hr</span></>
-                    )}
-                  </p>
-                </div>
-                <Button 
-                  variant="secondary" 
-                  onClick={() => setShowCalculations(!showCalculations)}
-                  className="text-sm flex items-center gap-1"
-                >
-                  {showCalculations ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
-                  {showCalculations ? 'Hide' : 'Show'} Math
-                </Button>
-              </div>
-
-              {showCalculations && (
-                <div className="mt-4 pt-4 border-t border-amber-200">
-                  <h5 className="font-semibold text-gray-800 mb-3">Tank Sizing Calculations:</h5>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Daily Demand:</span>
-                      <span className="font-mono">{result.metrics.dailyLiters} L</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Operating Hours:</span>
-                      <span className="font-mono">{inputs.hoursPerDay} hrs/day</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Average Draw Rate:</span>
-                      <span className="font-mono">{result.tankSizing.avgDrawRate.toFixed(1)} L/hr</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Coincidence Factor ({inputs.userType}):</span>
-                      <span className="font-mono">{(result.tankSizing.coincidenceFactor * 100).toFixed(0)}%</span>
-                    </div>
-                    <div className="flex justify-between font-semibold text-orange-700">
-                      <span>Peak Draw Rate:</span>
-                      <span className="font-mono">{result.tankSizing.peakDrawRateLph.toFixed(1)} L/hr</span>
-                    </div>
-                    
-                    <div className="h-px bg-amber-300 my-3"></div>
-                    
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Heat Pump Power (Adjusted):</span>
-                      <span className="font-mono">{result.system.adjustedKW.toFixed(1)} kW</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Temperature Lift (ΔT):</span>
-                      <span className="font-mono">{inputs.targetTemp - inputs.inletTemp}°C</span>
-                    </div>
-                    <div className="flex justify-between font-semibold text-blue-700">
-                      <span>Recovery Rate:</span>
-                      <span className="font-mono">{result.system.recoveryRate.toFixed(1)} L/hr</span>
-                    </div>
-                    
-                    <div className="h-px bg-amber-300 my-3"></div>
-                    
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Gap (Peak - Recovery):</span>
-                      <span className={`font-mono ${result.tankSizing.gapLph > 0 ? 'text-red-600 font-bold' : 'text-green-600'}`}>
-                        {result.tankSizing.gapLph.toFixed(1)} L/hr
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Peak Duration:</span>
-                      <span className="font-mono">{result.tankSizing.peakDuration} hrs</span>
-                    </div>
-                    
-                    <div className="h-px bg-amber-300 my-3"></div>
-                    
-                    <p className="text-xs text-gray-600 mb-2">Three sizing methods (we use the largest):</p>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600">Method 1: Gap × Duration</span>
-                      <span className="font-mono">{result.tankSizing.method1_GapBased.toFixed(0)} L</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600">Method 2: Peak Buffer (65%)</span>
-                      <span className="font-mono">{result.tankSizing.method2_PeakBuffer.toFixed(0)} L</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600">Method 3: Daily Reserve (35%)</span>
-                      <span className="font-mono">{result.tankSizing.method3_DailyReserve.toFixed(0)} L</span>
-                    </div>
-                    
-                    <div className="h-px bg-amber-300 my-3"></div>
-                    
-                    <div className="flex justify-between font-bold text-lg text-orange-600">
-                      <span>Recommended Tank Size:</span>
-                      <span className="font-mono">{result.tankSizing.recommendedTankSize} L</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Continue with rest of standard results... (saving space, but same as before) */}
             <div className="flex justify-end gap-3 pt-4 border-t">
               <Button variant="secondary" onClick={generatePDFReport}>
                 <FileText size={18} className="mr-2"/> PDF Report
@@ -1635,12 +604,10 @@ const HeatPumpCalculator = () => {
         {result?.error && (
           <div className="mt-6 p-4 bg-red-50 text-red-700 rounded border border-red-200">
             <p className="font-semibold">⚠️ {result.error}</p>
-            <p className="text-sm mt-2">Try adjusting your inputs or selecting a different refrigerant type.</p>
           </div>
         )}
       </Card>
 
-      {/* FIXTURE CALCULATOR MODAL */}
       {showFixtureModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
