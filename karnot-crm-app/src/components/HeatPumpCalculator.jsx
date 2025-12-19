@@ -738,6 +738,204 @@ const HeatPumpCalculator = () => {
       </html>
     `;
 
+          <div class="metric-box">
+            <div class="metric-value">${financials.paybackYears} Years</div>
+            <div class="metric-label">Payback Period</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value">${fmt(emissions.annualSaved)} kg</div>
+            <div class="metric-label">Annual CO₂ Reduction</div>
+          </div>
+        </div>
+        ` : ''}
+        
+        <div class="info-box no-break">
+          <h3 style="margin-top:0; color: #f57c00;">Tank Sizing Analysis</h3>
+          <table class="data-table">
+            <tbody>
+              <tr>
+                <td>Daily Hot Water Demand</td>
+                <td>${metrics.dailyLiters} Liters</td>
+              </tr>
+              <tr>
+                <td>Average Draw Rate</td>
+                <td>${tankSizing.avgDrawRate.toFixed(1)} L/hr</td>
+              </tr>
+              <tr>
+                <td>Peak Draw Rate (${(tankSizing.coincidenceFactor * 100).toFixed(0)}% coincidence)</td>
+                <td>${tankSizing.peakDrawRateLph.toFixed(1)} L/hr</td>
+              </tr>
+              <tr>
+                <td>Heat Pump Recovery Rate</td>
+                <td>${tankSizing.recoveryRateLph.toFixed(1)} L/hr</td>
+              </tr>
+              <tr>
+                <td>Gap (Draw - Recovery)</td>
+                <td>${tankSizing.gapLph.toFixed(1)} L/hr</td>
+              </tr>
+              <tr>
+                <td><strong>Recommended Tank Size</strong></td>
+                <td><strong>${tankSizing.recommendedTankSize} L</strong></td>
+              </tr>
+              ${system.integralTank ? `
+              <tr>
+                <td><strong>✓ Integral Tank Included</strong></td>
+                <td><strong>${system.integralTank} L</strong></td>
+              </tr>
+              ` : ''}
+            </tbody>
+          </table>
+          <p class="footnote">
+            Sizing based on ${inputs.userType} usage pattern with ${(tankSizing.coincidenceFactor * 100).toFixed(0)}% 
+            coincidence factor during ${tankSizing.peakDuration}-hour peak period.
+          </p>
+        </div>
+        
+        <h2 style="margin-top: 30px;">Financial Breakdown</h2>
+        <table class="data-table no-break">
+          <tbody>
+            <tr>
+              <td>Current Annual Heating Cost</td>
+              <td>${financials.symbol}${fmt(financials.currentAnnualCost)}</td>
+            </tr>
+            <tr>
+              <td>New Annual Operating Cost</td>
+              <td>${financials.symbol}${fmt(financials.newAnnualCost)}</td>
+            </tr>
+            <tr>
+              <td>Annual Heating Savings</td>
+              <td>${financials.symbol}${fmt(financials.heatingSavings)}</td>
+            </tr>
+            ${cooling ? `
+            <tr>
+              <td>Annual Cooling Savings (Bonus)</td>
+              <td>${financials.symbol}${fmt(cooling.annualSavings)}</td>
+            </tr>
+            ` : ''}
+            <tr style="border-top: 2px solid #1d1d1f;">
+              <td><strong>Total Annual Savings</strong></td>
+              <td><strong>${financials.symbol}${fmt(financials.totalAnnualSavings)}</strong></td>
+            </tr>
+          </tbody>
+        </table>
+        
+        ${cooling ? `
+        <div class="cooling-box no-break">
+          <h3 style="margin-top:0; color: #007aff;">Free Cooling Bonus!</h3>
+          <p>
+            Your reversible heat pump provides <strong>${cooling.coolingKW.toFixed(1)} kW</strong> of cooling capacity, 
+            saving an additional <strong>${financials.symbol}${fmt(cooling.annualSavings)}</strong> annually on air conditioning costs.
+          </p>
+        </div>
+        ` : ''}
+      </div>
+      
+      <div class="page-break-before">
+        <h2>System Specifications</h2>
+        <table class="data-table">
+          <tbody>
+            <tr>
+              <td>Daily Hot Water Demand</td>
+              <td>${metrics.dailyLiters} Liters</td>
+            </tr>
+            <tr>
+              <td>Operating Hours per Day</td>
+              <td>${inputs.hoursPerDay} hours</td>
+            </tr>
+            <tr>
+              <td>Average Draw Rate</td>
+              <td>${metrics.avgDrawRate} L/hr</td>
+            </tr>
+            <tr>
+              <td>Peak Draw Rate</td>
+              <td>${metrics.peakDrawRate} L/hr</td>
+            </tr>
+            <tr>
+              <td>Recovery Rate</td>
+              <td>${system.recoveryRate.toFixed(1)} L/hr</td>
+            </tr>
+            <tr>
+              <td>Warm-up Time (Full Tank)</td>
+              <td>${metrics.warmupTime} Hours</td>
+            </tr>
+            <tr>
+              <td>Average Power Draw</td>
+              <td>${metrics.avgPowerDrawKW} kW</td>
+            </tr>
+            <tr>
+              <td>Performance Factor</td>
+              <td>${metrics.performanceFactor}x</td>
+            </tr>
+            <tr>
+              <td>Temperature Lift (ΔT)</td>
+              <td>${inputs.targetTemp - inputs.inletTemp}°C</td>
+            </tr>
+            <tr>
+              <td>Water Inlet Temperature</td>
+              <td>${inputs.inletTemp}°C</td>
+            </tr>
+            <tr>
+              <td>Target Water Temperature</td>
+              <td>${inputs.targetTemp}°C</td>
+            </tr>
+            <tr>
+              <td>Ambient Air Temperature</td>
+              <td>${inputs.ambientTemp}°C</td>
+            </tr>
+            ${inputs.systemType === 'grid-solar' && metrics.panelCount > 0 ? `
+            <tr>
+              <td>Solar Panels Required</td>
+              <td>${metrics.panelCount} panels (${(metrics.panelCount * 0.425).toFixed(1)} kW system)</td>
+            </tr>
+            <tr>
+              <td>Average Sun Hours</td>
+              <td>${inputs.sunHours} hours/day</td>
+            </tr>
+            ` : ''}
+          </tbody>
+        </table>
+        
+        <h2 style="margin-top: 30px;">Environmental Impact</h2>
+        <table class="data-table">
+          <tbody>
+            <tr>
+              <td>Annual CO₂ Reduction</td>
+              <td>${fmt(emissions.annualSaved)} kg</td>
+            </tr>
+            <tr>
+              <td>15-Year CO₂ Reduction</td>
+              <td>${fmt(emissions.lifetimeSaved)} kg</td>
+            </tr>
+            <tr>
+              <td>Equivalent Trees Planted (per year)</td>
+              <td>${Math.round(emissions.annualSaved / 20)} trees</td>
+            </tr>
+            <tr>
+              <td>Current Heating Type</td>
+              <td>${inputs.heatingType.charAt(0).toUpperCase() + inputs.heatingType.slice(1)}</td>
+            </tr>
+            <tr>
+              <td>New System Type</td>
+              <td>Heat Pump ${inputs.systemType === 'grid-solar' ? '+ Solar' : '(Grid-powered)'}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="footer">
+        <p><strong>Karnot Energy Solutions Inc.</strong></p>
+        <p>© ${new Date().getFullYear()} All Rights Reserved</p>
+        <p>This is a preliminary estimate based on provided inputs. Contact us for a detailed site assessment and quotation.</p>
+        <p style="margin-top: 10px; font-size: 7pt;">
+          Report ID: KRN-${Date.now().toString(36).toUpperCase()} • 
+          Currency: ${financials.currency} • 
+          Generated: ${new Date().toISOString()}
+        </p>
+      </div>
+    </body>
+    </html>
+  `;
+
     // Open print dialog with properly formatted A4 content
     const printWindow = window.open('', '_blank');
     if (printWindow) {
