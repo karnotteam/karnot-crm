@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, db } from './firebase'; 
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { collection, onSnapshot, query, doc, setDoc, deleteDoc, serverTimestamp, addDoc, updateDoc } from "firebase/firestore"; 
+import { collection, onSnapshot, query, doc, getDoc, setDoc, deleteDoc, serverTimestamp, addDoc, updateDoc } from "firebase/firestore"; 
 
 // --- Import Pages & Components ---
 import LoginPage from './pages/LoginPage.jsx';
@@ -17,16 +17,17 @@ import AdminPage from './pages/AdminPage.jsx';
 import CalculatorsPage from './pages/CalculatorsPage.jsx';     
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
+import FinancialEntryLogger from './components/FinancialEntryLogger';
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { 
     BarChart2, FileText, List, HardHat, LogOut, Building, 
-    Users, ClipboardCheck, Settings, Calculator, Plus 
+    Users, ClipboardCheck, Settings, Calculator, Plus, Landmark 
 } from 'lucide-react'; 
 
 // --- Header Component ---
-const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( 
+const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, userRole }) => ( 
     <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
         <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveView('funnel')}>
@@ -42,6 +43,13 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc', 'warmRoomCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
                     <Calculator className="mr-1" size={14} /> Calculators
                 </Button>
+
+                {/* --- NEW FINANCIAL LEDGER BUTTON (ADMIN ONLY) --- */}
+                {userRole === 'ADMIN' && (
+                    <Button onClick={() => setActiveView('ledger')} variant={activeView === 'ledger' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700">
+                        <Landmark className="mr-1" size={14} /> Ledger
+                    </Button>
+                )}
 
                 <div className="h-8 w-px bg-gray-200 mx-2 hidden lg:block"></div>
 
@@ -60,6 +68,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
 
 export default function App() {
     const [user, setUser] = useState(null); 
+    const [userRole, setUserRole] = useState(null); // Track ADMIN vs SALES
     const [activeView, setActiveView] = useState('funnel');
     const [quoteToEdit, setQuoteToEdit] = useState(null);
     const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
@@ -71,15 +80,28 @@ export default function App() {
     const [loadingAuth, setLoadingAuth] = useState(true);
     const [loadingData, setLoadingData] = useState(true);
 
+    // --- 1. AUTH & ROLE CHECK ---
     useEffect(() => {
         setLoadingAuth(true); 
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            setUser(user || null);
+        const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+            if (authUser) {
+                setUser(authUser);
+                // Fetch the role from the users collection
+                const userRef = doc(db, "users", authUser.uid);
+                const userSnap = await getDoc(userRef);
+                if (userSnap.exists()) {
+                    setUserRole(userSnap.data().role);
+                }
+            } else {
+                setUser(null);
+                setUserRole(null);
+            }
             setLoadingAuth(false); 
         });
         return () => unsubscribe(); 
     }, []);
 
+    // --- 2. DATA SNAPSHOTS ---
     useEffect(() => {
         if (user) {
             setLoadingData(true); 
@@ -110,6 +132,7 @@ export default function App() {
         }
     }, [user, selectedOpportunity?.id]); 
 
+    // --- 3. HANDLERS ---
     const handleLogin = (email, password) => {
         signInWithEmailAndPassword(auth, email, password).catch((e) => alert(e.message));
     };
@@ -142,7 +165,6 @@ export default function App() {
         } catch (error) { console.error(error); alert("Delete failed"); }
     };
 
-    // RESTORE COMPANY HANDLER (UNDO)
     const handleRestoreCompany = async (companyId) => {
         if (!user) return;
         try {
@@ -169,13 +191,21 @@ export default function App() {
         return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
     }, [quotes]); 
 
+    // --- 4. RENDER LOGIC ---
     if (loadingAuth) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600">Authenticating...</div>;
     if (!user) return <LoginPage onLogin={handleLogin} />;
     if (loadingData) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600">Loading Karnot Systems...</div>;
 
     return (
         <div className="bg-gray-100 min-h-screen font-sans text-gray-900">
-            <Header activeView={activeView} setActiveView={setActiveView} quoteCount={quotes.length} onLogout={handleLogout} onNewQuote={handleNewQuote} />
+            <Header 
+                activeView={activeView} 
+                setActiveView={setActiveView} 
+                quoteCount={quotes.length} 
+                onLogout={handleLogout} 
+                onNewQuote={handleNewQuote}
+                userRole={userRole} 
+            />
             <main className="container mx-auto p-4 md:p-8">
                 {activeView === 'funnel' && (
                     <FunnelPage 
@@ -209,6 +239,14 @@ export default function App() {
                 {activeView === 'heatPumpCalc' && <div className="max-w-5xl mx-auto"><Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">← Back</Button><HeatPumpCalculator /></div>}
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 {activeView === 'admin' && <AdminPage user={user} />}
+                
+                {/* --- NEW FINANCIAL LEDGER ROUTE --- */}
+                {activeView === 'ledger' && (
+                    <div className="max-w-5xl mx-auto">
+                        <Button onClick={() => setActiveView('funnel')} variant="secondary" className="mb-4">← Back to Funnel</Button>
+                        <FinancialEntryLogger companies={companies} />
+                    </div>
+                )}
             </main>
         </div>
     );
