@@ -17,7 +17,9 @@ import AdminPage from './pages/AdminPage.jsx';
 import CalculatorsPage from './pages/CalculatorsPage.jsx';     
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
-import FinancialEntryLogger from './components/FinancialEntryLogger';
+
+// --- FIXED PATH BELOW ---
+import FinancialEntryLogger from './data/FinancialEntryLogger.jsx'; 
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
@@ -44,7 +46,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                     <Calculator className="mr-1" size={14} /> Calculators
                 </Button>
 
-                {/* --- FINANCIAL LEDGER BUTTON (VISIBLE TO ADMIN ONLY) --- */}
                 {userRole === 'ADMIN' && (
                     <Button onClick={() => setActiveView('ledger')} variant={activeView === 'ledger' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700">
                         <Landmark className="mr-1" size={14} /> Ledger
@@ -68,7 +69,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
 export default function App() {
     const [user, setUser] = useState(null); 
-    const [userRole, setUserRole] = useState(null); // Track ADMIN vs SALES
+    const [userRole, setUserRole] = useState(null); 
     const [activeView, setActiveView] = useState('funnel');
     const [quoteToEdit, setQuoteToEdit] = useState(null);
     const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
@@ -80,13 +81,11 @@ export default function App() {
     const [loadingAuth, setLoadingAuth] = useState(true);
     const [loadingData, setLoadingData] = useState(true);
 
-    // --- 1. AUTH & ROLE CHECK ---
     useEffect(() => {
         setLoadingAuth(true); 
         const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
             if (authUser) {
                 setUser(authUser);
-                // Fetch the role from the users collection
                 try {
                     const userRef = doc(db, "users", authUser.uid);
                     const userSnap = await getDoc(userRef);
@@ -105,7 +104,6 @@ export default function App() {
         return () => unsubscribe(); 
     }, []);
 
-    // --- 2. DATA SNAPSHOTS ---
     useEffect(() => {
         if (user) {
             setLoadingData(true); 
@@ -136,7 +134,6 @@ export default function App() {
         }
     }, [user, selectedOpportunity?.id]); 
 
-    // --- 3. HANDLERS ---
     const handleLogin = (email, password) => {
         signInWithEmailAndPassword(auth, email, password).catch((e) => alert(e.message));
     };
@@ -195,7 +192,6 @@ export default function App() {
         return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
     }, [quotes]); 
 
-    // --- 4. RENDER LOGIC ---
     if (loadingAuth) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600">Authenticating...</div>;
     if (!user) return <LoginPage onLogin={handleLogin} />;
     if (loadingData) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600">Loading Karnot Systems...</div>;
@@ -244,7 +240,6 @@ export default function App() {
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 {activeView === 'admin' && <AdminPage user={user} companies={companies} />}
                 
-                {/* --- NEW FINANCIAL LEDGER ROUTE --- */}
                 {activeView === 'ledger' && (
                     <div className="max-w-5xl mx-auto">
                         <Button onClick={() => setActiveView('funnel')} variant="secondary" className="mb-4">← Back to Funnel</Button>
