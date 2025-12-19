@@ -1,3 +1,4 @@
+QUOTE CALCULATOR FOR MODIFYING 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check, User, Handshake } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, Section, PRICING_TIERS } from '../data/constants.jsx';
@@ -364,32 +365,58 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         win.document.close();
     };
     
-    const handleSave = () => {
-        if (!customer.name) {
-            alert("Please enter a customer name.");
-            return;
-        }
-        
-        const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
+const handleSave = () => {
+    if (!customer.name) {
+        alert("Please enter a customer name.");
+        return;
+    }
+    
+    // 1. Determine the exact Revenue Account based on the quote metadata
+    let assignedRevenueAccount = "Domestic Equipment Sales";
+    if (customer.saleType === 'Export') {
+        assignedRevenueAccount = "Export Equipment Sales";
+    } else if (docGeneration.generateProForma && docControl.paymentTerms.includes("EaaS")) {
+        // Simple logic check for Service Charges vs Funded Sales
+        assignedRevenueAccount = "Domestic (EaaS) Service Charge";
+    }
 
-        const newQuote = {
-            id: quoteId,
-            customer,
-            commercial,
-            docControl,
-            costing,
-            docGeneration,
-            selectedProducts,
-            manualItems,
-            finalSalesPrice: quoteTotals.finalSalesPrice,
-            grossMarginAmount: quoteTotals.grossMarginAmount,
-            grossMarginPercentage: quoteTotals.grossMarginPercentage,
-            status: initialData?.status || 'DRAFT',
-            createdAt: initialData?.createdAt || new Date().toISOString(),
-            opportunityId: opportunityId, 
-        };
-        onSaveQuote(newQuote);
+    const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
+
+    // 2. Prepare the full Financial Entry for the General Ledger
+    const financialEntry = {
+        quoteId: quoteId,
+        revenueAccount: assignedRevenueAccount,
+        netSalesUSD: quoteTotals.subtotalUSD,
+        discountUSD: quoteTotals.subtotalUSD * (commercial.discount / 100),
+        finalSalesUSD: quoteTotals.finalSalesPrice,
+        finalSalesPHP: quoteTotals.finalSalesPrice * costing.forexRate,
+        marginPercentage: quoteTotals.grossMarginPercentage,
+        status: initialData?.status || 'DRAFT',
+        ledgerStatus: 'PENDING_MANUAL_BOOK' // Flag for your BIR transcription
     };
+
+    const newQuote = {
+        id: quoteId,
+        customer,
+        commercial,
+        docControl,
+        costing,
+        docGeneration,
+        selectedProducts,
+        manualItems,
+        // Keep your existing calculation fields
+        finalSalesPrice: quoteTotals.finalSalesPrice,
+        grossMarginAmount: quoteTotals.grossMarginAmount,
+        grossMarginPercentage: quoteTotals.grossMarginPercentage,
+        // NEW: The full audit trail
+        ledgerPosting: financialEntry, 
+        status: initialData?.status || 'DRAFT',
+        createdAt: initialData?.createdAt || new Date().toISOString(),
+        opportunityId: opportunityId, 
+    };
+
+    onSaveQuote(newQuote);
+};
 
     const productCategories = useMemo(() => {
         return dbProducts.reduce((acc, p) => {
