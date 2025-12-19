@@ -152,43 +152,95 @@ const HeatPumpCalculator = () => {
     }
 
     const { system, metrics, financials, cooling, emissions, tankSizing, enterpriseROI } = result;
+    const isEnterprise = inputs.enableEnterpriseROI && enterpriseROI;
     
-    const enterpriseSection = enterpriseROI ? `
-      <h2>Enterprise ROI Analysis (Nestlé-Aligned)</h2>
-      <div class="summary">
-        <div class="metric">
-          <div class="value">${financials.symbol}${fmt(enterpriseROI.financial.npv)}</div>
-          <div class="label">Net Present Value (NPV)</div>
+    const enterpriseSection = isEnterprise ? `
+      <div class="page-break-before">
+        <h2>Enterprise ROI Analysis (Nestlé-Aligned)</h2>
+        <div class="summary-grid">
+          <div class="metric-box">
+            <div class="metric-value">${financials.symbol}${fmt(enterpriseROI.financial.npv)}</div>
+            <div class="metric-label">Net Present Value (NPV)</div>
+            <div class="metric-sublabel">@ ${(inputs.enterpriseWACC * 100).toFixed(1)}% WACC</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value">${enterpriseROI.financial.irr.toFixed(1)}%</div>
+            <div class="metric-label">Internal Rate of Return</div>
+            <div class="metric-sublabel">vs. 12% hurdle rate</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-value">${enterpriseROI.csv.strategicROI.toFixed(1)}%</div>
+            <div class="metric-label">Strategic ROI</div>
+            <div class="metric-sublabel">CSV-Weighted</div>
+          </div>
         </div>
-        <div class="metric">
-          <div class="value">${enterpriseROI.financial.irr.toFixed(1)}%</div>
-          <div class="label">Internal Rate of Return (IRR)</div>
+        
+        <div class="viability-box ${enterpriseROI.viability.isViable ? 'approved' : 'review'}">
+          <h3>Investment Recommendation</h3>
+          <p class="recommendation"><strong>${enterpriseROI.viability.recommendation}</strong></p>
+          <div class="criteria-grid">
+            <div class="criterion">
+              <span class="icon">${enterpriseROI.viability.positiveNPV ? '✓' : '✗'}</span>
+              <span>Positive NPV @ ${(inputs.enterpriseWACC * 100).toFixed(1)}% WACC</span>
+            </div>
+            <div class="criterion">
+              <span class="icon">${enterpriseROI.viability.meetsHurdleRate ? '✓' : '✗'}</span>
+              <span>IRR exceeds 12% hurdle rate</span>
+            </div>
+            <div class="criterion">
+              <span class="icon">${enterpriseROI.viability.strategicallyViable ? '✓' : '✗'}</span>
+              <span>Strategic ROI > 15% with CSV > 7</span>
+            </div>
+          </div>
         </div>
-        <div class="metric">
-          <div class="value">${enterpriseROI.csv.strategicROI.toFixed(1)}%</div>
-          <div class="label">Strategic ROI (CSV-Weighted)</div>
+        
+        <h3 style="margin-top: 30px;">Creating Shared Value (CSV) Scorecard</h3>
+        <div class="csv-score-box">
+          <div class="csv-overall">
+            <span class="csv-label">Overall CSV Score</span>
+            <span class="csv-value">${enterpriseROI.csv.score.toFixed(1)}/10</span>
+          </div>
         </div>
-      </div>
-      
-      <h3>Creating Shared Value (CSV) Scorecard</h3>
-      <table style="font-size: 14px;">
-        <tr><td>Carbon Reduction Impact</td><td>${enterpriseROI.csv.breakdown.carbon.toFixed(1)}/10</td></tr>
-        <tr><td>Energy Efficiency Gain</td><td>${enterpriseROI.csv.breakdown.energy.toFixed(1)}/10</td></tr>
-        <tr><td>Water Efficiency</td><td>${enterpriseROI.csv.breakdown.water.toFixed(1)}/10</td></tr>
-        <tr><td>System Reliability</td><td>${enterpriseROI.csv.breakdown.reliability.toFixed(1)}/10</td></tr>
-        <tr><td>Technology Innovation</td><td>${enterpriseROI.csv.breakdown.innovation.toFixed(1)}/10</td></tr>
-        <tr><td><strong>Overall CSV Score</strong></td><td><strong>${enterpriseROI.csv.score.toFixed(1)}/10</strong></td></tr>
-      </table>
-      
-      <div class="calc-box">
-        <h3 style="margin-top:0;">Investment Viability Assessment</h3>
-        <p><strong>Status:</strong> ${enterpriseROI.viability.recommendation}</p>
-        <ul style="margin:10px 0; padding-left: 20px;">
-          <li>${enterpriseROI.viability.positiveNPV ? '✅' : '❌'} Positive NPV at ${(inputs.enterpriseWACC * 100).toFixed(1)}% WACC</li>
-          <li>${enterpriseROI.viability.meetsHurdleRate ? '✅' : '❌'} IRR exceeds ${(CONFIG.ENTERPRISE.HURDLE_RATE * 100).toFixed(0)}% hurdle rate</li>
-          <li>${enterpriseROI.viability.strategicallyViable ? '✅' : '❌'} Strategic ROI > 15% with CSV > 7</li>
-        </ul>
-        ${enterpriseROI.utop.marginImprovement > 0 ? `<p><strong>UTOP Margin Impact:</strong> +${enterpriseROI.utop.marginImprovement.toFixed(2)}%</p>` : ''}
+        <table class="data-table" style="margin-top: 15px;">
+          <tbody>
+            <tr>
+              <td>Carbon Reduction Impact</td>
+              <td class="score-cell">${enterpriseROI.csv.breakdown.carbon.toFixed(1)}/10</td>
+              <td class="bar-cell"><div class="bar" style="width: ${(enterpriseROI.csv.breakdown.carbon / 10) * 100}%"></div></td>
+            </tr>
+            <tr>
+              <td>Energy Efficiency Gain</td>
+              <td class="score-cell">${enterpriseROI.csv.breakdown.energy.toFixed(1)}/10</td>
+              <td class="bar-cell"><div class="bar" style="width: ${(enterpriseROI.csv.breakdown.energy / 10) * 100}%"></div></td>
+            </tr>
+            <tr>
+              <td>Water Efficiency</td>
+              <td class="score-cell">${enterpriseROI.csv.breakdown.water.toFixed(1)}/10</td>
+              <td class="bar-cell"><div class="bar" style="width: ${(enterpriseROI.csv.breakdown.water / 10) * 100}%"></div></td>
+            </tr>
+            <tr>
+              <td>System Reliability</td>
+              <td class="score-cell">${enterpriseROI.csv.breakdown.reliability.toFixed(1)}/10</td>
+              <td class="bar-cell"><div class="bar" style="width: ${(enterpriseROI.csv.breakdown.reliability / 10) * 100}%"></div></td>
+            </tr>
+            <tr>
+              <td>Technology Innovation</td>
+              <td class="score-cell">${enterpriseROI.csv.breakdown.innovation.toFixed(1)}/10</td>
+              <td class="bar-cell"><div class="bar" style="width: ${(enterpriseROI.csv.breakdown.innovation / 10) * 100}%"></div></td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="footnote" style="margin-top: 15px;">
+          <strong>CSV Multiplier:</strong> ${enterpriseROI.csv.multiplier.toFixed(2)}x 
+          (adds ${((enterpriseROI.csv.multiplier - 1) * 100).toFixed(1)}% strategic value to financial ROI)
+        </p>
+        
+        ${enterpriseROI.utop.marginImprovement > 0 ? `
+          <div class="info-box" style="margin-top: 20px;">
+            <h4>UTOP Margin Impact</h4>
+            <p><strong>+${enterpriseROI.utop.marginImprovement.toFixed(2)}%</strong> improvement to Underlying Trading Operating Profit margin</p>
+          </div>
+        ` : ''}
       </div>
     ` : '';
     
@@ -198,44 +250,510 @@ const HeatPumpCalculator = () => {
       <head>
         <meta charset="UTF-8">
         <title>Karnot Heat Pump Report - ${system.name}</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
-          body { font-family: 'Inter', sans-serif; margin: 40px; color: #1d1d1f; }
-          .header { text-align: center; border-bottom: 3px solid #F56600; padding-bottom: 20px; margin-bottom: 30px; }
-          .header h1 { color: #F56600; font-size: 32px; margin: 0; }
-          .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin: 30px 0; text-align: center; }
-          .metric { background: #f5f5f7; padding: 20px; border-radius: 12px; }
-          .metric .value { font-size: 28px; font-weight: 700; color: #F56600; }
-          .metric .label { font-size: 14px; color: #6e6e73; margin-top: 8px; }
-          h2 { color: #1d1d1f; border-bottom: 2px solid #d2d2d7; padding-bottom: 10px; margin-top: 30px; }
-          h3 { color: #1d1d1f; margin-top: 20px; }
-          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-          td { padding: 12px 0; border-bottom: 1px solid #d2d2d7; }
-          td:last-child { text-align: right; font-weight: 600; }
-          .cooling-box { background: #e6f2ff; border-left: 4px solid #007aff; padding: 20px; margin: 20px 0; border-radius: 8px; }
-          .calc-box { background: #fff9e6; border-left: 4px solid #ffc107; padding: 20px; margin: 20px 0; border-radius: 8px; }
-          footer { text-align: center; margin-top: 50px; font-size: 12px; color: #aaa; }
+          /* A4 Paper Specifications */
+          @page {
+            size: A4;
+            margin: 20mm;
+          }
+          
+          @media print {
+            body { 
+              margin: 0;
+              padding: 0;
+            }
+            .page-break-before {
+              page-break-before: always;
+            }
+            .page-break-after {
+              page-break-after: always;
+            }
+            .no-break {
+              page-break-inside: avoid;
+            }
+          }
+          
+          body { 
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #1d1d1f;
+            max-width: 210mm;
+            margin: 0 auto;
+            padding: 20mm;
+          }
+          
+          /* Header */
+          .header { 
+            text-align: center;
+            border-bottom: 3px solid #F56600;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+          }
+          .header h1 { 
+            color: #F56600;
+            font-size: 24pt;
+            margin: 0 0 5px 0;
+            font-weight: bold;
+          }
+          .header .subtitle {
+            font-size: 10pt;
+            color: #6e6e73;
+            margin: 0;
+          }
+          
+          /* Typography */
+          h2 { 
+            color: #1d1d1f;
+            font-size: 14pt;
+            border-bottom: 2px solid #d2d2d7;
+            padding-bottom: 8px;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-weight: bold;
+          }
+          h3 { 
+            color: #1d1d1f;
+            font-size: 12pt;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-weight: bold;
+          }
+          h4 {
+            color: #1d1d1f;
+            font-size: 11pt;
+            margin: 10px 0 5px 0;
+            font-weight: bold;
+          }
+          
+          /* Summary Metrics Grid */
+          .summary-grid { 
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 20px 0;
+          }
+          .metric-box { 
+            background: #f5f5f7;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+          }
+          .metric-value { 
+            font-size: 18pt;
+            font-weight: bold;
+            color: #F56600;
+            margin-bottom: 5px;
+          }
+          .metric-label { 
+            font-size: 9pt;
+            color: #6e6e73;
+            font-weight: bold;
+            text-transform: uppercase;
+          }
+          .metric-sublabel {
+            font-size: 8pt;
+            color: #8e8e93;
+            margin-top: 3px;
+          }
+          
+          /* Tables */
+          .data-table { 
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 9pt;
+          }
+          .data-table td { 
+            padding: 10px 8px;
+            border-bottom: 1px solid #d2d2d7;
+          }
+          .data-table td:last-child { 
+            text-align: right;
+            font-weight: bold;
+          }
+          .data-table tr:last-child td {
+            border-bottom: none;
+          }
+          .score-cell {
+            text-align: center !important;
+            width: 60px;
+            font-weight: bold;
+            color: #F56600;
+          }
+          .bar-cell {
+            width: 120px;
+            padding: 8px !important;
+          }
+          .bar {
+            height: 12px;
+            background: linear-gradient(90deg, #4a90e2, #5c6bc0);
+            border-radius: 6px;
+            transition: width 0.3s;
+          }
+          
+          /* Info Boxes */
+          .info-box { 
+            background: #fff9e6;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            page-break-inside: avoid;
+          }
+          .cooling-box { 
+            background: #e6f2ff;
+            border-left: 4px solid #007aff;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            page-break-inside: avoid;
+          }
+          .viability-box {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            border: 2px solid;
+            page-break-inside: avoid;
+          }
+          .viability-box.approved {
+            background: #e8f5e9;
+            border-color: #4caf50;
+          }
+          .viability-box.review {
+            background: #fff9e6;
+            border-color: #ffc107;
+          }
+          .viability-box h3 {
+            margin-top: 0;
+            font-size: 11pt;
+          }
+          .recommendation {
+            font-size: 10pt;
+            margin: 10px 0;
+          }
+          .criteria-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+            font-size: 8pt;
+          }
+          .criterion {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+          }
+          .criterion .icon {
+            font-size: 12pt;
+            font-weight: bold;
+            width: 20px;
+          }
+          
+          /* CSV Score */
+          .csv-score-box {
+            background: #f5f5f7;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+          }
+          .csv-overall {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .csv-label {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #1d1d1f;
+          }
+          .csv-value {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #5c6bc0;
+          }
+          
+          /* System Specs */
+          .system-spec {
+            font-size: 9pt;
+            color: #6e6e73;
+            margin: 10px 0;
+          }
+          .system-spec strong {
+            color: #1d1d1f;
+          }
+          
+          /* Footnotes */
+          .footnote {
+            font-size: 8pt;
+            color: #6e6e73;
+            font-style: italic;
+            margin-top: 10px;
+          }
+          
+          /* Footer */
+          .footer { 
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #d2d2d7;
+            font-size: 8pt;
+            color: #8e8e93;
+          }
+          .footer p {
+            margin: 5px 0;
+          }
+          
+          /* Logo placeholder */
+          .logo {
+            width: 150px;
+            height: auto;
+            margin-bottom: 15px;
+          }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1>Karnot Heat Pump ${enterpriseROI ? 'Enterprise' : 'Savings'} Report</h1>
-          <p>Generated on ${new Date().toLocaleDateString()}</p>
+          <h1>Karnot Energy Solutions</h1>
+          <p class="subtitle">${isEnterprise ? 'Enterprise ROI Analysis' : 'Heat Pump Savings Report'}</p>
+          <p class="subtitle">Generated ${new Date().toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          })}</p>
         </div>
         
         ${enterpriseSection}
         
-        <h2>Recommended System: ${system.name}</h2>
-        <p><strong>Refrigerant:</strong> ${system.refrigerant} | <strong>Rated Power:</strong> ${system.kW} kW | <strong>Adjusted Power:</strong> ${system.adjustedKW.toFixed(1)} kW | <strong>COP:</strong> ${system.cop}</p>
-        
-        ${!enterpriseROI ? `
-        <div class="summary">
-          <div class="metric">
-            <div class="value">${financials.symbol}${fmt(financials.totalAnnualSavings)}</div>
-            <div class="label">Total Annual Savings</div>
+        <div class="${isEnterprise ? 'page-break-before' : ''}">
+          <h2>Recommended System: ${system.name}</h2>
+          <p class="system-spec">
+            <strong>Refrigerant:</strong> ${system.refrigerant} • 
+            <strong>Rated Power:</strong> ${system.kW} kW • 
+            <strong>Adjusted Power:</strong> ${system.adjustedKW.toFixed(1)} kW • 
+            <strong>COP:</strong> ${system.cop}
+          </p>
+          
+          ${!isEnterprise ? `
+          <div class="summary-grid no-break">
+            <div class="metric-box">
+              <div class="metric-value">${financials.symbol}${fmt(financials.totalAnnualSavings)}</div>
+              <div class="metric-label">Total Annual Savings</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-value">${financials.paybackYears} Years</div>
+              <div class="metric-label">Payback Period</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-value">${fmt(emissions.annualSaved)} kg</div>
+              <div class="metric-label">Annual CO₂ Reduction</div>
+            </div>
           </div>
-          <div class="metric">
-            <div class="value">${financials.paybackYears} Years</div>
+          ` : ''}
+          
+          <div class="info-box no-break">
+            <h3 style="margin-top:0; color: #f57c00;">Tank Sizing Analysis</h3>
+            <table class="data-table">
+              <tbody>
+                <tr>
+                  <td>Daily Hot Water Demand</td>
+                  <td>${metrics.dailyLiters} Liters</td>
+                </tr>
+                <tr>
+                  <td>Average Draw Rate</td>
+                  <td>${tankSizing.avgDrawRate.toFixed(1)} L/hr</td>
+                </tr>
+                <tr>
+                  <td>Peak Draw Rate (${(tankSizing.coincidenceFactor * 100).toFixed(0)}% coincidence)</td>
+                  <td>${tankSizing.peakDrawRateLph.toFixed(1)} L/hr</td>
+                </tr>
+                <tr>
+                  <td>Heat Pump Recovery Rate</td>
+                  <td>${tankSizing.recoveryRateLph.toFixed(1)} L/hr</td>
+                </tr>
+                <tr>
+                  <td>Gap (Draw - Recovery)</td>
+                  <td>${tankSizing.gapLph.toFixed(1)} L/hr</td>
+                </tr>
+                <tr>
+                  <td><strong>Recommended Tank Size</strong></td>
+                  <td><strong>${tankSizing.recommendedTankSize} L</strong></td>
+                </tr>
+                ${system.integralTank ? `
+                <tr>
+                  <td><strong>✓ Integral Tank Included</strong></td>
+                  <td><strong>${system.integralTank} L</strong></td>
+                </tr>
+                ` : ''}
+              </tbody>
+            </table>
+            <p class="footnote">
+              Sizing based on ${inputs.userType} usage pattern with ${(tankSizing.coincidenceFactor * 100).toFixed(0)}% 
+              coincidence factor during ${tankSizing.peakDuration}-hour peak period.
+            </p>
+          </div>
+          
+          <h2 style="margin-top: 30px;">Financial Breakdown</h2>
+          <table class="data-table no-break">
+            <tbody>
+              <tr>
+                <td>Current Annual Heating Cost</td>
+                <td>${financials.symbol}${fmt(financials.currentAnnualCost)}</td>
+              </tr>
+              <tr>
+                <td>New Annual Operating Cost</td>
+                <td>${financials.symbol}${fmt(financials.newAnnualCost)}</td>
+              </tr>
+              <tr>
+                <td>Annual Heating Savings</td>
+                <td>${financials.symbol}${fmt(financials.heatingSavings)}</td>
+              </tr>
+              ${cooling ? `
+              <tr>
+                <td>Annual Cooling Savings (Bonus)</td>
+                <td>${financials.symbol}${fmt(cooling.annualSavings)}</td>
+              </tr>
+              ` : ''}
+              <tr style="border-top: 2px solid #1d1d1f;">
+                <td><strong>Total Annual Savings</strong></td>
+                <td><strong>${financials.symbol}${fmt(financials.totalAnnualSavings)}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+          
+          ${cooling ? `
+          <div class="cooling-box no-break">
+            <h3 style="margin-top:0; color: #007aff;">Free Cooling Bonus!</h3>
+            <p>
+              Your reversible heat pump provides <strong>${cooling.coolingKW.toFixed(1)} kW</strong> of cooling capacity, 
+              saving an additional <strong>${financials.symbol}${fmt(cooling.annualSavings)}</strong> annually on air conditioning costs.
+            </p>
+          </div>
+          ` : ''}
+        </div>
+        
+        <div class="page-break-before">
+          <h2>System Specifications</h2>
+          <table class="data-table">
+            <tbody>
+              <tr>
+                <td>Daily Hot Water Demand</td>
+                <td>${metrics.dailyLiters} Liters</td>
+              </tr>
+              <tr>
+                <td>Operating Hours per Day</td>
+                <td>${inputs.hoursPerDay} hours</td>
+              </tr>
+              <tr>
+                <td>Average Draw Rate</td>
+                <td>${metrics.avgDrawRate} L/hr</td>
+              </tr>
+              <tr>
+                <td>Peak Draw Rate</td>
+                <td>${metrics.peakDrawRate} L/hr</td>
+              </tr>
+              <tr>
+                <td>Recovery Rate</td>
+                <td>${system.recoveryRate.toFixed(1)} L/hr</td>
+              </tr>
+              <tr>
+                <td>Warm-up Time (Full Tank)</td>
+                <td>${metrics.warmupTime} Hours</td>
+              </tr>
+              <tr>
+                <td>Average Power Draw</td>
+                <td>${metrics.avgPowerDrawKW} kW</td>
+              </tr>
+              <tr>
+                <td>Performance Factor</td>
+                <td>${metrics.performanceFactor}x</td>
+              </tr>
+              <tr>
+                <td>Temperature Lift (ΔT)</td>
+                <td>${inputs.targetTemp - inputs.inletTemp}°C</td>
+              </tr>
+              <tr>
+                <td>Water Inlet Temperature</td>
+                <td>${inputs.inletTemp}°C</td>
+              </tr>
+              <tr>
+                <td>Target Water Temperature</td>
+                <td>${inputs.targetTemp}°C</td>
+              </tr>
+              <tr>
+                <td>Ambient Air Temperature</td>
+                <td>${inputs.ambientTemp}°C</td>
+              </tr>
+              ${inputs.systemType === 'grid-solar' && metrics.panelCount > 0 ? `
+              <tr>
+                <td>Solar Panels Required</td>
+                <td>${metrics.panelCount} panels (${(metrics.panelCount * 0.425).toFixed(1)} kW system)</td>
+              </tr>
+              <tr>
+                <td>Average Sun Hours</td>
+                <td>${inputs.sunHours} hours/day</td>
+              </tr>
+              ` : ''}
+            </tbody>
+          </table>
+          
+          <h2 style="margin-top: 30px;">Environmental Impact</h2>
+          <table class="data-table">
+            <tbody>
+              <tr>
+                <td>Annual CO₂ Reduction</td>
+                <td>${fmt(emissions.annualSaved)} kg</td>
+              </tr>
+              <tr>
+                <td>15-Year CO₂ Reduction</td>
+                <td>${fmt(emissions.lifetimeSaved)} kg</td>
+              </tr>
+              <tr>
+                <td>Equivalent Trees Planted (per year)</td>
+                <td>${Math.round(emissions.annualSaved / 20)} trees</td>
+              </tr>
+              <tr>
+                <td>Current Heating Type</td>
+                <td>${inputs.heatingType.charAt(0).toUpperCase() + inputs.heatingType.slice(1)}</td>
+              </tr>
+              <tr>
+                <td>New System Type</td>
+                <td>Heat Pump ${inputs.systemType === 'grid-solar' ? '+ Solar' : '(Grid-powered)'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div class="footer">
+          <p><strong>Karnot Energy Solutions Inc.</strong></p>
+          <p>© ${new Date().getFullYear()} All Rights Reserved</p>
+          <p>This is a preliminary estimate based on provided inputs. Contact us for a detailed site assessment and quotation.</p>
+          <p style="margin-top: 10px; font-size: 7pt;">
+            Report ID: KRN-${Date.now().toString(36).toUpperCase()} • 
+            Currency: ${financials.currency} • 
+            Generated: ${new Date().toISOString()}
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Open print dialog with properly formatted A4 content
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(reportHTML);
+      printWindow.document.close();
+      
+      // Wait for content to load, then trigger print
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+        }, 250);
+      };
+    } else {
+      alert('Please allow pop-ups to generate PDF reports.');
+    }
+  }; class="value">${financials.paybackYears} Years</div>
             <div class="label">Payback Period</div>
           </div>
           <div class="metric">
@@ -326,29 +844,76 @@ const HeatPumpCalculator = () => {
           </div>
 
           {inputs.enableEnterpriseROI && (
-            <div className="mt-4 pt-4 border-t border-blue-200 grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Input 
-                label="WACC / Discount Rate (%)" 
-                type="number" 
-                value={inputs.enterpriseWACC * 100} 
-                onChange={(e) => setInputs(prev => ({ ...prev, enterpriseWACC: parseFloat(e.target.value) / 100 || 0.07 }))}
-                step="0.1"
-              />
-              <Input 
-                label="Annual Facility Revenue (optional)" 
-                type="number" 
-                value={inputs.annualRevenue} 
-                onChange={handleChange('annualRevenue', true)}
-              />
-              <Input 
-                label="Water Savings Score (1-10)" 
-                type="number" 
-                value={inputs.waterSavingsScore} 
-                onChange={handleChange('waterSavingsScore', true)}
-                min="1"
-                max="10"
-              />
-            </div>
+            <>
+              <div className="mt-4 pt-4 border-t border-blue-200">
+                <div className="bg-white p-4 rounded-lg border border-blue-200 mb-4">
+                  <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                    <AlertCircle size={18} className="text-blue-600"/>
+                    WACC Reference Guide
+                  </h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b-2 border-gray-300">
+                          <th className="text-left py-2 pr-4 font-semibold text-gray-700">Company Type</th>
+                          <th className="text-left py-2 pr-4 font-semibold text-gray-700">Typical WACC</th>
+                          <th className="text-left py-2 font-semibold text-gray-700">Why?</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-gray-600">
+                        <tr className="border-b border-gray-200">
+                          <td className="py-2 pr-4 font-medium">Large Corps (Nestlé, P&G)</td>
+                          <td className="py-2 pr-4 text-blue-600 font-semibold">6-8%</td>
+                          <td className="py-2">Low risk, cheap debt, stable</td>
+                        </tr>
+                        <tr className="border-b border-gray-200">
+                          <td className="py-2 pr-4 font-medium">Mid-size Manufacturing</td>
+                          <td className="py-2 pr-4 text-blue-600 font-semibold">8-12%</td>
+                          <td className="py-2">Moderate risk</td>
+                        </tr>
+                        <tr className="border-b border-gray-200">
+                          <td className="py-2 pr-4 font-medium">Startups</td>
+                          <td className="py-2 pr-4 text-orange-600 font-semibold">15-25%+</td>
+                          <td className="py-2">High risk, expensive equity</td>
+                        </tr>
+                        <tr>
+                          <td className="py-2 pr-4 font-medium">Your customers (SMEs)</td>
+                          <td className="py-2 pr-4 text-green-600 font-semibold">10-15%</td>
+                          <td className="py-2">Bank loans at 8-12% + owner equity expectations</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3 italic">
+                    💡 WACC = Weighted Average Cost of Capital. Use your customer's WACC to calculate NPV in their language.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Input 
+                    label="WACC / Discount Rate (%)" 
+                    type="number" 
+                    value={inputs.enterpriseWACC * 100} 
+                    onChange={(e) => setInputs(prev => ({ ...prev, enterpriseWACC: parseFloat(e.target.value) / 100 || 0.07 }))}
+                    step="0.1"
+                  />
+                  <Input 
+                    label="Annual Facility Revenue (optional)" 
+                    type="number" 
+                    value={inputs.annualRevenue} 
+                    onChange={handleChange('annualRevenue', true)}
+                  />
+                  <Input 
+                    label="Water Savings Score (1-10)" 
+                    type="number" 
+                    value={inputs.waterSavingsScore} 
+                    onChange={handleChange('waterSavingsScore', true)}
+                    min="1"
+                    max="10"
+                  />
+                </div>
+              </div>
+            </>
           )}
         </div>
 
