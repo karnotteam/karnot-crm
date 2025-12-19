@@ -16,6 +16,7 @@ import CommissioningPage from './pages/CommissioningPage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
 import CalculatorsPage from './pages/CalculatorsPage.jsx';     
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
+import WarmRoomCalc from './components/WarmRoomCalc.jsx';
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
@@ -38,7 +39,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Building className="mr-1" size={14} /> Companies</Button>
                 <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Users className="mr-1" size={14} /> Contacts</Button>
                 
-                <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
+                <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc', 'warmRoomCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
                     <Calculator className="mr-1" size={14} /> Calculators
                 </Button>
 
@@ -206,6 +207,7 @@ export default function App() {
                 {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 {activeView === 'heatPumpCalc' && <div className="max-w-5xl mx-auto"><Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">← Back</Button><HeatPumpCalculator /></div>}
+                {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 {activeView === 'admin' && <AdminPage user={user} />}
             </main>
         </div>
