@@ -46,11 +46,16 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                     <Calculator className="mr-1" size={14} /> Calculators
                 </Button>
 
-                {userRole === 'ADMIN' && (
-                    <Button onClick={() => setActiveView('ledger')} variant={activeView === 'ledger' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700">
-                        <Landmark className="mr-1" size={14} /> Ledger
-                    </Button>
-                )}
+                {/* --- ACCOUNTS SECTION (ADMIN ONLY) --- */}
+{userRole === 'ADMIN' && (
+    <Button 
+        onClick={() => setActiveView('accounts')} 
+        variant={activeView === 'accounts' ? 'primary' : 'secondary'} 
+        className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700"
+    >
+        <Landmark className="mr-1" size={14} /> Accounts
+    </Button>
+)}
 
                 <div className="h-8 w-px bg-gray-200 mx-2 hidden lg:block"></div>
 
