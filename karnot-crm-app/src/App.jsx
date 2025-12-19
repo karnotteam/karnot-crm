@@ -245,13 +245,24 @@ export default function App() {
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 {activeView === 'admin' && <AdminPage user={user} companies={companies} />}
                 
-                {activeView === 'ledger' && (
-                    <div className="max-w-5xl mx-auto">
-                        <Button onClick={() => setActiveView('funnel')} variant="secondary" className="mb-4">← Back to Funnel</Button>
-                        <FinancialEntryLogger companies={companies} />
-                    </div>
-                )}
-            </main>
+                {/* --- DEDICATED ACCOUNTS BOOK PAGE --- */}
+{activeView === 'accounts' && (
+    <div className="space-y-6">
+        <div className="flex justify-between items-center border-b pb-4">
+            <div>
+                <h1 className="text-3xl font-bold text-gray-800">Financial Accounts</h1>
+                <p className="text-gray-500 text-sm">Official records for BIR Manual Books & Project ROI</p>
+            </div>
+            <Button onClick={() => setActiveView('funnel')} variant="secondary">← Back to Funnel</Button>
         </div>
-    );
-}
+
+        {/* This displays the Logger (which now includes the Edit/Delete table) */}
+        <FinancialEntryLogger companies={companies} />
+        
+        <div className="mt-12 p-6 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 text-center">
+            <p className="text-gray-400 text-sm italic">
+                Note: In the next update, we will add "Sales Journal" and "Disbursement Journal" summary views here for BIR transcription.
+            </p>
+        </div>
+    </div>
+)}
