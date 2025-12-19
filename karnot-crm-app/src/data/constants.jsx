@@ -37,7 +37,24 @@ export const PRICING_TIERS = {
     DISTRIB:  { label: 'Master Distributor',  discount: 25, color: 'orange' },
     EXPORT:   { label: 'Export Partner',      discount: 30, color: 'green' }
 };
-
+export const KARNOT_CHART_OF_ACCOUNTS = {
+    DIRECT_COSTS: [
+        "Export Equipment Costs", "Domestic Equipment Costs", "Domestic (Eaas) Unit Install Cost",
+        "Warrenty and Spare Parts", "Installation Team – Van Hire, Fuel & Tolls",
+        "Installation Team - Hotels", "Installation Team - Meals", 
+        "Installation Team - Tools & Consumables", "Installation Team - Uniforms & Laundry"
+    ],
+    OPERATING_EXPENSES: [
+        "Professional Fees (BOI Legal/Audit)", "Insurance", "Training and Seminars",
+        "Courier & Shipping", "Marketing", "Website & Domains/SSL",
+        "Sales - Car Hire, Fuel & Tolls", "International Travel", "Mobile Phones and Charges",
+        "Bank & Gateway Fees", "Recruitment & Onboarding"
+    ],
+    FIXED_ASSETS: [
+        "Core IT Server + Storage", "Office and Call Centre Furniture", 
+        "Demo Units (Cosmos Farm)", "Factory Building", "Production Line"
+    ]
+};
 // --- UI COMPONENTS ---
 export const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-2xl shadow-lg p-6 md:p-8 ${className}`}>
