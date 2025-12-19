@@ -17,9 +17,7 @@ import AdminPage from './pages/AdminPage.jsx';
 import CalculatorsPage from './pages/CalculatorsPage.jsx';     
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
-
-// --- FIXED PATH BELOW ---
-import FinancialEntryLogger from './data/FinancialEntryLogger.jsx'; 
+import FinancialEntryLogger from './data/FinancialEntryLogger.jsx'; // Corrected path
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
@@ -47,15 +45,11 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                 </Button>
 
                 {/* --- ACCOUNTS SECTION (ADMIN ONLY) --- */}
-{userRole === 'ADMIN' && (
-    <Button 
-        onClick={() => setActiveView('accounts')} 
-        variant={activeView === 'accounts' ? 'primary' : 'secondary'} 
-        className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700"
-    >
-        <Landmark className="mr-1" size={14} /> Accounts
-    </Button>
-)}
+                {userRole === 'ADMIN' && (
+                    <Button onClick={() => setActiveView('accounts')} variant={activeView === 'accounts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700">
+                        <Landmark className="mr-1" size={14} /> Accounts
+                    </Button>
+                )}
 
                 <div className="h-8 w-px bg-gray-200 mx-2 hidden lg:block"></div>
 
@@ -243,26 +237,19 @@ export default function App() {
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 {activeView === 'heatPumpCalc' && <div className="max-w-5xl mx-auto"><Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">← Back</Button><HeatPumpCalculator /></div>}
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
-                {activeView === 'admin' && <AdminPage user={user} companies={companies} />}
+                {activeView === 'admin' && <AdminPage user={user} />}
                 
-                {/* --- DEDICATED ACCOUNTS BOOK PAGE --- */}
-{activeView === 'accounts' && (
-    <div className="space-y-6">
-        <div className="flex justify-between items-center border-b pb-4">
-            <div>
-                <h1 className="text-3xl font-bold text-gray-800">Financial Accounts</h1>
-                <p className="text-gray-500 text-sm">Official records for BIR Manual Books & Project ROI</p>
-            </div>
-            <Button onClick={() => setActiveView('funnel')} variant="secondary">← Back to Funnel</Button>
+                {/* --- ACCOUNTS VIEW --- */}
+                {activeView === 'accounts' && (
+                    <div className="max-w-5xl mx-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-bold text-gray-800">Accounts & Financial Ledger</h2>
+                            <Button onClick={() => setActiveView('funnel')} variant="secondary">← Back to Funnel</Button>
+                        </div>
+                        <FinancialEntryLogger companies={companies} />
+                    </div>
+                )}
+            </main>
         </div>
-
-        {/* This displays the Logger (which now includes the Edit/Delete table) */}
-        <FinancialEntryLogger companies={companies} />
-        
-        <div className="mt-12 p-6 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 text-center">
-            <p className="text-gray-400 text-sm italic">
-                Note: In the next update, we will add "Sales Journal" and "Disbursement Journal" summary views here for BIR transcription.
-            </p>
-        </div>
-    </div>
-)}
+    );
+}
