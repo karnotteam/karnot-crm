@@ -1,32 +1,14 @@
 import React from 'react';
 import DataImporter from '../components/DataImporter';
 import ProductManager from '../components/ProductManager'; 
-import FinancialEntryLogger from '../data/FinancialEntryLogger.jsx';
 import { Card } from '../data/constants';
 
-export default function AdminPage({ user, companies }) {
+export default function AdminPage({ user }) {
     return (
         <div className="space-y-8 pb-20">
             <h1 className="text-3xl font-bold text-gray-800 tracking-tight">System Administration</h1>
             
-            {/* --- SECTION 1: FINANCIAL MANAGEMENT (The New Ledger Tool) --- */}
-            {/* This section enables logging of Hotels, Meals, Van Hire etc. mapped to your P&L */}
-            <section className="bg-orange-50 p-6 rounded-2xl border border-orange-200 shadow-sm">
-                <div className="mb-6">
-                    <h2 className="text-xl font-bold text-orange-700 flex items-center gap-2">
-                        💰 Financial Ledger & BIR Prep
-                    </h2>
-                    <p className="text-sm text-orange-800/80 mt-1">
-                        Use this tool to log project-specific costs. These entries populate your "Cost of Sales" 
-                        and provide the data for your physical BIR Manual Books.
-                    </p>
-                </div>
-                <FinancialEntryLogger companies={companies} />
-            </section>
-
-            <hr className="border-gray-300 my-8"/>
-
-            {/* --- SECTION 2: PRODUCT MANAGER (Your Existing Tool) --- */}
+            {/* --- SECTION 1: PRODUCT MANAGER --- */}
             <section>
                 <div className="mb-4">
                     <h2 className="text-xl font-semibold text-gray-700">Product Management</h2>
@@ -39,7 +21,7 @@ export default function AdminPage({ user, companies }) {
 
             <hr className="border-gray-300 my-8"/>
 
-            {/* --- SECTION 3: BULK IMPORTERS (Your Existing CSV Tools) --- */}
+            {/* --- SECTION 2: BULK IMPORTERS --- */}
             <section>
                 <div className="mb-4">
                     <h2 className="text-xl font-semibold text-gray-700">Bulk Data Import</h2>
