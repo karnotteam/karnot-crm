@@ -44,7 +44,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                     <Calculator className="mr-1" size={14} /> Calculators
                 </Button>
 
-                {/* --- NEW FINANCIAL LEDGER BUTTON (ADMIN ONLY) --- */}
+                {/* --- FINANCIAL LEDGER BUTTON (VISIBLE TO ADMIN ONLY) --- */}
                 {userRole === 'ADMIN' && (
                     <Button onClick={() => setActiveView('ledger')} variant={activeView === 'ledger' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700">
                         <Landmark className="mr-1" size={14} /> Ledger
@@ -87,10 +87,14 @@ export default function App() {
             if (authUser) {
                 setUser(authUser);
                 // Fetch the role from the users collection
-                const userRef = doc(db, "users", authUser.uid);
-                const userSnap = await getDoc(userRef);
-                if (userSnap.exists()) {
-                    setUserRole(userSnap.data().role);
+                try {
+                    const userRef = doc(db, "users", authUser.uid);
+                    const userSnap = await getDoc(userRef);
+                    if (userSnap.exists()) {
+                        setUserRole(userSnap.data().role);
+                    }
+                } catch (err) {
+                    console.error("Error fetching user role:", err);
                 }
             } else {
                 setUser(null);
@@ -238,7 +242,7 @@ export default function App() {
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 {activeView === 'heatPumpCalc' && <div className="max-w-5xl mx-auto"><Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">← Back</Button><HeatPumpCalculator /></div>}
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
-                {activeView === 'admin' && <AdminPage user={user} />}
+                {activeView === 'admin' && <AdminPage user={user} companies={companies} />}
                 
                 {/* --- NEW FINANCIAL LEDGER ROUTE --- */}
                 {activeView === 'ledger' && (
