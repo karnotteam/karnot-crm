@@ -1,151 +1,194 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Landmark, ArrowRightLeft, ReceiptText } from 'lucide-react';
+import { Save, Landmark, ArrowRightLeft, Trash2, Edit2, X, Check } from 'lucide-react';
 import { Card, Button, Input, Textarea, Section, KARNOT_CHART_OF_ACCOUNTS } from '../data/constants.jsx';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, orderBy, onSnapshot, doc, deleteDoc, updateDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const FinancialEntryLogger = ({ companies = [] }) => {
     const [loading, setLoading] = useState(false);
+    const [ledgerEntries, setLedgerEntries] = useState([]);
+    const [editingId, setEditingId] = useState(null);
     const [entry, setEntry] = useState({
         date: new Date().toISOString().split('T')[0],
         category: '',
         subCategory: '',
         amountUSD: '',
         amountPHP: '',
-        forexRate: 58.75, // Matches your FX_RATES constant
+        forexRate: 58.75,
         companyId: '',
         reference: '',
         description: ''
     });
 
-    // Automatically calculate PHP if USD is typed, and vice versa
+    // --- 1. REAL-TIME DATA FETCH ---
+    useEffect(() => {
+        const auth = getAuth();
+        if (!auth.currentUser) return;
+
+        const q = query(
+            collection(db, "users", auth.currentUser.uid, "ledger"),
+            orderBy("date", "desc")
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setLedgerEntries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    // --- 2. HANDLERS ---
     const handleAmountChange = (value, type) => {
         const numValue = parseFloat(value) || 0;
         if (type === 'USD') {
-            setEntry(prev => ({
-                ...prev,
-                amountUSD: value,
-                amountPHP: (numValue * prev.forexRate).toFixed(2)
-            }));
+            setEntry(prev => ({ ...prev, amountUSD: value, amountPHP: (numValue * prev.forexRate).toFixed(2) }));
         } else {
-            setEntry(prev => ({
-                ...prev,
-                amountPHP: value,
-                amountUSD: (numValue / prev.forexRate).toFixed(2)
-            }));
+            setEntry(prev => ({ ...prev, amountPHP: value, amountUSD: (numValue / prev.forexRate).toFixed(2) }));
         }
     };
 
     const handleSave = async () => {
         const auth = getAuth();
-        if (!auth.currentUser) return alert("Please log in first");
-        if (!entry.subCategory || !entry.amountPHP) return alert("Please select a line item and enter an amount");
+        if (!auth.currentUser) return;
+        if (!entry.subCategory || !entry.amountPHP) return alert("Please fill in the required fields.");
 
         setLoading(true);
         try {
-            // Save to a new collection called 'ledger'
-            await addDoc(collection(db, "users", auth.currentUser.uid, "ledger"), {
-                ...entry,
-                amountPHP: parseFloat(entry.amountPHP),
-                amountUSD: parseFloat(entry.amountUSD),
-                createdAt: new Date().toISOString(),
-                type: 'EXPENSE'
-            });
-
-            alert("Posted to Ledger successfully!");
-            // Reset form for next entry
+            if (editingId) {
+                // UPDATE EXISTING
+                await updateDoc(doc(db, "users", auth.currentUser.uid, "ledger", editingId), {
+                    ...entry,
+                    amountPHP: parseFloat(entry.amountPHP),
+                    amountUSD: parseFloat(entry.amountUSD)
+                });
+                setEditingId(null);
+            } else {
+                // ADD NEW
+                await addDoc(collection(db, "users", auth.currentUser.uid, "ledger"), {
+                    ...entry,
+                    amountPHP: parseFloat(entry.amountPHP),
+                    amountUSD: parseFloat(entry.amountUSD),
+                    createdAt: new Date().toISOString(),
+                    type: 'EXPENSE'
+                });
+            }
             setEntry(prev => ({ ...prev, amountUSD: '', amountPHP: '', reference: '', description: '' }));
         } catch (error) {
-            console.error("Error saving to ledger:", error);
-            alert("Failed to save entry.");
+            console.error(error);
+            alert("Error saving entry.");
         } finally {
             setLoading(false);
         }
     };
 
+    const handleDelete = async (id) => {
+        if (window.confirm("Are you sure you want to delete this entry? This cannot be undone.")) {
+            const auth = getAuth();
+            await deleteDoc(doc(db, "users", auth.currentUser.uid, "ledger", id));
+        }
+    };
+
+    const startEdit = (item) => {
+        setEditingId(item.id);
+        setEntry({ ...item });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     return (
-        <Card className="max-w-5xl mx-auto">
-            <div className="flex items-center gap-3 mb-8 border-b-2 border-orange-500 pb-4">
-                <Landmark className="text-orange-600" size={32} />
-                <h2 className="text-3xl font-bold text-gray-800">Financial Ledger Entry</h2>
-            </div>
+        <div className="space-y-10">
+            {/* FORM SECTION */}
+            <Card className="max-w-5xl mx-auto border-t-4 border-orange-500">
+                <div className="flex justify-between items-center mb-8 pb-4 border-b">
+                    <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                        <Landmark className="text-orange-600" /> {editingId ? "Edit Ledger Entry" : "New Ledger Entry"}
+                    </h2>
+                    {editingId && (
+                        <Button onClick={() => {setEditingId(null); setEntry(prev => ({...prev, amountUSD: '', amountPHP: ''}))}} variant="secondary">
+                            <X size={16} className="mr-1"/> Cancel Edit
+                        </Button>
+                    )}
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                {/* LEFT COLUMN: CATEGORY & DATE */}
-                <Section title="1. Categorization">
-                    <div className="space-y-4">
-                        <Input label="Transaction Date" type="date" value={entry.date} onChange={e => setEntry({...entry, date: e.target.value})} />
-                        
-                        <div>
-                            <label className="block text-sm font-medium text-gray-600 mb-1">Account Group</label>
-                            <select 
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-orange-500"
-                                value={entry.category}
-                                onChange={(e) => setEntry({...entry, category: e.target.value, subCategory: ''})}
-                            >
-                                <option value="">-- Select Group --</option>
-                                {Object.keys(KARNOT_CHART_OF_ACCOUNTS).map(cat => (
-                                    <option key={cat} value={cat}>{cat.replace('_', ' ')}</option>
-                                ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <Section title="Categorization">
+                        <div className="space-y-4">
+                            <Input label="Date" type="date" value={entry.date} onChange={e => setEntry({...entry, date: e.target.value})} />
+                            <select className="w-full p-2 border rounded" value={entry.category} onChange={(e) => setEntry({...entry, category: e.target.value, subCategory: ''})}>
+                                <option value="">-- Account Group --</option>
+                                {Object.keys(KARNOT_CHART_OF_ACCOUNTS).map(cat => <option key={cat} value={cat}>{cat.replace('_', ' ')}</option>)}
                             </select>
-                        </div>
-
-                        {entry.category && (
-                            <div>
-                                <label className="block text-sm font-medium text-gray-600 mb-1">P&L Line Item</label>
-                                <select 
-                                    className="w-full px-3 py-2 border border-orange-300 bg-orange-50 rounded-md focus:ring-orange-500 font-semibold"
-                                    value={entry.subCategory}
-                                    onChange={(e) => setEntry({...entry, subCategory: e.target.value})}
-                                >
-                                    <option value="">-- Select Specific Account --</option>
-                                    {KARNOT_CHART_OF_ACCOUNTS[entry.category].map(item => (
-                                        <option key={item} value={item}>{item}</option>
-                                    ))}
+                            {entry.category && (
+                                <select className="w-full p-2 border border-orange-300 bg-orange-50 rounded font-bold" value={entry.subCategory} onChange={(e) => setEntry({...entry, subCategory: e.target.value})}>
+                                    <option value="">-- Specific Line Item --</option>
+                                    {KARNOT_CHART_OF_ACCOUNTS[entry.category].map(item => <option key={item} value={item}>{item}</option>)}
                                 </select>
+                            )}
+                            <Input label="Reference (OR#)" value={entry.reference} onChange={e => setEntry({...entry, reference: e.target.value})} />
+                        </div>
+                    </Section>
+
+                    <Section title="Values">
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2">
+                                <Input label="USD" type="number" value={entry.amountUSD} onChange={e => handleAmountChange(e.target.value, 'USD')} />
+                                <ArrowRightLeft className="mt-6 text-gray-400" size={20} />
+                                <Input label="PHP" type="number" value={entry.amountPHP} onChange={e => handleAmountChange(e.target.value, 'PHP')} />
                             </div>
-                        )}
-                        
-                        <Input label="Reference (OR / Check / Invoice #)" value={entry.reference} onChange={e => setEntry({...entry, reference: e.target.value})} />
-                    </div>
-                </Section>
-
-                {/* RIGHT COLUMN: MONEY & ALLOCATION */}
-                <Section title="2. Values & Projects">
-                    <div className="space-y-4">
-                        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                            <Input label="Amount (USD)" type="number" value={entry.amountUSD} onChange={e => handleAmountChange(e.target.value, 'USD')} />
-                            <div className="mt-6 text-gray-400"><ArrowRightLeft size={20} /></div>
-                            <Input label="Amount (PHP)" type="number" value={entry.amountPHP} onChange={e => handleAmountChange(e.target.value, 'PHP')} />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-600 mb-1">Link to Company (for Cost of Sales)</label>
-                            <select 
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                                value={entry.companyId}
-                                onChange={(e) => setEntry({...entry, companyId: e.target.value})}
-                            >
-                                <option value="">-- Internal Business Expense --</option>
-                                {companies.map(c => (
-                                    <option key={c.id} value={c.id}>{c.companyName}</option>
-                                ))}
+                            <select className="w-full p-2 border rounded" value={entry.companyId} onChange={(e) => setEntry({...entry, companyId: e.target.value})}>
+                                <option value="">-- Internal / No Company --</option>
+                                {companies.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
                             </select>
+                            <Textarea label="Description" value={entry.description} onChange={e => setEntry({...entry, description: e.target.value})} />
                         </div>
+                    </Section>
+                </div>
 
-                        <Textarea label="Notes / Memo" rows="3" value={entry.description} onChange={e => setEntry({...entry, description: e.target.value})} placeholder="e.g. Flight to Davao for installation..." />
-                    </div>
-                </Section>
-            </div>
+                <div className="flex justify-end mt-8">
+                    <Button onClick={handleSave} variant="success" className="px-10" disabled={loading}>
+                        {editingId ? <Check className="mr-2"/> : <Save className="mr-2"/>}
+                        {editingId ? "Update Entry" : "Post to Ledger"}
+                    </Button>
+                </div>
+            </Card>
 
-            <div className="flex justify-end mt-10 pt-6 border-t">
-                <Button onClick={handleSave} variant="success" className="w-full md:w-auto px-12 py-3 text-lg" disabled={loading}>
-                    <Save className="mr-2" size={20} />
-                    {loading ? "Posting..." : "Post Entry to Ledger"}
-                </Button>
-            </div>
-        </Card>
+            {/* HISTORY TABLE SECTION */}
+            <Card className="max-w-5xl mx-auto overflow-hidden">
+                <h3 className="text-xl font-bold mb-6 text-gray-700">Recent Transactions (Manual Book History)</h3>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left border-collapse">
+                        <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                            <tr>
+                                <th className="p-4 border">Date</th>
+                                <th className="p-4 border">Category / Account</th>
+                                <th className="p-4 border text-right">Amount (PHP)</th>
+                                <th className="p-4 border">Reference</th>
+                                <th className="p-4 border text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {ledgerEntries.map((item) => (
+                                <tr key={item.id} className="hover:bg-gray-50 border-b">
+                                    <td className="p-4 border font-medium">{item.date}</td>
+                                    <td className="p-4 border">
+                                        <div className="font-bold text-orange-700">{item.subCategory}</div>
+                                        <div className="text-[10px] text-gray-400 uppercase">{item.category}</div>
+                                    </td>
+                                    <td className="p-4 border text-right font-mono font-bold">₱{parseFloat(item.amountPHP).toLocaleString()}</td>
+                                    <td className="p-4 border text-gray-500">{item.reference || '-'}</td>
+                                    <td className="p-4 border">
+                                        <div className="flex justify-center gap-2">
+                                            <button onClick={() => startEdit(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded"><Edit2 size={16}/></button>
+                                            <button onClick={() => handleDelete(item.id)} className="p-2 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+        </div>
     );
 };
 
