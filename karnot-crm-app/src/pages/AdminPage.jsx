@@ -1,7 +1,7 @@
 import React from 'react';
 import DataImporter from '../components/DataImporter';
 import ProductManager from '../components/ProductManager'; 
-import FinancialEntryLogger from '../components/FinancialEntryLogger';
+import FinancialEntryLogger from '../data/FinancialEntryLogger.jsx';
 import { Card } from '../data/constants';
 
 export default function AdminPage({ user, companies }) {
