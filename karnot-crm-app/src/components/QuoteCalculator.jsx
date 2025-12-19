@@ -1,4 +1,3 @@
-QUOTE CALCULATOR FOR MODIFYING 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check, User, Handshake } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, Section, PRICING_TIERS } from '../data/constants.jsx';
@@ -122,11 +121,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     }, [contacts, customer.name]);
 
     const handleSelectCompany = (company) => {
-        // 1. Detect Tier
         const detectedTier = company.tier && PRICING_TIERS[company.tier] ? company.tier : 'STANDARD';
         const tierDiscount = PRICING_TIERS[detectedTier].discount;
 
-        // 2. Set Customer
         setCustomer(prev => ({
             ...prev,
             name: company.companyName,
@@ -137,7 +134,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         setCompanySearch(company.companyName);
         setIsCompanyDropdownOpen(false);
 
-        // 3. Set Commercial Terms
         setCommercial(prev => ({
             ...prev,
             discount: tierDiscount,
@@ -145,7 +141,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         }));
     };
 
-    // --- NEW: Handle Manual Tier Change ---
     const handleTierChange = (e) => {
         const newTier = e.target.value;
         const newDiscount = PRICING_TIERS[newTier] ? PRICING_TIERS[newTier].discount : 0;
@@ -358,65 +353,66 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             generatedDocumentsHTML += `<div class="report-page">${birHeaderHTML}${soldToInfoHTML}<h3>Details</h3><table class="line-items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">Unit Price (PHP)</th><th class="text-right">Amount (PHP)</th></tr></thead><tbody>${birLineItemsHTML}</tbody></table><div class="summary-wrapper">${birSummaryHTML}</div>${bankDetailsPHP}</div>`;
         }
 
-        const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Quote Preview</title><style>body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6; color: #333; } .report-page { background: white; max-width: 800px; margin: 0 auto 40px auto; padding: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 8px; position: relative; } .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 2px solid #ea580c; padding-bottom: 20px; } .report-info h2 { color: #ea580c; margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px; } .customer-info-box { background-color: #f9fafb; border-left: 4px solid #ea580c; padding: 15px; margin-bottom: 30px; font-size: 14px; line-height: 1.5; } h3 { color: #4b5563; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-top: 0; } table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; } th { background-color: #ea580c; color: white; padding: 10px; text-align: left; font-weight: 600; } td { padding: 10px; border-bottom: 1px solid #e5e7eb; } .text-right { text-align: right; } .text-center { text-align: center; } .simple-summary-table { width: 100%; max-width: 400px; margin-left: auto; } .simple-summary-table td { border: none; padding: 5px 10px; } .grand-total-row { border-top: 2px solid #333; font-size: 16px; background-color: #f3f4f6; } .summary-wrapper { page-break-inside: avoid; margin-bottom: 20px; } .terms-conditions { font-size: 12px; color: #666; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; } dt { font-weight: bold; margin-top: 5px; color: #333; } dd { margin: 2px 0 10px 0; } @media print { body { background: white; margin: 0; padding: 0; } .report-page { box-shadow: none; margin: 0; width: 100%; max-width: none; page-break-after: always; } .report-page:last-child { page-break-after: auto; } }</style></head><body>${generatedDocumentsHTML}</body></html>`;
+        const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Quote Preview</title><style>body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6; color: #333; } .report-page { background: white; max-width: 800px; margin: 0 auto 40px auto; padding: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 8px; position: relative; } .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 2px solid #ea580c; padding-bottom: 20px; } .report-info h2 { color: #ea580c; margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px; } .customer-info-box { background-color: #f9fafb; border-left: 4px solid #ea580c; padding: 15px; margin-bottom: 30px; font-size: 14px; line-height: 1.5; } h3 { color: #4b5563; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-top: 0; } table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; } th { background-color: #ea580c; color: white; padding: 10px; text-align: left; font-weight: 600; } td { padding: 10px; border-bottom: 1px solid #e5e7eb; } .text-right { text-align: right; } .text-center { text-align: center; } .simple-summary-table { width: 100%; max-width: 400px; margin-left: auto; } .simple-summary-table td { border: none; padding: 5px 10px; } .grand-total-row { border-top: 2px solid #333; font-size: 16px; background-color: #f3f4f6; } .summary-wrapper { page-break-inside: avoid; margin-bottom: 20px; } .terms-conditions { font-size: 12px; color: #666; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; } dt { font-weight: bold; margin-top: 5px; color: #333; } dd { margin: 2px 0 10px 0; } @media print { body { background: white; margin: 0; padding: 0; } .report-page { box-shadow: none; margin: 0; width: 210mm; min-height: 297mm; max-width: none; page-break-after: always; padding: 20mm; } .report-page:last-child { page-break-after: auto; } }</style></head><body>${generatedDocumentsHTML}</body></html>`;
         
         const win = window.open("", "QuotePreview");
         win.document.write(finalReportHTML);
         win.document.close();
     };
     
-const handleSave = () => {
-    if (!customer.name) {
-        alert("Please enter a customer name.");
-        return;
-    }
-    
-    // 1. Determine the exact Revenue Account based on the quote metadata
-    let assignedRevenueAccount = "Domestic Equipment Sales";
-    if (customer.saleType === 'Export') {
-        assignedRevenueAccount = "Export Equipment Sales";
-    } else if (docGeneration.generateProForma && docControl.paymentTerms.includes("EaaS")) {
-        // Simple logic check for Service Charges vs Funded Sales
-        assignedRevenueAccount = "Domestic (EaaS) Service Charge";
-    }
+    const handleSave = () => {
+        if (!customer.name) {
+            alert("Please enter a customer name.");
+            return;
+        }
+        
+        const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
 
-    const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
+        // 1. Determine Revenue Account for P&L Matching
+        let assignedRevenueAccount = "Domestic Equipment Sales";
+        if (customer.saleType === 'Export') {
+            assignedRevenueAccount = "Export Equipment Sales";
+        } else if (docControl.paymentTerms.toLowerCase().includes("eaas")) {
+            assignedRevenueAccount = docGeneration.generateProForma ? "Domestic (EaaS) Service Charge" : "Domestic (EaaS) Funded Sales";
+        }
 
-    // 2. Prepare the full Financial Entry for the General Ledger
-    const financialEntry = {
-        quoteId: quoteId,
-        revenueAccount: assignedRevenueAccount,
-        netSalesUSD: quoteTotals.subtotalUSD,
-        discountUSD: quoteTotals.subtotalUSD * (commercial.discount / 100),
-        finalSalesUSD: quoteTotals.finalSalesPrice,
-        finalSalesPHP: quoteTotals.finalSalesPrice * costing.forexRate,
-        marginPercentage: quoteTotals.grossMarginPercentage,
-        status: initialData?.status || 'DRAFT',
-        ledgerStatus: 'PENDING_MANUAL_BOOK' // Flag for your BIR transcription
+        // 2. Calculate Financial Splits for BIR Manual Books
+        const totalPHP = quoteTotals.finalSalesPrice * costing.forexRate;
+        const vatableSales = customer.saleType === 'Export' ? 0 : totalPHP / 1.12;
+        const vatOutput = customer.saleType === 'Export' ? 0 : vatableSales * 0.12;
+        const zeroRatedSales = customer.saleType === 'Export' ? totalPHP : 0;
+
+        const financialEntry = {
+            quoteId,
+            revenueAccount: assignedRevenueAccount,
+            netSalesUSD: quoteTotals.subtotalUSD,
+            finalSalesPHP: totalPHP,
+            vatableSalesPHP: vatableSales,
+            vatOutputPHP: vatOutput,
+            zeroRatedSalesPHP: zeroRatedSales,
+            marginPercentage: quoteTotals.grossMarginPercentage,
+            ledgerStatus: 'PENDING_MANUAL_BOOK'
+        };
+
+        const newQuote = {
+            id: quoteId,
+            customer,
+            commercial,
+            docControl,
+            costing,
+            docGeneration,
+            selectedProducts,
+            manualItems,
+            finalSalesPrice: quoteTotals.finalSalesPrice,
+            grossMarginAmount: quoteTotals.grossMarginAmount,
+            grossMarginPercentage: quoteTotals.grossMarginPercentage,
+            ledgerPosting: financialEntry, // Added audit trail for BIR
+            status: initialData?.status || 'DRAFT',
+            createdAt: initialData?.createdAt || new Date().toISOString(),
+            opportunityId: opportunityId, 
+        };
+        onSaveQuote(newQuote);
     };
-
-    const newQuote = {
-        id: quoteId,
-        customer,
-        commercial,
-        docControl,
-        costing,
-        docGeneration,
-        selectedProducts,
-        manualItems,
-        // Keep your existing calculation fields
-        finalSalesPrice: quoteTotals.finalSalesPrice,
-        grossMarginAmount: quoteTotals.grossMarginAmount,
-        grossMarginPercentage: quoteTotals.grossMarginPercentage,
-        // NEW: The full audit trail
-        ledgerPosting: financialEntry, 
-        status: initialData?.status || 'DRAFT',
-        createdAt: initialData?.createdAt || new Date().toISOString(),
-        opportunityId: opportunityId, 
-    };
-
-    onSaveQuote(newQuote);
-};
 
     const productCategories = useMemo(() => {
         return dbProducts.reduce((acc, p) => {
@@ -477,7 +473,6 @@ const handleSave = () => {
                                                     {company.isVerified && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Verified</span>}
                                                 </div>
                                                 {company.address && <span className="block truncate text-xs text-gray-500">{company.address}</span>}
-                                                {/* SHOW TIER IN DROPDOWN */}
                                                 {company.tier && PRICING_TIERS[company.tier] && (
                                                     <span className={`text-[10px] font-bold px-1.5 rounded bg-${PRICING_TIERS[company.tier].color}-100 text-${PRICING_TIERS[company.tier].color}-800`}>
                                                         {PRICING_TIERS[company.tier].label}
@@ -598,7 +593,7 @@ const handleSave = () => {
                     <div className="text-center p-4">Loading Products from Database...</div>
                 ) : dbProducts.length === 0 ? (
                     <div className="text-center p-4 bg-orange-50 border border-orange-200 rounded text-orange-700">
-                        No products found in the database. Please use the <strong>Admin Page</strong> to upload your products.
+                        No products found in the database.
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
