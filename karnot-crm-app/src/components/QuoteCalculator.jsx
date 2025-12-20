@@ -320,7 +320,10 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     };
     
     const handleSave = () => {
-        if (!customer.name) { alert("Please enter a customer name."); return; }
+    if (!customer.name) { 
+        alert("Please enter a customer name."); 
+        return; 
+    }
         
         let assignedRevenueAccount = "Domestic Equipment Sales";
         if (customer.saleType === 'Export') {
@@ -345,32 +348,24 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
         // Ensure it looks exactly like this:
 const newQuote = {
-    id: quoteId,
-    customer: {
-        ...customer,
-        id: customer.id || '' // Must have the company ID
-    },
-    // ... other fields ...
-    status: initialData?.status || 'DRAFT',
-    createdAt: initialData?.createdAt || new Date().toISOString(),
-    opportunityId: opportunityId, // <--- CRITICAL: This links to the Funnel lead
-};
-            commercial,
-            docControl,
-            costing,
-            docGeneration,
-            selectedProducts,
-            manualItems,
-            finalSalesPrice: quoteTotals.finalSalesPrice,
-            grossMarginAmount: quoteTotals.grossMarginAmount,
-            grossMarginPercentage: quoteTotals.grossMarginPercentage,
-            ledgerPosting: financialEntry, 
-            status: initialData?.status || 'DRAFT',
-            createdAt: initialData?.createdAt || new Date().toISOString(),
-            opportunityId: opportunityId, 
-        };
-
-        onSaveQuote(newQuote);
+        id: quoteId,
+        customer: {
+            ...customer,
+            id: customer.id || (companies.find(c => c.companyName === customer.name)?.id || '')
+        },
+        commercial,
+        docControl,
+        costing,
+        docGeneration,
+        selectedProducts,
+        manualItems, // Ensure there is a comma here
+        finalSalesPrice: quoteTotals.finalSalesPrice, // Ensure there is a comma here
+        grossMarginAmount: quoteTotals.grossMarginAmount, // Ensure there is a comma here
+        grossMarginPercentage: quoteTotals.grossMarginPercentage, // Ensure there is a comma here
+        ledgerPosting: financialEntry, 
+        status: initialData?.status || 'DRAFT',
+        createdAt: initialData?.createdAt || new Date().toISOString(),
+        opportunityId: opportunityId, // This is the link to the Funnel
     };
 
     const productCategories = useMemo(() => {
