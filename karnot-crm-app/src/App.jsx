@@ -176,7 +176,9 @@ export default function App() {
                 {activeView === 'opportunityDetail' && <OpportunityDetailPage opportunity={selectedOpportunity} quotes={quotes} onBack={() => setActiveView('funnel')} onOpenQuote={handleEditQuote} user={user} onAddQuote={() => { setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); setActiveView('calculator'); }} />}
                 {activeView === 'companies' && <CompaniesPage companies={companies} contacts={contacts} quotes={quotes} user={user} onOpenQuote={handleEditQuote} onRestoreCompany={(id) => updateDoc(doc(db, "users", user.uid, "companies", id), { isDeleted: false })} />}
                 {activeView === 'contacts' && <ContactsPage contacts={contacts} companies={companies} user={user} />}
-                {activeView === 'calculator' && <QuoteCalculator onSaveQuote={handleSaveQuote} nextQuoteNumber={nextQuoteNumber} key={quoteToEdit ? quoteToEdit.id : 'new'} initialData={quoteToEdit} companies={companies} contacts={contacts} />}
+                
+                {/* FIXED: Added opportunities prop */}
+                {activeView === 'calculator' && <QuoteCalculator onSaveQuote={handleSaveQuote} nextQuoteNumber={nextQuoteNumber} key={quoteToEdit ? quoteToEdit.id : 'new'} initialData={quoteToEdit} companies={companies} contacts={contacts} opportunities={opportunities} />}
                 
                 {activeView === 'list' && (
                     <QuotesListPage 
