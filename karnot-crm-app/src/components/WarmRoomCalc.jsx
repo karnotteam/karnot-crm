@@ -10,7 +10,6 @@ const CONFIG = {
     DIESEL_LHV_KWH_L: 9.9,
     DIESEL_CO2_KG_PER_L: 2.68,
     GRID_CO2_KG_PER_KWH: 0.7,
-    FX_USD_PHP: 58.5,
     REQUIRED_WATER_TEMP_C: 65,
     TANK_SIZING_L_PER_KW: 20,
     PV_DERATE_FACTOR: 0.80,
@@ -19,6 +18,22 @@ const CONFIG = {
     SOLAR_PANEL_COST_USD: 200,
     SOLAR_PANEL_KW_RATED: 0.425,
     INVERTER_COST_PER_WATT_USD: 0.30,
+    FX: {
+        PHP: 58.5,
+        USD: 1.0,
+        GBP: 0.79,
+        EUR: 0.92,
+        CAD: 1.43,
+        AUD: 1.57,
+    },
+    SYMBOLS: {
+        PHP: '₱',
+        USD: '$',
+        GBP: '£',
+        EUR: '€',
+        CAD: 'C$',
+        AUD: 'A$',
+    },
     EFFICIENCY_BREAKDOWN: [
         { id: "combustionEff", label: 'Initial Combustion Efficiency', value: 83.0, isLoss: false },
         { id: "steamLeaks", label: 'Steam Leaks', value: 2.0, isLoss: true },
@@ -29,7 +44,7 @@ const CONFIG = {
         { id: "trapLoss", label: 'Steam Trap Leaks', value: 5.0, isLoss: true },
         { id: "pipeLoss", label: 'Un-Insulated Pipe Loss', value: 3.0, isLoss: true },
         { id: "wetSteamLoss", label: 'Wet Steam Loss', value: 1.0, isLoss: true },
-        { id: "scaleLoss", label: 'Scale Deposit Loss', value: 10.0, isLoss: true },
+        { id: "scaleLoss\", label: 'Scale Deposit Loss', value: 10.0, isLoss: true },
     ]
 };
 
@@ -40,6 +55,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
 
     // Form inputs
     const [inputs, setInputs] = useState({
+        currency: 'PHP',
         roomL: 11.5,
         roomW: 6,
         roomH: 6,
@@ -175,6 +191,16 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
         if (nameLower.includes('r410')) return 'R410';
         
         return '';
+    };
+
+    // Currency conversion helper
+    const convertCurrency = (usdAmount) => {
+        const rate = CONFIG.FX[inputs.currency] || 1;
+        return usdAmount * rate;
+    };
+
+    const getCurrencySymbol = () => {
+        return CONFIG.SYMBOLS[inputs.currency] || '$';
     };
 
     const handleInputChange = (field, value) => {
@@ -353,9 +379,10 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
             selectedFanCoil ? `(${getFanCoilHeatingKw(selectedFanCoil).toFixed(1)} kW)` : 'NONE');
 
         // --- CAPEX CALCULATION ---
-        const heatPumpSalePrice = selectedHeatPump ? (selectedHeatPump.salesPriceUSD * CONFIG.FX_USD_PHP) : 0;
-        const tankSalePrice = selectedTank ? (selectedTank.salesPriceUSD * CONFIG.FX_USD_PHP) : 0;
-        const fanCoilSalePrice = selectedFanCoil ? (selectedFanCoil.salesPriceUSD * CONFIG.FX_USD_PHP * 2) : 0;
+        const fxRate = CONFIG.FX[currency] || CONFIG.FX.PHP;
+        const heatPumpSalePrice = selectedHeatPump ? (selectedHeatPump.salesPriceUSD * fxRate) : 0;
+        const tankSalePrice = selectedTank ? (selectedTank.salesPriceUSD * fxRate) : 0;
+        const fanCoilSalePrice = selectedFanCoil ? (selectedFanCoil.salesPriceUSD * fxRate * 2) : 0;
         
         // --- HP & SOLAR ANALYSIS ---
         const hp_total_electric_kWh = totalThermalLoad_kWh / hpCOP;
@@ -397,7 +424,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
             const numPanels = Math.ceil(requiredPV_kWp / CONFIG.SOLAR_PANEL_KW_RATED);
             const solarHardwareUSD = (numPanels * CONFIG.SOLAR_PANEL_COST_USD) + 
                 (requiredPV_kWp * 1000 * CONFIG.INVERTER_COST_PER_WATT_USD);
-            pvHardwareCostPHP = solarHardwareUSD * CONFIG.FX_USD_PHP;
+            pvHardwareCostPHP = solarHardwareUSD * fxRate;
             pvInstallCostPHP = requiredPV_kWp * solarInstallCost;
         }
         
@@ -627,7 +654,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                                         <TrendingUp className="text-green-600" size={20}/>
                                         <p className="text-xs font-bold text-gray-500 uppercase">NPV @ {(inputs.enterpriseWACC * 100).toFixed(1)}%</p>
                                     </div>
-                                    <p className="text-2xl font-bold text-green-600">₱{fmt(results.enterpriseROI.financial.npv)}</p>
+                                    <p className="text-2xl font-bold text-green-600">{getCurrencySymbol()}{fmt(results.enterpriseROI.financial.npv)}</p>
                                 </div>
                                 <div className="bg-white p-4 rounded-lg border-2 border-blue-200 shadow-sm">
                                     <div className="flex items-center gap-2 mb-2">
@@ -887,23 +914,23 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                                         <th className="text-left py-3 text-gray-600">
                                             Heat Pump ({results.hp.selection?.name})
                                         </th>
-                                        <td className="text-right py-3">₱ {fmt(results.capex.hp)}</td>
+                                        <td className="text-right py-3">{getCurrencySymbol()} {fmt(results.capex.hp)}</td>
                                     </tr>
                                     <tr className="border-b">
                                         <th className="text-left py-3 text-gray-600">
                                             Fan Coil Units (2 × {results.fanCoil.selection?.name || 'N/A'})
                                         </th>
-                                        <td className="text-right py-3">₱ {fmt(results.capex.fanCoil)}</td>
+                                        <td className="text-right py-3">{getCurrencySymbol()} {fmt(results.capex.fanCoil)}</td>
                                     </tr>
                                     <tr className="border-b">
                                         <th className="text-left py-3 text-gray-600">
                                             Thermal Storage Tank ({results.tank.selection?.name || 'N/A'})
                                         </th>
-                                        <td className="text-right py-3">₱ {fmt(results.capex.tank)}</td>
+                                        <td className="text-right py-3">{getCurrencySymbol()} {fmt(results.capex.tank)}</td>
                                     </tr>
                                     <tr className="border-b">
                                         <th className="text-left py-3 text-gray-600">Installation & Commissioning</th>
-                                        <td className="text-right py-3">₱ {fmt(results.capex.install)}</td>
+                                        <td className="text-right py-3">{getCurrencySymbol()} {fmt(results.capex.install)}</td>
                                     </tr>
                                     {results.capex.pvHardware > 0 && (
                                         <>
@@ -911,11 +938,11 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                                                 <th className="text-left py-3 text-gray-600">
                                                     Solar PV Hardware ({fmt(results.solar.requiredPV_kWp, 1)} kWp)
                                                 </th>
-                                                <td className="text-right py-3">₱ {fmt(results.capex.pvHardware)}</td>
+                                                <td className="text-right py-3">{getCurrencySymbol()} {fmt(results.capex.pvHardware)}</td>
                                             </tr>
                                             <tr className="border-b">
                                                 <th className="text-left py-3 text-gray-600">Solar PV Installation</th>
-                                                <td className="text-right py-3">₱ {fmt(results.capex.pvInstall)}</td>
+                                                <td className="text-right py-3">{getCurrencySymbol()} {fmt(results.capex.pvInstall)}</td>
                                             </tr>
                                         </>
                                     )}
@@ -924,7 +951,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                                             <th className="text-left py-3 text-gray-600">
                                                 {results.solar.storage.type} ({fmt(results.solar.storage.requiredSize, 1)} {results.solar.storage.units})
                                             </th>
-                                            <td className="text-right py-3">₱ {fmt(results.capex.storage)}</td>
+                                            <td className="text-right py-3">{getCurrencySymbol()} {fmt(results.capex.storage)}</td>
                                         </tr>
                                     )}
                                     <tr className="border-b-2 border-orange-500">
@@ -932,13 +959,13 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                                             Total Project Investment (CAPEX)
                                         </th>
                                         <td className="text-right py-3 font-bold text-orange-600 text-lg">
-                                            ₱ {fmt(results.capex.total)}
+                                            {getCurrencySymbol()} {fmt(results.capex.total)}
                                         </td>
                                     </tr>
                                     <tr className="border-b">
                                         <th className="text-left py-3 text-gray-600">Estimated Annual Savings</th>
                                         <td className="text-right py-3 font-bold text-green-600">
-                                            ₱ {fmt(results.savings.annual)}
+                                            {getCurrencySymbol()} {fmt(results.savings.annual)}
                                         </td>
                                     </tr>
                                     <tr className="border-b">
@@ -956,7 +983,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                                     <tr>
                                         <th className="text-left py-3 text-gray-600">Net Present Value (NPV)</th>
                                         <td className="text-right py-3 font-bold text-purple-600">
-                                            ₱ {fmt(results.roi.npv)}
+                                            {getCurrencySymbol()} {fmt(results.roi.npv)}
                                         </td>
                                     </tr>
                                 </tbody>
@@ -974,7 +1001,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                             A delay in project approval will result in lost savings, reducing the project's total value.
                         </p>
                         <div className="text-4xl font-bold text-orange-600">
-                            ₱ {fmt(results.roi.costOfDelay)}
+                            {getCurrencySymbol()} {fmt(results.roi.costOfDelay)}
                         </div>
                         <p className="text-sm text-gray-600 mt-2">
                             Lost project value over {inputs.implementationDelay} months delay
@@ -1094,6 +1121,27 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                         )}
                     </div>
 
+                    {/* CURRENCY SELECTOR */}
+                    <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                            <DollarSign className="text-green-600" size={18}/>
+                            Display Currency
+                        </label>
+                        <select
+                            value={inputs.currency}
+                            onChange={(e) => setInputs(prev => ({ ...prev, currency: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white"
+                        >
+                            <option value="PHP">🇵🇭 Philippine Peso (₱)</option>
+                            <option value="USD">🇺🇸 US Dollar ($)</option>
+                            <option value="GBP">🇬🇧 British Pound (£)</option>
+                            <option value="CAD">🇨🇦 Canadian Dollar (C$)</option>
+                            <option value="EUR">🇪🇺 Euro (€)</option>
+                            <option value="AUD">🇦🇺 Australian Dollar (A$)</option>
+                        </select>
+                        <p className="text-xs text-gray-500 mt-2">All prices and costs will be displayed in {inputs.currency}. Products are stored in USD and converted using live FX rates.</p>
+                    </div>
+
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         {/* Section 1: Room & Environment */}
                         <div className="bg-gray-50 rounded-lg p-6">
@@ -1192,11 +1240,11 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                                 </div>
                                 <InputField label="Heat Pump COP (at 65°C Water)" value={inputs.hpCOP} step="0.01"
                                     onChange={(e) => handleInputChange('hpCOP', parseFloat(e.target.value))} />
-                                <InputField label="Electricity Tariff (₱/kWh)" value={inputs.electricityTariff} step="0.01"
+                                <InputField label={`Electricity Tariff (${getCurrencySymbol()}/kWh)`} value={inputs.electricityTariff} step="0.01"
                                     onChange={(e) => handleInputChange('electricityTariff', parseFloat(e.target.value))} />
-                                <InputField label="Diesel Price (₱/Liter)" value={inputs.dieselPrice} step="0.01"
+                                <InputField label={`Diesel Price (${getCurrencySymbol()}/Liter)`} value={inputs.dieselPrice} step="0.01"
                                     onChange={(e) => handleInputChange('dieselPrice', parseFloat(e.target.value))} />
-                                <InputField label="Installation Cost (₱)" value={inputs.installationCost} 
+                                <InputField label={`Installation Cost (${getCurrencySymbol()})`} value={inputs.installationCost} 
                                     onChange={(e) => handleInputChange('installationCost', parseFloat(e.target.value))} />
                                 <InputField label="Project Lifespan (Years)" value={inputs.projectLifespan} 
                                     onChange={(e) => handleInputChange('projectLifespan', parseFloat(e.target.value))} />
@@ -1245,11 +1293,11 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                                         </div>
                                         <InputField label="Peak Sun Hours per Day (PSH)" value={inputs.psh} step="0.1"
                                             onChange={(e) => handleInputChange('psh', parseFloat(e.target.value))} />
-                                        <InputField label="Solar Installation Cost (₱/kWp)" value={inputs.solarInstallCost} 
+                                        <InputField label={`Solar Installation Cost (${getCurrencySymbol()}/kWp)`} value={inputs.solarInstallCost} 
                                             onChange={(e) => handleInputChange('solarInstallCost', parseFloat(e.target.value))} />
-                                        <InputField label="Battery Cost (₱/kWh)" value={inputs.batteryCost} 
+                                        <InputField label={`Battery Cost (${getCurrencySymbol()}/kWh)`} value={inputs.batteryCost} 
                                             onChange={(e) => handleInputChange('batteryCost', parseFloat(e.target.value))} />
-                                        <InputField label="PCM Thermal Storage Cost (₱/kWh)" value={inputs.pcmCost} 
+                                        <InputField label={`PCM Thermal Storage Cost (${getCurrencySymbol()}/kWh)`} value={inputs.pcmCost} 
                                             onChange={(e) => handleInputChange('pcmCost', parseFloat(e.target.value))} />
                                     </>
                                 )}
