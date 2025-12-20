@@ -21,14 +21,14 @@ import WarmRoomCalc from './components/WarmRoomCalc.jsx';
 // --- Import New Financial Components ---
 import FinancialEntryLogger from './data/FinancialEntryLogger.jsx';
 import ManpowerLogger from './data/ManpowerLogger.jsx';
-import ProjectOperations from './data/ProjectOperations.jsx'; // <--- Added
-import BIRBookPrep from './data/BIRBookPrep.jsx';           // <--- Added
+import ProjectOperations from './data/ProjectOperations.jsx'; 
+import BIRBookPrep from './data/BIRBookPrep.jsx';           
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { 
-    BarChart2, FileText, List, HardHat, LogOut, Building, 
-    Users, ClipboardCheck, Settings, Calculator, Plus, Landmark, Clock, BookOpen, Briefcase
+    BarChart2, List, HardHat, LogOut, Building, 
+    Users, Settings, Calculator, Plus, Landmark, Clock, BookOpen, Briefcase
 } from 'lucide-react'; 
 
 // --- Header Component ---
@@ -76,20 +76,18 @@ export default function App() {
     const [activeView, setActiveView] = useState('funnel');
     const [subView, setSubView] = useState('ledger'); 
     
-    // Data States
     const [opportunities, setOpportunities] = useState([]);
     const [quotes, setQuotes] = useState([]);
     const [companies, setCompanies] = useState([]); 
     const [contacts, setContacts] = useState([]);
-    const [ledgerEntries, setLedgerEntries] = useState([]); // <--- Added for ROI calc
-    const [manpowerLogs, setManpowerLogs] = useState([]);   // <--- Added for ROI calc
+    const [ledgerEntries, setLedgerEntries] = useState([]); 
+    const [manpowerLogs, setManpowerLogs] = useState([]);   
     
     const [quoteToEdit, setQuoteToEdit] = useState(null);
     const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
     const [loadingAuth, setLoadingAuth] = useState(true);
     const [loadingData, setLoadingData] = useState(true);
 
-    // --- 1. AUTH & ROLE CHECK ---
     useEffect(() => {
         setLoadingAuth(true); 
         const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
@@ -111,7 +109,6 @@ export default function App() {
         return () => unsubscribe(); 
     }, []);
 
-    // --- 2. DATA SNAPSHOTS ---
     useEffect(() => {
         if (user) {
             setLoadingData(true); 
@@ -134,21 +131,29 @@ export default function App() {
                 setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setLoadingData(false);
             });
-
             return () => { unsubQuotes(); unsubOpps(); unsubCompanies(); unsubContacts(); unsubLedger(); unsubManpower(); };
         } else {
             setLoadingData(false);
         }
     }, [user]); 
 
-    // --- 3. HANDLERS (Same as before) ---
     const handleLogin = (email, password) => signInWithEmailAndPassword(auth, email, password).catch((e) => alert(e.message));
     const handleLogout = () => signOut(auth);
+    
+    const handleUpdateQuoteStatus = async (quoteId, newStatus) => {
+        if (!user) return;
+        await updateDoc(doc(db, "users", user.uid, "quotes", quoteId), { 
+            status: newStatus, 
+            lastModified: serverTimestamp() 
+        });
+    };
+
     const handleSaveQuote = async (quoteData) => {
         if (!user) return;
         await setDoc(doc(db, "users", user.uid, "quotes", quoteData.id), { ...quoteData, lastModified: serverTimestamp() }, { merge: true });
         setActiveView('funnel'); 
     };
+    
     const handleDeleteQuote = async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db, "users", user.uid, "quotes", id)); };
     const handleEditQuote = (quote) => { setQuoteToEdit(quote); setActiveView('calculator'); };
     const handleNewQuote = () => { setQuoteToEdit(null); setActiveView('calculator'); };
@@ -172,25 +177,26 @@ export default function App() {
                 {activeView === 'companies' && <CompaniesPage companies={companies} contacts={contacts} quotes={quotes} user={user} onOpenQuote={handleEditQuote} onRestoreCompany={(id) => updateDoc(doc(db, "users", user.uid, "companies", id), { isDeleted: false })} />}
                 {activeView === 'contacts' && <ContactsPage contacts={contacts} companies={companies} user={user} />}
                 {activeView === 'calculator' && <QuoteCalculator onSaveQuote={handleSaveQuote} nextQuoteNumber={nextQuoteNumber} key={quoteToEdit ? quoteToEdit.id : 'new'} initialData={quoteToEdit} companies={companies} contacts={contacts} />}
+                
                 {activeView === 'list' && (
-    <QuotesListPage 
-        quotes={quotes} 
-        onDeleteQuote={handleDeleteQuote} 
-        onEditQuote={handleEditQuote} 
-        onUpdateQuoteStatus={handleUpdateQuoteStatus}
-        onViewProject={(quote) => {
-            setActiveView('accounts');
-            setSubView('projectOps'); // Automatically opens the Project ROI tab
-        }}
-    />
-)}
+                    <QuotesListPage 
+                        quotes={quotes} 
+                        onDeleteQuote={handleDeleteQuote} 
+                        onEditQuote={handleEditQuote} 
+                        onUpdateQuoteStatus={handleUpdateQuoteStatus}
+                        onViewProject={(quote) => {
+                            setSubView('projectOps'); 
+                            setActiveView('accounts');
+                        }}
+                    />
+                )}
+
                 {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 {activeView === 'heatPumpCalc' && <div className="max-w-5xl mx-auto"><Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">← Back</Button><HeatPumpCalculator /></div>}
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
-                {/* --- DEDICATED ACCOUNTS & BIR BOOKS SECTION --- */}
                 {activeView === 'accounts' && (
                     <div className="space-y-6 pb-20">
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
@@ -199,22 +205,14 @@ export default function App() {
                                 <p className="text-gray-500 text-sm">BIR Compliance & Project Engineering Costing</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}>
-                                    <Landmark size={14} className="mr-1" /> Disbursements
-                                </Button>
-                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}>
-                                    <Clock size={14} className="mr-1" /> Manpower
-                                </Button>
-                                <Button onClick={() => setSubView('projectOps')} variant={subView === 'projectOps' ? 'primary' : 'secondary'}>
-                                    <Briefcase size={14} className="mr-1" /> Project ROI
-                                </Button>
-                                <Button onClick={() => setSubView('birBooks')} variant={subView === 'birBooks' ? 'primary' : 'secondary'} className="border-orange-500 text-orange-700">
-                                    <BookOpen size={14} className="mr-1" /> BIR Books
-                                </Button>
+                                <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}><Landmark size={14} className="mr-1" /> Disbursements</Button>
+                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Clock size={14} className="mr-1" /> Manpower</Button>
+                                <Button onClick={() => setSubView('projectOps')} variant={subView === 'projectOps' ? 'primary' : 'secondary'}><Briefcase size={14} className="mr-1" /> Project ROI</Button>
+                                <Button onClick={() => setSubView('birBooks')} variant={subView === 'birBooks' ? 'primary' : 'secondary'} className="border-orange-500 text-orange-700"><BookOpen size={14} className="mr-1" /> BIR Books</Button>
+                                <Button onClick={() => setActiveView('funnel')} variant="secondary">← Back</Button>
                             </div>
                         </div>
 
-                        {/* Sub-view Content */}
                         {subView === 'ledger' && <FinancialEntryLogger companies={companies} />}
                         {subView === 'manpower' && <ManpowerLogger companies={companies} />}
                         {subView === 'projectOps' && <ProjectOperations quotes={quotes} manpowerLogs={manpowerLogs} ledgerEntries={ledgerEntries} />}
