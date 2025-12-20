@@ -149,10 +149,13 @@ export default function App() {
     };
 
     const handleSaveQuote = async (quoteData) => {
-        if (!user) return;
-        await setDoc(doc(db, "users", user.uid, "quotes", quoteData.id), { ...quoteData, lastModified: serverTimestamp() }, { merge: true });
-        setActiveView('funnel'); 
-    };
+    if (!user) return;
+    await setDoc(doc(db, "users", user.uid, "quotes", quoteData.id), { ...quoteData, lastModified: serverTimestamp() }, { merge: true });
+    // AUTO-NAVIGATE TO FUNNEL after saving quote
+    setActiveView('funnel'); 
+    // Optional: Show success message
+    console.log("Quote saved! Redirecting to funnel...");
+};
     
     const handleDeleteQuote = async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db, "users", user.uid, "quotes", id)); };
     const handleEditQuote = (quote) => { setQuoteToEdit(quote); setActiveView('calculator'); };
