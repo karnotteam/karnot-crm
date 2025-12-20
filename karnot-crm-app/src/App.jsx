@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, db } from './firebase'; 
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { collection, onSnapshot, query, doc, setDoc, deleteDoc, serverTimestamp, addDoc, updateDoc } from "firebase/firestore"; 
+import { collection, onSnapshot, query, doc, getDoc, setDoc, deleteDoc, serverTimestamp, addDoc, updateDoc } from "firebase/firestore"; 
 
 // --- Import Pages & Components ---
 import LoginPage from './pages/LoginPage.jsx';
@@ -18,15 +18,19 @@ import CalculatorsPage from './pages/CalculatorsPage.jsx';
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
 
+// --- Import New Financial Components ---
+import FinancialEntryLogger from './data/FinancialEntryLogger.jsx';
+import ManpowerLogger from './data/ManpowerLogger.jsx';
+
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { 
     BarChart2, FileText, List, HardHat, LogOut, Building, 
-    Users, ClipboardCheck, Settings, Calculator, Plus 
+    Users, ClipboardCheck, Settings, Calculator, Plus, Landmark, Clock
 } from 'lucide-react'; 
 
 // --- Header Component ---
-const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( 
+const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, userRole }) => ( 
     <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
         <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveView('funnel')}>
@@ -42,6 +46,13 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
                 <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc', 'warmRoomCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
                     <Calculator className="mr-1" size={14} /> Calculators
                 </Button>
+
+                {/* --- ACCOUNTS SECTION (VISIBLE TO ADMIN ONLY) --- */}
+                {userRole === 'ADMIN' && (
+                    <Button onClick={() => setActiveView('accounts')} variant={activeView === 'accounts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700">
+                        <Landmark className="mr-1" size={14} /> Accounts
+                    </Button>
+                )}
 
                 <div className="h-8 w-px bg-gray-200 mx-2 hidden lg:block"></div>
 
@@ -60,7 +71,9 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote })
 
 export default function App() {
     const [user, setUser] = useState(null); 
+    const [userRole, setUserRole] = useState(null); 
     const [activeView, setActiveView] = useState('funnel');
+    const [subView, setSubView] = useState('ledger'); // For Accounts Page Tabs
     const [quoteToEdit, setQuoteToEdit] = useState(null);
     const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
     const [opportunities, setOpportunities] = useState([]);
@@ -71,15 +84,32 @@ export default function App() {
     const [loadingAuth, setLoadingAuth] = useState(true);
     const [loadingData, setLoadingData] = useState(true);
 
+    // --- 1. AUTH & ROLE CHECK ---
     useEffect(() => {
         setLoadingAuth(true); 
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            setUser(user || null);
+        const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+            if (authUser) {
+                setUser(authUser);
+                // Fetch the role from the users collection
+                try {
+                    const userRef = doc(db, "users", authUser.uid);
+                    const userSnap = await getDoc(userRef);
+                    if (userSnap.exists()) {
+                        setUserRole(userSnap.data().role);
+                    }
+                } catch (err) {
+                    console.error("Error fetching user role:", err);
+                }
+            } else {
+                setUser(null);
+                setUserRole(null);
+            }
             setLoadingAuth(false); 
         });
         return () => unsubscribe(); 
     }, []);
 
+    // --- 2. DATA SNAPSHOTS ---
     useEffect(() => {
         if (user) {
             setLoadingData(true); 
@@ -110,6 +140,7 @@ export default function App() {
         }
     }, [user, selectedOpportunity?.id]); 
 
+    // --- 3. HANDLERS ---
     const handleLogin = (email, password) => {
         signInWithEmailAndPassword(auth, email, password).catch((e) => alert(e.message));
     };
@@ -142,7 +173,6 @@ export default function App() {
         } catch (error) { console.error(error); alert("Delete failed"); }
     };
 
-    // RESTORE COMPANY HANDLER (UNDO)
     const handleRestoreCompany = async (companyId) => {
         if (!user) return;
         try {
@@ -169,13 +199,21 @@ export default function App() {
         return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
     }, [quotes]); 
 
+    // --- 4. RENDER LOGIC ---
     if (loadingAuth) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600">Authenticating...</div>;
     if (!user) return <LoginPage onLogin={handleLogin} />;
     if (loadingData) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600">Loading Karnot Systems...</div>;
 
     return (
         <div className="bg-gray-100 min-h-screen font-sans text-gray-900">
-            <Header activeView={activeView} setActiveView={setActiveView} quoteCount={quotes.length} onLogout={handleLogout} onNewQuote={handleNewQuote} />
+            <Header 
+                activeView={activeView} 
+                setActiveView={setActiveView} 
+                quoteCount={quotes.length} 
+                onLogout={handleLogout} 
+                onNewQuote={handleNewQuote}
+                userRole={userRole} 
+            />
             <main className="container mx-auto p-4 md:p-8">
                 {activeView === 'funnel' && (
                     <FunnelPage 
@@ -209,6 +247,39 @@ export default function App() {
                 {activeView === 'heatPumpCalc' && <div className="max-w-5xl mx-auto"><Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">← Back</Button><HeatPumpCalculator /></div>}
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 {activeView === 'admin' && <AdminPage user={user} />}
+                
+                {/* --- DEDICATED ACCOUNTS & BIR BOOK PREP --- */}
+                {activeView === 'accounts' && (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center border-b pb-4">
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-800">Financial Accounts</h1>
+                                <p className="text-gray-500 text-sm">Official records for BIR Manual Books & Project ROI</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}>
+                                    <Landmark size={14} className="mr-1" /> Disbursements
+                                </Button>
+                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}>
+                                    <Clock size={14} className="mr-1" /> Manpower
+                                </Button>
+                                <Button onClick={() => setActiveView('funnel')} variant="secondary">← Back</Button>
+                            </div>
+                        </div>
+
+                        {subView === 'ledger' ? (
+                            <FinancialEntryLogger companies={companies} />
+                        ) : (
+                            <ManpowerLogger companies={companies} />
+                        )}
+
+                        <div className="mt-12 p-6 bg-orange-50 rounded-xl border-2 border-dashed border-orange-200 text-center">
+                            <p className="text-orange-800 text-sm font-bold">
+                                📖 Next Step: We will build the "Sales Journal" view here to pull in your invoices automatically.
+                            </p>
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );
