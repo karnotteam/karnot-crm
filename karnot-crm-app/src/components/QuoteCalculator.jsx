@@ -343,13 +343,18 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             ledgerStatus: 'PENDING_MANUAL_BOOK'
         };
 
-        const newQuote = {
-            id: quoteId,
-            // FIX: Robust customer data with ID for funnel filtering
-            customer: {
-                ...customer,
-                id: customer.id || (companies.find(c => c.companyName === customer.name)?.id || '')
-            },
+        // Ensure it looks exactly like this:
+const newQuote = {
+    id: quoteId,
+    customer: {
+        ...customer,
+        id: customer.id || '' // Must have the company ID
+    },
+    // ... other fields ...
+    status: initialData?.status || 'DRAFT',
+    createdAt: initialData?.createdAt || new Date().toISOString(),
+    opportunityId: opportunityId, // <--- CRITICAL: This links to the Funnel lead
+};
             commercial,
             docControl,
             costing,
