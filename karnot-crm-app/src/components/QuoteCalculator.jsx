@@ -361,58 +361,61 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     };
     
     const handleSave = () => {
-        if (!customer.name) {
-            alert("Please enter a customer name.");
-            return;
-        }
-        
-        const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
+    if (!customer.name) {
+        alert("Please enter a customer name.");
+        return;
+    }
+    
+    const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
 
-        // 1. Determine Revenue Account for P&L Matching
-        let assignedRevenueAccount = "Domestic Equipment Sales";
-        if (customer.saleType === 'Export') {
-            assignedRevenueAccount = "Export Equipment Sales";
-        } else if (docControl.paymentTerms.toLowerCase().includes("eaas")) {
-            assignedRevenueAccount = docGeneration.generateProForma ? "Domestic (EaaS) Service Charge" : "Domestic (EaaS) Funded Sales";
-        }
+    // 1. Determine Revenue Account
+    let assignedRevenueAccount = "Domestic Equipment Sales";
+    if (customer.saleType === 'Export') {
+        assignedRevenueAccount = "Export Equipment Sales";
+    }
 
-        // 2. Calculate Financial Splits for BIR Manual Books
-        const totalPHP = quoteTotals.finalSalesPrice * costing.forexRate;
-        const vatableSales = customer.saleType === 'Export' ? 0 : totalPHP / 1.12;
-        const vatOutput = customer.saleType === 'Export' ? 0 : vatableSales * 0.12;
-        const zeroRatedSales = customer.saleType === 'Export' ? totalPHP : 0;
+    // 2. Financial Splits for BIR
+    const totalPHP = quoteTotals.finalSalesPrice * costing.forexRate;
+    const vatableSales = customer.saleType === 'Export' ? 0 : totalPHP / 1.12;
+    const vatOutput = customer.saleType === 'Export' ? 0 : vatableSales * 0.12;
+    const zeroRatedSales = customer.saleType === 'Export' ? totalPHP : 0;
 
-        const financialEntry = {
-            quoteId,
-            revenueAccount: assignedRevenueAccount,
-            netSalesUSD: quoteTotals.subtotalUSD,
-            finalSalesPHP: totalPHP,
-            vatableSalesPHP: vatableSales,
-            vatOutputPHP: vatOutput,
-            zeroRatedSalesPHP: zeroRatedSales,
-            marginPercentage: quoteTotals.grossMarginPercentage,
-            ledgerStatus: 'PENDING_MANUAL_BOOK'
-        };
+    // 3. NEW: Calculate Equipment Cost in PHP for ROI tracking
+    // This pulls from the 'costPriceUSD' field in your Product Manager
+    const totalEquipmentCostPHP = quoteTotals.costSubtotalUSD * costing.forexRate;
 
-        const newQuote = {
-            id: quoteId,
-            customer,
-            commercial,
-            docControl,
-            costing,
-            docGeneration,
-            selectedProducts,
-            manualItems,
-            finalSalesPrice: quoteTotals.finalSalesPrice,
-            grossMarginAmount: quoteTotals.grossMarginAmount,
-            grossMarginPercentage: quoteTotals.grossMarginPercentage,
-            ledgerPosting: financialEntry, // Added audit trail for BIR
-            status: initialData?.status || 'DRAFT',
-            createdAt: initialData?.createdAt || new Date().toISOString(),
-            opportunityId: opportunityId, 
-        };
-        onSaveQuote(newQuote);
+    const financialEntry = {
+        quoteId,
+        revenueAccount: assignedRevenueAccount,
+        netSalesUSD: quoteTotals.subtotalUSD,
+        finalSalesPHP: totalPHP,
+        vatableSalesPHP: vatableSales,
+        vatOutputPHP: vatOutput,
+        zeroRatedSalesPHP: zeroRatedSales,
+        marginPercentage: quoteTotals.grossMarginPercentage,
+        ledgerStatus: 'PENDING_MANUAL_BOOK'
     };
+
+    const newQuote = {
+        id: quoteId,
+        customer,
+        commercial,
+        docControl,
+        costing,
+        docGeneration,
+        selectedProducts,
+        manualItems,
+        finalSalesPrice: totalPHP, // Saved in PHP for ledger consistency
+        totalCost: totalEquipmentCostPHP, // <--- THIS FIXES THE ROI PAGE
+        grossMarginAmount: totalPHP - totalEquipmentCostPHP,
+        grossMarginPercentage: quoteTotals.grossMarginPercentage,
+        ledgerPosting: financialEntry, 
+        status: initialData?.status || 'DRAFT',
+        createdAt: initialData?.createdAt || new Date().toISOString(),
+        opportunityId: opportunityId, 
+    };
+    onSaveQuote(newQuote);
+};
 
     const productCategories = useMemo(() => {
         return dbProducts.reduce((acc, p) => {
