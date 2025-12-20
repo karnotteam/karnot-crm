@@ -15,7 +15,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
     const [opportunityId, setOpportunityId] = useState(initialData?.opportunityId || null);
 
-    // FIX: State now includes 'id' field for linking to funnel
+    // Added 'id' to customer state to ensure linking
     const [customer, setCustomer] = useState({ 
         id: '', name: '', number: '', tin: '', address: '', saleType: 'Export',
         contactId: '', contactName: '', contactEmail: '', tier: 'STANDARD' 
@@ -108,7 +108,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             setManualItems([]);
             setOpportunityId(null);
         }
-    }, [initialData, nextQuoteNumber, companies]);
+    }, [initialData, nextQuoteNumber]);
 
     const filteredCompanies = useMemo(() => {
         if (!companies) return [];
@@ -126,7 +126,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
         setCustomer(prev => ({
             ...prev,
-            id: company.id, // CRITICAL: Save company ID
+            id: company.id,
             name: company.companyName,
             address: company.address || prev.address,
             contactId: '', contactName: '', contactEmail: '',
@@ -145,6 +145,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     const handleTierChange = (e) => {
         const newTier = e.target.value;
         const newDiscount = PRICING_TIERS[newTier] ? PRICING_TIERS[newTier].discount : 0;
+        
         setCustomer(prev => ({ ...prev, tier: newTier }));
         setCommercial(prev => ({ ...prev, discount: newDiscount }));
     };
@@ -160,7 +161,10 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                 contactEmail: contact.email
             }));
         } else {
-            setCustomer(prev => ({ ...prev, contactId: '', contactName: '', contactEmail: '' }));
+            setCustomer(prev => ({
+                ...prev,
+                contactId: '', contactName: '', contactEmail: ''
+            }));
         }
     };
 
@@ -175,13 +179,19 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
     const handleProductSelect = (id) => (e) => {
         const newSelected = { ...selectedProducts };
-        if (e.target.checked) { newSelected[id] = 1; } else { delete newSelected[id]; }
+        if (e.target.checked) {
+            newSelected[id] = 1;
+        } else {
+            delete newSelected[id];
+        }
         setSelectedProducts(newSelected);
     };
 
     const handleProductQuantityChange = (id) => (e) => {
         const quantity = parseInt(e.target.value, 10);
-        if (quantity >= 1) { setSelectedProducts(prev => ({ ...prev, [id]: quantity })); }
+        if (quantity >= 1) {
+            setSelectedProducts(prev => ({ ...prev, [id]: quantity }));
+        }
     };
     
     const addManualItem = () => {
@@ -191,10 +201,19 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         }
     };
     
-    const removeManualItem = (index) => { setManualItems(prev => prev.filter((_, i) => i !== index)); };
+    const removeManualItem = (index) => {
+        setManualItems(prev => prev.filter((_, i) => i !== index));
+    };
 
-    const startEditing = (index) => { setEditingIndex(index); setEditingItem(manualItems[index]); };
-    const cancelEditing = () => { setEditingIndex(null); setEditingItem(null); };
+    const startEditing = (index) => {
+        setEditingIndex(index);
+        setEditingItem(manualItems[index]);
+    };
+
+    const cancelEditing = () => {
+        setEditingIndex(null);
+        setEditingItem(null);
+    };
 
     const saveEditing = (index) => {
         const updatedItems = [...manualItems];
@@ -203,7 +222,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         cancelEditing();
     };
 
-    const handleEditInputChange = (field) => (e) => { setEditingItem(prev => ({ ...prev, [field]: e.target.value })); };
+    const handleEditInputChange = (field) => (e) => {
+        setEditingItem(prev => ({ ...prev, [field]: e.target.value }));
+    };
 
     const quoteTotals = useMemo(() => {
         const allItems = [
@@ -219,6 +240,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         
         const subtotalUSD = allItems.reduce((acc, item) => acc + (item.salesPriceUSD || item.priceUSD || 0) * item.quantity, 0);
         const costSubtotalUSD = allItems.reduce((acc, item) => acc + (item.costPriceUSD || 0) * item.quantity, 0);
+
         const discountAmount = subtotalUSD * (commercial.discount / 100);
         const finalSalesPrice = subtotalUSD - discountAmount;
         const grossMarginAmount = finalSalesPrice - costSubtotalUSD;
@@ -229,10 +251,15 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
     const generateQuotePreview = () => {
         const { allItems, subtotalUSD } = quoteTotals;
-        if (allItems.length === 0) { alert("Please select at least one product or add a manual item."); return; }
+        
+        if (allItems.length === 0) {
+            alert("Please select at least one product or add a manual item.");
+            return;
+        }
 
         const discountAmountUSD = subtotalUSD * (commercial.discount / 100);
         const totalAfterDiscountUSD = subtotalUSD - discountAmountUSD;
+
         const formatPHP = (num) => `₱${num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         const formatUSD = (num) => `$${num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 
@@ -241,7 +268,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const todayFormatted = today.toLocaleDateString('en-CA');
         
         let quoteId = `QN${String(docControl.quoteNumber).padStart(4, '0')}/${year}`;
-        if (docControl.revision) { quoteId += ` - Rev ${docControl.revision}`; }
+        if (docControl.revision) {
+            quoteId += ` - Rev ${docControl.revision}`;
+        }
 
         const primaryFormat = docGeneration.generateInPHP ? formatPHP : formatUSD;
         const subtotalPrimary = docGeneration.generateInPHP ? subtotalUSD * costing.forexRate : subtotalUSD;
@@ -260,7 +289,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             const unitPrice = docGeneration.generateInPHP ? (p.salesPriceUSD || p.priceUSD || 0) * costing.forexRate : (p.salesPriceUSD || p.priceUSD || 0);
             const lineTotal = unitPrice * (p.quantity || 1);
             let description = p.name;
-            if (p.specs) { description += `<br><small style="color:#6e6e73; font-style:italic;">${p.specs.replace(/\n/g, "<br>")}</small>`; }
+            if (p.specs) {
+                description += `<br><small style="color:#6e6e73; font-style:italic;">${p.specs.replace(/\n/g, "<br>")}</small>`;
+            }
             return `<tr><td>${description}</td><td class="text-center">${p.quantity || 1}</td><td class="text-right">${primaryFormat(unitPrice)}</td><td class="text-right">${primaryFormat(lineTotal)}</td></tr>`;
         }).join('');
 
@@ -268,7 +299,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const companyHeaderHTML = `<div class="company-details"><img src="${logoURL}" alt="Karnot Logo" style="width:200px; margin-bottom:15px;"><p><strong>Karnot Energy Solutions INC.</strong><br>TIN: ${customer.tin || 'N/A'}<br>Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>2429 Mapandan, Pangasinan, Philippines<br>Tel: +63 75 510 8922</p></div>`;
         
         let contactLine = '';
-        if (customer.contactName) { contactLine = `<br><strong>Attention:</strong> ${customer.contactName}`; }
+        if (customer.contactName) {
+            contactLine = `<br><strong>Attention:</strong> ${customer.contactName}`;
+        }
 
         const customerInfoHTML = `<div class="customer-info-box"><strong>Quote For:</strong><br>Customer No.: ${customer.number || "N/A"}<br>${customer.name || "N/A"}${contactLine}<br>${customer.address.replace(/\n/g, "<br>") || "N/A"}</div>`;
         const billToInfoHTML = `<div class="customer-info-box"><strong>Bill To:</strong><br>Customer No.: ${customer.number || "N/A"}<br>${customer.name || "N/A"}${contactLine}<br>${customer.address.replace(/\n/g, "<br>") || "N/A"}</div>`;
@@ -283,12 +316,14 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             const customsValueUSD = cifUSD + dutiesUSD;
             const vatUSD = customsValueUSD * (costing.vatRate / 100);
             const totalLandedCostUSD = customsValueUSD + vatUSD + costing.brokerFees;
+            
             landedCostHTML = `<h3>Estimated Landed Cost Breakdown (USD)</h3><table class="simple-summary-table"><tr><td>Equipment Price (Ex-Works, after discount)</td><td class="text-right">${formatUSD(totalAfterDiscountUSD)}</td></tr><tr><td>Freight Cost</td><td class="text-right">${formatUSD(costing.transportCost)}</td></tr><tr><td>Duties (${costing.dutiesRate}%)</td><td class="text-right">${formatUSD(dutiesUSD)}</td></tr><tr><td>VAT / IVA (${costing.vatRate}%)</td><td class="text-right">${formatUSD(vatUSD)}</td></tr><tr><td>Broker & Handling Fees</td><td class="text-right">${formatUSD(costing.brokerFees)}</td></tr><tr class="grand-total-row"><td><strong>Total Estimated Landed Cost</strong></td><td class="text-right"><strong>${formatUSD(totalLandedCostUSD)}</strong></td></tr></table>`;
         }
 
         if (docGeneration.generateQuote) {
             const quoteHeaderHTML = `<div class="report-header">${companyHeaderHTML}<div class="report-info"><h2>Sales Quotation</h2><p><strong>Date:</strong> ${todayFormatted}<br><strong>Quote ID:</strong> ${quoteId}</p></div></div>`;
             const quoteSummaryHTML = `<table class="simple-summary-table"><tr><td>Subtotal</td><td class="text-right">${primaryFormat(subtotalPrimary)}</td></tr>${discountAmountPrimary > 0 ? `<tr><td>Discount (${commercial.discount}%)</td><td class="text-right">-${primaryFormat(discountAmountPrimary)}</td></tr>` : ''}<tr class="grand-total-row"><td><strong>Total Amount</strong></td><td class="text-right"><strong>${primaryFormat(totalAfterDiscountPrimary)}</strong></td></tr></table>`;
+            
             generatedDocumentsHTML += `<div class="report-page">${quoteHeaderHTML}${customerInfoHTML}<h3>Products & Services</h3><table class="line-items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">${priceColumnHeader}</th><th class="text-right">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table><div class="summary-wrapper">${quoteSummaryHTML}</div><div class="summary-wrapper">${landedCostHTML}</div>${termsAndConditionsHTML}</div>`;
         }
 
@@ -296,6 +331,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             const proFormaHeaderHTML = `<div class="report-header">${companyHeaderHTML}<div class="report-info"><h2>Pro Forma Invoice</h2><p><strong>Date:</strong> ${todayFormatted}<br><strong>Reference:</strong> PF-${quoteId}<br><strong>Due Date: ${commercial.dueDate}</strong></p></div></div>`;
             const proFormaSummaryHTML = `<table class="simple-summary-table"><tr><td>Subtotal</td><td class="text-right">${primaryFormat(subtotalPrimary)}</td></tr>${discountAmountPrimary > 0 ? `<tr><td>Discount (${commercial.discount}%)</td><td class="text-right">-${primaryFormat(discountAmountPrimary)}</td></tr>` : ''}<tr class="grand-total-row"><td><strong>Total Amount Due</strong></td><td class="text-right"><strong>${primaryFormat(totalAfterDiscountPrimary)}</strong></td></tr></table>`;
             const bankDetailsHTML = docGeneration.generateInPHP ? bankDetailsPHP : bankDetailsUSD;
+            
             generatedDocumentsHTML += `<div class="report-page">${proFormaHeaderHTML}${billToInfoHTML}<h3>Details</h3><table class="line-items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">${priceColumnHeader}</th><th class="text-right">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table><div class="summary-wrapper">${proFormaSummaryHTML}</div><div class="summary-wrapper">${landedCostHTML}</div>${bankDetailsHTML}</div>`;
         }
 
@@ -305,26 +341,33 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             const vatAmount = vatableSales * 0.12;
             const withholdingTaxAmount = vatableSales * (commercial.wht / 100);
             const totalAmountDue = totalAfterDiscountPHP - withholdingTaxAmount;
+            
             const birLineItemsHTML = allItems.map(p => {
                 const unitPricePHP = (p.salesPriceUSD || p.priceUSD || 0) * costing.forexRate;
                 const lineTotalPHP = unitPricePHP * (p.quantity || 1);
                 return `<tr><td>${p.name}</td><td class="text-center">${p.quantity || 1}</td><td class="text-right">${formatPHP(unitPricePHP)}</td><td class="text-right">${formatPHP(lineTotalPHP)}</td></tr>`;
             }).join('');
+
             const birHeaderHTML = `<div class="report-header">${companyHeaderHTML}<div class="report-info"><h2>SALES INVOICE</h2><p><strong>No:</strong> ${String(docControl.quoteNumber).padStart(4, '0')}<br><strong>Date:</strong> ${todayFormatted}<br><strong>Due Date: ${commercial.dueDate}</strong></p></div></div>`;
             const birSummaryHTML = `<table class="summary-table"><tr><td>VATable Sales</td><td class="text-right">${formatPHP(vatableSales)}</td><td>Total Sales (VAT-Inclusive)</td><td class="text-right">${formatPHP(totalAfterDiscountPHP)}</td></tr><tr><td>VAT-Exempt Sales</td><td class="text-right">${formatPHP(0)}</td><td>Less: 12% VAT</td><td class="text-right">${formatPHP(vatAmount)}</td></tr><tr><td>Zero-Rated Sales</td><td class="text-right">${formatPHP(0)}</td><td>Net of VAT</td><td class="text-right">${formatPHP(vatableSales)}</td></tr><tr><td><strong>Total Sales</strong></td><td class="text-right"><strong>${formatPHP(vatableSales)}</strong></td><td>Less: Withholding Tax (${commercial.wht}%)</td><td class="text-right">${formatPHP(withholdingTaxAmount)}</td></tr><tr class="bir-grand-total-row"><td></td><td></td><td><strong>TOTAL AMOUNT DUE</strong></td><td class="text-right"><strong>${formatPHP(totalAmountDue)}</strong></td></tr></table>`;
+            
             generatedDocumentsHTML += `<div class="report-page">${birHeaderHTML}${soldToInfoHTML}<h3>Details</h3><table class="line-items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">Unit Price (PHP)</th><th class="text-right">Amount (PHP)</th></tr></thead><tbody>${birLineItemsHTML}</tbody></table><div class="summary-wrapper">${birSummaryHTML}</div>${bankDetailsPHP}</div>`;
         }
 
         const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Quote Preview</title><style>body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6; color: #333; } .report-page { background: white; max-width: 800px; margin: 0 auto 40px auto; padding: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 8px; position: relative; } .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 2px solid #ea580c; padding-bottom: 20px; } .report-info h2 { color: #ea580c; margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px; } .customer-info-box { background-color: #f9fafb; border-left: 4px solid #ea580c; padding: 15px; margin-bottom: 30px; font-size: 14px; line-height: 1.5; } h3 { color: #4b5563; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-top: 0; } table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; } th { background-color: #ea580c; color: white; padding: 10px; text-align: left; font-weight: 600; } td { padding: 10px; border-bottom: 1px solid #e5e7eb; } .text-right { text-align: right; } .text-center { text-align: center; } .simple-summary-table { width: 100%; max-width: 400px; margin-left: auto; } .simple-summary-table td { border: none; padding: 5px 10px; } .grand-total-row { border-top: 2px solid #333; font-size: 16px; background-color: #f3f4f6; } .summary-wrapper { page-break-inside: avoid; margin-bottom: 20px; } .terms-conditions { font-size: 12px; color: #666; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; } dt { font-weight: bold; margin-top: 5px; color: #333; } dd { margin: 2px 0 10px 0; } @media print { body { background: white; margin: 0; padding: 0; } .report-page { box-shadow: none; margin: 0; width: 100%; max-width: none; page-break-after: always; } .report-page:last-child { page-break-after: auto; } }</style></head><body>${generatedDocumentsHTML}</body></html>`;
-        const win = window.open("", "QuotePreview"); win.document.write(finalReportHTML); win.document.close();
+        
+        const win = window.open("", "QuotePreview");
+        win.document.write(finalReportHTML);
+        win.document.close();
     };
     
     const handleSave = () => {
-    if (!customer.name) { 
-        alert("Please enter a customer name."); 
-        return; 
-    }
+        if (!customer.name) {
+            alert("Please enter a customer name.");
+            return;
+        }
         
+        // 1. Determine Revenue Account
         let assignedRevenueAccount = "Domestic Equipment Sales";
         if (customer.saleType === 'Export') {
             assignedRevenueAccount = "Export Equipment Sales";
@@ -334,6 +377,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
         const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
 
+        // 2. Prepare Ledger Data
         const financialEntry = {
             quoteId: quoteId,
             revenueAccount: assignedRevenueAccount,
@@ -346,26 +390,28 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             ledgerStatus: 'PENDING_MANUAL_BOOK'
         };
 
-        // Ensure it looks exactly like this:
-const newQuote = {
-        id: quoteId,
-        customer: {
-            ...customer,
-            id: customer.id || (companies.find(c => c.companyName === customer.name)?.id || '')
-        },
-        commercial,
-        docControl,
-        costing,
-        docGeneration,
-        selectedProducts,
-        manualItems, // Ensure there is a comma here
-        finalSalesPrice: quoteTotals.finalSalesPrice, // Ensure there is a comma here
-        grossMarginAmount: quoteTotals.grossMarginAmount, // Ensure there is a comma here
-        grossMarginPercentage: quoteTotals.grossMarginPercentage, // Ensure there is a comma here
-        ledgerPosting: financialEntry, 
-        status: initialData?.status || 'DRAFT',
-        createdAt: initialData?.createdAt || new Date().toISOString(),
-        opportunityId: opportunityId, // This is the link to the Funnel
+        const newQuote = {
+            id: quoteId,
+            customer: {
+                ...customer,
+                id: customer.id || (companies.find(c => c.companyName === customer.name)?.id || '')
+            },
+            commercial,
+            docControl,
+            costing,
+            docGeneration,
+            selectedProducts,
+            manualItems,
+            finalSalesPrice: quoteTotals.finalSalesPrice,
+            grossMarginAmount: quoteTotals.grossMarginAmount,
+            grossMarginPercentage: quoteTotals.grossMarginPercentage,
+            ledgerPosting: financialEntry, 
+            status: initialData?.status || 'DRAFT',
+            createdAt: initialData?.createdAt || new Date().toISOString(),
+            opportunityId: opportunityId, 
+        };
+
+        onSaveQuote(newQuote);
     };
 
     const productCategories = useMemo(() => {
@@ -415,10 +461,18 @@ const newQuote = {
                                         </div>
                                     ) : (
                                         filteredCompanies.map((company) => (
-                                            <div key={company.id} className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-orange-50 text-gray-900 border-b border-gray-50 last:border-0" onClick={() => handleSelectCompany(company)}>
+                                            <div
+                                                key={company.id}
+                                                className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-orange-50 text-gray-900 border-b border-gray-50 last:border-0"
+                                                onClick={() => handleSelectCompany(company)}
+                                            >
                                                 <div className="flex items-center justify-between">
                                                     <span className="block truncate font-medium">{company.companyName}</span>
-                                                    {company.tier && <span className={`text-[10px] font-bold px-1.5 rounded bg-${PRICING_TIERS[company.tier]?.color}-100 text-${PRICING_TIERS[company.tier]?.color}-800`}>{company.tier}</span>}
+                                                    {company.tier && PRICING_TIERS[company.tier] && (
+                                                        <span className={`text-[10px] font-bold px-1.5 rounded bg-${PRICING_TIERS[company.tier].color}-100 text-${PRICING_TIERS[company.tier].color}-800`}>
+                                                            {PRICING_TIERS[company.tier].label}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))
@@ -428,29 +482,48 @@ const newQuote = {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Pricing Tier</label>
-                            <select value={customer.tier} onChange={handleTierChange} className={`block w-full px-3 py-2 border rounded-md shadow-sm focus:ring-orange-500 sm:text-sm font-semibold ${currentTier ? `bg-${currentTier.color}-50 border-${currentTier.color}-200 text-${currentTier.color}-800` : 'bg-white'}`}>
-                                {Object.entries(PRICING_TIERS).map(([key, t]) => <option key={key} value={key}>{t.label} ({t.discount}% Off)</option>)}
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Pricing Tier / Discount Level</label>
+                            <select 
+                                value={customer.tier} 
+                                onChange={handleTierChange} 
+                                className={`block w-full pl-3 pr-10 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-orange-500 sm:text-sm font-semibold
+                                    ${currentTier ? `bg-${currentTier.color}-50 border-${currentTier.color}-200 text-${currentTier.color}-800` : 'bg-white border-gray-300'}
+                                `}
+                            >
+                                {Object.entries(PRICING_TIERS).map(([key, t]) => (
+                                    <option key={key} value={key}>
+                                        {t.label} ({t.discount}% Off)
+                                    </option>
+                                ))}
                             </select>
                         </div>
 
                         {customer.name && companyContacts.length > 0 && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Attention To (Contact)</label>
-                                <select value={customer.contactId} onChange={handleSelectContact} className="block w-full pl-3 pr-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:ring-orange-500 sm:text-sm">
-                                    <option value="">-- Select Contact --</option>
-                                    {companyContacts.map(c => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
-                                </select>
+                                <div className="relative">
+                                    <select 
+                                        value={customer.contactId} 
+                                        onChange={handleSelectContact} 
+                                        className="block w-full pl-10 pr-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 sm:text-sm"
+                                    >
+                                        <option value="">-- Select Contact Person --</option>
+                                        {companyContacts.map(c => (
+                                            <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                                        ))}
+                                    </select>
+                                    <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}/>
+                                </div>
                             </div>
                         )}
 
                         <Input label="Customer No." value={customer.number} onChange={handleInputChange(setCustomer, 'number')} />
                         <Input label="TIN" value={customer.tin} onChange={handleInputChange(setCustomer, 'tin')} />
                         <Textarea label="Business Address" rows="3" value={customer.address} onChange={handleInputChange(setCustomer, 'address')} />
-                        <div className="flex items-end gap-4 pt-2">
+                         <div className="flex items-end gap-4 pt-2">
                             <Checkbox id="saleTypeExport" label="Export Sale" checked={customer.saleType === 'Export'} onChange={() => setCustomer(p => ({...p, saleType: 'Export'}))} />
                             <Checkbox id="saleTypeDomestic" label="Domestic Sale" checked={customer.saleType === 'Domestic'} onChange={() => setCustomer(p => ({...p, saleType: 'Domestic'}))} />
-                        </div>
+                         </div>
                     </div>
                 </Section>
 
@@ -468,8 +541,10 @@ const newQuote = {
 
                 <Section title="3. Document Control">
                     <div className="space-y-4">
-                        <Input label="Quote Start No." type="number" value={docControl.quoteNumber} onChange={handleInputChange(setDocControl, 'quoteNumber', true)} />
-                        <Input label="Revision" value={docControl.revision} onChange={handleInputChange(setDocControl, 'revision')} />
+                        <div className="flex gap-4">
+                             <Input label="Quote Start No." type="number" value={docControl.quoteNumber} onChange={handleInputChange(setDocControl, 'quoteNumber', true)} />
+                             <Input label="Revision" value={docControl.revision} onChange={handleInputChange(setDocControl, 'revision')} />
+                        </div>
                         <Textarea label="Payment Terms" rows="4" value={docControl.paymentTerms} onChange={handleInputChange(setDocControl, 'paymentTerms')} />
                     </div>
                 </Section>
@@ -480,24 +555,24 @@ const newQuote = {
                       <Input label="Forex Rate" type="number" value={costing.forexRate} onChange={handleInputChange(setCosting, 'forexRate', true)} />
                       <Input label="Transport (USD)" type="number" value={costing.transportCost} onChange={handleInputChange(setCosting, 'transportCost', true)} />
                       <Input label="Duties Rate (%)" type="number" value={costing.dutiesRate} onChange={handleInputChange(setCosting, 'dutiesRate', true)} />
-                      <Input label="VAT Rate (%)" type="number" value={costing.vatRate} onChange={handleInputChange(setCosting, 'vatRate', true)} />
-                      <Input label="Broker USD" type="number" value={costing.brokerFees} onChange={handleInputChange(setCosting, 'brokerFees', true)} />
+                      <Input label="VAT on Import (%)" type="number" value={costing.vatRate} onChange={handleInputChange(setCosting, 'vatRate', true)} />
+                      <Input label="Broker Fees (USD)" type="number" value={costing.brokerFees} onChange={handleInputChange(setCosting, 'brokerFees', true)} />
                 </div>
             </Section>
 
             <Section title="4. Document Options">
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <Checkbox label="PHP Document" checked={docGeneration.generateInPHP} onChange={handleCheckboxChange(setDocGeneration, 'generateInPHP')} />
-                    <Checkbox label="Quotation" checked={docGeneration.generateQuote} onChange={handleCheckboxChange(setDocGeneration, 'generateQuote')} />
-                    <Checkbox label="Pro Forma" checked={docGeneration.generateProForma} onChange={handleCheckboxChange(setDocGeneration, 'generateProForma')} />
-                    <Checkbox label="BIR Invoice" checked={docGeneration.generateBirInvoice} onChange={handleCheckboxChange(setDocGeneration, 'generateBirInvoice')} />
-                    <Checkbox label="Landed Cost" checked={docGeneration.includeLandedCost} onChange={handleCheckboxChange(setDocGeneration, 'includeLandedCost')} />
+                    <Checkbox label="Generate in PHP" checked={docGeneration.generateInPHP} onChange={handleCheckboxChange(setDocGeneration, 'generateInPHP')} />
+                    <Checkbox label="Sales Quotation" checked={docGeneration.generateQuote} onChange={handleCheckboxChange(setDocGeneration, 'generateQuote')} />
+                    <Checkbox label="Pro Forma Invoice" checked={docGeneration.generateProForma} onChange={handleCheckboxChange(setDocGeneration, 'generateProForma')} />
+                    <Checkbox label="BIR Sales Invoice" checked={docGeneration.generateBirInvoice} onChange={handleCheckboxChange(setDocGeneration, 'generateBirInvoice')} />
+                    <Checkbox label="Include Landed Cost" checked={docGeneration.includeLandedCost} onChange={handleCheckboxChange(setDocGeneration, 'includeLandedCost')} />
                 </div>
             </Section>
-
+            
             <Section title="5. Product Selection">
                 {loadingProducts ? (
-                    <div className="text-center p-4">Loading Products...</div>
+                    <div className="text-center p-4">Loading Products from Database...</div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
                         {Object.entries(productCategories).map(([category, products]) => (
@@ -519,23 +594,30 @@ const newQuote = {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                     <Input label="Item Name" value={manualItemInput.name} onChange={e => setManualItemInput(p => ({...p, name: e.target.value}))} />
                     <Input label="Price (USD)" type="number" value={manualItemInput.price} onChange={e => setManualItemInput(p => ({...p, price: e.target.value}))} />
-                    <Textarea label="Specs" rows={1} value={manualItemInput.specs} onChange={e => setManualItemInput(p => ({...p, specs: e.target.value}))} />
+                    <Textarea label="Description (Optional)" rows={1} value={manualItemInput.specs} onChange={e => setManualItemInput(p => ({...p, specs: e.target.value}))} />
                 </div>
-                <Button onClick={addManualItem} className="mt-4"><Plus className="mr-2" size={16}/>Add Item</Button>
+                <Button onClick={addManualItem} className="w-full md:w-auto mt-4"><Plus className="mr-2" size={16}/>Add Item</Button>
                 {manualItems.length > 0 && <div className="mt-4 space-y-2">
                         {manualItems.map((item, index) => (
-                            <div key={item.id} className="flex justify-between items-center bg-gray-100 p-2 rounded-lg">
+                            <div key={item.id}>
                                 {editingIndex === index ? (
-                                    <div className="w-full space-y-2">
-                                        <Input value={editingItem.name} onChange={handleEditInputChange('name')} />
-                                        <Input type="number" value={editingItem.priceUSD} onChange={handleEditInputChange('priceUSD')} />
-                                        <div className="flex gap-2 justify-end"><Button onClick={cancelEditing} variant="secondary">Cancel</Button><Button onClick={() => saveEditing(index)} variant="success">Save</Button></div>
+                                    <div className="p-2 bg-orange-100 rounded-lg space-y-2">
+                                        <Input label="Item Name" value={editingItem.name} onChange={handleEditInputChange('name')} />
+                                        <Input label="Price (USD)" type="number" value={editingItem.priceUSD} onChange={handleEditInputChange('priceUSD')} />
+                                        <Textarea label="Description" rows={2} value={editingItem.specs} onChange={handleEditInputChange('specs')} />
+                                        <div className="flex gap-2 justify-end">
+                                            <Button onClick={cancelEditing} variant="secondary" className="px-2 py-1"><X size={16} /></Button>
+                                            <Button onClick={() => saveEditing(index)} variant="success" className="px-2 py-1"><Save size={16} /></Button>
+                                        </div>
                                     </div>
                                 ) : (
-                                    <>
+                                    <div className="flex justify-between items-center bg-gray-100 p-2 rounded-lg">
                                         <span>{item.name} - ${parseFloat(item.priceUSD).toLocaleString()}</span>
-                                        <div className="flex gap-2"><button onClick={() => startEditing(index)} className="text-blue-500"><Edit size={16}/></button><button onClick={() => removeManualItem(index)} className="text-red-500"><Trash2 size={16}/></button></div>
-                                    </>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => startEditing(index)} className="text-blue-500 hover:bg-blue-50 p-1 rounded"><Edit size={16}/></button>
+                                            <button onClick={() => removeManualItem(index)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 size={16}/></button>
+                                        </div>
+                                    </div>
                                 )}
                             </div>
                         ))}
@@ -547,8 +629,8 @@ const newQuote = {
                     <p className="font-bold">Subtotal: ${quoteTotals.subtotalUSD.toLocaleString()}</p>
                     <p className="text-green-600 font-bold">Margin: {quoteTotals.grossMarginPercentage.toFixed(1)}%</p>
                 </div>
-                <Button onClick={generateQuotePreview} variant="secondary"><Eye className="mr-2"/>Preview</Button>
-                <Button onClick={handleSave} variant="success"><Plus className="mr-2"/>{initialData ? 'Update CRM' : 'Save CRM'}</Button>
+                <Button onClick={generateQuotePreview} variant="secondary"><Eye className="mr-2"/>Preview Quote</Button>
+                <Button onClick={handleSave} variant="success"><Plus className="mr-2"/>{initialData ? 'Update Quote in CRM' : 'Save Quote to CRM'}</Button>
             </div>
         </Card>
     );
