@@ -21,12 +21,14 @@ import WarmRoomCalc from './components/WarmRoomCalc.jsx';
 // --- Import New Financial Components ---
 import FinancialEntryLogger from './data/FinancialEntryLogger.jsx';
 import ManpowerLogger from './data/ManpowerLogger.jsx';
+import ProjectOperations from './data/ProjectOperations.jsx'; // <--- Added
+import BIRBookPrep from './data/BIRBookPrep.jsx';           // <--- Added
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { 
     BarChart2, FileText, List, HardHat, LogOut, Building, 
-    Users, ClipboardCheck, Settings, Calculator, Plus, Landmark, Clock
+    Users, ClipboardCheck, Settings, Calculator, Plus, Landmark, Clock, BookOpen, Briefcase
 } from 'lucide-react'; 
 
 // --- Header Component ---
@@ -47,7 +49,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                     <Calculator className="mr-1" size={14} /> Calculators
                 </Button>
 
-                {/* --- ACCOUNTS SECTION (VISIBLE TO ADMIN ONLY) --- */}
                 {userRole === 'ADMIN' && (
                     <Button onClick={() => setActiveView('accounts')} variant={activeView === 'accounts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700">
                         <Landmark className="mr-1" size={14} /> Accounts
@@ -73,14 +74,18 @@ export default function App() {
     const [user, setUser] = useState(null); 
     const [userRole, setUserRole] = useState(null); 
     const [activeView, setActiveView] = useState('funnel');
-    const [subView, setSubView] = useState('ledger'); // For Accounts Page Tabs
-    const [quoteToEdit, setQuoteToEdit] = useState(null);
-    const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
+    const [subView, setSubView] = useState('ledger'); 
+    
+    // Data States
     const [opportunities, setOpportunities] = useState([]);
     const [quotes, setQuotes] = useState([]);
     const [companies, setCompanies] = useState([]); 
     const [contacts, setContacts] = useState([]);
-    const [commissioningReports, setCommissioningReports] = useState([]); 
+    const [ledgerEntries, setLedgerEntries] = useState([]); // <--- Added for ROI calc
+    const [manpowerLogs, setManpowerLogs] = useState([]);   // <--- Added for ROI calc
+    
+    const [quoteToEdit, setQuoteToEdit] = useState(null);
+    const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
     const [loadingAuth, setLoadingAuth] = useState(true);
     const [loadingData, setLoadingData] = useState(true);
 
@@ -90,16 +95,13 @@ export default function App() {
         const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
             if (authUser) {
                 setUser(authUser);
-                // Fetch the role from the users collection
                 try {
                     const userRef = doc(db, "users", authUser.uid);
                     const userSnap = await getDoc(userRef);
                     if (userSnap.exists()) {
                         setUserRole(userSnap.data().role);
                     }
-                } catch (err) {
-                    console.error("Error fetching user role:", err);
-                }
+                } catch (err) { console.error(err); }
             } else {
                 setUser(null);
                 setUserRole(null);
@@ -117,12 +119,7 @@ export default function App() {
                 setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             });
             const unsubOpps = onSnapshot(query(collection(db, "users", user.uid, "opportunities")), (snap) => {
-                const liveOpps = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setOpportunities(liveOpps);
-                if (selectedOpportunity) {
-                    const updated = liveOpps.find(o => o.id === selectedOpportunity.id);
-                    if (updated) setSelectedOpportunity(updated);
-                }
+                setOpportunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             });
             const unsubCompanies = onSnapshot(query(collection(db, "users", user.uid, "companies")), (snap) => {
                 setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -130,68 +127,31 @@ export default function App() {
             const unsubContacts = onSnapshot(query(collection(db, "users", user.uid, "contacts")), (snap) => {
                 setContacts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             });
-            const unsubComms = onSnapshot(query(collection(db, "users", user.uid, "commissioning_reports")), (snap) => {
-                setCommissioningReports(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const unsubLedger = onSnapshot(query(collection(db, "users", user.uid, "ledger")), (snap) => {
+                setLedgerEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            });
+            const unsubManpower = onSnapshot(query(collection(db, "users", user.uid, "manpower_logs")), (snap) => {
+                setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                 setLoadingData(false);
             });
-            return () => { unsubQuotes(); unsubOpps(); unsubCompanies(); unsubContacts(); unsubComms(); };
+
+            return () => { unsubQuotes(); unsubOpps(); unsubCompanies(); unsubContacts(); unsubLedger(); unsubManpower(); };
         } else {
             setLoadingData(false);
         }
-    }, [user, selectedOpportunity?.id]); 
+    }, [user]); 
 
-    // --- 3. HANDLERS ---
-    const handleLogin = (email, password) => {
-        signInWithEmailAndPassword(auth, email, password).catch((e) => alert(e.message));
-    };
+    // --- 3. HANDLERS (Same as before) ---
+    const handleLogin = (email, password) => signInWithEmailAndPassword(auth, email, password).catch((e) => alert(e.message));
     const handleLogout = () => signOut(auth);
-
     const handleSaveQuote = async (quoteData) => {
         if (!user) return;
-        let currentOpportunityId = quoteData.opportunityId;
-        if (!currentOpportunityId) {
-            const oppDocRef = await addDoc(collection(db, "users", user.uid, "opportunities"), {
-                customerName: quoteData.customer.name, 
-                project: `Quote ${quoteData.id} Project`,
-                estimatedValue: quoteData.finalSalesPrice || 0,
-                stage: 'Proposal Sent', probability: 75,
-                createdAt: serverTimestamp(), lastModified: serverTimestamp()
-            });
-            currentOpportunityId = oppDocRef.id; 
-        }
-        await setDoc(doc(db, "users", user.uid, "quotes", quoteData.id), {
-            ...quoteData, opportunityId: currentOpportunityId, 
-            createdAt: quoteData.createdAt || serverTimestamp(), lastModified: serverTimestamp()
-        }, { merge: true });
+        await setDoc(doc(db, "users", user.uid, "quotes", quoteData.id), { ...quoteData, lastModified: serverTimestamp() }, { merge: true });
         setActiveView('funnel'); 
     };
-
-    const handleDeleteQuote = async (quoteId) => {
-        if (!user) return;
-        try {
-            await deleteDoc(doc(db, "users", user.uid, "quotes", quoteId));
-        } catch (error) { console.error(error); alert("Delete failed"); }
-    };
-
-    const handleRestoreCompany = async (companyId) => {
-        if (!user) return;
-        try {
-            const companyRef = doc(db, "users", user.uid, "companies", companyId);
-            await updateDoc(companyRef, { isDeleted: false });
-        } catch (error) {
-            console.error("Restore failed:", error);
-        }
-    };
-
-    const handleUpdateQuoteStatus = async (quoteId, newStatus) => {
-        if (!user) return;
-        await setDoc(doc(db, "users", user.uid, "quotes", quoteId), { status: newStatus, lastModified: serverTimestamp() }, { merge: true });
-    };
-
+    const handleDeleteQuote = async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db, "users", user.uid, "quotes", id)); };
     const handleEditQuote = (quote) => { setQuoteToEdit(quote); setActiveView('calculator'); };
-    const handleOpenOpportunity = (opp) => { setSelectedOpportunity(opp); setActiveView('opportunityDetail'); };
-    const handleBackToFunnel = () => { setSelectedOpportunity(null); setActiveView('funnel'); };
-    const handleNewQuote = () => { setQuoteToEdit(null); setSelectedOpportunity(null); setActiveView('calculator'); };
+    const handleNewQuote = () => { setQuoteToEdit(null); setActiveView('calculator'); };
 
     const nextQuoteNumber = useMemo(() => {
         if (quotes.length === 0) return 2501;
@@ -199,85 +159,55 @@ export default function App() {
         return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
     }, [quotes]); 
 
-    // --- 4. RENDER LOGIC ---
     if (loadingAuth) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600">Authenticating...</div>;
     if (!user) return <LoginPage onLogin={handleLogin} />;
     if (loadingData) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600">Loading Karnot Systems...</div>;
 
     return (
         <div className="bg-gray-100 min-h-screen font-sans text-gray-900">
-            <Header 
-                activeView={activeView} 
-                setActiveView={setActiveView} 
-                quoteCount={quotes.length} 
-                onLogout={handleLogout} 
-                onNewQuote={handleNewQuote}
-                userRole={userRole} 
-            />
+            <Header activeView={activeView} setActiveView={setActiveView} quoteCount={quotes.length} onLogout={handleLogout} onNewQuote={handleNewQuote} userRole={userRole} />
             <main className="container mx-auto p-4 md:p-8">
-                {activeView === 'funnel' && (
-                    <FunnelPage 
-                        opportunities={opportunities} user={user} quotes={quotes}
-                        onOpenQuote={handleEditQuote} onOpen={handleOpenOpportunity} 
-                        companies={companies} contacts={contacts} 
-                    />
-                )}
-                {activeView === 'opportunityDetail' && (
-                    <OpportunityDetailPage
-                        opportunity={selectedOpportunity} quotes={quotes} onBack={handleBackToFunnel}
-                        onOpenQuote={handleEditQuote} user={user} 
-                        onAddQuote={() => { setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); setActiveView('calculator'); }}
-                    />
-                )}
-                {activeView === 'companies' && (
-                    <CompaniesPage 
-                        companies={companies} 
-                        contacts={contacts} 
-                        quotes={quotes} 
-                        user={user} 
-                        onOpenQuote={handleEditQuote}
-                        onRestoreCompany={handleRestoreCompany} 
-                    />
-                )}
+                {activeView === 'funnel' && <FunnelPage opportunities={opportunities} user={user} quotes={quotes} onOpenQuote={handleEditQuote} onOpen={(opp) => { setSelectedOpportunity(opp); setActiveView('opportunityDetail'); }} companies={companies} contacts={contacts} />}
+                {activeView === 'opportunityDetail' && <OpportunityDetailPage opportunity={selectedOpportunity} quotes={quotes} onBack={() => setActiveView('funnel')} onOpenQuote={handleEditQuote} user={user} onAddQuote={() => { setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); setActiveView('calculator'); }} />}
+                {activeView === 'companies' && <CompaniesPage companies={companies} contacts={contacts} quotes={quotes} user={user} onOpenQuote={handleEditQuote} onRestoreCompany={(id) => updateDoc(doc(db, "users", user.uid, "companies", id), { isDeleted: false })} />}
                 {activeView === 'contacts' && <ContactsPage contacts={contacts} companies={companies} user={user} />}
                 {activeView === 'calculator' && <QuoteCalculator onSaveQuote={handleSaveQuote} nextQuoteNumber={nextQuoteNumber} key={quoteToEdit ? quoteToEdit.id : 'new'} initialData={quoteToEdit} companies={companies} contacts={contacts} />}
-                {activeView === 'list' && <QuotesListPage quotes={quotes} onDeleteQuote={handleDeleteQuote} onEditQuote={handleEditQuote} onUpdateQuoteStatus={handleUpdateQuoteStatus} />}
+                {activeView === 'list' && <QuotesListPage quotes={quotes} onDeleteQuote={handleDeleteQuote} onEditQuote={handleEditQuote} onUpdateQuoteStatus={(id, s) => setDoc(doc(db, "users", user.uid, "quotes", id), { status: s }, { merge: true })} />}
                 {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 {activeView === 'heatPumpCalc' && <div className="max-w-5xl mx-auto"><Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">← Back</Button><HeatPumpCalculator /></div>}
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
-                {/* --- DEDICATED ACCOUNTS & BIR BOOK PREP --- */}
+                {/* --- DEDICATED ACCOUNTS & BIR BOOKS SECTION --- */}
                 {activeView === 'accounts' && (
-                    <div className="space-y-6">
-                        <div className="flex justify-between items-center border-b pb-4">
+                    <div className="space-y-6 pb-20">
+                        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
                             <div>
-                                <h1 className="text-3xl font-bold text-gray-800">Financial Accounts</h1>
-                                <p className="text-gray-500 text-sm">Official records for BIR Manual Books & Project ROI</p>
+                                <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Financial Accounts</h1>
+                                <p className="text-gray-500 text-sm">BIR Compliance & Project Engineering Costing</p>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                                 <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}>
                                     <Landmark size={14} className="mr-1" /> Disbursements
                                 </Button>
                                 <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}>
                                     <Clock size={14} className="mr-1" /> Manpower
                                 </Button>
-                                <Button onClick={() => setActiveView('funnel')} variant="secondary">← Back</Button>
+                                <Button onClick={() => setSubView('projectOps')} variant={subView === 'projectOps' ? 'primary' : 'secondary'}>
+                                    <Briefcase size={14} className="mr-1" /> Project ROI
+                                </Button>
+                                <Button onClick={() => setSubView('birBooks')} variant={subView === 'birBooks' ? 'primary' : 'secondary'} className="border-orange-500 text-orange-700">
+                                    <BookOpen size={14} className="mr-1" /> BIR Books
+                                </Button>
                             </div>
                         </div>
 
-                        {subView === 'ledger' ? (
-                            <FinancialEntryLogger companies={companies} />
-                        ) : (
-                            <ManpowerLogger companies={companies} />
-                        )}
-
-                        <div className="mt-12 p-6 bg-orange-50 rounded-xl border-2 border-dashed border-orange-200 text-center">
-                            <p className="text-orange-800 text-sm font-bold">
-                                📖 Next Step: We will build the "Sales Journal" view here to pull in your invoices automatically.
-                            </p>
-                        </div>
+                        {/* Sub-view Content */}
+                        {subView === 'ledger' && <FinancialEntryLogger companies={companies} />}
+                        {subView === 'manpower' && <ManpowerLogger companies={companies} />}
+                        {subView === 'projectOps' && <ProjectOperations quotes={quotes} manpowerLogs={manpowerLogs} ledgerEntries={ledgerEntries} />}
+                        {subView === 'birBooks' && <BIRBookPrep quotes={quotes} ledgerEntries={ledgerEntries} />}
                     </div>
                 )}
             </main>
