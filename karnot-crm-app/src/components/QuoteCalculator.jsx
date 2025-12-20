@@ -372,63 +372,64 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     };
     
     const handleSave = () => {
-        if (!customer.name) {
-            alert("Please enter a customer name.");
-            return;
-        }
-        
-        // 1. Determine Revenue Account
-        let assignedRevenueAccount = "Domestic Equipment Sales";
-        if (customer.saleType === 'Export') {
-            assignedRevenueAccount = "Export Equipment Sales";
-        } else if (docGeneration.generateProForma && docControl.paymentTerms.includes("EaaS")) {
-            assignedRevenueAccount = "Domestic (EaaS) Service Charge";
-        }
+    if (!customer.name) {
+        alert("Please enter a customer name.");
+        return;
+    }
+    
+    // 1. Determine Revenue Account
+    let assignedRevenueAccount = "Domestic Equipment Sales";
+    if (customer.saleType === 'Export') {
+        assignedRevenueAccount = "Export Equipment Sales";
+    } else if (docGeneration.generateProForma && docControl.paymentTerms.includes("EaaS")) {
+        assignedRevenueAccount = "Domestic (EaaS) Service Charge";
+    }
 
-        const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
+    const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
 
-        // 2. Prepare Ledger Data
-        const financialEntry = {
-            quoteId: quoteId,
-            revenueAccount: assignedRevenueAccount,
-            netSalesUSD: quoteTotals.subtotalUSD,
-            discountUSD: quoteTotals.subtotalUSD * (commercial.discount / 100),
-            finalSalesUSD: quoteTotals.finalSalesPrice,
-            finalSalesPHP: quoteTotals.finalSalesPrice * costing.forexRate,
-            marginPercentage: quoteTotals.grossMarginPercentage,
-            status: initialData?.status || 'DRAFT',
-            ledgerStatus: 'PENDING_MANUAL_BOOK'
-        };
-
-        // FIXED: Ensure company ID is captured correctly
-        const companyId = customer.id || (companies && companies.find(c => c.companyName === customer.name)?.id) || '';
-
-        const newQuote = {
-            id: quoteId,
-            customer: {
-                ...customer,
-                id: companyId
-            },
-            commercial,
-            docControl,
-            costing,
-            docGeneration,
-            selectedProducts,
-            manualItems,
-            finalSalesPrice: quoteTotals.finalSalesPrice,
-            grossMarginAmount: quoteTotals.grossMarginAmount,
-            grossMarginPercentage: quoteTotals.grossMarginPercentage,
-            ledgerPosting: financialEntry, 
-            status: initialData?.status || 'DRAFT',
-            createdAt: initialData?.createdAt || new Date().toISOString(),
-            opportunityId: opportunityId || null,
-            companyId: companyId,
-            customerName: customer.name
-        };
-
-        console.log("Saving quote with opportunityId:", opportunityId);
-        onSaveQuote(newQuote);
+    // 2. Prepare Ledger Data
+    const financialEntry = {
+        quoteId: quoteId,
+        revenueAccount: assignedRevenueAccount,
+        netSalesUSD: quoteTotals.subtotalUSD,
+        discountUSD: quoteTotals.subtotalUSD * (commercial.discount / 100),
+        finalSalesUSD: quoteTotals.finalSalesPrice,
+        finalSalesPHP: quoteTotals.finalSalesPrice * costing.forexRate,
+        marginPercentage: quoteTotals.grossMarginPercentage,
+        status: initialData?.status || 'DRAFT',
+        ledgerStatus: 'PENDING_MANUAL_BOOK'
     };
+
+    // FIXED: Ensure company ID is captured correctly
+    const companyId = customer.id || (companies && companies.find(c => c.companyName === customer.name)?.id) || '';
+
+    const newQuote = {
+        id: quoteId,
+        customer: {
+            ...customer,
+            id: companyId
+        },
+        commercial,
+        docControl,
+        costing,
+        docGeneration,
+        selectedProducts,
+        manualItems,
+        finalSalesPrice: quoteTotals.finalSalesPrice,
+        totalCost: quoteTotals.costSubtotalUSD, // NEW: Added total cost
+        grossMarginAmount: quoteTotals.grossMarginAmount,
+        grossMarginPercentage: quoteTotals.grossMarginPercentage,
+        ledgerPosting: financialEntry, 
+        status: initialData?.status || 'DRAFT',
+        createdAt: initialData?.createdAt || new Date().toISOString(),
+        opportunityId: opportunityId || null,
+        companyId: companyId,
+        customerName: customer.name
+    };
+
+    console.log("Saving quote with opportunityId:", opportunityId);
+    onSaveQuote(newQuote);
+};
 
     const productCategories = useMemo(() => {
         return dbProducts.reduce((acc, p) => {
