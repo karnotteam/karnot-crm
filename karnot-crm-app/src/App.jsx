@@ -172,7 +172,18 @@ export default function App() {
                 {activeView === 'companies' && <CompaniesPage companies={companies} contacts={contacts} quotes={quotes} user={user} onOpenQuote={handleEditQuote} onRestoreCompany={(id) => updateDoc(doc(db, "users", user.uid, "companies", id), { isDeleted: false })} />}
                 {activeView === 'contacts' && <ContactsPage contacts={contacts} companies={companies} user={user} />}
                 {activeView === 'calculator' && <QuoteCalculator onSaveQuote={handleSaveQuote} nextQuoteNumber={nextQuoteNumber} key={quoteToEdit ? quoteToEdit.id : 'new'} initialData={quoteToEdit} companies={companies} contacts={contacts} />}
-                {activeView === 'list' && <QuotesListPage quotes={quotes} onDeleteQuote={handleDeleteQuote} onEditQuote={handleEditQuote} onUpdateQuoteStatus={(id, s) => setDoc(doc(db, "users", user.uid, "quotes", id), { status: s }, { merge: true })} />}
+                {activeView === 'list' && (
+    <QuotesListPage 
+        quotes={quotes} 
+        onDeleteQuote={handleDeleteQuote} 
+        onEditQuote={handleEditQuote} 
+        onUpdateQuoteStatus={handleUpdateQuoteStatus}
+        onViewProject={(quote) => {
+            setActiveView('accounts');
+            setSubView('projectOps'); // Automatically opens the Project ROI tab
+        }}
+    />
+)}
                 {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 {activeView === 'heatPumpCalc' && <div className="max-w-5xl mx-auto"><Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">← Back</Button><HeatPumpCalculator /></div>}
