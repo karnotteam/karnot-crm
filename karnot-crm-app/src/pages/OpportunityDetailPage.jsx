@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Mail, Phone, Hash, ArrowLeft, DollarSign, List, Calendar, 
-    Edit, Plus, FileText, User, Layout, Activity
+    Edit, Plus, FileText, User, Layout, Activity, Trash2, PlusCircle, ExternalLink
 } from 'lucide-react';
 import { db } from '../firebase'; 
 import { 
-    collection, addDoc, serverTimestamp, 
+    collection, addDoc, serverTimestamp, doc, updateDoc,
     query, onSnapshot, orderBy 
 } from "firebase/firestore";
 
@@ -15,12 +15,24 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
     
     const [newNoteText, setNewNoteText] = useState('');
     const [notes, setNotes] = useState([]); 
+    const [interactions, setInteractions] = useState(opportunity?.interactions || []);
+    const [newLogType, setNewLogType] = useState('Call');
+    const [newLogOutcome, setNewLogOutcome] = useState('');
+    const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedQuoteId, setSelectedQuoteId] = useState('');
     
     const formatProb = (p) => {
         if (p >= 90) return 'text-green-600';
         if (p >= 50) return 'text-yellow-600';
         return 'text-red-600';
     };
+
+    // Load interactions from opportunity data
+    useEffect(() => {
+        if (opportunity?.interactions) {
+            setInteractions(opportunity.interactions);
+        }
+    }, [opportunity]);
 
     useEffect(() => {
         if (!opportunity?.id || !user?.uid) {
@@ -42,6 +54,20 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
         return () => unsubscribe();
     }, [opportunity, user]); 
 
+    // Save interactions to Firebase
+    const saveInteractionsToFirebase = async (updatedInteractions) => {
+        if (!user || !opportunity) return;
+        try {
+            const oppRef = doc(db, "users", user.uid, "opportunities", opportunity.id);
+            await updateDoc(oppRef, {
+                interactions: updatedInteractions,
+                lastModified: serverTimestamp()
+            });
+        } catch (error) {
+            console.error("Error saving interactions:", error);
+        }
+    };
+
     const handleSaveNote = async () => {
         if (!newNoteText.trim()) return; 
         if (!user?.uid) return alert("Error: User not logged in.");
@@ -58,6 +84,41 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
             console.error("Error adding note: ", error);
             alert("Failed to save note.");
         }
+    };
+
+    // NEW: Add structured interaction (like Companies page)
+    const handleAddInteraction = async () => {
+        if (!newLogOutcome) return;
+        
+        let linkedQuote = null;
+        if (selectedQuoteId) {
+            linkedQuote = relatedQuotes.find(q => q.id === selectedQuoteId);
+        }
+
+        const newInteraction = {
+            id: Date.now(),
+            date: newLogDate,
+            type: newLogType,
+            outcome: newLogOutcome,
+            linkedQuote
+        };
+
+        const updatedInteractions = [newInteraction, ...interactions].sort((a, b) => 
+            new Date(b.date) - new Date(a.date)
+        );
+
+        setInteractions(updatedInteractions);
+        await saveInteractionsToFirebase(updatedInteractions);
+
+        // Reset form
+        setNewLogOutcome('');
+        setSelectedQuoteId('');
+    };
+
+    const handleDeleteInteraction = async (logId) => {
+        const updatedInteractions = interactions.filter(i => i.id !== logId);
+        setInteractions(updatedInteractions);
+        await saveInteractionsToFirebase(updatedInteractions);
     };
 
     if (!opportunity) {
@@ -150,19 +211,120 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                         </div>
                     </Card>
 
-                    <Card className="max-h-[500px] flex flex-col">
+                    <Card className="max-h-[600px] flex flex-col">
                         <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4">Activity Log</h3>
-                        <div className="space-y-3 mb-4">
-                            <Textarea rows="3" placeholder="Write a note..." className="text-sm border-slate-200 rounded-xl focus:ring-orange-500" value={newNoteText} onChange={(e) => setNewNoteText(e.target.value)}/>
-                            <Button className="w-full text-xs font-black uppercase tracking-widest" variant="secondary" onClick={handleSaveNote}>Post Activity</Button>
+                        
+                        {/* NEW: Structured Activity Form (like Companies page) */}
+                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2 mb-4">
+                            <div className="flex gap-2">
+                                <Input 
+                                    type="date" 
+                                    value={newLogDate} 
+                                    onChange={e => setNewLogDate(e.target.value)} 
+                                    className="text-xs flex-1" 
+                                />
+                                <select 
+                                    value={newLogType} 
+                                    onChange={e => setNewLogType(e.target.value)} 
+                                    className="text-xs border rounded px-2 py-1 flex-1 font-black uppercase bg-white"
+                                >
+                                    <option value="Call">Call</option>
+                                    <option value="Visit">Site Visit</option>
+                                    <option value="Email">Email</option>
+                                    <option value="Meeting">Meeting</option>
+                                </select>
+                            </div>
+
+                            {relatedQuotes.length > 0 && (
+                                <select 
+                                    value={selectedQuoteId} 
+                                    onChange={e => setSelectedQuoteId(e.target.value)} 
+                                    className="w-full text-xs border px-2 py-1 rounded font-bold uppercase bg-white"
+                                >
+                                    <option value="">Attach Quote Link (Optional)</option>
+                                    {relatedQuotes.map(q => (
+                                        <option key={q.id} value={q.id}>
+                                            {q.id} - ${q.finalSalesPrice?.toLocaleString()}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    value={newLogOutcome} 
+                                    onChange={e => setNewLogOutcome(e.target.value)} 
+                                    placeholder="Summary of activity..." 
+                                    className="flex-1 text-sm px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500" 
+                                />
+                                <Button onClick={handleAddInteraction} variant="primary" className="px-3">
+                                    <PlusCircle size={20}/>
+                                </Button>
+                            </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                            {notes.length > 0 ? notes.map(note => (
+
+                        {/* Activity Log Display */}
+                        <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                            {interactions.length > 0 && interactions.map(log => (
+                                <div key={log.id} className="bg-white p-4 rounded-xl border shadow-sm group relative hover:border-orange-200 transition-all">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className={`text-[9px] font-black px-2 py-1 rounded-full text-white uppercase tracking-widest ${
+                                            log.type === 'Visit' ? 'bg-green-500' : 
+                                            log.type === 'Email' ? 'bg-purple-500' :
+                                            log.type === 'Meeting' ? 'bg-indigo-500' :
+                                            'bg-blue-500'
+                                        }`}>
+                                            {log.type}
+                                        </span>
+                                        <span className="text-[10px] text-gray-400 font-bold">
+                                            {new Date(log.date).toLocaleDateString('en-US', { 
+                                                month: 'short', 
+                                                day: 'numeric', 
+                                                year: 'numeric' 
+                                            })}
+                                        </span>
+                                    </div>
+                                    
+                                    <p className="text-sm text-gray-700 font-medium mb-2">{log.outcome}</p>
+                                    
+                                    {log.linkedQuote && (
+                                        <button 
+                                            type="button"
+                                            onClick={() => onOpenQuote(log.linkedQuote)} 
+                                            className="flex items-center gap-1.5 text-blue-600 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors"
+                                        >
+                                            <FileText size={12}/>
+                                            <span className="text-[9px] font-black uppercase">
+                                                Ref: {log.linkedQuote.id}
+                                            </span>
+                                            <ExternalLink size={10}/>
+                                        </button>
+                                    )}
+                                    
+                                    <button 
+                                        onClick={() => handleDeleteInteraction(log.id)} 
+                                        className="absolute top-3 right-3 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <Trash2 size={14}/>
+                                    </button>
+                                </div>
+                            ))}
+
+                            {/* Legacy Notes Display (keeping backward compatibility) */}
+                            {notes.length > 0 && notes.map(note => (
                                 <div key={note.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                     <p className="text-sm text-gray-700 font-medium leading-relaxed">{note.text}</p>
-                                    <div className="mt-2 flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-gray-400"><span className="text-orange-600">{note.authorName?.split(' ')[0]}</span><span>{note.createdAt ? note.createdAt.toDate().toLocaleDateString() : 'Just now'}</span></div> 
+                                    <div className="mt-2 flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-gray-400">
+                                        <span className="text-orange-600">{note.authorName?.split(' ')[0]}</span>
+                                        <span>{note.createdAt ? note.createdAt.toDate().toLocaleDateString() : 'Just now'}</span>
+                                    </div> 
                                 </div>
-                            )) : <p className="text-[10px] text-gray-300 font-black uppercase tracking-widest text-center py-4">No recent history</p>}
+                            ))}
+
+                            {interactions.length === 0 && notes.length === 0 && (
+                                <p className="text-[10px] text-gray-300 font-black uppercase tracking-widest text-center py-4">No recent history</p>
+                            )}
                         </div>
                     </Card>
                 </div>
@@ -171,4 +333,4 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
     );
 };
 
-export default OpportunityDetailPage; // <--- THIS WAS THE MISSING LINK
+export default OpportunityDetailPage;
