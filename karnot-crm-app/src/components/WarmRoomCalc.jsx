@@ -1,970 +1,1209 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase'; 
-import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { getAuth } from "firebase/auth";
-import { calculateHeatPump, calculateFixtureDemand, CONFIG } from '../utils/heatPumpLogic'; 
-import { Card, Section, Input, Button } from '../data/constants.jsx'; 
-import { Save, Calculator, RefreshCw, FileText, X, ChevronDown, ChevronUp, AlertCircle, CheckCircle, TrendingUp, Award, Target, BarChart3, Droplets, Gauge, Sun, Thermometer, DollarSign, TrendingDown } from 'lucide-react';
+import { db } from '../firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { Button } from '../data/constants.jsx';
+import { ArrowLeft, Calculator, Flame, AlertCircle, CheckCircle, Download, TrendingUp, DollarSign, Leaf, Award, Target, BarChart3, ChevronDown, ChevronUp } from 'lucide-react';
 
-const HeatPumpCalculator = () => {  
-  const [inputs, setInputs] = useState({
-    currency: 'PHP',
-    userType: 'home',
-    homeOccupants: 4,
-    dailyLitersInput: 500,
-    mealsPerDay: 0,
-    roomsPerDay: 0,
-    hoursPerDay: 12,
-    heatingType: 'electric',
-    fuelPrice: 12.25,
-    elecRate: 12.25,
-    gasRate: 7.0,
-    lpgPrice: 950,
-    lpgSize: 11,
-    dieselPrice: 60,
-    ambientTemp: 30,
-    inletTemp: 15,
-    targetTemp: 55,
-    systemType: 'grid-solar',
-    sunHours: 5.5,
-    heatPumpType: 'all',
-    includeCooling: false,
-    enableEnterpriseROI: false,
-    enterpriseWACC: 0.07,
-    annualRevenue: 0,
-    waterSavingsScore: 5,
-    reliabilityScore: 8,
-    innovationScore: 7
-  });
-
-  const [showFixtureModal, setShowFixtureModal] = useState(false);
-  const [showCalculations, setShowCalculations] = useState(false);
-  const [showEnterpriseDetails, setShowEnterpriseDetails] = useState(false);
-  const [fixtureInputs, setFixtureInputs] = useState({ 
-    showers: 0, 
-    basins: 0, 
-    sinks: 0, 
-    people: 0, 
-    hours: 8 
-  });
-  
-  const [result, setResult] = useState(null);
-  const [dbProducts, setDbProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  const symbol = CONFIG?.SYMBOLS?.[inputs.currency] || '$';
-
-  useEffect(() => {
-    const fetchInventory = async () => {
-      const user = getAuth().currentUser;
-      if (!user) { 
-        setLoading(false); 
-        return; 
-      }
-      try {
-        const snap = await getDocs(collection(db, "users", user.uid, "products"));
-        setDbProducts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (e) { 
-        console.error('Error fetching products:', e); 
-      } finally { 
-        setLoading(false); 
-      }
-    };
-    fetchInventory();
-  }, []);
-
-  useEffect(() => {
-    if (!loading && dbProducts.length > 0) {
-      setResult(calculateHeatPump(inputs, dbProducts));
-    }
-  }, [inputs, dbProducts, loading]);
-
-  useEffect(() => {
-    const rates = CONFIG.defaultRate[inputs.currency];
-    if (rates) {
-      setInputs(prev => ({
-        ...prev,
-        elecRate: rates.grid,
-        gasRate: rates.gas,
-        lpgPrice: rates.lpgPrice,
-        lpgSize: rates.lpgSize,
-        dieselPrice: rates.diesel
-      }));
-    }
-  }, [inputs.currency]);
-
-  const handleChange = (field, isNumber = false) => (e) => {
-    const val = isNumber ? parseFloat(e.target.value) || 0 : e.target.value;
-    setInputs(prev => ({ ...prev, [field]: val }));
-  };
-
-  const handleFixtureChange = (field) => (e) => {
-    setFixtureInputs(prev => ({ 
-      ...prev, 
-      [field]: parseInt(e.target.value) || 0 
-    }));
-  };
-
-  const applyFixtureCalculation = () => {
-    const calculatedLiters = calculateFixtureDemand(fixtureInputs);
-    setInputs(prev => ({ ...prev, dailyLitersInput: calculatedLiters }));
-    setShowFixtureModal(false);
-  };
-
-  const handleSave = async () => {
-    if (!result || result.error) {
-      alert('Please run a valid calculation first.');
-      return;
-    }
-
-    const user = getAuth().currentUser;
-    if (!user) {
-      alert('Please sign in to save calculations.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await addDoc(collection(db, "users", user.uid, "calculations"), {
-        inputs,
-        result,
-        timestamp: serverTimestamp(),
-        type: 'heat_pump_roi'
-      });
-      alert('Calculation saved successfully!');
-    } catch (error) {
-      console.error('Error saving:', error);
-      alert('Failed to save calculation.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const fmt = n => (+n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-
-  const generatePDFReport = () => {
-    if (!result || result.error) {
-      alert('Please run a valid calculation first.');
-      return;
-    }
-
-    const { system, metrics, financials, cooling, emissions, tankSizing, enterpriseROI } = result;
-    const isEnterprise = inputs.enableEnterpriseROI && enterpriseROI;
-
-    const reportHTML = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Karnot Report - ${system.name}</title>
-<style>
-@page { size: A4; margin: 20mm; }
-body { font-family: Arial, sans-serif; font-size: 10pt; color: #1d1d1f; max-width: 210mm; margin: 0 auto; padding: 20mm; }
-.header { text-align: center; border-bottom: 3px solid #F56600; padding-bottom: 15px; margin-bottom: 25px; }
-h1 { color: #F56600; font-size: 24pt; margin: 0; }
-h2 { color: #1d1d1f; font-size: 14pt; border-bottom: 2px solid #d2d2d7; padding-bottom: 8px; margin-top: 25px; }
-table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 9pt; }
-td { padding: 10px 8px; border-bottom: 1px solid #d2d2d7; }
-td:last-child { text-align: right; font-weight: bold; }
-.metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
-.metric-box { background: #f5f5f7; padding: 15px; border-radius: 8px; text-align: center; }
-.metric-value { font-size: 18pt; font-weight: bold; color: #F56600; }
-.metric-label { font-size: 9pt; color: #6e6e73; margin-top: 5px; }
-.info-box { background: #fff9e6; border-left: 4px solid #ffc107; padding: 15px; margin: 15px 0; }
-.footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #d2d2d7; font-size: 8pt; color: #8e8e93; }
-@media print { .page-break { page-break-before: always; } }
-</style>
-</head>
-<body>
-<div class="header">
-<h1>Karnot Energy Solutions</h1>
-<p>${isEnterprise ? 'Enterprise ROI Analysis' : 'Heat Pump Savings Report'}</p>
-<p>${new Date().toLocaleDateString()}</p>
-</div>
-${isEnterprise ? `<h2>Enterprise ROI Metrics</h2>
-<div class="metric-grid">
-<div class="metric-box"><div class="metric-value">${financials.symbol}${fmt(enterpriseROI.financial.npv)}</div><div class="metric-label">NPV @ ${(inputs.enterpriseWACC * 100).toFixed(1)}%</div></div>
-<div class="metric-box"><div class="metric-value">${enterpriseROI.financial.irr.toFixed(1)}%</div><div class="metric-label">IRR</div></div>
-<div class="metric-box"><div class="metric-value">${enterpriseROI.csv.strategicROI.toFixed(1)}%</div><div class="metric-label">Strategic ROI</div></div>
-</div>
-<p><strong>Recommendation:</strong> ${enterpriseROI.viability.recommendation}</p>
-<h3>CSV Scorecard</h3>
-<table>
-<tr><td>Carbon Reduction</td><td>${enterpriseROI.csv.breakdown.carbon.toFixed(1)}/10</td></tr>
-<tr><td>Energy Efficiency</td><td>${enterpriseROI.csv.breakdown.energy.toFixed(1)}/10</td></tr>
-<tr><td>Water Efficiency</td><td>${enterpriseROI.csv.breakdown.water.toFixed(1)}/10</td></tr>
-<tr><td>Overall CSV Score</td><td><strong>${enterpriseROI.csv.score.toFixed(1)}/10</strong></td></tr>
-</table>` : ''}
-<h2>System: ${system.name}</h2>
-<p><strong>Refrigerant:</strong> ${system.refrigerant} | <strong>Power:</strong> ${system.kW} kW | <strong>COP:</strong> ${system.cop}</p>
-<div class="metric-grid">
-<div class="metric-box"><div class="metric-value">${financials.symbol}${fmt(financials.totalAnnualSavings)}</div><div class="metric-label">Annual Savings</div></div>
-<div class="metric-box"><div class="metric-value">${financials.paybackYears} Yrs</div><div class="metric-label">Payback</div></div>
-<div class="metric-box"><div class="metric-value">${fmt(emissions.annualSaved)} kg</div><div class="metric-label">CO₂ Reduction</div></div>
-</div>
-<h2>Financial Summary</h2>
-<table>
-<tr><td>Current Annual Cost</td><td>${financials.symbol}${fmt(financials.currentAnnualCost)}</td></tr>
-<tr><td>New Annual Cost</td><td>${financials.symbol}${fmt(financials.newAnnualCost)}</td></tr>
-<tr><td>Annual Savings</td><td>${financials.symbol}${fmt(financials.totalAnnualSavings)}</td></tr>
-</table>
-<div class="info-box">
-<h3 style="margin-top:0;">Tank Sizing Analysis</h3>
-<table>
-<tr><td>Daily Demand</td><td>${metrics.dailyLiters} L</td></tr>
-<tr><td>Peak Draw Rate</td><td>${tankSizing.peakDrawRateLph.toFixed(1)} L/hr</td></tr>
-<tr><td>Recovery Rate</td><td>${tankSizing.recoveryRateLph.toFixed(1)} L/hr</td></tr>
-<tr><td>Recommended Tank</td><td><strong>${tankSizing.recommendedTankSize} L</strong></td></tr>
-</table>
-</div>
-${cooling ? `<div class="info-box"><h3>Free Cooling Bonus</h3><p>Provides <strong>${cooling.coolingKW.toFixed(1)} kW</strong> cooling, saving <strong>${financials.symbol}${fmt(cooling.annualSavings)}</strong> annually.</p></div>` : ''}
-<div class="footer">
-<p><strong>Karnot Energy Solutions Inc.</strong></p>
-<p>© ${new Date().getFullYear()} All Rights Reserved | Report ID: KRN-${Date.now().toString(36).toUpperCase()}</p>
-</div>
-</body>
-</html>`;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(reportHTML);
-      printWindow.document.close();
-      printWindow.onload = () => {
-        setTimeout(() => printWindow.print(), 250);
-      };
-    } else {
-      alert('Please allow pop-ups to generate PDF reports.');
-    }
-  };
-
-  const showLitersInput = ['office', 'spa', 'school'].includes(inputs.userType);
-  const showMealsInput = ['restaurant', 'resort'].includes(inputs.userType);
-  const showRoomsInput = inputs.userType === 'resort';
-  const showOccupantsInput = inputs.userType === 'home';
-return (
-    <>
-      <Card>
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
-          <h2 className="text-2xl font-bold text-orange-600 flex items-center gap-2">
-            <Calculator/> Heat Pump ROI Calculator
-          </h2>
-          {loading && <RefreshCw className="animate-spin text-gray-400"/>}
-        </div>
-
-        {/* ENTERPRISE ROI TOGGLE */}
-        <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Award className="text-blue-600" size={24}/>
-              <div>
-                <h3 className="font-bold text-gray-800">Enterprise ROI Mode</h3>
-                <p className="text-xs text-gray-600">Nestlé-aligned metrics: NPV, IRR, CSV scoring</p>
-              </div>
-            </div>
-            <label className="flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                checked={inputs.enableEnterpriseROI}
-                onChange={(e) => setInputs(prev => ({ ...prev, enableEnterpriseROI: e.target.checked }))}
-                className="sr-only peer"
-              />
-              <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
-          </div>
-
-          {inputs.enableEnterpriseROI && (
-            <div className="mt-4 pt-4 border-t border-blue-200">
-              <div className="bg-white p-4 rounded-lg border border-blue-200 mb-4">
-                <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <AlertCircle size={18} className="text-blue-600"/>
-                  WACC Reference Guide
-                </h4>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b-2 border-gray-300">
-                        <th className="text-left py-2 pr-4 font-semibold text-gray-700">Company Type</th>
-                        <th className="text-left py-2 pr-4 font-semibold text-gray-700">Typical WACC</th>
-                        <th className="text-left py-2 font-semibold text-gray-700">Why?</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-gray-600">
-                      <tr className="border-b border-gray-200">
-                        <td className="py-2 pr-4 font-medium">Large Corps (Nestlé, P&G)</td>
-                        <td className="py-2 pr-4 text-blue-600 font-semibold">6-8%</td>
-                        <td className="py-2">Low risk, cheap debt, stable</td>
-                      </tr>
-                      <tr className="border-b border-gray-200">
-                        <td className="py-2 pr-4 font-medium">Mid-size Manufacturing</td>
-                        <td className="py-2 pr-4 text-blue-600 font-semibold">8-12%</td>
-                        <td className="py-2">Moderate risk</td>
-                      </tr>
-                      <tr className="border-b border-gray-200">
-                        <td className="py-2 pr-4 font-medium">Startups</td>
-                        <td className="py-2 pr-4 text-orange-600 font-semibold">15-25%+</td>
-                        <td className="py-2">High risk, expensive equity</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 pr-4 font-medium">Your customers (SMEs)</td>
-                        <td className="py-2 pr-4 text-green-600 font-semibold">10-15%</td>
-                        <td className="py-2">Bank loans at 8-12% + owner equity expectations</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-xs text-gray-500 mt-3 italic">
-                  💡 WACC = Weighted Average Cost of Capital. Use your customer's WACC to calculate NPV in their language.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Input 
-                  label="WACC / Discount Rate (%)" 
-                  type="number" 
-                  value={inputs.enterpriseWACC * 100} 
-                  onChange={(e) => setInputs(prev => ({ ...prev, enterpriseWACC: parseFloat(e.target.value) / 100 || 0.07 }))}
-                  step="0.1"
-                />
-                <Input 
-                  label="Annual Facility Revenue (optional)" 
-                  type="number" 
-                  value={inputs.annualRevenue} 
-                  onChange={handleChange('annualRevenue', true)}
-                />
-                <Input 
-                  label="Water Savings Score (1-10)" 
-                  type="number" 
-                  value={inputs.waterSavingsScore} 
-                  onChange={handleChange('waterSavingsScore', true)}
-                  min="1"
-                  max="10"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* INPUT SECTIONS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Section title="1. Your Demand">
-            <label className="block text-sm font-semibold text-gray-600 mb-2">User Type</label>
-            <select 
-              className="w-full border p-2 rounded mb-3" 
-              value={inputs.userType} 
-              onChange={handleChange('userType')}
-            >
-              <option value="home">Home</option>
-              <option value="restaurant">Restaurant</option>
-              <option value="resort">Hotels & Resorts</option>
-              <option value="spa">Spa / Clinic</option>
-              <option value="school">Schools & Colleges</option>
-              <option value="office">Office</option>
-            </select>
-
-            {showOccupantsInput && (
-              <Input 
-                label="Number of Occupants" 
-                type="number" 
-                value={inputs.homeOccupants} 
-                onChange={handleChange('homeOccupants', true)} 
-              />
-            )}
-
-            {showLitersInput && (
-              <div>
-                <Input 
-                  label="Liters of Hot Water / Day" 
-                  type="number" 
-                  value={inputs.dailyLitersInput} 
-                  onChange={handleChange('dailyLitersInput', true)} 
-                />
-                <Button 
-                  variant="secondary" 
-                  onClick={() => setShowFixtureModal(true)}
-                  className="mt-2 w-full"
-                >
-                  Estimate via Fixtures
-                </Button>
-              </div>
-            )}
-
-            {showMealsInput && (
-              <Input 
-                label="Meals Served / Day" 
-                type="number" 
-                value={inputs.mealsPerDay} 
-                onChange={handleChange('mealsPerDay', true)} 
-              />
-            )}
-
-            {showRoomsInput && (
-              <Input 
-                label="Rooms Occupied / Day" 
-                type="number" 
-                value={inputs.roomsPerDay} 
-                onChange={handleChange('roomsPerDay', true)} 
-              />
-            )}
-
-            <Input 
-              label="Daily Operating Hours" 
-              type="number" 
-              value={inputs.hoursPerDay} 
-              onChange={handleChange('hoursPerDay', true)} 
-            />
-          </Section>
-
-          <Section title="2. Your Costs">
-            <label className="block text-sm font-semibold text-gray-600 mb-2">Currency</label>
-            <select 
-              className="w-full border p-2 rounded mb-3" 
-              value={inputs.currency} 
-              onChange={handleChange('currency')}
-            >
-              {Object.keys(CONFIG.FX).map(c => (
-                <option key={c} value={c}>{CONFIG.SYMBOLS[c]} {c}</option>
-              ))}
-            </select>
-
-            <label className="block text-sm font-semibold text-gray-600 mb-2">Current Heating Type</label>
-            <select 
-              className="w-full border p-2 rounded mb-3" 
-              value={inputs.heatingType} 
-              onChange={handleChange('heatingType')}
-            >
-              <option value="electric">Electric</option>
-              <option value="gas">Natural Gas</option>
-              <option value="propane">Propane (LPG)</option>
-              <option value="diesel">Diesel</option>
-            </select>
-
-            {inputs.heatingType === 'electric' && (
-              <Input 
-                label={`Electricity Rate (${symbol}/kWh)`} 
-                type="number" 
-                value={inputs.elecRate} 
-                onChange={handleChange('elecRate', true)} 
-                step="0.01"
-              />
-            )}
-
-            {inputs.heatingType === 'gas' && (
-              <Input 
-                label={`Natural Gas Rate (${symbol}/kWh)`} 
-                type="number" 
-                value={inputs.gasRate} 
-                onChange={handleChange('gasRate', true)} 
-                step="0.01"
-              />
-            )}
-
-            {inputs.heatingType === 'propane' && (
-              <div className="flex gap-2 items-end">
-                <Input 
-                  label={`LPG Price (${symbol})`} 
-                  type="number" 
-                  value={inputs.lpgPrice} 
-                  onChange={handleChange('lpgPrice', true)} 
-                />
-                <Input 
-                  label="Tank Size (kg)" 
-                  type="number" 
-                  value={inputs.lpgSize} 
-                  onChange={handleChange('lpgSize', true)} 
-                />
-              </div>
-            )}
-
-            {inputs.heatingType === 'diesel' && (
-              <Input 
-                label={`Diesel Price (${symbol}/L)`} 
-                type="number" 
-                value={inputs.dieselPrice} 
-                onChange={handleChange('dieselPrice', true)} 
-                step="0.01"
-              />
-            )}
-          </Section>
-
-          <Section title="3. Conditions & Options">
-            <div className="flex gap-2">
-              <Input 
-                label="Inlet Temp (°C)" 
-                type="number" 
-                value={inputs.inletTemp} 
-                onChange={handleChange('inletTemp', true)} 
-              />
-              <Input 
-                label="Target Temp (°C)" 
-                type="number" 
-                value={inputs.targetTemp} 
-                onChange={handleChange('targetTemp', true)} 
-              />
-            </div>
-
-            <Input 
-              label="Ambient Air Temp (°C)" 
-              type="number" 
-              value={inputs.ambientTemp} 
-              onChange={handleChange('ambientTemp', true)} 
-            />
-
-            <label className="block text-sm font-semibold text-gray-600 mb-2">System Type</label>
-            <select 
-              className="w-full border p-2 rounded mb-3" 
-              value={inputs.systemType} 
-              onChange={handleChange('systemType')}
-            >
-              <option value="grid-only">Grid Only</option>
-              <option value="grid-solar">Grid + Solar Offset</option>
-            </select>
-
-            {inputs.systemType === 'grid-solar' && (
-              <>
-                <Input 
-                  label="Avg Daily Sun Hours" 
-                  type="number" 
-                  value={inputs.sunHours} 
-                  onChange={handleChange('sunHours', true)} 
-                  step="0.1"
-                />
-                <Input 
-                  label={`Grid Electricity Rate (${symbol}/kWh)`} 
-                  type="number" 
-                  value={inputs.elecRate} 
-                  onChange={handleChange('elecRate', true)} 
-                  step="0.01"
-                />
-              </>
-            )}
-
-            <label className="block text-sm font-semibold text-gray-600 mb-2">Refrigerant Type</label>
-            <select 
-              className="w-full border p-2 rounded mb-3" 
-              value={inputs.heatPumpType} 
-              onChange={handleChange('heatPumpType')}
-            >
-              <option value="all">Best Price (Any)</option>
-              <option value="R290">R290 Only</option>
-              <option value="R32">R32 Only</option>
-              <option value="R744">CO2 (R744)</option>
-            </select>
-
-            <label className="block text-sm font-semibold text-gray-600 mb-2">Require Cooling?</label>
-            <select 
-              className="w-full border p-2 rounded" 
-              value={inputs.includeCooling ? 'yes' : 'no'} 
-              onChange={(e) => setInputs(prev => ({ ...prev, includeCooling: e.target.value === 'yes' }))}
-            >
-              <option value="no">No</option>
-              <option value="yes">Yes (Reversible Only)</option>
-            </select>
-          </Section>
-        </div>
-
-        <div className="mt-8">
-          <Button 
-            onClick={() => setResult(calculateHeatPump(inputs, dbProducts))} 
-            variant="primary"
-            className="w-full"
-          >
-            Calculate Savings & ROI
-          </Button>
-        </div>
-{/* ENTERPRISE ROI RESULTS */}
-        {result && !result.error && result.enterpriseROI && (
-          <div className="mt-8 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-300">
-            <div className="flex items-center gap-2 mb-4">
-              <Target className="text-blue-600" size={28}/>
-              <h3 className="text-2xl font-bold text-blue-900">Enterprise ROI Analysis</h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="bg-white p-4 rounded-lg border-2 border-blue-200 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp className="text-green-600" size={20}/>
-                  <p className="text-xs font-bold text-gray-500 uppercase">NPV @ {(inputs.enterpriseWACC * 100).toFixed(1)}%</p>
-                </div>
-                <p className="text-2xl font-bold text-green-600">{symbol}{fmt(result.enterpriseROI.financial.npv)}</p>
-              </div>
-              <div className="bg-white p-4 rounded-lg border-2 border-blue-200 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <BarChart3 className="text-blue-600" size={20}/>
-                  <p className="text-xs font-bold text-gray-500 uppercase">Internal Rate of Return</p>
-                </div>
-                <p className="text-2xl font-bold text-blue-600">{result.enterpriseROI.financial.irr.toFixed(1)}%</p>
-              </div>
-              <div className="bg-white p-4 rounded-lg border-2 border-indigo-200 shadow-sm">
-                <div className="flex items-center gap-2 mb-2">
-                  <Award className="text-indigo-600" size={20}/>
-                  <p className="text-xs font-bold text-gray-500 uppercase">Strategic ROI</p>
-                </div>
-                <p className="text-2xl font-bold text-indigo-600">{result.enterpriseROI.csv.strategicROI.toFixed(1)}%</p>
-              </div>
-            </div>
-
-            <div className={`p-4 rounded-lg border-2 mb-6 ${
-              result.enterpriseROI.viability.isViable 
-                ? 'bg-green-50 border-green-300' 
-                : 'bg-yellow-50 border-yellow-300'
-            }`}>
-              <div className="flex items-start gap-3">
-                {result.enterpriseROI.viability.isViable ? (
-                  <CheckCircle className="text-green-600 flex-shrink-0" size={24}/>
-                ) : (
-                  <AlertCircle className="text-yellow-600 flex-shrink-0" size={24}/>
-                )}
-                <div>
-                  <h4 className="font-bold text-gray-800 mb-2">Investment Recommendation</h4>
-                  <p className="text-sm text-gray-700 mb-3">{result.enterpriseROI.viability.recommendation}</p>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                    <div className="flex items-center gap-1">
-                      {result.enterpriseROI.viability.positiveNPV ? '✅' : '❌'}
-                      <span>Positive NPV</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {result.enterpriseROI.viability.meetsHurdleRate ? '✅' : '❌'}
-                      <span>IRR &gt; 12% Hurdle</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {result.enterpriseROI.viability.strategicallyViable ? '✅' : '❌'}
-                      <span>Strategic Criteria</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-bold text-gray-800">Creating Shared Value (CSV) Scorecard</h4>
-                <div className="text-2xl font-bold text-indigo-600">{result.enterpriseROI.csv.score.toFixed(1)}/10</div>
-              </div>
-              
-              <div className="space-y-2">
-                {Object.entries(result.enterpriseROI.csv.breakdown).map(([key, value]) => (
-                  <div key={key} className="flex items-center gap-2">
-                    <div className="w-32 text-sm text-gray-600 capitalize">{key}</div>
-                    <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
-                      <div 
-                        className="bg-gradient-to-r from-blue-400 to-indigo-500 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${(value / 10) * 100}%` }}
-                      ></div>
-                    </div>
-                    <div className="w-12 text-sm font-bold text-gray-700 text-right">{value.toFixed(1)}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-600">
-                <p><strong>CSV Multiplier:</strong> {result.enterpriseROI.csv.multiplier.toFixed(2)}x (adds {((result.enterpriseROI.csv.multiplier - 1) * 100).toFixed(1)}% strategic value)</p>
-              </div>
-            </div>
-
-            <Button 
-              variant="secondary" 
-              onClick={() => setShowEnterpriseDetails(!showEnterpriseDetails)}
-              className="mt-4 w-full flex items-center justify-center gap-2"
-            >
-              {showEnterpriseDetails ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-              {showEnterpriseDetails ? 'Hide' : 'Show'} Detailed Financials
-            </Button>
-
-            {showEnterpriseDetails && (
-              <div className="mt-4 pt-4 border-t border-blue-200 space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-600">Simple ROI</p>
-                    <p className="font-bold text-lg">{result.enterpriseROI.financial.simpleROI.toFixed(1)}%</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Payback Period</p>
-                    <p className="font-bold text-lg">{result.enterpriseROI.financial.paybackYears.toFixed(1)} yrs</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* STANDARD RESULTS */}
-        {result && !result.error && result.financials && (
-          <div className="mt-8 bg-slate-50 p-6 rounded-xl border border-slate-200">
-            <div className="flex justify-between items-end mb-6 pb-4 border-b">
-              <div>
-                <h3 className="text-xl font-bold text-orange-600">{result.system.name}</h3>
-                <p className="text-xs font-bold text-gray-500 uppercase mt-1">
-                  {result.system.refrigerant} • {result.system.kW} kW (Adj: {result.system.adjustedKW.toFixed(1)} kW) • COP {result.system.cop}
-                </p>
-              </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold text-green-600">
-                  {result.financials.symbol}{fmt(result.financials.totalAnnualSavings)}
-                </div>
-                <p className="text-xs font-bold text-gray-400 uppercase">Total Annual Savings</p>
-              </div>
-            </div>
-
-            {/* TANK SIZING WITH SHOW MATH */}
-            <div className="bg-amber-50 border-l-4 border-amber-400 p-4 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    {result.tankSizing.gapLph > 0 ? (
-                      <AlertCircle className="text-amber-600" size={20}/>
-                    ) : (
-                      <CheckCircle className="text-green-600" size={20}/>
-                    )}
-                    <h4 className="font-bold text-gray-800">Tank Sizing</h4>
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    {result.system.integralTank ? (
-                      <>
-                        <strong>Integral Tank:</strong> This unit includes a {result.system.integralTank}L built-in tank.
-                      </>
-                    ) : (
-                      <>
-                        <strong>Required Tank:</strong> {result.tankSizing.recommendedTankSize}L external tank needed.
-                      </>
-                    )}
-                  </p>
-                  <p className="text-xs text-gray-600 mt-1">
-                    Recovery: {result.system.recoveryRate.toFixed(1)} L/hr • 
-                    Peak Draw: {result.tankSizing.peakDrawRateLph.toFixed(1)} L/hr
-                    {result.tankSizing.gapLph > 0 && (
-                      <> • Gap: <span className="text-amber-700 font-semibold">{result.tankSizing.gapLph.toFixed(1)} L/hr</span></>
-                    )}
-                  </p>
-                </div>
-                <Button 
-                  variant="secondary" 
-                  onClick={() => setShowCalculations(!showCalculations)}
-                  className="text-sm flex items-center gap-1"
-                >
-                  {showCalculations ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
-                  {showCalculations ? 'Hide' : 'Show'} Math
-                </Button>
-              </div>
-
-              {showCalculations && (
-                <div className="mt-4 pt-4 border-t border-amber-200">
-                  <h5 className="font-semibold text-gray-800 mb-3">Tank Sizing Calculations:</h5>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Daily Demand:</span>
-                      <span className="font-mono">{result.metrics.dailyLiters} L</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Operating Hours:</span>
-                      <span className="font-mono">{inputs.hoursPerDay} hrs/day</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Average Draw Rate:</span>
-                      <span className="font-mono">{result.tankSizing.avgDrawRate.toFixed(1)} L/hr</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Coincidence Factor ({inputs.userType}):</span>
-                      <span className="font-mono">{(result.tankSizing.coincidenceFactor * 100).toFixed(0)}%</span>
-                    </div>
-                    <div className="flex justify-between font-semibold text-orange-700">
-                      <span>Peak Draw Rate:</span>
-                      <span className="font-mono">{result.tankSizing.peakDrawRateLph.toFixed(1)} L/hr</span>
-                    </div>
-                    
-                    <div className="h-px bg-amber-300 my-3"></div>
-                    
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Heat Pump Power (Adjusted):</span>
-                      <span className="font-mono">{result.system.adjustedKW.toFixed(1)} kW</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Temperature Lift (ΔT):</span>
-                      <span className="font-mono">{inputs.targetTemp - inputs.inletTemp}°C</span>
-                    </div>
-                    <div className="flex justify-between font-semibold text-blue-700">
-                      <span>Recovery Rate:</span>
-                      <span className="font-mono">{result.system.recoveryRate.toFixed(1)} L/hr</span>
-                    </div>
-                    
-                    <div className="h-px bg-amber-300 my-3"></div>
-                    
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Gap (Peak - Recovery):</span>
-                      <span className={`font-mono ${result.tankSizing.gapLph > 0 ? 'text-red-600 font-bold' : 'text-green-600'}`}>
-                        {result.tankSizing.gapLph.toFixed(1)} L/hr
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Peak Duration:</span>
-                      <span className="font-mono">{result.tankSizing.peakDuration} hrs</span>
-                    </div>
-                    
-                    <div className="h-px bg-amber-300 my-3"></div>
-                    
-                    <p className="text-xs text-gray-600 mb-2">Three sizing methods (we use the largest):</p>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600">Method 1: Gap × Duration</span>
-                      <span className="font-mono">{result.tankSizing.method1_GapBased.toFixed(0)} L</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600">Method 2: Peak Buffer (65%)</span>
-                      <span className="font-mono">{result.tankSizing.method2_PeakBuffer.toFixed(0)} L</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-600">Method 3: Daily Reserve (35%)</span>
-                      <span className="font-mono">{result.tankSizing.method3_DailyReserve.toFixed(0)} L</span>
-                    </div>
-                    
-                    <div className="h-px bg-amber-300 my-3"></div>
-                    
-                    <div className="flex justify-between font-bold text-lg text-orange-600">
-                      <span>Recommended Tank Size:</span>
-                      <span className="font-mono">{result.tankSizing.recommendedTankSize} L</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* KEY METRICS GRID */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm">
-                <DollarSign className="text-green-600"/>
-                <div>
-                  <p className="text-xs text-gray-400 font-bold uppercase">Payback</p>
-                  <p className="text-lg font-bold">{result.financials.paybackYears} Yrs</p>
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm">
-                <Droplets className="text-blue-500"/>
-                <div>
-                  <p className="text-xs text-gray-400 font-bold uppercase">Peak Draw</p>
-                  <p className="text-lg font-bold">{result.metrics.peakDrawRate} L/hr</p>
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm">
-                <Gauge className="text-orange-500"/>
-                <div>
-                  <p className="text-xs text-gray-400 font-bold uppercase">Warm-up</p>
-                  <p className="text-lg font-bold">{result.metrics.warmupTime} Hrs</p>
-                </div>
-              </div>
-              <div className="bg-white p-4 rounded border flex items-center gap-3 shadow-sm">
-                <TrendingDown className="text-green-600"/>
-                <div>
-                  <p className="text-xs text-gray-400 font-bold uppercase">CO₂ Saved</p>
-                  <p className="text-lg font-bold">{fmt(result.emissions.annualSaved)} kg</p>
-                </div>
-              </div>
-            </div>
-
-            {/* SOLAR OFFSET */}
-            {inputs.systemType === 'grid-solar' && result.metrics.panelCount > 0 && (
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
-                <div className="flex items-center gap-2">
-                  <Sun className="text-yellow-600"/>
-                  <p className="text-sm">
-                    <strong>Solar Offset:</strong> Requires {result.metrics.panelCount} solar panels 
-                    ({(result.metrics.panelCount * 0.425).toFixed(1)} kW system)
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* COOLING BONUS */}
-            {result.cooling && (
-              <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
-                <h4 className="font-bold text-blue-900 mb-2">🎉 Free Cooling Bonus!</h4>
-                <p className="text-sm text-blue-800">
-                  Your reversible heat pump provides <strong>{result.cooling.coolingKW.toFixed(1)} kW</strong> of 
-                  cooling capacity, saving an additional <strong>{result.financials.symbol}{fmt(result.cooling.annualSavings)}</strong> 
-                  annually on air conditioning costs!
-                </p>
-              </div>
-            )}
-
-            {/* ACTION BUTTONS */}
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <Button variant="secondary" onClick={generatePDFReport}>
-                <FileText size={18} className="mr-2"/> PDF Report
-              </Button>
-              <Button variant="success" onClick={handleSave} disabled={saving}>
-                {saving ? <RefreshCw size={18} className="mr-2 animate-spin"/> : <Save size={18} className="mr-2"/>}
-                Save
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* ERROR DISPLAY */}
-        {result?.error && (
-          <div className="mt-6 p-4 bg-red-50 text-red-700 rounded border border-red-200">
-            <p className="font-semibold">⚠️ {result.error}</p>
-            <p className="text-sm mt-2">Try adjusting your inputs or selecting a different refrigerant type.</p>
-          </div>
-        )}
-      </Card>
-
-      {/* FIXTURE CALCULATOR MODAL */}
-      {showFixtureModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-800">Estimate via Fixtures</h3>
-              <button 
-                onClick={() => setShowFixtureModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={24}/>
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <Input 
-                label="Number of Showers" 
-                type="number" 
-                value={fixtureInputs.showers} 
-                onChange={handleFixtureChange('showers')} 
-              />
-              <Input 
-                label="Lavatory Basins" 
-                type="number" 
-                value={fixtureInputs.basins} 
-                onChange={handleFixtureChange('basins')} 
-              />
-              <Input 
-                label="Kitchen Sinks" 
-                type="number" 
-                value={fixtureInputs.sinks} 
-                onChange={handleFixtureChange('sinks')} 
-              />
-              <Input 
-                label="Number of Occupants" 
-                type="number" 
-                value={fixtureInputs.people} 
-                onChange={handleFixtureChange('people')} 
-              />
-              <Input 
-                label="Hours per Day" 
-                type="number" 
-                value={fixtureInputs.hours} 
-                onChange={handleFixtureChange('hours')} 
-              />
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <Button variant="secondary" onClick={() => setShowFixtureModal(false)} className="flex-1">
-                Cancel
-              </Button>
-              <Button variant="primary" onClick={applyFixtureCalculation} className="flex-1">
-                Use These Values
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
+const CONFIG = {
+    AIR_DENSITY_KG_M3: 1.2,
+    AIR_SPECIFIC_HEAT_KJ_KGK: 1.006,
+    DIESEL_LHV_KWH_L: 9.9,
+    DIESEL_CO2_KG_PER_L: 2.68,
+    GRID_CO2_KG_PER_KWH: 0.7,
+    FX_USD_PHP: 58.5,
+    REQUIRED_WATER_TEMP_C: 65,
+    TANK_SIZING_L_PER_KW: 20,
+    PV_DERATE_FACTOR: 0.80,
+    WEEKEND_SUN_DAYS: 2,
+    BATTERY_DOD: 0.80,
+    SOLAR_PANEL_COST_USD: 200,
+    SOLAR_PANEL_KW_RATED: 0.425,
+    INVERTER_COST_PER_WATT_USD: 0.30,
+    EFFICIENCY_BREAKDOWN: [
+        { id: "combustionEff", label: 'Initial Combustion Efficiency', value: 83.0, isLoss: false },
+        { id: "steamLeaks", label: 'Steam Leaks', value: 2.0, isLoss: true },
+        { id: "radConvLoss", label: 'Radiation / Convection Loss', value: 5.0, isLoss: true },
+        { id: "purgeLoss", label: 'Purge Loss (Cycling)', value: 3.0, isLoss: true },
+        { id: "o2Loss", label: 'O2 Control at Low Loads', value: 2.0, isLoss: true },
+        { id: "ventLoss", label: 'Vent Loss (Feed Water)', value: 2.0, isLoss: true },
+        { id: "trapLoss", label: 'Steam Trap Leaks', value: 5.0, isLoss: true },
+        { id: "pipeLoss", label: 'Un-Insulated Pipe Loss', value: 3.0, isLoss: true },
+        { id: "wetSteamLoss", label: 'Wet Steam Loss', value: 1.0, isLoss: true },
+        { id: "scaleLoss", label: 'Scale Deposit Loss', value: 10.0, isLoss: true },
+    ]
 };
 
-export default HeatPumpCalculator;
+const WarmRoomCalc = ({ setActiveView, user }) => {
+    // Product data from Firebase
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Form inputs
+    const [inputs, setInputs] = useState({
+        roomL: 11.5,
+        roomW: 6,
+        roomH: 6,
+        uValue: 0.40,
+        ambientTemp: 20,
+        setpointTemp: 47,
+        duration: 63,
+        doorOpenings: 20,
+        airExchange: 50,
+        ach: 1.0,
+        refrigerantType: 'iHEAT (R290)',
+        hpCOP: 2.84,
+        electricityTariff: 12.00,
+        dieselPrice: 60.00,
+        installationCost: 150000,
+        projectLifespan: 10,
+        discountRate: 8,
+        implementationDelay: 6,
+        systemType: 'grid-solar',
+        storageType: 'battery',
+        psh: 4.5,
+        solarInstallCost: 15000,
+        batteryCost: 11700,
+        pcmCost: 4388,
+        standbyFuel: 0.6,
+        condensateReturn: 40,
+        enableEnterpriseROI: false,
+        enterpriseWACC: 0.07,
+        annualRevenue: 0,
+        waterSavingsScore: 5,
+        reliabilityScore: 8,
+        innovationScore: 7
+    });
+
+    // Efficiency breakdown state
+    const [efficiencyValues, setEfficiencyValues] = useState(
+        CONFIG.EFFICIENCY_BREAKDOWN.reduce((acc, item) => {
+            acc[item.id] = item.value;
+            return acc;
+        }, {})
+    );
+
+    const [systemEfficiency, setSystemEfficiency] = useState(50);
+    const [results, setResults] = useState(null);
+    const [showReport, setShowReport] = useState(false);
+    const [showCalculations, setShowCalculations] = useState(false);
+    const [showEnterpriseDetails, setShowEnterpriseDetails] = useState(false);
+
+    // Load products from Firebase
+    useEffect(() => {
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+
+        const unsub = onSnapshot(
+            collection(db, "users", user.uid, "products"),
+            (snapshot) => {
+                const list = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                setProducts(list);
+                
+                // Debug logging
+                console.log('=== Warm Room Calc: Products Loaded ===');
+                console.log('Total products:', list.length);
+                
+                // Group by category
+                const byCategory = {};
+                list.forEach(p => {
+                    const cat = p.category || 'Uncategorized';
+                    byCategory[cat] = (byCategory[cat] || 0) + 1;
+                });
+                console.log('Products by category:', byCategory);
+                
+                // Count products with kW in name
+                const withKW = list.filter(p => /\d+(\.\d+)?\s*kW/i.test(p.name || '')).length;
+                console.log('Products with kW in name:', withKW);
+                
+                // Count products with L in name (tanks)
+                const withL = list.filter(p => /\d+\s*L/i.test(p.name || '')).length;
+                console.log('Products with L in name (tanks):', withL);
+                
+                setLoading(false);
+            },
+            (error) => {
+                console.error("Error loading products:", error);
+                setLoading(false);
+            }
+        );
+
+        return () => unsub();
+    }, [user]);
+
+    // Update system efficiency when breakdown changes
+    useEffect(() => {
+        updateBoilerEfficiency();
+    }, [efficiencyValues]);
+
+    const updateBoilerEfficiency = () => {
+        let totalLosses = 0;
+        const combustionEff = efficiencyValues.combustionEff || 83;
+        
+        CONFIG.EFFICIENCY_BREAKDOWN.forEach(item => {
+            if (item.isLoss) {
+                totalLosses += efficiencyValues[item.id] || 0;
+            }
+        });
+        
+        const finalEfficiency = Math.max(0, combustionEff - totalLosses);
+        setSystemEfficiency(finalEfficiency);
+    };
+
+    // Helper functions to extract kW and Liters from product names
+    const getPeakKwFromName = (name) => {
+        if (!name) return 0;
+        const match = name.match(/(\d+(\.\d+)?)\s?kW/i);
+        return match ? parseFloat(match[1]) : 0;
+    };
+
+    const getTankLitersFromName = (name) => {
+        if (!name) return 0;
+        const match = name.match(/(\d+)\s?L/i);
+        return match ? parseInt(match[1], 10) : 0;
+    };
+
+    const handleInputChange = (field, value) => {
+        setInputs(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleEfficiencyChange = (field, value) => {
+        setEfficiencyValues(prev => ({ ...prev, [field]: parseFloat(value) || 0 }));
+    };
+
+    const calculate = () => {
+        // --- READ INPUTS ---
+        const {
+            roomL, roomW, roomH, uValue, ambientTemp, setpointTemp,
+            duration, doorOpenings, airExchange, ach,
+            electricityTariff, dieselPrice, hpCOP, refrigerantType,
+            installationCost, projectLifespan, discountRate, implementationDelay,
+            systemType, storageType, psh, solarInstallCost, batteryCost, pcmCost, standbyFuel
+        } = inputs;
+
+        // --- CALCULATE LOADS ---
+        const roomVolume_m3 = roomL * roomW * roomH;
+        const surfaceArea_m2 = (2 * roomL * roomH) + (2 * roomW * roomH) + (roomL * roomW);
+        const deltaT = Math.max(0, setpointTemp - ambientTemp);
+        
+        const steadyLoad_kW = ((uValue * surfaceArea_m2 * deltaT) / 1000) + 
+            ((roomVolume_m3 * ach * CONFIG.AIR_DENSITY_KG_M3 * CONFIG.AIR_SPECIFIC_HEAT_KJ_KGK * deltaT) / 3600);
+        
+        const doorEnergy_perOpening_kWh = (roomVolume_m3 * (airExchange / 100) * CONFIG.AIR_DENSITY_KG_M3 * 
+            CONFIG.AIR_SPECIFIC_HEAT_KJ_KGK * deltaT) / 3600;
+        
+        const warmUpEnergy_kWh = (roomVolume_m3 * CONFIG.AIR_DENSITY_KG_M3 * 
+            CONFIG.AIR_SPECIFIC_HEAT_KJ_KGK * deltaT) / 3600;
+        
+        const peakLoad_kW = warmUpEnergy_kWh + steadyLoad_kW;
+        const totalThermalLoad_kWh = (steadyLoad_kW * duration) + (doorEnergy_perOpening_kWh * doorOpenings);
+        
+        // --- BOILER ANALYSIS ---
+        const diesel_for_heat_L = systemEfficiency > 0 ? 
+            totalThermalLoad_kWh / (CONFIG.DIESEL_LHV_KWH_L * (systemEfficiency / 100)) : 0;
+        const boiler_diesel_standby_L = standbyFuel * duration;
+        const total_diesel_L = diesel_for_heat_L + boiler_diesel_standby_L;
+        const boiler_cost = total_diesel_L * dieselPrice;
+        const boiler_co2_kg = total_diesel_L * CONFIG.DIESEL_CO2_KG_PER_L;
+        
+        // --- HEAT PUMP SELECTION FROM FIREBASE ---
+        // Filter products that match the selected refrigerant type and have kW in name
+        const availableHeatPumps = products
+            .filter(p => {
+                const hasCategory = p.category && p.category.includes(refrigerantType);
+                const hasKW = getPeakKwFromName(p.name) > 0;
+                return hasCategory && hasKW;
+            })
+            .sort((a, b) => getPeakKwFromName(a.name) - getPeakKwFromName(b.name));
+        
+        console.log('Refrigerant type:', refrigerantType);
+        console.log('Available heat pumps:', availableHeatPumps.length);
+        console.log('Peak load required:', peakLoad_kW, 'kW');
+        
+        let selectedHeatPump = availableHeatPumps.find(hp => getPeakKwFromName(hp.name) >= peakLoad_kW) || 
+            availableHeatPumps[availableHeatPumps.length - 1];
+        
+        if (!selectedHeatPump || availableHeatPumps.length === 0) {
+            alert(`No suitable heat pump found in database for "${refrigerantType}"!\n\nPlease check:\n1. Products exist with category containing "${refrigerantType}"\n2. Product names include "kW" (e.g., "30kW")\n3. salesPriceUSD is set\n\nFound ${products.length} total products in database.`);
+            return;
+        }
+
+        // Temperature compatibility check
+        let compatibility = { isCompatible: true, message: "System is suitable for the required temperature." };
+        if ((refrigerantType.includes('R32') && CONFIG.REQUIRED_WATER_TEMP_C > 60) || 
+            (refrigerantType.includes('R290') && CONFIG.REQUIRED_WATER_TEMP_C > 80)) {
+            compatibility.isCompatible = false;
+            compatibility.message = `Warning: The selected heat pump range may not be suitable for ${CONFIG.REQUIRED_WATER_TEMP_C}°C water temperature.`;
+        }
+
+        // --- TANK SELECTION FROM FIREBASE ---
+        const requiredTankSizeL = getPeakKwFromName(selectedHeatPump.name) * CONFIG.TANK_SIZING_L_PER_KW;
+        const availableTanks = products
+            .filter(p => {
+                const catLower = (p.category || '').toLowerCase();
+                return catLower.includes('istor') || catLower.includes('storage') || catLower.includes('tank');
+            })
+            .filter(p => getTankLitersFromName(p.name) > 0)
+            .sort((a, b) => getTankLitersFromName(a.name) - getTankLitersFromName(b.name));
+        
+        let selectedTank = availableTanks.find(t => getTankLitersFromName(t.name) >= requiredTankSizeL) || 
+            availableTanks[availableTanks.length - 1];
+        
+        console.log('Available tanks:', availableTanks.length);
+        console.log('Required tank size:', requiredTankSizeL, 'L');
+
+        // --- FAN COIL SELECTION FROM FIREBASE ---
+        const requiredFanCoilKw = peakLoad_kW / 2; // Split between 2 units
+        const availableFanCoils = products
+            .filter(p => {
+                const nameLower = (p.name || '').toLowerCase();
+                return (nameLower.includes('izone') || nameLower.includes('fcu') || nameLower.includes('fan coil')) 
+                    && getPeakKwFromName(p.name) > 0;
+            })
+            .sort((a, b) => getPeakKwFromName(a.name) - getPeakKwFromName(b.name));
+        
+        let selectedFanCoil = availableFanCoils.find(f => getPeakKwFromName(f.name) >= requiredFanCoilKw) || 
+            availableFanCoils[availableFanCoils.length - 1];
+        
+        console.log('Available fan coils:', availableFanCoils.length);
+        console.log('Required fan coil capacity:', requiredFanCoilKw, 'kW each');
+
+        // --- CAPEX CALCULATION ---
+        const heatPumpSalePrice = selectedHeatPump ? (selectedHeatPump.salesPriceUSD * CONFIG.FX_USD_PHP) : 0;
+        const tankSalePrice = selectedTank ? (selectedTank.salesPriceUSD * CONFIG.FX_USD_PHP) : 0;
+        const fanCoilSalePrice = selectedFanCoil ? (selectedFanCoil.salesPriceUSD * CONFIG.FX_USD_PHP * 2) : 0;
+        
+        // --- HP & SOLAR ANALYSIS ---
+        const hp_total_electric_kWh = totalThermalLoad_kWh / hpCOP;
+        let hp_grid_import_kWh = hp_total_electric_kWh;
+        let pvHardwareCostPHP = 0, pvInstallCostPHP = 0, storageCostPHP = 0, requiredPV_kWp = 0;
+        let storage = { type: 'N/A', requiredSize: 0, units: '' };
+
+        if (systemType === 'grid-solar') {
+            requiredPV_kWp = getPeakKwFromName(selectedHeatPump.name) / hpCOP;
+            const weekendPV_kWh = requiredPV_kWp * psh * CONFIG.PV_DERATE_FACTOR * CONFIG.WEEKEND_SUN_DAYS;
+            const totalSunHours = psh * CONFIG.WEEKEND_SUN_DAYS;
+            const daytimeRatio = Math.min(1, totalSunHours / duration);
+            const hp_daytime_electric_kWh = hp_total_electric_kWh * daytimeRatio;
+            const hp_nighttime_electric_kWh = hp_total_electric_kWh * (1 - daytimeRatio);
+            const excessPV_kWh = Math.max(0, weekendPV_kWh - hp_daytime_electric_kWh);
+            
+            if (storageType === 'none') {
+                storage.type = 'None (Grid Backup)';
+                hp_grid_import_kWh = Math.max(0, hp_daytime_electric_kWh - weekendPV_kWh) + hp_nighttime_electric_kWh;
+            } else if (storageType === 'battery') {
+                storage.type = 'Lithium Battery';
+                const energyFromBattery = Math.min(hp_nighttime_electric_kWh, excessPV_kWh);
+                hp_grid_import_kWh = Math.max(0, hp_daytime_electric_kWh - weekendPV_kWh) + 
+                    (hp_nighttime_electric_kWh - energyFromBattery);
+                storage.requiredSize = hp_nighttime_electric_kWh / CONFIG.BATTERY_DOD;
+                storage.units = 'kWh';
+                storageCostPHP = storage.requiredSize * batteryCost;
+            } else if (storageType === 'pcm') {
+                storage.type = 'Thermal (PCM) Storage';
+                const nighttime_thermal_kWh = totalThermalLoad_kWh * (1 - daytimeRatio);
+                storage.requiredSize = nighttime_thermal_kWh;
+                storage.units = 'kWh (thermal)';
+                storageCostPHP = storage.requiredSize * pcmCost;
+                const pcm_charge_electric_kWh = nighttime_thermal_kWh / hpCOP;
+                const total_daytime_demand_kWh = hp_daytime_electric_kWh + pcm_charge_electric_kWh;
+                hp_grid_import_kWh = Math.max(0, total_daytime_demand_kWh - weekendPV_kWh);
+            }
+
+            const numPanels = Math.ceil(requiredPV_kWp / CONFIG.SOLAR_PANEL_KW_RATED);
+            const solarHardwareUSD = (numPanels * CONFIG.SOLAR_PANEL_COST_USD) + 
+                (requiredPV_kWp * 1000 * CONFIG.INVERTER_COST_PER_WATT_USD);
+            pvHardwareCostPHP = solarHardwareUSD * CONFIG.FX_USD_PHP;
+            pvInstallCostPHP = requiredPV_kWp * solarInstallCost;
+        }
+        
+        const hp_cost = hp_grid_import_kWh * electricityTariff;
+        const hp_co2_kg = hp_grid_import_kWh * CONFIG.GRID_CO2_KG_PER_KWH;
+        
+        // --- FINAL CAPEX & ROI ---
+        const totalCapex = heatPumpSalePrice + tankSalePrice + fanCoilSalePrice + installationCost + 
+            pvHardwareCostPHP + pvInstallCostPHP + storageCostPHP;
+        const weekend_savings = boiler_cost - hp_cost;
+        const annualSavings = weekend_savings * 52;
+        const simplePayback = totalCapex > 0 && annualSavings > 0 ? totalCapex / annualSavings : 0;
+        
+        const weekend_co2_savings_kg = boiler_co2_kg - hp_co2_kg;
+        const annual_co2_savings_kg = weekend_co2_savings_kg * 52;
+
+        let total_pv_of_savings = 0;
+        for (let year = 1; year <= projectLifespan; year++) {
+            total_pv_of_savings += annualSavings / Math.pow(1 + (discountRate / 100), year);
+        }
+        const npv = total_pv_of_savings - totalCapex;
+        const costOfDelay = npv - (npv / Math.pow(1 + (discountRate / 100), implementationDelay / 12));
+        
+        // --- ENTERPRISE ROI CALCULATIONS ---
+        let enterpriseROI = null;
+        if (inputs.enableEnterpriseROI) {
+            // Calculate IRR (simplified iterative approach)
+            const calculateIRR = (cashFlows, initialGuess = 0.1) => {
+                const maxIterations = 100;
+                const tolerance = 0.0001;
+                let irr = initialGuess;
+                
+                for (let i = 0; i < maxIterations; i++) {
+                    let npvAtRate = -totalCapex;
+                    let derivative = 0;
+                    
+                    for (let year = 1; year <= projectLifespan; year++) {
+                        npvAtRate += annualSavings / Math.pow(1 + irr, year);
+                        derivative -= year * annualSavings / Math.pow(1 + irr, year + 1);
+                    }
+                    
+                    if (Math.abs(npvAtRate) < tolerance) break;
+                    irr = irr - npvAtRate / derivative;
+                }
+                
+                return irr;
+            };
+            
+            const irr = calculateIRR() * 100;
+            
+            // Calculate NPV with enterprise WACC
+            let npv_enterprise = -totalCapex;
+            for (let year = 1; year <= projectLifespan; year++) {
+                npv_enterprise += annualSavings / Math.pow(1 + inputs.enterpriseWACC, year);
+            }
+            
+            // CSV Scoring (Creating Shared Value)
+            const carbonScore = Math.min(10, (annual_co2_savings_kg / 10000) * 10); // 10k kg = 10/10
+            const energyScore = Math.min(10, ((boiler_cost - hp_cost) / boiler_cost) * 10); // % savings
+            const waterScore = inputs.waterSavingsScore || 5;
+            const reliabilityScore = inputs.reliabilityScore || 8;
+            const innovationScore = inputs.innovationScore || 7;
+            
+            const csvScore = (carbonScore + energyScore + waterScore + reliabilityScore + innovationScore) / 5;
+            const csvMultiplier = 1 + (csvScore / 20); // Max 1.5x multiplier
+            const strategicROI = (irr * csvMultiplier);
+            
+            // Viability checks
+            const positiveNPV = npv_enterprise > 0;
+            const meetsHurdleRate = irr > 12; // 12% hurdle rate
+            const strategicallyViable = csvScore >= 6.0;
+            const isViable = positiveNPV && (meetsHurdleRate || strategicallyViable);
+            
+            let recommendation = '';
+            if (isViable && meetsHurdleRate && strategicallyViable) {
+                recommendation = '✅ STRONG APPROVAL: Project meets all financial and strategic criteria. High NPV, IRR exceeds hurdle rate, and strong CSV alignment.';
+            } else if (isViable && positiveNPV) {
+                recommendation = '✅ CONDITIONAL APPROVAL: Positive NPV with strategic value. Consider as part of sustainability roadmap even if IRR is below hurdle.';
+            } else if (positiveNPV && strategicallyViable) {
+                recommendation = '⚠️ STRATEGIC CONSIDERATION: Below financial hurdle but strong strategic value. May warrant approval for ESG/sustainability goals.';
+            } else {
+                recommendation = '❌ NOT RECOMMENDED: Project does not meet minimum financial or strategic thresholds at current assumptions.';
+            }
+            
+            enterpriseROI = {
+                financial: {
+                    npv: npv_enterprise,
+                    irr: irr,
+                    simpleROI: ((total_pv_of_savings - totalCapex) / totalCapex) * 100,
+                    paybackYears: simplePayback
+                },
+                csv: {
+                    score: csvScore,
+                    breakdown: {
+                        carbon: carbonScore,
+                        energy: energyScore,
+                        water: waterScore,
+                        reliability: reliabilityScore,
+                        innovation: innovationScore
+                    },
+                    multiplier: csvMultiplier,
+                    strategicROI: strategicROI
+                },
+                viability: {
+                    isViable,
+                    positiveNPV,
+                    meetsHurdleRate,
+                    strategicallyViable,
+                    recommendation
+                }
+            };
+        }
+        
+        // Store results
+        setResults({
+            loads: { peakLoad_kW, steadyLoad_kW, totalThermalLoad_kWh, warmUpEnergy_kWh },
+            hp: { selection: selectedHeatPump, compatibility },
+            tank: { selection: selectedTank, requiredSize: requiredTankSizeL },
+            fanCoil: { selection: selectedFanCoil, requiredKw: requiredFanCoilKw },
+            boiler: { total_diesel_L, cost: boiler_cost, co2_kg: boiler_co2_kg },
+            heatPump: { total_electric_kWh: hp_total_electric_kWh, grid_import_kWh: hp_grid_import_kWh, cost: hp_cost, co2_kg: hp_co2_kg },
+            savings: { 
+                weekend: weekend_savings,
+                annual: annualSavings, 
+                weekend_co2_kg: weekend_co2_savings_kg,
+                annual_co2_kg: annual_co2_savings_kg 
+            },
+            roi: { payback: simplePayback, npv, costOfDelay },
+            capex: { 
+                total: totalCapex, 
+                hp: heatPumpSalePrice, 
+                tank: tankSalePrice, 
+                fanCoil: fanCoilSalePrice, 
+                install: installationCost, 
+                pvHardware: pvHardwareCostPHP, 
+                pvInstall: pvInstallCostPHP, 
+                storage: storageCostPHP 
+            },
+            solar: { storage, requiredPV_kWp },
+            enterpriseROI: enterpriseROI
+        });
+        
+        setShowReport(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    const fmt = (n, decimals = 0) => {
+        if (n === null || n === undefined || isNaN(n)) return '0';
+        return Number(n).toLocaleString(undefined, { 
+            minimumFractionDigits: decimals, 
+            maximumFractionDigits: decimals 
+        });
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Loading product database...</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="max-w-7xl mx-auto">
+            {/* Header */}
+            <div className="mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <Button
+                        onClick={() => setActiveView('calculators')}
+                        variant="secondary"
+                        className="flex items-center gap-2"
+                    >
+                        <ArrowLeft size={16} />
+                        Back
+                    </Button>
+                    <div>
+                        <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+                            <Flame className="text-red-600" />
+                            Warm Room Heating Calculator
+                        </h2>
+                        <p className="text-gray-600 mt-1">Industrial heat pump sizing for temperature-controlled rooms</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Results Report */}
+            {showReport && results && (
+                <div className="bg-white rounded-xl shadow-lg border-2 border-orange-500 p-8 mb-6">
+                    <h3 className="text-2xl font-bold text-center text-gray-800 mb-6 border-b-2 border-orange-500 pb-3">
+                        Project Proposal: Warm Room Electrification
+                    </h3>
+
+                    {/* Compatibility Status */}
+                    <div className={`mb-6 p-4 rounded-lg flex items-start gap-3 ${
+                        results.hp.compatibility.isCompatible 
+                            ? 'bg-green-50 border-2 border-green-500' 
+                            : 'bg-yellow-50 border-2 border-yellow-500'
+                    }`}>
+                        {results.hp.compatibility.isCompatible ? (
+                            <CheckCircle className="text-green-600 flex-shrink-0" size={24} />
+                        ) : (
+                            <AlertCircle className="text-yellow-600 flex-shrink-0" size={24} />
+                        )}
+                        <div>
+                            <p className={`font-semibold ${
+                                results.hp.compatibility.isCompatible ? 'text-green-800' : 'text-yellow-800'
+                            }`}>
+                                {results.hp.compatibility.message}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* ENTERPRISE ROI RESULTS */}
+                    {results.enterpriseROI && (
+                        <div className="mb-6 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-300">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Target className="text-blue-600" size={28}/>
+                                <h3 className="text-2xl font-bold text-blue-900">Enterprise ROI Analysis</h3>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                <div className="bg-white p-4 rounded-lg border-2 border-blue-200 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <TrendingUp className="text-green-600" size={20}/>
+                                        <p className="text-xs font-bold text-gray-500 uppercase">NPV @ {(inputs.enterpriseWACC * 100).toFixed(1)}%</p>
+                                    </div>
+                                    <p className="text-2xl font-bold text-green-600">₱{fmt(results.enterpriseROI.financial.npv)}</p>
+                                </div>
+                                <div className="bg-white p-4 rounded-lg border-2 border-blue-200 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <BarChart3 className="text-blue-600" size={20}/>
+                                        <p className="text-xs font-bold text-gray-500 uppercase">Internal Rate of Return</p>
+                                    </div>
+                                    <p className="text-2xl font-bold text-blue-600">{results.enterpriseROI.financial.irr.toFixed(1)}%</p>
+                                </div>
+                                <div className="bg-white p-4 rounded-lg border-2 border-indigo-200 shadow-sm">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Award className="text-indigo-600" size={20}/>
+                                        <p className="text-xs font-bold text-gray-500 uppercase">Strategic ROI</p>
+                                    </div>
+                                    <p className="text-2xl font-bold text-indigo-600">{results.enterpriseROI.csv.strategicROI.toFixed(1)}%</p>
+                                </div>
+                            </div>
+
+                            <div className={`p-4 rounded-lg border-2 mb-6 ${
+                                results.enterpriseROI.viability.isViable 
+                                    ? 'bg-green-50 border-green-300' 
+                                    : 'bg-yellow-50 border-yellow-300'
+                            }`}>
+                                <div className="flex items-start gap-3">
+                                    {results.enterpriseROI.viability.isViable ? (
+                                        <CheckCircle className="text-green-600 flex-shrink-0" size={24}/>
+                                    ) : (
+                                        <AlertCircle className="text-yellow-600 flex-shrink-0" size={24}/>
+                                    )}
+                                    <div>
+                                        <h4 className="font-bold text-gray-800 mb-2">Investment Recommendation</h4>
+                                        <p className="text-sm text-gray-700 mb-3">{results.enterpriseROI.viability.recommendation}</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                                            <div className="flex items-center gap-1">
+                                                {results.enterpriseROI.viability.positiveNPV ? '✅' : '❌'}
+                                                <span>Positive NPV</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                {results.enterpriseROI.viability.meetsHurdleRate ? '✅' : '❌'}
+                                                <span>IRR &gt; 12% Hurdle</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                {results.enterpriseROI.viability.strategicallyViable ? '✅' : '❌'}
+                                                <span>Strategic Criteria</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="font-bold text-gray-800">Creating Shared Value (CSV) Scorecard</h4>
+                                    <div className="text-2xl font-bold text-indigo-600">{results.enterpriseROI.csv.score.toFixed(1)}/10</div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    {Object.entries(results.enterpriseROI.csv.breakdown).map(([key, value]) => (
+                                        <div key={key} className="flex items-center gap-2">
+                                            <div className="w-32 text-sm text-gray-600 capitalize">{key}</div>
+                                            <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
+                                                <div 
+                                                    className="bg-gradient-to-r from-blue-400 to-indigo-500 h-full rounded-full transition-all duration-500"
+                                                    style={{ width: `${(value / 10) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                            <div className="w-12 text-sm font-bold text-gray-700 text-right">{value.toFixed(1)}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-600">
+                                    <p><strong>CSV Multiplier:</strong> {results.enterpriseROI.csv.multiplier.toFixed(2)}x (adds {((results.enterpriseROI.csv.multiplier - 1) * 100).toFixed(1)}% strategic value)</p>
+                                </div>
+                            </div>
+
+                            <Button 
+                                variant="secondary" 
+                                onClick={() => setShowEnterpriseDetails(!showEnterpriseDetails)}
+                                className="w-full flex items-center justify-center gap-2"
+                            >
+                                {showEnterpriseDetails ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                                {showEnterpriseDetails ? 'Hide' : 'Show'} Detailed Financials
+                            </Button>
+
+                            {showEnterpriseDetails && (
+                                <div className="mt-4 pt-4 border-t border-blue-200 space-y-4">
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <p className="text-gray-600">Simple ROI</p>
+                                            <p className="font-bold text-lg">{results.enterpriseROI.financial.simpleROI.toFixed(1)}%</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-600">Payback Period</p>
+                                            <p className="font-bold text-lg">{results.enterpriseROI.financial.paybackYears.toFixed(1)} yrs</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* System Summary */}
+                    <div className="mb-6">
+                        <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                            <Calculator size={20} className="text-orange-600" />
+                            1. Recommended System & Heating Loads
+                        </h4>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="flex-1">
+                                    <table className="w-full">
+                                        <tbody>
+                                            <tr className="border-b">
+                                                <th className="text-left py-3 text-gray-600">Selected Heat Pump</th>
+                                                <td className="text-right py-3 font-bold text-gray-900">
+                                                    {results.hp.selection?.name || 'N/A'}
+                                                </td>
+                                            </tr>
+                                            <tr className="border-b">
+                                                <th className="text-left py-3 text-gray-600">Peak Heating Load (Warm-up)</th>
+                                                <td className="text-right py-3 font-bold text-orange-600">
+                                                    {fmt(results.loads.peakLoad_kW, 1)} kW
+                                                </td>
+                                            </tr>
+                                            <tr className="border-b">
+                                                <th className="text-left py-3 text-gray-600">Steady-State Load</th>
+                                                <td className="text-right py-3">
+                                                    {fmt(results.loads.steadyLoad_kW, 1)} kW
+                                                </td>
+                                            </tr>
+                                            <tr className="border-b">
+                                                <th className="text-left py-3 text-gray-600">Total Weekend Thermal Energy</th>
+                                                <td className="text-right py-3">
+                                                    {fmt(results.loads.totalThermalLoad_kWh, 0)} kWh
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <th className="text-left py-3 text-gray-600">Est. Weekend Carbon Reduction</th>
+                                                <td className="text-right py-3 font-bold text-green-600">
+                                                    {fmt(results.savings.weekend_co2_kg, 1)} kg CO₂
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <Button 
+                                    variant="secondary" 
+                                    onClick={() => setShowCalculations(!showCalculations)}
+                                    className="ml-4 text-sm flex items-center gap-1"
+                                >
+                                    {showCalculations ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                                    {showCalculations ? 'Hide' : 'Show'} Math
+                                </Button>
+                            </div>
+
+                            {showCalculations && (
+                                <div className="mt-4 pt-4 border-t border-gray-300 bg-white p-4 rounded-lg">
+                                    <h5 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                        <Calculator size={18} className="text-orange-600"/>
+                                        Thermal Load Calculations
+                                    </h5>
+                                    <div className="space-y-3 text-sm">
+                                        <div className="bg-blue-50 p-3 rounded">
+                                            <p className="font-semibold text-blue-900 mb-2">Room Geometry:</p>
+                                            <div className="space-y-1 text-gray-700">
+                                                <div className="flex justify-between">
+                                                    <span>Volume:</span>
+                                                    <span className="font-mono">{inputs.roomL} × {inputs.roomW} × {inputs.roomH} = {(inputs.roomL * inputs.roomW * inputs.roomH).toFixed(1)} m³</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span>Surface Area:</span>
+                                                    <span className="font-mono">{((2 * inputs.roomL * inputs.roomH) + (2 * inputs.roomW * inputs.roomH) + (inputs.roomL * inputs.roomW)).toFixed(1)} m²</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span>Temperature Lift (ΔT):</span>
+                                                    <span className="font-mono">{inputs.setpointTemp} - {inputs.ambientTemp} = {inputs.setpointTemp - inputs.ambientTemp}°C</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-orange-50 p-3 rounded">
+                                            <p className="font-semibold text-orange-900 mb-2">Steady-State Heat Loss:</p>
+                                            <div className="space-y-1 text-gray-700">
+                                                <div className="flex justify-between">
+                                                    <span>Conduction Loss:</span>
+                                                    <span className="font-mono">U × A × ΔT = {results.loads.steadyLoad_kW.toFixed(2)} kW</span>
+                                                </div>
+                                                <div className="flex justify-between text-xs text-gray-600">
+                                                    <span>Formula:</span>
+                                                    <span className="font-mono">{inputs.uValue} W/m²K × {((2 * inputs.roomL * inputs.roomH) + (2 * inputs.roomW * inputs.roomH) + (inputs.roomL * inputs.roomW)).toFixed(1)} m² × {inputs.setpointTemp - inputs.ambientTemp}°C ÷ 1000</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-green-50 p-3 rounded">
+                                            <p className="font-semibold text-green-900 mb-2">Warm-up Energy:</p>
+                                            <div className="space-y-1 text-gray-700">
+                                                <div className="flex justify-between">
+                                                    <span>Air Mass:</span>
+                                                    <span className="font-mono">{(inputs.roomL * inputs.roomW * inputs.roomH * CONFIG.AIR_DENSITY_KG_M3).toFixed(1)} kg</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span>Warm-up Energy Required:</span>
+                                                    <span className="font-mono font-bold text-green-700">{results.loads.warmUpEnergy_kWh.toFixed(1)} kWh</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-purple-50 p-3 rounded">
+                                            <p className="font-semibold text-purple-900 mb-2">Door Opening Losses:</p>
+                                            <div className="space-y-1 text-gray-700">
+                                                <div className="flex justify-between">
+                                                    <span>Energy per Opening:</span>
+                                                    <span className="font-mono">{((inputs.roomL * inputs.roomW * inputs.roomH * (inputs.airExchange/100) * CONFIG.AIR_DENSITY_KG_M3 * CONFIG.AIR_SPECIFIC_HEAT_KJ_KGK * (inputs.setpointTemp - inputs.ambientTemp)) / 3600).toFixed(2)} kWh</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span>Number of Openings:</span>
+                                                    <span className="font-mono">{inputs.doorOpenings}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span>Total Door Loss:</span>
+                                                    <span className="font-mono font-bold text-purple-700">{(((inputs.roomL * inputs.roomW * inputs.roomH * (inputs.airExchange/100) * CONFIG.AIR_DENSITY_KG_M3 * CONFIG.AIR_SPECIFIC_HEAT_KJ_KGK * (inputs.setpointTemp - inputs.ambientTemp)) / 3600) * inputs.doorOpenings).toFixed(1)} kWh</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="h-px bg-gray-300 my-3"></div>
+
+                                        <div className="bg-gradient-to-r from-orange-100 to-red-100 p-4 rounded-lg border-2 border-orange-500">
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between text-base">
+                                                    <span className="font-bold text-gray-800">Peak Load (Warm-up + Steady):</span>
+                                                    <span className="font-mono font-bold text-orange-600 text-lg">{fmt(results.loads.peakLoad_kW, 1)} kW</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="font-bold text-gray-800">Total Weekend Energy:</span>
+                                                    <span className="font-mono font-bold text-orange-600 text-lg">{fmt(results.loads.totalThermalLoad_kWh, 0)} kWh</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Financial Summary */}
+                    <div className="mb-6">
+                        <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                            <DollarSign size={20} className="text-orange-600" />
+                            2. Financial Summary & ROI
+                        </h4>
+                        <div className="bg-gray-50 rounded-lg p-4">
+                            <table className="w-full">
+                                <tbody>
+                                    <tr className="border-b">
+                                        <th className="text-left py-3 text-gray-600">
+                                            Heat Pump ({results.hp.selection?.name})
+                                        </th>
+                                        <td className="text-right py-3">₱ {fmt(results.capex.hp)}</td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <th className="text-left py-3 text-gray-600">
+                                            Fan Coil Units (2 × {results.fanCoil.selection?.name || 'N/A'})
+                                        </th>
+                                        <td className="text-right py-3">₱ {fmt(results.capex.fanCoil)}</td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <th className="text-left py-3 text-gray-600">
+                                            Thermal Storage Tank ({results.tank.selection?.name || 'N/A'})
+                                        </th>
+                                        <td className="text-right py-3">₱ {fmt(results.capex.tank)}</td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <th className="text-left py-3 text-gray-600">Installation & Commissioning</th>
+                                        <td className="text-right py-3">₱ {fmt(results.capex.install)}</td>
+                                    </tr>
+                                    {results.capex.pvHardware > 0 && (
+                                        <>
+                                            <tr className="border-b">
+                                                <th className="text-left py-3 text-gray-600">
+                                                    Solar PV Hardware ({fmt(results.solar.requiredPV_kWp, 1)} kWp)
+                                                </th>
+                                                <td className="text-right py-3">₱ {fmt(results.capex.pvHardware)}</td>
+                                            </tr>
+                                            <tr className="border-b">
+                                                <th className="text-left py-3 text-gray-600">Solar PV Installation</th>
+                                                <td className="text-right py-3">₱ {fmt(results.capex.pvInstall)}</td>
+                                            </tr>
+                                        </>
+                                    )}
+                                    {results.capex.storage > 0 && (
+                                        <tr className="border-b">
+                                            <th className="text-left py-3 text-gray-600">
+                                                {results.solar.storage.type} ({fmt(results.solar.storage.requiredSize, 1)} {results.solar.storage.units})
+                                            </th>
+                                            <td className="text-right py-3">₱ {fmt(results.capex.storage)}</td>
+                                        </tr>
+                                    )}
+                                    <tr className="border-b-2 border-orange-500">
+                                        <th className="text-left py-3 font-bold text-gray-900">
+                                            Total Project Investment (CAPEX)
+                                        </th>
+                                        <td className="text-right py-3 font-bold text-orange-600 text-lg">
+                                            ₱ {fmt(results.capex.total)}
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <th className="text-left py-3 text-gray-600">Estimated Annual Savings</th>
+                                        <td className="text-right py-3 font-bold text-green-600">
+                                            ₱ {fmt(results.savings.annual)}
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <th className="text-left py-3 text-gray-600">Estimated Annual Carbon Savings</th>
+                                        <td className="text-right py-3 font-bold text-green-600">
+                                            {fmt(results.savings.annual_co2_kg, 0)} kg CO₂
+                                        </td>
+                                    </tr>
+                                    <tr className="border-b">
+                                        <th className="text-left py-3 text-gray-600">Simple Payback Period</th>
+                                        <td className="text-right py-3 font-bold text-blue-600">
+                                            {fmt(results.roi.payback, 1)} Years
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th className="text-left py-3 text-gray-600">Net Present Value (NPV)</th>
+                                        <td className="text-right py-3 font-bold text-purple-600">
+                                            ₱ {fmt(results.roi.npv)}
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Cost of Delay */}
+                    <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-500 rounded-lg p-6 text-center">
+                        <h4 className="text-xl font-semibold text-gray-800 mb-2 flex items-center justify-center gap-2">
+                            <TrendingUp className="text-yellow-600" size={24} />
+                            The Cost of Delay
+                        </h4>
+                        <p className="text-gray-700 mb-4">
+                            A delay in project approval will result in lost savings, reducing the project's total value.
+                        </p>
+                        <div className="text-4xl font-bold text-orange-600">
+                            ₱ {fmt(results.roi.costOfDelay)}
+                        </div>
+                        <p className="text-sm text-gray-600 mt-2">
+                            Lost project value over {inputs.implementationDelay} months delay
+                        </p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="mt-6 flex gap-3 justify-end">
+                        <Button
+                            onClick={() => window.print()}
+                            variant="secondary"
+                            className="flex items-center gap-2"
+                        >
+                            <Download size={16} />
+                            Print / Save PDF
+                        </Button>
+                        <Button
+                            onClick={() => setShowReport(false)}
+                            variant="primary"
+                        >
+                            Edit Inputs
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {/* Input Form */}
+            {!showReport && (
+                <div className="bg-white rounded-xl shadow-lg p-8">
+                    {/* ENTERPRISE ROI TOGGLE */}
+                    <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <Award className="text-blue-600" size={24}/>
+                                <div>
+                                    <h3 className="font-bold text-gray-800">Enterprise ROI Mode</h3>
+                                    <p className="text-xs text-gray-600">Nestlé-aligned metrics: NPV, IRR, CSV scoring</p>
+                                </div>
+                            </div>
+                            <label className="flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={inputs.enableEnterpriseROI}
+                                    onChange={(e) => setInputs(prev => ({ ...prev, enableEnterpriseROI: e.target.checked }))}
+                                    className="sr-only peer"
+                                />
+                                <div className="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        {inputs.enableEnterpriseROI && (
+                            <div className="mt-4 pt-4 border-t border-blue-200">
+                                <div className="bg-white p-4 rounded-lg border border-blue-200 mb-4">
+                                    <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                        <AlertCircle size={18} className="text-blue-600"/>
+                                        WACC Reference Guide
+                                    </h4>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b-2 border-gray-300">
+                                                    <th className="text-left py-2 pr-4 font-semibold text-gray-700">Company Type</th>
+                                                    <th className="text-left py-2 pr-4 font-semibold text-gray-700">Typical WACC</th>
+                                                    <th className="text-left py-2 font-semibold text-gray-700">Why?</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="text-gray-600">
+                                                <tr className="border-b border-gray-200">
+                                                    <td className="py-2 pr-4 font-medium">Large Corps (Nestlé, P&G)</td>
+                                                    <td className="py-2 pr-4 text-blue-600 font-semibold">6-8%</td>
+                                                    <td className="py-2">Low risk, cheap debt, stable</td>
+                                                </tr>
+                                                <tr className="border-b border-gray-200">
+                                                    <td className="py-2 pr-4 font-medium">Mid-size Manufacturing</td>
+                                                    <td className="py-2 pr-4 text-blue-600 font-semibold">8-12%</td>
+                                                    <td className="py-2">Moderate risk</td>
+                                                </tr>
+                                                <tr className="border-b border-gray-200">
+                                                    <td className="py-2 pr-4 font-medium">Startups</td>
+                                                    <td className="py-2 pr-4 text-orange-600 font-semibold">15-25%+</td>
+                                                    <td className="py-2">High risk, expensive equity</td>
+                                                </tr>
+                                                <tr>
+                                                    <td className="py-2 pr-4 font-medium">Your customers (SMEs)</td>
+                                                    <td className="py-2 pr-4 text-green-600 font-semibold">10-15%</td>
+                                                    <td className="py-2">Bank loans at 8-12% + owner equity expectations</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-3 italic">
+                                        💡 WACC = Weighted Average Cost of Capital. Use your customer's WACC to calculate NPV in their language.
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <InputField 
+                                        label="WACC / Discount Rate (%)" 
+                                        value={inputs.enterpriseWACC * 100} 
+                                        onChange={(e) => setInputs(prev => ({ ...prev, enterpriseWACC: parseFloat(e.target.value) / 100 || 0.07 }))}
+                                        step="0.1"
+                                    />
+                                    <InputField 
+                                        label="Annual Facility Revenue (optional)" 
+                                        value={inputs.annualRevenue} 
+                                        onChange={(e) => setInputs(prev => ({ ...prev, annualRevenue: parseFloat(e.target.value) || 0 }))}
+                                    />
+                                    <InputField 
+                                        label="Water Savings Score (1-10)" 
+                                        value={inputs.waterSavingsScore} 
+                                        onChange={(e) => setInputs(prev => ({ ...prev, waterSavingsScore: parseFloat(e.target.value) || 5 }))}
+                                        min="1"
+                                        max="10"
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Section 1: Room & Environment */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 border-b-2 border-orange-500 pb-2">
+                                1. Room & Environment
+                            </h3>
+                            <div className="space-y-4">
+                                <InputField label="Room Length (m)" value={inputs.roomL} 
+                                    onChange={(e) => handleInputChange('roomL', parseFloat(e.target.value))} />
+                                <InputField label="Room Width (m)" value={inputs.roomW} 
+                                    onChange={(e) => handleInputChange('roomW', parseFloat(e.target.value))} />
+                                <InputField label="Room Height (m)" value={inputs.roomH} 
+                                    onChange={(e) => handleInputChange('roomH', parseFloat(e.target.value))} />
+                                <InputField label="Panel U-Value (W/m²·K)" value={inputs.uValue} step="0.01"
+                                    onChange={(e) => handleInputChange('uValue', parseFloat(e.target.value))} />
+                                <InputField label="Worst-Case Ambient Temp (°C)" value={inputs.ambientTemp} 
+                                    onChange={(e) => handleInputChange('ambientTemp', parseFloat(e.target.value))} />
+                                <InputField label="Room Setpoint Temp (°C)" value={inputs.setpointTemp} 
+                                    onChange={(e) => handleInputChange('setpointTemp', parseFloat(e.target.value))} />
+                            </div>
+                        </div>
+
+                        {/* Section 2: Operating Profile */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 border-b-2 border-orange-500 pb-2">
+                                2. Operating Profile (Weekend)
+                            </h3>
+                            <div className="space-y-4">
+                                <InputField label="Operating Duration (hours)" value={inputs.duration} 
+                                    onChange={(e) => handleInputChange('duration', parseFloat(e.target.value))} />
+                                <InputField label="Number of Door Openings" value={inputs.doorOpenings} 
+                                    onChange={(e) => handleInputChange('doorOpenings', parseFloat(e.target.value))} />
+                                <InputField label="Air Exchange per Opening (%)" value={inputs.airExchange} 
+                                    onChange={(e) => handleInputChange('airExchange', parseFloat(e.target.value))} />
+                                <InputField label="Background Air Changes per Hour (ACH)" value={inputs.ach} step="0.1"
+                                    onChange={(e) => handleInputChange('ach', parseFloat(e.target.value))} />
+                            </div>
+                        </div>
+
+                        {/* Section 3: Steam Boiler Inefficiencies */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 border-b-2 border-orange-500 pb-2">
+                                3. Steam Boiler Inefficiencies
+                            </h3>
+                            <div className="space-y-3">
+                                {CONFIG.EFFICIENCY_BREAKDOWN.map((item) => (
+                                    <div key={item.id} className="flex items-center justify-between gap-3">
+                                        <label className="text-sm text-gray-700 flex-1">{item.label}</label>
+                                        <input
+                                            type="number"
+                                            value={efficiencyValues[item.id]}
+                                            onChange={(e) => handleEfficiencyChange(item.id, e.target.value)}
+                                            step="0.5"
+                                            className="w-20 px-2 py-1 text-right border border-gray-300 rounded focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                        />
+                                    </div>
+                                ))}
+                                <div className="pt-3 border-t-2 border-gray-300">
+                                    <div className="flex items-center justify-between font-bold">
+                                        <label className="text-gray-800">Overall Steam System Efficiency (%)</label>
+                                        <input
+                                            type="number"
+                                            value={systemEfficiency.toFixed(1)}
+                                            disabled
+                                            className="w-20 px-2 py-1 text-right bg-gray-200 border border-gray-400 rounded font-bold text-orange-600"
+                                        />
+                                    </div>
+                                </div>
+                                <InputField label="Boiler Standby Fuel Burn (L/hr)" value={inputs.standbyFuel} step="0.1"
+                                    onChange={(e) => handleInputChange('standbyFuel', parseFloat(e.target.value))} />
+                                <InputField label="Condensate Return (%)" value={inputs.condensateReturn} 
+                                    onChange={(e) => handleInputChange('condensateReturn', parseFloat(e.target.value))} />
+                            </div>
+                        </div>
+
+                        {/* Section 4: Proposed System & Financials */}
+                        <div className="bg-gray-50 rounded-lg p-6">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 border-b-2 border-orange-500 pb-2">
+                                4. Proposed System & Financials
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Select Heat Pump Range
+                                    </label>
+                                    <select
+                                        value={inputs.refrigerantType}
+                                        onChange={(e) => handleInputChange('refrigerantType', e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                    >
+                                        <option value="iHEAT (R290)">iHEAT (R290)</option>
+                                        <option value="iHEAT (CO₂)">iHEAT (CO₂)</option>
+                                        <option value="iHEAT Pro (R32)">iHEAT Pro (R32)</option>
+                                        <option value="iHEAT Clima (R32)">iHEAT Clima (R32)</option>
+                                    </select>
+                                </div>
+                                <InputField label="Heat Pump COP (at 65°C Water)" value={inputs.hpCOP} step="0.01"
+                                    onChange={(e) => handleInputChange('hpCOP', parseFloat(e.target.value))} />
+                                <InputField label="Electricity Tariff (₱/kWh)" value={inputs.electricityTariff} step="0.01"
+                                    onChange={(e) => handleInputChange('electricityTariff', parseFloat(e.target.value))} />
+                                <InputField label="Diesel Price (₱/Liter)" value={inputs.dieselPrice} step="0.01"
+                                    onChange={(e) => handleInputChange('dieselPrice', parseFloat(e.target.value))} />
+                                <InputField label="Installation Cost (₱)" value={inputs.installationCost} 
+                                    onChange={(e) => handleInputChange('installationCost', parseFloat(e.target.value))} />
+                                <InputField label="Project Lifespan (Years)" value={inputs.projectLifespan} 
+                                    onChange={(e) => handleInputChange('projectLifespan', parseFloat(e.target.value))} />
+                                <InputField label="Annual Discount Rate (%)" value={inputs.discountRate} step="0.5"
+                                    onChange={(e) => handleInputChange('discountRate', parseFloat(e.target.value))} />
+                                <InputField label="Implementation Delay (Months)" value={inputs.implementationDelay} 
+                                    onChange={(e) => handleInputChange('implementationDelay', parseFloat(e.target.value))} />
+                            </div>
+                        </div>
+
+                        {/* Section 5: Power System Configuration */}
+                        <div className="bg-gray-50 rounded-lg p-6 lg:col-span-2">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4 border-b-2 border-orange-500 pb-2">
+                                5. Power System Configuration
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Select Power System
+                                    </label>
+                                    <select
+                                        value={inputs.systemType}
+                                        onChange={(e) => handleInputChange('systemType', e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                    >
+                                        <option value="grid-only">Grid Only</option>
+                                        <option value="grid-solar">Grid + Solar</option>
+                                    </select>
+                                </div>
+
+                                {inputs.systemType === 'grid-solar' && (
+                                    <>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                Energy Storage for Night Hours
+                                            </label>
+                                            <select
+                                                value={inputs.storageType}
+                                                onChange={(e) => handleInputChange('storageType', e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                            >
+                                                <option value="none">None (Grid Backup)</option>
+                                                <option value="battery">Lithium Battery</option>
+                                                <option value="pcm">Thermal (PCM) Storage</option>
+                                            </select>
+                                        </div>
+                                        <InputField label="Peak Sun Hours per Day (PSH)" value={inputs.psh} step="0.1"
+                                            onChange={(e) => handleInputChange('psh', parseFloat(e.target.value))} />
+                                        <InputField label="Solar Installation Cost (₱/kWp)" value={inputs.solarInstallCost} 
+                                            onChange={(e) => handleInputChange('solarInstallCost', parseFloat(e.target.value))} />
+                                        <InputField label="Battery Cost (₱/kWh)" value={inputs.batteryCost} 
+                                            onChange={(e) => handleInputChange('batteryCost', parseFloat(e.target.value))} />
+                                        <InputField label="PCM Thermal Storage Cost (₱/kWh)" value={inputs.pcmCost} 
+                                            onChange={(e) => handleInputChange('pcmCost', parseFloat(e.target.value))} />
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Calculate Button */}
+                    <div className="mt-8">
+                        <Button
+                            onClick={calculate}
+                            variant="primary"
+                            className="w-full py-4 text-lg font-bold"
+                        >
+                            <Calculator size={20} className="mr-2" />
+                            Generate Proposal
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Helper Input Component
+const InputField = ({ label, value, onChange, type = "number", step = "1", disabled = false }) => (
+    <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            step={step}
+            disabled={disabled}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-200 disabled:text-gray-600"
+        />
+    </div>
+);
+
+export default WarmRoomCalc;
