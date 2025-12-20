@@ -39,10 +39,21 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
     const totalActualBurn = projectExpenses + projectManpower;
 
     // --- ROI & MARGIN CALCULATIONS ---
-    const equipmentCost = selectedQuote?.totalCost || (selectedQuote?.finalSalesPrice * 0.5);
-    const availableMargin = (selectedQuote?.finalSalesPrice || 0) - equipmentCost; 
-    const remainingProfit = availableMargin - totalActualBurn;
-    const burnPercentage = availableMargin > 0 ? (totalActualBurn / availableMargin) * 100 : 0;
+    // --- ROI & MARGIN CALCULATIONS ---
+    const forexRate = selectedQuote?.costing?.forexRate || 58.5;
+    
+    // We now pull the EXACT cost price we collected in the Quotation Calculator
+    const equipmentCostUSD = selectedQuote?.totalCost || 0; 
+    const salesPriceUSD = selectedQuote?.finalSalesPrice || 0;
+
+    // Convert everything to PHP for the "Actual Burn" comparison
+    const availableMarginPHP = (salesPriceUSD - equipmentCostUSD) * forexRate;
+    
+    // Actuals from Ledger & Logs (already in PHP)
+    const totalActualBurnPHP = projectExpenses + projectManpower; 
+    
+    const remainingProfitPHP = availableMarginPHP - totalActualBurnPHP;
+    const burnPercentage = availableMarginPHP > 0 ? (totalActualBurnPHP / availableMarginPHP) * 100 : 0;
 
     // --- VARIANCE CALCULATIONS ---
     const laborVariance = parseFloat(targetLabor || 0) - projectManpower;
