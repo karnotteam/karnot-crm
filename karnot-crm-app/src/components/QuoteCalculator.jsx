@@ -1,4 +1,3 @@
-QUOTE CALCULATOR BEFORE CHANGES
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Eye, Plus, Trash2, Edit, Save, X, Search, ChevronDown, Check, User, Handshake } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, Section, PRICING_TIERS } from '../data/constants.jsx';
