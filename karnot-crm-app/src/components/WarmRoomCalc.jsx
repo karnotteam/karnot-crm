@@ -312,19 +312,45 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
 
         // --- FAN COIL SELECTION FROM FIREBASE ---
         const requiredFanCoilKw = peakLoad_kW / 2; // Split between 2 units
+        
+        // Helper to get fan coil heating capacity from either field or name
+        const getFanCoilHeatingKw = (product) => {
+            // Try the dedicated heating field first (for new fan coils)
+            if (product.kW_Heating_Nominal && product.kW_Heating_Nominal > 0) {
+                return product.kW_Heating_Nominal;
+            }
+            // Fallback to DHW field (for older products)
+            if (product.kW_DHW_Nominal && product.kW_DHW_Nominal > 0) {
+                return product.kW_DHW_Nominal;
+            }
+            // Last resort: parse from name
+            return getPeakKwFromName(product.name);
+        };
+        
         const availableFanCoils = products
             .filter(p => {
                 const nameLower = (p.name || '').toLowerCase();
-                return (nameLower.includes('izone') || nameLower.includes('fcu') || nameLower.includes('fan coil')) 
-                    && getPeakKwFromName(p.name) > 0;
+                const categoryLower = (p.category || '').toLowerCase();
+                const isFanCoil = nameLower.includes('izone') || nameLower.includes('fcu') || 
+                                  nameLower.includes('fan coil') || categoryLower.includes('fan coil') ||
+                                  categoryLower.includes('izone');
+                const hasCapacity = getFanCoilHeatingKw(p) > 0;
+                return isFanCoil && hasCapacity;
             })
-            .sort((a, b) => getPeakKwFromName(a.name) - getPeakKwFromName(b.name));
-        
-        let selectedFanCoil = availableFanCoils.find(f => getPeakKwFromName(f.name) >= requiredFanCoilKw) || 
-            availableFanCoils[availableFanCoils.length - 1];
+            .sort((a, b) => getFanCoilHeatingKw(a) - getFanCoilHeatingKw(b));
         
         console.log('Available fan coils:', availableFanCoils.length);
-        console.log('Required fan coil capacity:', requiredFanCoilKw, 'kW each');
+        console.log('Required fan coil capacity:', requiredFanCoilKw.toFixed(1), 'kW each');
+        console.log('Sample fan coils:', availableFanCoils.slice(0, 3).map(f => ({ 
+            name: f.name, 
+            heatingKw: getFanCoilHeatingKw(f) 
+        })));
+        
+        let selectedFanCoil = availableFanCoils.find(f => getFanCoilHeatingKw(f) >= requiredFanCoilKw) || 
+            availableFanCoils[availableFanCoils.length - 1];
+        
+        console.log('✅ Selected fan coil:', selectedFanCoil?.name, 
+            selectedFanCoil ? `(${getFanCoilHeatingKw(selectedFanCoil).toFixed(1)} kW)` : 'NONE');
 
         // --- CAPEX CALCULATION ---
         const heatPumpSalePrice = selectedHeatPump ? (selectedHeatPump.salesPriceUSD * CONFIG.FX_USD_PHP) : 0;
