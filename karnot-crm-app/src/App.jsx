@@ -176,7 +176,7 @@ export default function App() {
             <Header activeView={activeView} setActiveView={setActiveView} quoteCount={quotes.length} onLogout={handleLogout} onNewQuote={handleNewQuote} userRole={userRole} />
             <main className="container mx-auto p-4 md:p-8">
                 {activeView === 'funnel' && <FunnelPage opportunities={opportunities} user={user} quotes={quotes} onOpenQuote={handleEditQuote} onOpen={(opp) => { setSelectedOpportunity(opp); setActiveView('opportunityDetail'); }} companies={companies} contacts={contacts} />}
-                {activeView === 'opportunityDetail' && <OpportunityDetailPage opportunity={selectedOpportunity} quotes={quotes} onBack={() => setActiveView('funnel')} onOpenQuote={handleEditQuote} user={user} onAddQuote={() => { setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); setActiveView('calculator'); }} />}
+                {activeView === 'opportunityDetail' && <OpportunityDetailPage opportunity={selectedOpportunity} quotes={quotes} onBack={() => setActiveView('funnel')} onOpenQuote={handleEditQuote} user={user} companies={companies} onAddQuote={() => { setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); setActiveView('calculator'); }} />}
                 {activeView === 'companies' && <CompaniesPage companies={companies} contacts={contacts} quotes={quotes} user={user} onOpenQuote={handleEditQuote} onRestoreCompany={(id) => updateDoc(doc(db, "users", user.uid, "companies", id), { isDeleted: false })} />}
                 {activeView === 'contacts' && <ContactsPage contacts={contacts} companies={companies} user={user} />}
                 
