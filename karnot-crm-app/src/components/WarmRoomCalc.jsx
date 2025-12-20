@@ -50,7 +50,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
         doorOpenings: 20,
         airExchange: 50,
         ach: 1.0,
-        refrigerantType: 'iHEAT (R290)',
+        refrigerantType: 'all',
         hpCOP: 2.84,
         electricityTariff: 12.00,
         dieselPrice: 60.00,
@@ -164,6 +164,19 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
         return match ? parseInt(match[1], 10) : 0;
     };
 
+    // Extract refrigerant type from product name
+    const getRefrigerantFromName = (name) => {
+        if (!name) return '';
+        const nameLower = name.toLowerCase();
+        
+        if (nameLower.includes('r290') || nameLower.includes('propane')) return 'R290';
+        if (nameLower.includes('r32')) return 'R32';
+        if (nameLower.includes('r744') || nameLower.includes('co2') || nameLower.includes('co₂')) return 'R744';
+        if (nameLower.includes('r410')) return 'R410';
+        
+        return '';
+    };
+
     const handleInputChange = (field, value) => {
         setInputs(prev => ({ ...prev, [field]: value }));
     };
@@ -208,33 +221,77 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
         const boiler_co2_kg = total_diesel_L * CONFIG.DIESEL_CO2_KG_PER_L;
         
         // --- HEAT PUMP SELECTION FROM FIREBASE ---
-        // Filter products that match the selected refrigerant type and have kW in name
-        const availableHeatPumps = products
+        // Filter products that are heat pumps (iHEAT or AquaHERO) with kW rating
+        const allHeatPumps = products
             .filter(p => {
-                const hasCategory = p.category && p.category.includes(refrigerantType);
+                const category = (p.category || '').trim().toLowerCase();
+                const name = (p.name || '').toLowerCase();
+                const isHeatPump = category.includes('iheat') || category.includes('aquahero') || 
+                                   name.includes('iheat') || name.includes('aquahero');
                 const hasKW = getPeakKwFromName(p.name) > 0;
-                return hasCategory && hasKW;
-            })
-            .sort((a, b) => getPeakKwFromName(a.name) - getPeakKwFromName(b.name));
+                return isHeatPump && hasKW;
+            });
         
-        console.log('Refrigerant type:', refrigerantType);
-        console.log('Available heat pumps:', availableHeatPumps.length);
-        console.log('Peak load required:', peakLoad_kW, 'kW');
+        // Filter by refrigerant type if specified
+        let availableHeatPumps = allHeatPumps;
+        if (refrigerantType !== 'all') {
+            availableHeatPumps = allHeatPumps.filter(hp => {
+                const hpRefrigerant = getRefrigerantFromName(hp.name);
+                return hpRefrigerant === refrigerantType;
+            });
+        }
         
-        let selectedHeatPump = availableHeatPumps.find(hp => getPeakKwFromName(hp.name) >= peakLoad_kW) || 
-            availableHeatPumps[availableHeatPumps.length - 1];
+        // Sort by kW capacity
+        availableHeatPumps.sort((a, b) => getPeakKwFromName(a.name) - getPeakKwFromName(b.name));
         
-        if (!selectedHeatPump || availableHeatPumps.length === 0) {
-            alert(`No suitable heat pump found in database for "${refrigerantType}"!\n\nPlease check:\n1. Products exist with category containing "${refrigerantType}"\n2. Product names include "kW" (e.g., "30kW")\n3. salesPriceUSD is set\n\nFound ${products.length} total products in database.`);
+        console.log('=== Heat Pump Selection ===');
+        console.log('Refrigerant filter:', refrigerantType);
+        console.log('Total heat pumps in database:', allHeatPumps.length);
+        console.log('After refrigerant filter:', availableHeatPumps.length);
+        console.log('Peak load required:', peakLoad_kW.toFixed(1), 'kW');
+        
+        // Find heat pump that meets capacity requirement
+        let candidateHeatPumps = availableHeatPumps.filter(hp => getPeakKwFromName(hp.name) >= peakLoad_kW);
+        
+        let selectedHeatPump = null;
+        
+        if (refrigerantType === 'all') {
+            // Best price mode: find cheapest among candidates
+            if (candidateHeatPumps.length > 0) {
+                selectedHeatPump = candidateHeatPumps.reduce((cheapest, current) => {
+                    const cheapestPrice = cheapest.salesPriceUSD || Infinity;
+                    const currentPrice = current.salesPriceUSD || Infinity;
+                    return currentPrice < cheapestPrice ? current : cheapest;
+                });
+                console.log('Best price selection:', selectedHeatPump.name, '- $' + selectedHeatPump.salesPriceUSD);
+            }
+        } else {
+            // Specific refrigerant: pick smallest that meets requirement
+            selectedHeatPump = candidateHeatPumps[0];
+        }
+        
+        // Fallback to largest available if none meet requirement
+        if (!selectedHeatPump && availableHeatPumps.length > 0) {
+            selectedHeatPump = availableHeatPumps[availableHeatPumps.length - 1];
+            console.log('⚠️ No heat pump meets peak load requirement. Using largest available:', selectedHeatPump.name);
+        }
+        
+        if (!selectedHeatPump) {
+            const refrigerantMsg = refrigerantType === 'all' ? 'any refrigerant type' : refrigerantType;
+            alert(`No suitable heat pump found in database for ${refrigerantMsg}!\n\nPlease check:\n1. Products exist with "iHEAT" or "AquaHERO" in name/category\n2. Product names include refrigerant type (R290, R32, CO2)\n3. Product names include "kW" (e.g., "30kW")\n4. salesPriceUSD is set\n\nFound ${products.length} total products in database.\nFound ${allHeatPumps.length} heat pump products.\n${refrigerantType !== 'all' ? `Found ${availableHeatPumps.length} with ${refrigerantType} refrigerant.` : ''}`);
             return;
         }
+        
+        console.log('✅ Selected:', selectedHeatPump.name, '(' + getPeakKwFromName(selectedHeatPump.name).toFixed(1) + ' kW)');
 
         // Temperature compatibility check
+        const detectedRefrigerant = getRefrigerantFromName(selectedHeatPump.name);
         let compatibility = { isCompatible: true, message: "System is suitable for the required temperature." };
-        if ((refrigerantType.includes('R32') && CONFIG.REQUIRED_WATER_TEMP_C > 60) || 
-            (refrigerantType.includes('R290') && CONFIG.REQUIRED_WATER_TEMP_C > 80)) {
+        
+        if ((detectedRefrigerant === 'R32' && CONFIG.REQUIRED_WATER_TEMP_C > 60) || 
+            (detectedRefrigerant === 'R290' && CONFIG.REQUIRED_WATER_TEMP_C > 80)) {
             compatibility.isCompatible = false;
-            compatibility.message = `Warning: The selected heat pump range may not be suitable for ${CONFIG.REQUIRED_WATER_TEMP_C}°C water temperature.`;
+            compatibility.message = `Warning: ${detectedRefrigerant} heat pumps may not be suitable for ${CONFIG.REQUIRED_WATER_TEMP_C}°C water temperature.`;
         }
 
         // --- TANK SELECTION FROM FIREBASE ---
@@ -1094,17 +1151,17 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Select Heat Pump Range
+                                        Refrigerant Type
                                     </label>
                                     <select
                                         value={inputs.refrigerantType}
                                         onChange={(e) => handleInputChange('refrigerantType', e.target.value)}
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                                     >
-                                        <option value="iHEAT (R290)">iHEAT (R290)</option>
-                                        <option value="iHEAT (CO₂)">iHEAT (CO₂)</option>
-                                        <option value="iHEAT Pro (R32)">iHEAT Pro (R32)</option>
-                                        <option value="iHEAT Clima (R32)">iHEAT Clima (R32)</option>
+                                        <option value="all">Best Price (Any)</option>
+                                        <option value="R290">R290 Only</option>
+                                        <option value="R32">R32 Only</option>
+                                        <option value="R744">CO₂ (R744)</option>
                                     </select>
                                 </div>
                                 <InputField label="Heat Pump COP (at 65°C Water)" value={inputs.hpCOP} step="0.01"
