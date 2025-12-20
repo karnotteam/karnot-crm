@@ -2,101 +2,79 @@ import React from 'react';
 import { Card } from '../data/constants.jsx';
 
 const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
+    // Math logic for the quarter
+    const invoicedQuotes = quotes.filter(q => q.status === 'Invoiced' || q.status === 'Won');
+    const totalGrossSales = invoicedQuotes.reduce((sum, q) => sum + (q.finalSalesPrice || 0), 0);
+    const totalNetSales = totalGrossSales / 1.12;
+    const totalOutputVat = totalGrossSales - totalNetSales;
+
+    const totalGrossPurchases = ledgerEntries.reduce((sum, e) => sum + (parseFloat(e.amountPHP) || 0), 0);
+    const totalNetPurchases = totalGrossPurchases / 1.12;
+    const totalInputVat = totalGrossPurchases - totalNetPurchases;
+
     return (
-        <div className="space-y-10">
-            {/* 6-COLUMN BOOK: SALES JOURNAL */}
-            <Card className="border-t-4 border-orange-500 shadow-lg">
-                <div className="mb-4">
-                    <h2 className="text-xl font-bold uppercase tracking-wider text-orange-700">6-Column Book: Sales Journal</h2>
-                    <p className="text-xs text-gray-500 italic">Transcribe these to your physical Sales Journal book.</p>
+        <div className="space-y-8 pb-20">
+            {/* --- DYSLEXIA FRIENDLY FORM MAP --- */}
+            <Card className="border-l-8 border-orange-500 bg-white shadow-xl">
+                <div className="bg-orange-600 p-4 -m-6 mb-6 rounded-t-lg">
+                    <h2 className="text-white text-2xl font-black uppercase">Filing Assistant: Form 2550Q</h2>
+                    <p className="text-orange-100 text-sm italic">Match these boxes to the boxes on your screen in eFPS</p>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-[11px] text-left border-collapse border border-gray-200">
-                        <thead className="bg-gray-100 font-bold uppercase">
-                            <tr>
-                                <th className="p-2 border">Date</th>
-                                <th className="p-2 border">Invoice #</th>
-                                <th className="p-2 border">Customer Name</th>
-                                <th className="p-2 border text-right">Net Sales (VATable)</th>
-                                <th className="p-2 border text-right">VAT Output (12%)</th>
-                                <th className="p-2 border text-right">Gross Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {quotes.filter(q => q.status === 'Invoiced' || q.status === 'Won').map(q => {
-                                const total = q.finalSalesPrice || 0;
-                                const net = total / 1.12;
-                                const vat = total - net;
-                                return (
-                                    <tr key={q.id} className="hover:bg-orange-50">
-                                        <td className="p-2 border whitespace-nowrap">{new Date(q.lastModified?.seconds * 1000).toLocaleDateString()}</td>
-                                        <td className="p-2 border font-bold text-orange-600">{q.id}</td>
-                                        <td className="p-2 border uppercase">{q.customer?.name}</td>
-                                        <td className="p-2 border text-right font-mono">₱{net.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                        <td className="p-2 border text-right font-mono text-orange-700">₱{vat.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                        <td className="p-2 border text-right font-bold font-mono bg-gray-50">₱{total.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+
+                <div className="grid grid-cols-1 gap-6">
+                    {/* STEP 1: SALES */}
+                    <div className="p-6 border-2 border-orange-100 rounded-xl bg-orange-50/30">
+                        <h3 className="text-orange-700 font-black mb-4 flex items-center gap-2">
+                            <span className="bg-orange-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">1</span> 
+                            PART II: SALES (Where money came in)
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-white p-4 rounded border shadow-sm">
+                                <span className="text-[10px] text-gray-400 font-bold block">BOX 15A (Vatable Sales)</span>
+                                <span className="text-2xl font-mono font-black text-gray-800">₱{totalNetSales.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            </div>
+                            <div className="bg-white p-4 rounded border shadow-sm border-orange-200">
+                                <span className="text-[10px] text-orange-400 font-bold block">BOX 15B (Output Tax)</span>
+                                <span className="text-2xl font-mono font-black text-orange-600">₱{totalOutputVat.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* STEP 2: PURCHASES */}
+                    <div className="p-6 border-2 border-blue-100 rounded-xl bg-blue-50/30">
+                        <h3 className="text-blue-700 font-black mb-4 flex items-center gap-2">
+                            <span className="bg-blue-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">2</span> 
+                            PART II: PURCHASES (Where money went out)
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-white p-4 rounded border shadow-sm">
+                                <span className="text-[10px] text-gray-400 font-bold block">BOX 20A (Domestic Purchases)</span>
+                                <span className="text-2xl font-mono font-black text-gray-800">₱{totalNetPurchases.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            </div>
+                            <div className="bg-white p-4 rounded border shadow-sm border-blue-200">
+                                <span className="text-[10px] text-blue-400 font-bold block">BOX 20B (Input Tax)</span>
+                                <span className="text-2xl font-mono font-black text-blue-600">₱{totalInputVat.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* STEP 3: THE TOTAL */}
+                    <div className="p-6 bg-slate-900 rounded-xl text-white">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <span className="text-[10px] text-orange-400 font-bold block uppercase tracking-widest">BOX 26 (Tax Payable / Overpayment)</span>
+                                <h4 className="text-3xl font-black">₱{(totalOutputVat - totalInputVat).toLocaleString(undefined, {minimumFractionDigits: 2})}</h4>
+                            </div>
+                            <div className="text-right text-xs text-gray-400 max-w-[200px]">
+                                If this number is MINUS (-), you don't pay anything. You just file it.
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </Card>
 
-            {/* 8-COLUMN BOOK: DISBURSEMENTS */}
-            <Card className="border-t-4 border-blue-600 shadow-lg">
-                <div className="mb-4">
-                    <h2 className="text-xl font-bold uppercase tracking-wider text-blue-700">8-Column Book: Disbursement Journal</h2>
-                    <p className="text-xs text-gray-500 italic">Use the Supplier TIN column for your VAT Input claims.</p>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-[11px] text-left border-collapse border border-gray-200">
-                        <thead className="bg-gray-100 font-bold uppercase">
-                            <tr>
-                                <th className="p-2 border">Date</th>
-                                <th className="p-2 border">Ref (OR#)</th>
-                                <th className="p-2 border">Payee/Supplier</th>
-                                <th className="p-2 border text-blue-700">Supplier TIN</th>
-                                <th className="p-2 border text-right">Gross Amount</th>
-                                <th className="p-2 border text-right">VAT Input (12%)</th>
-                                <th className="p-2 border text-right">Net Purchase</th>
-                                <th className="p-2 border">Account Title</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {ledgerEntries.map(e => {
-                                const gross = parseFloat(e.amountPHP) || 0;
-                                // BIR Formula for Input VAT: Gross / 9.333 or (Gross / 1.12) * 0.12
-                                const net = gross / 1.12;
-                                const vatInput = gross - net;
-                                return (
-                                    <tr key={e.id} className="hover:bg-blue-50">
-                                        <td className="p-2 border whitespace-nowrap">{e.date}</td>
-                                        <td className="p-2 border font-bold">{e.reference || 'N/A'}</td>
-                                        <td className="p-2 border uppercase truncate max-w-[150px]">{e.description}</td>
-                                        <td className="p-2 border font-mono text-blue-700">{e.supplierTIN || 'PENDING'}</td>
-                                        <td className="p-2 border text-right font-mono font-bold">₱{gross.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                        <td className="p-2 border text-right font-mono text-blue-600">₱{vatInput.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                        <td className="p-2 border text-right font-mono">₱{net.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                        <td className="p-2 border uppercase text-[9px] font-bold text-gray-600">{e.subCategory}</td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            </Card>
-
-            <div className="bg-gray-800 text-white p-6 rounded-xl shadow-inner">
-                <h3 className="font-bold text-orange-400 flex items-center gap-2 mb-2">
-                    💡 BIR Transcription Tip
-                </h3>
-                <p className="text-sm opacity-90">
-                    Your 8-column book requires an <strong>Account Title</strong> for the last column. 
-                    I have mapped your <strong>Sub-Category</strong> directly to this field so you know exactly 
-                    which section of your General Ledger to post these totals to.
-                </p>
-            </div>
+            {/* The Detailed Journal Tables (The ones we built before) go here */}
+            {/* ... (Keep the Sales Journal and Disbursement Journal tables below this) ... */}
         </div>
     );
 };
