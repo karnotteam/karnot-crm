@@ -15,9 +15,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
     const [opportunityId, setOpportunityId] = useState(initialData?.opportunityId || null);
 
-    // customer state now explicitly holds the 'id' field for linking
+    // Added 'tier' to customer state
     const [customer, setCustomer] = useState({ 
-        id: '', name: '', number: '', tin: '', address: '', saleType: 'Export',
+        name: '', number: '', tin: '', address: '', saleType: 'Export',
         contactId: '', contactName: '', contactEmail: '', tier: 'STANDARD' 
     });
     
@@ -79,7 +79,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
 
     useEffect(() => {
         const defaultCustomer = { 
-            id: '', name: '', number: '', tin: '', address: '', saleType: 'Export',
+            name: '', number: '', tin: '', address: '', saleType: 'Export',
             contactId: '', contactName: '', contactEmail: '', tier: 'STANDARD'
         };
         const defaultCommercial = { shippingTerms: 'Ex-Works Warehouse', deliveryTime: '3-5 days from payment', dueDate: '', discount: 0, wht: 0 };
@@ -121,12 +121,13 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     }, [contacts, customer.name]);
 
     const handleSelectCompany = (company) => {
+        // 1. Detect Tier
         const detectedTier = company.tier && PRICING_TIERS[company.tier] ? company.tier : 'STANDARD';
         const tierDiscount = PRICING_TIERS[detectedTier].discount;
 
+        // 2. Set Customer
         setCustomer(prev => ({
             ...prev,
-            id: company.id, // FIX: Capture ID for Funnel linking
             name: company.companyName,
             address: company.address || prev.address,
             contactId: '', contactName: '', contactEmail: '',
@@ -135,6 +136,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         setCompanySearch(company.companyName);
         setIsCompanyDropdownOpen(false);
 
+        // 3. Set Commercial Terms
         setCommercial(prev => ({
             ...prev,
             discount: tierDiscount,
@@ -142,6 +144,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         }));
     };
 
+    // --- NEW: Handle Manual Tier Change ---
     const handleTierChange = (e) => {
         const newTier = e.target.value;
         const newDiscount = PRICING_TIERS[newTier] ? PRICING_TIERS[newTier].discount : 0;
@@ -367,36 +370,11 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             return;
         }
         
-        // 1. Determine Revenue Account
-        let assignedRevenueAccount = "Domestic Equipment Sales";
-        if (customer.saleType === 'Export') {
-            assignedRevenueAccount = "Export Equipment Sales";
-        } else if (docGeneration.generateProForma && docControl.paymentTerms.includes("EaaS")) {
-            assignedRevenueAccount = "Domestic (EaaS) Service Charge";
-        }
-
         const quoteId = initialData?.id || `QN${String(docControl.quoteNumber).padStart(4, '0')}-${new Date().getFullYear()}`;
-
-        // 2. Prepare Financial Entry
-        const financialEntry = {
-            quoteId: quoteId,
-            revenueAccount: assignedRevenueAccount,
-            netSalesUSD: quoteTotals.subtotalUSD,
-            discountUSD: quoteTotals.subtotalUSD * (commercial.discount / 100),
-            finalSalesUSD: quoteTotals.finalSalesPrice,
-            finalSalesPHP: quoteTotals.finalSalesPrice * costing.forexRate,
-            marginPercentage: quoteTotals.grossMarginPercentage,
-            status: initialData?.status || 'DRAFT',
-            ledgerStatus: 'PENDING_MANUAL_BOOK'
-        };
 
         const newQuote = {
             id: quoteId,
-            // FIX: Ensure customer includes the ID so Funnel knows which company this is
-            customer: {
-                ...customer,
-                id: customer.id || (companies.find(c => c.companyName === customer.name)?.id || '')
-            },
+            customer,
             commercial,
             docControl,
             costing,
@@ -406,12 +384,10 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             finalSalesPrice: quoteTotals.finalSalesPrice,
             grossMarginAmount: quoteTotals.grossMarginAmount,
             grossMarginPercentage: quoteTotals.grossMarginPercentage,
-            ledgerPosting: financialEntry, 
             status: initialData?.status || 'DRAFT',
             createdAt: initialData?.createdAt || new Date().toISOString(),
-            opportunityId: opportunityId, // KEY: This links the quote to the Kanban Funnel
+            opportunityId: opportunityId, 
         };
-
         onSaveQuote(newQuote);
     };
 
@@ -424,6 +400,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         }, {});
     }, [dbProducts]);
 
+    // --- TIER BADGE HELPER ---
     const currentTier = PRICING_TIERS[customer.tier || 'STANDARD'];
 
     return (
@@ -433,6 +410,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <Section title="1. Customer Details">
                     <div className="space-y-4">
+                        {/* --- SEARCHABLE COMPANY DROPDOWN --- */}
                         <div className="relative" ref={dropdownRef}>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Registered Name</label>
                             <div className="relative">
@@ -450,7 +428,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                 />
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16}/>
                                 {customer.name && companies.find(c => c.companyName === customer.name) && (
-                                    <Check className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={16}/>
+                                    <Check className="absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" size={16} title="Company Linked"/>
                                 )}
                             </div>
                             
@@ -472,6 +450,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                                     {company.isVerified && <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Verified</span>}
                                                 </div>
                                                 {company.address && <span className="block truncate text-xs text-gray-500">{company.address}</span>}
+                                                {/* SHOW TIER IN DROPDOWN */}
                                                 {company.tier && PRICING_TIERS[company.tier] && (
                                                     <span className={`text-[10px] font-bold px-1.5 rounded bg-${PRICING_TIERS[company.tier].color}-100 text-${PRICING_TIERS[company.tier].color}-800`}>
                                                         {PRICING_TIERS[company.tier].label}
@@ -484,6 +463,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                             )}
                         </div>
 
+                        {/* --- NEW: PRICING TIER DROPDOWN (MANUAL OVERRIDE) --- */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Pricing Tier / Discount Level</label>
                             <div className="relative">
@@ -504,6 +484,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                             </div>
                         </div>
 
+                        {/* --- CONTACT PERSON DROPDOWN --- */}
                         {customer.name && companyContacts.length > 0 && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Attention To (Contact)</label>
@@ -590,7 +571,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                     <div className="text-center p-4">Loading Products from Database...</div>
                 ) : dbProducts.length === 0 ? (
                     <div className="text-center p-4 bg-orange-50 border border-orange-200 rounded text-orange-700">
-                        No products found in the database.
+                        No products found in the database. Please use the <strong>Admin Page</strong> to upload your products.
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-2">
@@ -598,10 +579,10 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                             <div key={category}>
                                <h4 className="text-orange-600 font-semibold mt-4 mb-2">{category}</h4>
                                {products.map(p => (
-                                    <div key={p.id} className="flex items-center justify-between gap-4 my-1">
+                                   <div key={p.id} className="flex items-center justify-between gap-4 my-1">
                                        <Checkbox id={p.id} label={p.name} checked={!!selectedProducts[p.id]} onChange={handleProductSelect(p.id)} />
                                        <Input type="number" className="w-20 text-center" value={selectedProducts[p.id] || 1} onChange={handleProductQuantityChange(p.id)} disabled={!selectedProducts[p.id]} />
-                                    </div>
+                                   </div>
                                ))}
                             </div>
                         ))}
@@ -633,8 +614,8 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                     <div className="flex justify-between items-center bg-gray-100 p-2 rounded-lg">
                                         <span>{item.name} - ${parseFloat(item.priceUSD).toLocaleString()}</span>
                                         <div className="flex gap-2">
-                                            <button onClick={() => startEditing(index)} className="text-blue-500 hover:bg-blue-50 p-1 rounded"><Edit size={16}/></button>
-                                            <button onClick={() => removeManualItem(index)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 size={16}/></button>
+                                            <Button onClick={() => startEditing(index)} variant="secondary" className="px-2 py-1"><Edit size={16}/></Button>
+                                            <Button onClick={() => removeManualItem(index)} variant="danger" className="px-2 py-1"><Trash2 size={16}/></Button>
                                         </div>
                                     </div>
                                 )}
