@@ -2,8 +2,8 @@ import React from 'react';
 import { Card } from '../data/constants.jsx';
 
 const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
-    // Math logic for the quarter
-    const invoicedQuotes = quotes.filter(q => q.status === 'Invoiced' || q.status === 'Won');
+    // Math for the Summary
+    const invoicedQuotes = quotes.filter(q => q.status === 'WON' || q.status === 'APPROVED' || q.status === 'INVOICED');
     const totalGrossSales = invoicedQuotes.reduce((sum, q) => sum + (q.finalSalesPrice || 0), 0);
     const totalNetSales = totalGrossSales / 1.12;
     const totalOutputVat = totalGrossSales - totalNetSales;
@@ -13,68 +13,94 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
     const totalInputVat = totalGrossPurchases - totalNetPurchases;
 
     return (
-        <div className="space-y-8 pb-20">
-            {/* --- DYSLEXIA FRIENDLY FORM MAP --- */}
-            <Card className="border-l-8 border-orange-500 bg-white shadow-xl">
-                <div className="bg-orange-600 p-4 -m-6 mb-6 rounded-t-lg">
-                    <h2 className="text-white text-2xl font-black uppercase">Filing Assistant: Form 2550Q</h2>
-                    <p className="text-orange-100 text-sm italic">Match these boxes to the boxes on your screen in eFPS</p>
+        <div className="space-y-10 pb-20">
+            {/* Part II: Summary for eFPS Form 2550Q */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-white border border-gray-200 rounded shadow-sm">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase">Box 15B (Output VAT)</p>
+                    <p className="text-xl font-bold">₱{totalOutputVat.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                 </div>
+                <div className="p-4 bg-white border border-gray-200 rounded shadow-sm">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase">Box 20B (Input VAT)</p>
+                    <p className="text-xl font-bold">₱{totalInputVat.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                </div>
+                <div className="p-4 bg-slate-800 text-white rounded shadow-sm md:col-span-2">
+                    <p className="text-[10px] text-orange-400 font-bold uppercase">Box 26 (Net VAT Payable)</p>
+                    <p className="text-xl font-bold">₱{(totalOutputVat - totalInputVat).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                </div>
+            </div>
 
-                <div className="grid grid-cols-1 gap-6">
-                    {/* STEP 1: SALES */}
-                    <div className="p-6 border-2 border-orange-100 rounded-xl bg-orange-50/30">
-                        <h3 className="text-orange-700 font-black mb-4 flex items-center gap-2">
-                            <span className="bg-orange-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">1</span> 
-                            PART II: SALES (Where money came in)
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white p-4 rounded border shadow-sm">
-                                <span className="text-[10px] text-gray-400 font-bold block">BOX 15A (Vatable Sales)</span>
-                                <span className="text-2xl font-mono font-black text-gray-800">₱{totalNetSales.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                            </div>
-                            <div className="bg-white p-4 rounded border shadow-sm border-orange-200">
-                                <span className="text-[10px] text-orange-400 font-bold block">BOX 15B (Output Tax)</span>
-                                <span className="text-2xl font-mono font-black text-orange-600">₱{totalOutputVat.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* STEP 2: PURCHASES */}
-                    <div className="p-6 border-2 border-blue-100 rounded-xl bg-blue-50/30">
-                        <h3 className="text-blue-700 font-black mb-4 flex items-center gap-2">
-                            <span className="bg-blue-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">2</span> 
-                            PART II: PURCHASES (Where money went out)
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="bg-white p-4 rounded border shadow-sm">
-                                <span className="text-[10px] text-gray-400 font-bold block">BOX 20A (Domestic Purchases)</span>
-                                <span className="text-2xl font-mono font-black text-gray-800">₱{totalNetPurchases.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                            </div>
-                            <div className="bg-white p-4 rounded border shadow-sm border-blue-200">
-                                <span className="text-[10px] text-blue-400 font-bold block">BOX 20B (Input Tax)</span>
-                                <span className="text-2xl font-mono font-black text-blue-600">₱{totalInputVat.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* STEP 3: THE TOTAL */}
-                    <div className="p-6 bg-slate-900 rounded-xl text-white">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <span className="text-[10px] text-orange-400 font-bold block uppercase tracking-widest">BOX 26 (Tax Payable / Overpayment)</span>
-                                <h4 className="text-3xl font-black">₱{(totalOutputVat - totalInputVat).toLocaleString(undefined, {minimumFractionDigits: 2})}</h4>
-                            </div>
-                            <div className="text-right text-xs text-gray-400 max-w-[200px]">
-                                If this number is MINUS (-), you don't pay anything. You just file it.
-                            </div>
-                        </div>
-                    </div>
+            {/* Sales Journal Table */}
+            <Card>
+                <h2 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wider">Sales Journal (6-Column Book Data)</h2>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left border-collapse border border-gray-100">
+                        <thead className="bg-gray-50 text-gray-500 uppercase">
+                            <tr>
+                                <th className="p-2 border">Date</th>
+                                <th className="p-2 border">Quote/SI #</th>
+                                <th className="p-2 border">Customer</th>
+                                <th className="p-2 border text-right">Net Sales (PHP)</th>
+                                <th className="p-2 border text-right">VAT Output</th>
+                                <th className="p-2 border text-right">Gross Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {invoicedQuotes.map(q => (
+                                <tr key={q.id} className="hover:bg-gray-50">
+                                    <td className="p-2 border">{new Date(q.lastModified?.seconds * 1000).toLocaleDateString()}</td>
+                                    <td className="p-2 border font-mono">{q.id}</td>
+                                    <td className="p-2 border uppercase font-medium">{q.customer?.name}</td>
+                                    <td className="p-2 border text-right">₱{(q.finalSalesPrice / 1.12).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                    <td className="p-2 border text-right">₱{(q.finalSalesPrice - (q.finalSalesPrice / 1.12)).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                    <td className="p-2 border text-right font-bold bg-gray-50">₱{q.finalSalesPrice?.toLocaleString()}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </Card>
 
-            {/* The Detailed Journal Tables (The ones we built before) go here */}
-            {/* ... (Keep the Sales Journal and Disbursement Journal tables below this) ... */}
+            {/* Disbursement Journal Table */}
+            <Card>
+                <h2 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wider">Disbursement Journal (8-Column Book Data)</h2>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left border-collapse border border-gray-100">
+                        <thead className="bg-gray-50 text-gray-500 uppercase">
+                            <tr>
+                                <th className="p-2 border">Date</th>
+                                <th className="p-2 border">OR Reference</th>
+                                <th className="p-2 border">Payee/Supplier</th>
+                                <th className="p-2 border">Supplier TIN</th>
+                                <th className="p-2 border text-right">Gross</th>
+                                <th className="p-2 border text-right">VAT Input</th>
+                                <th className="p-2 border text-right">Net Purchase</th>
+                                <th className="p-2 border">Account Title</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {ledgerEntries.map(e => {
+                                const gross = parseFloat(e.amountPHP) || 0;
+                                const net = gross / 1.12;
+                                return (
+                                    <tr key={e.id} className="hover:bg-gray-50">
+                                        <td className="p-2 border whitespace-nowrap">{e.date}</td>
+                                        <td className="p-2 border font-mono">{e.reference}</td>
+                                        <td className="p-2 border truncate max-w-[150px]">{e.description}</td>
+                                        <td className={`p-2 border font-mono ${!e.supplierTIN ? 'bg-red-50 text-red-600' : ''}`}>
+                                            {e.supplierTIN || 'TIN MISSING'}
+                                        </td>
+                                        <td className="p-2 border text-right font-bold">₱{gross.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                        <td className="p-2 border text-right">₱{(gross - net).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                        <td className="p-2 border text-right">₱{net.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                        <td className="p-2 border uppercase font-bold text-blue-800">{e.subCategory}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
         </div>
     );
 };
