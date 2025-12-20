@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { auth, db } from './firebase'; 
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { collection, onSnapshot, query, doc, getDoc, setDoc, deleteDoc, serverTimestamp, addDoc, updateDoc } from "firebase/firestore"; 
+import { collection, onSnapshot, query, doc, setDoc, deleteDoc, serverTimestamp, addDoc, updateDoc } from "firebase/firestore"; 
 
 // --- Import Pages & Components ---
 import LoginPage from './pages/LoginPage.jsx';
@@ -17,17 +17,16 @@ import AdminPage from './pages/AdminPage.jsx';
 import CalculatorsPage from './pages/CalculatorsPage.jsx';     
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
-import FinancialEntryLogger from './data/FinancialEntryLogger.jsx'; // Corrected path
 
 // --- Import Constants & Header ---
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { 
     BarChart2, FileText, List, HardHat, LogOut, Building, 
-    Users, ClipboardCheck, Settings, Calculator, Plus, Landmark 
+    Users, ClipboardCheck, Settings, Calculator, Plus 
 } from 'lucide-react'; 
 
 // --- Header Component ---
-const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, userRole }) => ( 
+const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote }) => ( 
     <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
         <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveView('funnel')}>
@@ -43,13 +42,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                 <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc', 'warmRoomCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
                     <Calculator className="mr-1" size={14} /> Calculators
                 </Button>
-
-                {/* --- ACCOUNTS SECTION (ADMIN ONLY) --- */}
-                {userRole === 'ADMIN' && (
-                    <Button onClick={() => setActiveView('accounts')} variant={activeView === 'accounts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700">
-                        <Landmark className="mr-1" size={14} /> Accounts
-                    </Button>
-                )}
 
                 <div className="h-8 w-px bg-gray-200 mx-2 hidden lg:block"></div>
 
@@ -68,7 +60,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
 export default function App() {
     const [user, setUser] = useState(null); 
-    const [userRole, setUserRole] = useState(null); 
     const [activeView, setActiveView] = useState('funnel');
     const [quoteToEdit, setQuoteToEdit] = useState(null);
     const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
@@ -82,22 +73,8 @@ export default function App() {
 
     useEffect(() => {
         setLoadingAuth(true); 
-        const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
-            if (authUser) {
-                setUser(authUser);
-                try {
-                    const userRef = doc(db, "users", authUser.uid);
-                    const userSnap = await getDoc(userRef);
-                    if (userSnap.exists()) {
-                        setUserRole(userSnap.data().role);
-                    }
-                } catch (err) {
-                    console.error("Error fetching user role:", err);
-                }
-            } else {
-                setUser(null);
-                setUserRole(null);
-            }
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+            setUser(user || null);
             setLoadingAuth(false); 
         });
         return () => unsubscribe(); 
@@ -165,6 +142,7 @@ export default function App() {
         } catch (error) { console.error(error); alert("Delete failed"); }
     };
 
+    // RESTORE COMPANY HANDLER (UNDO)
     const handleRestoreCompany = async (companyId) => {
         if (!user) return;
         try {
@@ -197,14 +175,7 @@ export default function App() {
 
     return (
         <div className="bg-gray-100 min-h-screen font-sans text-gray-900">
-            <Header 
-                activeView={activeView} 
-                setActiveView={setActiveView} 
-                quoteCount={quotes.length} 
-                onLogout={handleLogout} 
-                onNewQuote={handleNewQuote}
-                userRole={userRole} 
-            />
+            <Header activeView={activeView} setActiveView={setActiveView} quoteCount={quotes.length} onLogout={handleLogout} onNewQuote={handleNewQuote} />
             <main className="container mx-auto p-4 md:p-8">
                 {activeView === 'funnel' && (
                     <FunnelPage 
@@ -238,17 +209,6 @@ export default function App() {
                 {activeView === 'heatPumpCalc' && <div className="max-w-5xl mx-auto"><Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">← Back</Button><HeatPumpCalculator /></div>}
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 {activeView === 'admin' && <AdminPage user={user} />}
-                
-                {/* --- ACCOUNTS VIEW --- */}
-                {activeView === 'accounts' && (
-                    <div className="max-w-5xl mx-auto">
-                        <div className="flex justify-between items-center mb-6">
-                            <h2 className="text-2xl font-bold text-gray-800">Accounts & Financial Ledger</h2>
-                            <Button onClick={() => setActiveView('funnel')} variant="secondary">← Back to Funnel</Button>
-                        </div>
-                        <FinancialEntryLogger companies={companies} />
-                    </div>
-                )}
             </main>
         </div>
     );
