@@ -39,14 +39,13 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
     const totalActualBurn = projectExpenses + projectManpower;
 
     // --- ROI & MARGIN CALCULATIONS ---
-    // --- ROI & MARGIN CALCULATIONS ---
     const forexRate = selectedQuote?.costing?.forexRate || 58.5;
     
-    // We now pull the EXACT cost price we collected in the Quotation Calculator
+    // Pull the EXACT cost price from quote
     const equipmentCostUSD = selectedQuote?.totalCost || 0; 
     const salesPriceUSD = selectedQuote?.finalSalesPrice || 0;
 
-    // Convert everything to PHP for the "Actual Burn" comparison
+    // Convert to PHP for comparison
     const availableMarginPHP = (salesPriceUSD - equipmentCostUSD) * forexRate;
     
     // Actuals from Ledger & Logs (already in PHP)
@@ -97,22 +96,20 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
                                 <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Equipment Margin (Buffer)</p>
-                                <p className="text-2xl font-black text-green-600">₱{availableMargin.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                                <p className="text-2xl font-black text-green-600">₱{availableMarginPHP.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                                 <p className="text-[10px] text-gray-400 mt-2 italic">Sales Price - Machine Cost</p>
                             </div>
-
                             <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
                                 <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Actual Burn (Spent)</p>
                                 <p className="text-2xl font-black text-red-600">₱{totalActualBurn.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                                 <p className="text-[10px] text-gray-400 mt-2 italic">Total Labor + Ledger Expenses</p>
                             </div>
-
-                            <div className={`p-6 rounded-3xl shadow-lg text-white ${remainingProfit > 0 ? 'bg-slate-900' : 'bg-red-700'}`}>
+                            <div className={`p-6 rounded-3xl shadow-lg text-white ${remainingProfitPHP > 0 ? 'bg-slate-900' : 'bg-red-700'}`}>
                                 <p className="text-[10px] uppercase opacity-70 font-black mb-1">Net Project Profit</p>
-                                <p className="text-3xl font-black">₱{remainingProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                                <p className="text-3xl font-black">₱{remainingProfitPHP.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                                 <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
                                     <div 
-                                        className={`h-full ${burnPercentage > 90 ? 'bg-red-400' : 'bg-green-400'}`} 
+                                        className={`h-full ${burnPercentage > 90 ? 'bg-red-400' : 'bg-green-400'}`}
                                         style={{ width: `${Math.min(burnPercentage, 100)}%` }}
                                     ></div>
                                 </div>
@@ -164,7 +161,6 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                             {laborVariance < 0 ? '-' : '+'}₱{Math.abs(laborVariance).toLocaleString()}
                                         </td>
                                     </tr>
-
                                     {/* MATERIALS ROW */}
                                     <tr>
                                         <td className="p-4">
@@ -189,7 +185,6 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                             {materialVariance < 0 ? '-' : '+'}₱{Math.abs(materialVariance).toLocaleString()}
                                         </td>
                                     </tr>
-
                                     {/* TOTAL FOOTER ROW */}
                                     <tr className="bg-slate-50 border-t-2 border-gray-100">
                                         <td className="p-4 font-black text-slate-800 uppercase text-xs">TOTAL INSTALLATION COST</td>
