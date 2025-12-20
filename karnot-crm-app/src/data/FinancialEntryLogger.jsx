@@ -18,6 +18,7 @@ const FinancialEntryLogger = ({ companies = [] }) => {
         forexRate: 58.75,
         companyId: '',
         reference: '',
+        supplierTIN: '', // <--- Added for BIR Compliance
         description: ''
     });
 
@@ -56,7 +57,6 @@ const FinancialEntryLogger = ({ companies = [] }) => {
         setLoading(true);
         try {
             if (editingId) {
-                // UPDATE EXISTING
                 await updateDoc(doc(db, "users", auth.currentUser.uid, "ledger", editingId), {
                     ...entry,
                     amountPHP: parseFloat(entry.amountPHP),
@@ -64,7 +64,6 @@ const FinancialEntryLogger = ({ companies = [] }) => {
                 });
                 setEditingId(null);
             } else {
-                // ADD NEW
                 await addDoc(collection(db, "users", auth.currentUser.uid, "ledger"), {
                     ...entry,
                     amountPHP: parseFloat(entry.amountPHP),
@@ -73,7 +72,15 @@ const FinancialEntryLogger = ({ companies = [] }) => {
                     type: 'EXPENSE'
                 });
             }
-            setEntry(prev => ({ ...prev, amountUSD: '', amountPHP: '', reference: '', description: '' }));
+            // Reset form
+            setEntry(prev => ({ 
+                ...prev, 
+                amountUSD: '', 
+                amountPHP: '', 
+                reference: '', 
+                supplierTIN: '', 
+                description: '' 
+            }));
         } catch (error) {
             console.error(error);
             alert("Error saving entry.");
@@ -124,7 +131,10 @@ const FinancialEntryLogger = ({ companies = [] }) => {
                                     {KARNOT_CHART_OF_ACCOUNTS[entry.category].map(item => <option key={item} value={item}>{item}</option>)}
                                 </select>
                             )}
-                            <Input label="Reference (OR#)" value={entry.reference} onChange={e => setEntry({...entry, reference: e.target.value})} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <Input label="Reference (OR#)" placeholder="Invoice/OR#" value={entry.reference} onChange={e => setEntry({...entry, reference: e.target.value})} />
+                                <Input label="Supplier TIN" placeholder="000-000-000-000" value={entry.supplierTIN} onChange={e => setEntry({...entry, supplierTIN: e.target.value})} />
+                            </div>
                         </div>
                     </Section>
 
@@ -160,7 +170,7 @@ const FinancialEntryLogger = ({ companies = [] }) => {
                         <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
                             <tr>
                                 <th className="p-4 border">Date</th>
-                                <th className="p-4 border">Category / Account</th>
+                                <th className="p-4 border">Category / TIN</th>
                                 <th className="p-4 border text-right">Amount (PHP)</th>
                                 <th className="p-4 border">Reference</th>
                                 <th className="p-4 border text-center">Actions</th>
@@ -169,13 +179,13 @@ const FinancialEntryLogger = ({ companies = [] }) => {
                         <tbody>
                             {ledgerEntries.map((item) => (
                                 <tr key={item.id} className="hover:bg-gray-50 border-b">
-                                    <td className="p-4 border font-medium">{item.date}</td>
+                                    <td className="p-4 border font-medium whitespace-nowrap">{item.date}</td>
                                     <td className="p-4 border">
                                         <div className="font-bold text-orange-700">{item.subCategory}</div>
-                                        <div className="text-[10px] text-gray-400 uppercase">{item.category}</div>
+                                        <div className="text-[10px] text-gray-500 font-mono">{item.supplierTIN || 'NO TIN PROVIDED'}</div>
                                     </td>
                                     <td className="p-4 border text-right font-mono font-bold">₱{parseFloat(item.amountPHP).toLocaleString()}</td>
-                                    <td className="p-4 border text-gray-500">{item.reference || '-'}</td>
+                                    <td className="p-4 border text-gray-500 font-medium">{item.reference || '-'}</td>
                                     <td className="p-4 border">
                                         <div className="flex justify-center gap-2">
                                             <button onClick={() => startEdit(item)} className="p-2 text-blue-600 hover:bg-blue-50 rounded"><Edit2 size={16}/></button>
