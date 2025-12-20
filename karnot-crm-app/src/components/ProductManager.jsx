@@ -30,6 +30,7 @@ import {
   Sun,
   Thermometer,
   Box,
+  Wind, // ✅ ADD THIS
 } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants';
 
@@ -297,6 +298,26 @@ const ProductManager = ({ user }) => {
     Order_Reference: '',
     createdAt: null,
     lastModified: null,
+
+    // ✅ ADD FAN COIL FIELDS (safe add)
+    coilType: '',
+    mountingType: '',
+    kW_Heating_Nominal: 0,
+    CoolingCapacity_H_W: 0,
+    HeatingCapacity_H_W: 0,
+    Airflow_H_m3h: 0,
+    Airflow_M_m3h: 0,
+    Airflow_L_m3h: 0,
+    Noise_H_dBA: 0,
+    Noise_M_dBA: 0,
+    Noise_L_dBA: 0,
+    PowerInput_W: 0,
+    WaterFlow_Cooling_m3h: 0,
+    WaterFlow_Heating_m3h: 0,
+    WaterPressureDrop_Cooling_kPa: 0,
+    WaterPressureDrop_Heating_kPa: 0,
+    WaterConnection: '',
+    DrainConnection: '',
   };
 
   const [formData, setFormData] = useState(defaultFormData);
@@ -394,6 +415,22 @@ const ProductManager = ({ user }) => {
       Net_Weight: parseFloat(product.Net_Weight || 0),
       Gross_Weight: parseFloat(product.Gross_Weight || 0),
       isReversible: product.isReversible !== undefined ? product.isReversible : true,
+
+      // ✅ FAN COIL numeric parsing (safe)
+      kW_Heating_Nominal: parseFloat(product.kW_Heating_Nominal || 0),
+      CoolingCapacity_H_W: parseFloat(product.CoolingCapacity_H_W || 0),
+      HeatingCapacity_H_W: parseFloat(product.HeatingCapacity_H_W || 0),
+      Airflow_H_m3h: parseFloat(product.Airflow_H_m3h || 0),
+      Airflow_M_m3h: parseFloat(product.Airflow_M_m3h || 0),
+      Airflow_L_m3h: parseFloat(product.Airflow_L_m3h || 0),
+      Noise_H_dBA: parseFloat(product.Noise_H_dBA || 0),
+      Noise_M_dBA: parseFloat(product.Noise_M_dBA || 0),
+      Noise_L_dBA: parseFloat(product.Noise_L_dBA || 0),
+      PowerInput_W: parseFloat(product.PowerInput_W || 0),
+      WaterFlow_Cooling_m3h: parseFloat(product.WaterFlow_Cooling_m3h || 0),
+      WaterFlow_Heating_m3h: parseFloat(product.WaterFlow_Heating_m3h || 0),
+      WaterPressureDrop_Cooling_kPa: parseFloat(product.WaterPressureDrop_Cooling_kPa || 0),
+      WaterPressureDrop_Heating_kPa: parseFloat(product.WaterPressureDrop_Heating_kPa || 0),
     });
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -511,7 +548,17 @@ const ProductManager = ({ user }) => {
     const isNumeric = [
       'costPriceUSD', 'salesPriceUSD', 'kW_DHW_Nominal', 'COP_DHW', 'kW_Cooling_Nominal',
       'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current',
-      'Sound_Power_Level', 'Net_Weight', 'Gross_Weight'
+      'Sound_Power_Level', 'Net_Weight', 'Gross_Weight',
+
+      // ✅ FAN COIL numeric fields
+      'kW_Heating_Nominal',
+      'CoolingCapacity_H_W',
+      'HeatingCapacity_H_W',
+      'Airflow_H_m3h', 'Airflow_M_m3h', 'Airflow_L_m3h',
+      'Noise_H_dBA', 'Noise_M_dBA', 'Noise_L_dBA',
+      'PowerInput_W',
+      'WaterFlow_Cooling_m3h', 'WaterFlow_Heating_m3h',
+      'WaterPressureDrop_Cooling_kPa', 'WaterPressureDrop_Heating_kPa'
     ].includes(field);
 
     let finalValue = value;
@@ -614,6 +661,7 @@ const ProductManager = ({ user }) => {
       "Sales Price": p.salesPriceUSD,
       "Cost Price": p.costPriceUSD,
       "kW_DHW_Nominal": p.kW_DHW_Nominal,
+      "kW_Heating_Nominal": p.kW_Heating_Nominal, // ✅ add
       "kW_Cooling_Nominal": p.kW_Cooling_Nominal,
       "COP_DHW": p.COP_DHW,
       "SCOP_DHW_Avg": p.SCOP_DHW_Avg,
@@ -642,6 +690,25 @@ const ProductManager = ({ user }) => {
       "Unit Dimensions": p.Unit_Dimensions,
       "Order Reference": p.Order_Reference,
       "Specs": p.specs,
+
+      // ✅ fan coil export fields (safe)
+      "Coil Type": p.coilType,
+      "Mounting Type": p.mountingType,
+      "CoolingCapacity_H_W": p.CoolingCapacity_H_W,
+      "HeatingCapacity_H_W": p.HeatingCapacity_H_W,
+      "Airflow_H_m3h": p.Airflow_H_m3h,
+      "Airflow_M_m3h": p.Airflow_M_m3h,
+      "Airflow_L_m3h": p.Airflow_L_m3h,
+      "Noise_H_dBA": p.Noise_H_dBA,
+      "Noise_M_dBA": p.Noise_M_dBA,
+      "Noise_L_dBA": p.Noise_L_dBA,
+      "PowerInput_W": p.PowerInput_W,
+      "WaterFlow_Cooling_m3h": p.WaterFlow_Cooling_m3h,
+      "WaterFlow_Heating_m3h": p.WaterFlow_Heating_m3h,
+      "WaterPressureDrop_Cooling_kPa": p.WaterPressureDrop_Cooling_kPa,
+      "WaterPressureDrop_Heating_kPa": p.WaterPressureDrop_Heating_kPa,
+      "WaterConnection": p.WaterConnection,
+      "DrainConnection": p.DrainConnection,
     }));
 
     const csv = Papa.unparse(exportData);
@@ -717,6 +784,40 @@ const ProductManager = ({ user }) => {
           'unit dimensions': 'Unit_Dimensions',
           'order reference': 'Order_Reference',
           'specs': 'specs',
+
+          // ✅ ADD THESE FAN COIL MAPPINGS:
+          'coiltype': 'coilType',
+          'coil type': 'coilType',
+          'mountingtype': 'mountingType',
+          'mounting type': 'mountingType',
+          'kw_heating_nominal': 'kW_Heating_Nominal',
+          'coolingcapacity_h_w': 'CoolingCapacity_H_W',
+          'heatingcapacity_h_w': 'HeatingCapacity_H_W',
+          'airflow_h_m3h': 'Airflow_H_m3h',
+          'airflow_m_m3h': 'Airflow_M_m3h',
+          'airflow_l_m3h': 'Airflow_L_m3h',
+          'noise_h_dba': 'Noise_H_dBA',
+          'noise_m_dba': 'Noise_M_dBA',
+          'noise_l_dba': 'Noise_L_dBA',
+          'powerinput_w': 'PowerInput_W',
+          'waterflow_cooling_m3h': 'WaterFlow_Cooling_m3h',
+          'waterflow_heating_m3h': 'WaterFlow_Heating_m3h',
+          'waterpressuredrop_cooling_kpa': 'WaterPressureDrop_Cooling_kPa',
+          'waterpressuredrop_heating_kpa': 'WaterPressureDrop_Heating_kPa',
+          'waterconnection': 'WaterConnection',
+          'drainconnection': 'DrainConnection',
+
+          // ✅ IMPORTANT: Support your existing template camelCase headers
+          'systemid': 'id',
+          'salespriceusd': 'salesPriceUSD',
+          'costpriceusd': 'costPriceUSD',
+          'powersupply': 'Power_Supply',
+          'dimensions_mm': 'Unit_Dimensions',
+          'netweight_kg': 'Net_Weight',
+          'grossweight_kg': 'Gross_Weight',
+          // Also allow plain "name" and "id" columns if present
+          'name': 'name',
+          'id': 'id',
         };
 
         const numericFields = [
@@ -732,10 +833,28 @@ const ProductManager = ({ user }) => {
           'Sound_Power_Level',
           'Net_Weight',
           'Gross_Weight',
+
+          // ✅ FAN COIL numeric fields
+          'kW_Heating_Nominal',
+          'CoolingCapacity_H_W',
+          'HeatingCapacity_H_W',
+          'Airflow_H_m3h',
+          'Airflow_M_m3h',
+          'Airflow_L_m3h',
+          'Noise_H_dBA',
+          'Noise_M_dBA',
+          'Noise_L_dBA',
+          'PowerInput_W',
+          'WaterFlow_Cooling_m3h',
+          'WaterFlow_Heating_m3h',
+          'WaterPressureDrop_Cooling_kPa',
+          'WaterPressureDrop_Heating_kPa',
         ];
 
         dataRows.forEach(row => {
-          const csvSystemId = (row['System ID'] || row['id'] || '').toString().trim();
+          // ✅ Support: "System ID", "id", and your template "systemId"
+          const csvSystemId = (row['System ID'] || row['id'] || row['systemId'] || row['systemid'] || '').toString().trim();
+          // ✅ Support: "Product Name", "name"
           const csvProductName = (row['Product Name'] || row['name'] || '').toString().trim();
 
           if (!csvSystemId && !csvProductName) {
@@ -771,7 +890,7 @@ const ProductManager = ({ user }) => {
             if (data.name || data.category || data.kW_Cooling_Nominal || data.kW_DHW_Nominal) {
               data.name = ensureHpInName({
                 name: data.name || csvProductName || '',
-                category: data.category || row['Category'] || '',
+                category: data.category || row['Category'] || row['category'] || '',
                 kW_Cooling_Nominal: data.kW_Cooling_Nominal,
                 kW_DHW_Nominal: data.kW_DHW_Nominal
               });
@@ -1011,6 +1130,93 @@ const ProductManager = ({ user }) => {
             </div>
           </div>
 
+          {/* ✅ ADD THIS FAN COIL SECTION */}
+          {(formData.category || '').toLowerCase().includes('fan coil') ||
+           (formData.category || '').toLowerCase().includes('izone') ? (
+            <div className="bg-white p-4 rounded-lg border border-blue-200 mb-4">
+              <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <Wind size={16} className="text-blue-600" /> Fan Coil Specifications
+              </h5>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Input
+                  label="Coil Type"
+                  value={formData.coilType || ''}
+                  onChange={handleInputChange('coilType')}
+                  placeholder="e.g., 2-pipe, 4-pipe"
+                />
+                <Input
+                  label="Mounting Type"
+                  value={formData.mountingType || ''}
+                  onChange={handleInputChange('mountingType')}
+                  placeholder="e.g., Ceiling, Wall"
+                />
+                <Input
+                  label="Heating Capacity (kW)"
+                  type="number"
+                  value={formData.kW_Heating_Nominal || 0}
+                  onChange={handleInputChange('kW_Heating_Nominal')}
+                />
+                <Input
+                  label="Cooling Capacity (kW)"
+                  type="number"
+                  value={formData.kW_Cooling_Nominal || 0}
+                  onChange={handleInputChange('kW_Cooling_Nominal')}
+                />
+
+                <Input
+                  label="Airflow High (m³/h)"
+                  type="number"
+                  value={formData.Airflow_H_m3h || 0}
+                  onChange={handleInputChange('Airflow_H_m3h')}
+                />
+                <Input
+                  label="Airflow Medium (m³/h)"
+                  type="number"
+                  value={formData.Airflow_M_m3h || 0}
+                  onChange={handleInputChange('Airflow_M_m3h')}
+                />
+                <Input
+                  label="Airflow Low (m³/h)"
+                  type="number"
+                  value={formData.Airflow_L_m3h || 0}
+                  onChange={handleInputChange('Airflow_L_m3h')}
+                />
+                <Input
+                  label="Power Input (W)"
+                  type="number"
+                  value={formData.PowerInput_W || 0}
+                  onChange={handleInputChange('PowerInput_W')}
+                />
+
+                <Input
+                  label="Noise High (dB(A))"
+                  type="number"
+                  value={formData.Noise_H_dBA || 0}
+                  onChange={handleInputChange('Noise_H_dBA')}
+                />
+                <Input
+                  label="Noise Medium (dB(A))"
+                  type="number"
+                  value={formData.Noise_M_dBA || 0}
+                  onChange={handleInputChange('Noise_M_dBA')}
+                />
+                <Input
+                  label="Noise Low (dB(A))"
+                  type="number"
+                  value={formData.Noise_L_dBA || 0}
+                  onChange={handleInputChange('Noise_L_dBA')}
+                />
+                <Input
+                  label="Water Connection"
+                  value={formData.WaterConnection || ''}
+                  onChange={handleInputChange('WaterConnection')}
+                  placeholder='e.g., ZG3/4"'
+                />
+              </div>
+            </div>
+          ) : null}
+
           <div className="md:col-span-4 mb-4">
             <Textarea
               label="Specs / Description"
@@ -1091,7 +1297,7 @@ const ProductManager = ({ user }) => {
 
                       <td className="px-6 py-4 text-right text-sm text-gray-500">
                         <span className="font-semibold text-gray-700">
-                          {p.kW_DHW_Nominal ? `${p.kW_DHW_Nominal} kW` : '-'}
+                          {p.kW_DHW_Nominal ? `${p.kW_DHW_Nominal} kW` : (p.kW_Heating_Nominal ? `${p.kW_Heating_Nominal} kW` : '-')}
                         </span>
                       </td>
 
