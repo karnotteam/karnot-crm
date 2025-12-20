@@ -63,8 +63,12 @@ const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuote
             <div className="grid gap-4">
                 {filteredQuotes.length > 0 ? filteredQuotes.map(quote => {
                     const isWon = quote.status === 'WON' || quote.status === 'APPROVED';
-                    // Calculate quick margin for display
-                    const margin = (quote.finalSalesPrice || 0) - (quote.totalCost || 0);
+                    
+                    // FIXED: Calculate margin using the saved values
+                    const revenue = Number(quote.finalSalesPrice || 0);
+                    const cost = Number(quote.totalCost || 0);
+                    const margin = revenue - cost;
+                    const marginPercentage = revenue > 0 ? ((margin / revenue) * 100) : 0;
                     
                     return (
                         <Card key={quote.id} className="p-0 overflow-hidden border-gray-100 bg-white group hover:border-orange-400 transition-all shadow-sm">
@@ -87,15 +91,20 @@ const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuote
                                 </div>
 
                                 {/* Price & Margin Section */}
-                                <div className="text-center md:text-right px-8 md:border-r md:border-l border-gray-50 flex flex-col justify-center min-w-[150px]">
+                                <div className="text-center md:text-right px-8 md:border-r md:border-l border-gray-50 flex flex-col justify-center min-w-[180px]">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Value</p>
                                     <p className="text-xl font-black text-gray-800 leading-none mb-2">
-                                        ${Number(quote.finalSalesPrice || 0).toLocaleString()}
+                                        ${revenue.toLocaleString()}
                                     </p>
-                                    {isWon && (
-                                        <div className="flex items-center justify-end gap-1 text-green-600 font-bold text-[10px]">
-                                            <TrendingUp size={12} />
-                                            <span>Est. Margin: ${margin.toLocaleString()}</span>
+                                    {isWon && cost > 0 && (
+                                        <div className="space-y-1">
+                                            <div className="flex items-center justify-end gap-1 text-orange-600 font-bold text-[10px]">
+                                                <span>Cost: ${cost.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex items-center justify-end gap-1 text-green-600 font-bold text-[10px]">
+                                                <TrendingUp size={12} />
+                                                <span>Margin: ${margin.toLocaleString()} ({marginPercentage.toFixed(1)}%)</span>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
