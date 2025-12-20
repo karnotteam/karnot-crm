@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react'; // --- 1. IMPORT useMemo ---
+import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase'; 
-import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { Plus, X, Edit, Trash2, FileText } from 'lucide-react';
+import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, getDocs } from "firebase/firestore";
+import { Plus, X, Edit, Trash2, FileText, DollarSign } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
 const STAGE_ORDER = [
@@ -14,8 +14,8 @@ const STAGE_ORDER = [
     'Closed-Lost'
 ];
 
-// --- (OpportunityCard component is unchanged) ---
-const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
+// --- OpportunityCard Component ---
+const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThisOpp }) => {
     const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
     const nextStage = STAGE_ORDER[currentStageIndex + 1];
 
@@ -45,6 +45,15 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
                     {opp.probability || 0}%
                 </span>
             </div>
+            
+            {/* Show number of quotes if any exist */}
+            {quotesForThisOpp && quotesForThisOpp.length > 0 && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
+                    <DollarSign size={12} />
+                    <span>{quotesForThisOpp.length} Quote{quotesForThisOpp.length > 1 ? 's' : ''} Created</span>
+                </div>
+            )}
+            
             <Button onClick={() => onOpen(opp)} variant="secondary" className="w-full text-xs py-1 mt-3">
                 <FileText size={14} className="mr-2"/> View Details / Notes
             </Button>
@@ -60,51 +69,52 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen }) => {
 };
 
 
-// --- 2. REBUILD THE NewOpportunityModal to be SMART ---
+// --- New Opportunity Modal ---
 const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, contacts }) => {
     const isEditMode = Boolean(opportunityToEdit);
     
-    // --- New State ---
-    const [companyId, setCompanyId] = useState(''); // Store the Company ID
-    const [contactId, setContactId] = useState(''); // Store the Contact ID
+    const [companyId, setCompanyId] = useState('');
+    const [contactId, setContactId] = useState('');
     const [project, setProject] = useState('');
     const [estimatedValue, setEstimatedValue] = useState(0);
     const [probability, setProbability] = useState(10);
-    const [contactEmail, setContactEmail] = useState(''); // This will now auto-fill
+    const [contactEmail, setContactEmail] = useState('');
 
-    // --- Smart Dropdown Logic ---
-    // This filters the contacts list based on the selected company
+    // FIXED: Filter contacts by matching companyName instead of companyId
     const availableContacts = useMemo(() => {
-        if (!companyId) return []; // If no company is selected, show no contacts
-        return contacts.filter(contact => contact.companyId === companyId);
-    }, [companyId, contacts]);
+        if (!companyId) return [];
+        const selectedCompany = companies.find(c => c.id === companyId);
+        if (!selectedCompany) return [];
+        
+        // Match contacts to company by companyName
+        return contacts.filter(contact => contact.companyName === selectedCompany.companyName);
+    }, [companyId, companies, contacts]);
 
-    // --- Updated useEffect ---
     useEffect(() => {
         if (isEditMode) {
             // EDIT MODE: Pre-fill all fields from the opportunity
             const company = companies.find(c => c.companyName === opportunityToEdit.customerName);
-            const companyId = company ? company.id : '';
+            const foundCompanyId = company ? company.id : '';
             
-            setCompanyId(companyId);
-            setProject(opportunityToEdit.project);
-            setEstimatedValue(opportunityToEdit.estimatedValue);
-            setProbability(opportunityToEdit.probability);
+            setCompanyId(foundCompanyId);
+            setProject(opportunityToEdit.project || '');
+            setEstimatedValue(opportunityToEdit.estimatedValue || 0);
+            setProbability(opportunityToEdit.probability || 10);
             
             // Find the matching contact
-            const contact = contacts.find(c => 
-                c.companyId === companyId && 
-                c.firstName.includes(opportunityToEdit.contactName.split(' ')[0]) &&
-                c.lastName.includes(opportunityToEdit.contactName.split(' ')[1])
-            );
+            if (foundCompanyId) {
+                const relatedContacts = contacts.filter(c => c.companyName === company.companyName);
+                const contact = relatedContacts.find(c => 
+                    `${c.firstName} ${c.lastName}` === opportunityToEdit.contactName
+                );
 
-            if (contact) {
-                setContactId(contact.id);
-                setContactEmail(contact.email);
-            } else {
-                // Handle contacts that were manually entered
-                setContactId('manual'); // Set a special ID
-                setContactEmail(opportunityToEdit.contactEmail);
+                if (contact) {
+                    setContactId(contact.id);
+                    setContactEmail(contact.email);
+                } else {
+                    setContactId('');
+                    setContactEmail(opportunityToEdit.contactEmail || '');
+                }
             }
 
         } else {
@@ -116,30 +126,35 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
             setProbability(10);
             
             // Auto-select first contact of that company
-            const defaultContacts = contacts.filter(c => c.companyId === defaultCompanyId);
-            if (defaultContacts.length > 0) {
-                setContactId(defaultContacts[0].id);
-                setContactEmail(defaultContacts[0].email);
-            } else {
-                setContactId('');
-                setContactEmail('');
+            if (defaultCompanyId) {
+                const defaultCompany = companies.find(c => c.id === defaultCompanyId);
+                const defaultContacts = contacts.filter(c => c.companyName === defaultCompany.companyName);
+                if (defaultContacts.length > 0) {
+                    setContactId(defaultContacts[0].id);
+                    setContactEmail(defaultContacts[0].email);
+                } else {
+                    setContactId('');
+                    setContactEmail('');
+                }
             }
         }
     }, [opportunityToEdit, isEditMode, companies, contacts]);
 
-    // --- Event Handlers for Dropdowns ---
     const handleCompanyChange = (e) => {
         const newCompanyId = e.target.value;
         setCompanyId(newCompanyId);
 
         // Auto-select the first contact from this new company
-        const newContacts = contacts.filter(c => c.companyId === newCompanyId);
-        if (newContacts.length > 0) {
-            setContactId(newContacts[0].id);
-            setContactEmail(newContacts[0].email);
-        } else {
-            setContactId('');
-            setContactEmail('');
+        const newCompany = companies.find(c => c.id === newCompanyId);
+        if (newCompany) {
+            const newContacts = contacts.filter(c => c.companyName === newCompany.companyName);
+            if (newContacts.length > 0) {
+                setContactId(newContacts[0].id);
+                setContactEmail(newContacts[0].email);
+            } else {
+                setContactId('');
+                setContactEmail('');
+            }
         }
     };
 
@@ -156,19 +171,25 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
         }
     };
 
-    // --- Updated Save Function ---
     const handleSave = async () => {
         const selectedCompany = companies.find(c => c.id === companyId);
         const selectedContact = contacts.find(c => c.id === contactId);
 
-        if (!selectedCompany || !selectedContact) {
-            alert('Please select a valid company and contact.');
+        if (!selectedCompany) {
+            alert('Please select a valid company.');
+            return;
+        }
+        
+        if (!selectedContact) {
+            alert('Please select a valid contact.');
             return;
         }
         
         const oppData = {
             companyId: selectedCompany.id,
-            customerName: selectedCompany.companyName, // Use 'customerName' to keep card display simple
+            customerName: selectedCompany.companyName,
+            customerAddress: selectedCompany.address || '',
+            customerTIN: selectedCompany.tin || '',
             project,
             estimatedValue: Number(estimatedValue),
             probability: Number(probability),
@@ -191,7 +212,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
                 </div>
                 <div className="space-y-4">
                     
-                    {/* --- Company Dropdown --- */}
+                    {/* Company Dropdown */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
                         <select
@@ -212,14 +233,30 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
                         </select>
                     </div>
 
-                    <Input label="Project Name" value={project} onChange={(e) => setProject(e.target.value)} placeholder="e.g., Laguna Plant - Cooling/Heat Recovery" required />
-                    <Input label="Estimated Value ($)" type="number" value={estimatedValue} onChange={(e) => setEstimatedValue(e.target.value)} />
-                    <Input label="Probability (%)" type="number" value={probability} onChange={(e) => setProbability(e.target.value)} />
+                    <Input 
+                        label="Project Name" 
+                        value={project} 
+                        onChange={(e) => setProject(e.target.value)} 
+                        placeholder="e.g., Laguna Plant - Cooling/Heat Recovery" 
+                        required 
+                    />
+                    <Input 
+                        label="Estimated Value ($)" 
+                        type="number" 
+                        value={estimatedValue} 
+                        onChange={(e) => setEstimatedValue(e.target.value)} 
+                    />
+                    <Input 
+                        label="Probability (%)" 
+                        type="number" 
+                        value={probability} 
+                        onChange={(e) => setProbability(e.target.value)} 
+                    />
 
                     <hr className="my-2"/>
                     <h4 className="text-lg font-semibold text-gray-700">Primary Contact</h4>
                     
-                    {/* --- Smart Contact Dropdown --- */}
+                    {/* Smart Contact Dropdown */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
                         <select
@@ -227,7 +264,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
                             onChange={handleContactChange}
                             className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
                             required
-                            disabled={availableContacts.length === 0} // Disable if no contacts
+                            disabled={availableContacts.length === 0}
                         >
                             {availableContacts.length === 0 ? (
                                 <option value="">No contacts found for this company</option>
@@ -238,14 +275,17 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
                                     </option>
                                 ))
                             )}
-                            {isEditMode && contactId === 'manual' && (
-                                <option value="manual">Manually Entered Contact</option>
-                            )}
                         </select>
                     </div>
                     
-                    {/* --- Auto-filled Email --- */}
-                    <Input label="Contact Email" type="email" value={contactEmail} readOnly disabled />
+                    {/* Auto-filled Email */}
+                    <Input 
+                        label="Contact Email" 
+                        type="email" 
+                        value={contactEmail} 
+                        readOnly 
+                        disabled 
+                    />
 
                 </div>
                 <div className="mt-6 flex justify-end">
@@ -259,14 +299,44 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
     );
 };
 
-// --- 3. ACCEPT 'contacts' PROP ---
+// --- MAIN FUNNEL PAGE COMPONENT ---
 const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingOpportunity, setEditingOpportunity] = useState(null);
+    const [quotes, setQuotes] = useState([]); // NEW: State for quotes
+    const [loadingQuotes, setLoadingQuotes] = useState(true); // NEW: Loading state
     
     const STAGES = STAGE_ORDER;
 
-    // --- (All handle... functions are unchanged) ---
+    // NEW: Fetch quotes from Firebase
+    useEffect(() => {
+        const fetchQuotes = async () => {
+            if (!user || !user.uid) return;
+            
+            setLoadingQuotes(true);
+            try {
+                const quotesSnapshot = await getDocs(collection(db, "users", user.uid, "quotes"));
+                const quotesData = quotesSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+                setQuotes(quotesData);
+                console.log("Loaded quotes:", quotesData.length);
+            } catch (error) {
+                console.error("Error fetching quotes:", error);
+            } finally {
+                setLoadingQuotes(false);
+            }
+        };
+
+        fetchQuotes();
+    }, [user]);
+
+    // NEW: Helper function to get quotes for a specific opportunity
+    const getQuotesForOpportunity = (opportunityId) => {
+        return quotes.filter(quote => quote.opportunityId === opportunityId);
+    };
+
     const handleSaveOpportunity = async (newOppData) => {
         if (!user || !user.uid) {
             alert("Error: You are not logged in.");
@@ -287,9 +357,16 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
             alert("Failed to save opportunity. Check console.");
         }
     };
+
     const handleUpdateFullOpportunity = async (oppData) => {
-        if (!editingOpportunity || !editingOpportunity.id) return alert("Error: No opportunity selected for update.");
-        if (!user || !user.uid) return alert("Error: User not logged in.");
+        if (!editingOpportunity || !editingOpportunity.id) {
+            alert("Error: No opportunity selected for update.");
+            return;
+        }
+        if (!user || !user.uid) {
+            alert("Error: User not logged in.");
+            return;
+        }
 
         const oppRef = doc(db, "users", user.uid, "opportunities", editingOpportunity.id);
         try {
@@ -305,6 +382,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
             alert("Failed to update opportunity.");
         }
     };
+
     const handleSave = (oppDataFromModal) => {
         if (editingOpportunity) {
             handleUpdateFullOpportunity(oppDataFromModal);
@@ -312,22 +390,31 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
             handleSaveOpportunity(oppDataFromModal);
         }
     };
+
     const handleOpenNewModal = () => {
         setEditingOpportunity(null);
         setShowModal(true);
     };
+
     const handleOpenEditModal = (opp) => {
         setEditingOpportunity(opp);
         setShowModal(true);
     };
+
     const handleCloseModal = () => {
         setShowModal(false);
         setEditingOpportunity(null);
     };
+
     const handleUpdateOpportunityStage = async (oppId, newStage) => {
-        if (!user || !user.uid) return alert("Error: User not logged in.");
+        if (!user || !user.uid) {
+            alert("Error: User not logged in.");
+            return;
+        }
+        
         const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
         let newProbability;
+        
         switch (newStage) {
             case 'Lead': newProbability = 10; break;
             case 'Qualifying': newProbability = 25; break;
@@ -338,6 +425,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
             case 'Closed-Lost': newProbability = 0; break;
             default: newProbability = 0;
         }
+        
         try {
             await setDoc(oppRef, {
                 stage: newStage,
@@ -350,8 +438,13 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
             alert("Failed to update lead stage.");
         }
     };
+
     const handleDeleteOpportunity = async (oppId) => {
-        if (!user || !user.uid) return alert("Error: User not logged in.");
+        if (!user || !user.uid) {
+            alert("Error: User not logged in.");
+            return;
+        }
+        
         if (window.confirm("Are you sure you want to permanently delete this Opportunity?")) {
             const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
             try {
@@ -363,22 +456,23 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
             }
         }
     };
+
     const getOppsByStage = (stage) => {
         if (!opportunities) return []; 
         return opportunities.filter(opp => opp.stage === stage);
     };
-    // --- (End of unchanged handle... functions) ---
 
     return (
         <div className="w-full">
-            {/* --- 4. PASS 'contacts' DOWN TO THE MODAL --- */}
-            {showModal && <NewOpportunityModal 
-                onSave={handleSave} 
-                onClose={handleCloseModal}
-                opportunityToEdit={editingOpportunity} 
-                companies={companies}
-                contacts={contacts} 
-            />}
+            {showModal && (
+                <NewOpportunityModal 
+                    onSave={handleSave} 
+                    onClose={handleCloseModal}
+                    opportunityToEdit={editingOpportunity} 
+                    companies={companies}
+                    contacts={contacts} 
+                />
+            )}
             
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold text-gray-800">Sales Funnel</h1>
@@ -386,6 +480,10 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
                     <Plus className="mr-2" size={16} /> New Opportunity
                 </Button>
             </div>
+
+            {loadingQuotes && (
+                <div className="text-center text-gray-500 mb-4">Loading quotes...</div>
+            )}
 
             <div className="flex gap-4 overflow-x-auto pb-4" style={{minHeight: '60vh'}}>
                 {STAGES.map(stage => {
@@ -413,6 +511,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
                                             onDelete={handleDeleteOpportunity}
                                             onEdit={handleOpenEditModal}
                                             onOpen={onOpen}
+                                            quotesForThisOpp={getQuotesForOpportunity(opp.id)}
                                         />
                                     ))
                                 }
