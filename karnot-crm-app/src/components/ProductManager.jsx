@@ -30,7 +30,8 @@ import {
   Sun,
   Thermometer,
   Box,
-  Wind, // ✅ ADD THIS
+  Wind,
+  Battery
 } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants';
 
@@ -44,11 +45,21 @@ const CATEGORY_MAP = {
   'iMESH': { icon: Box, color: 'purple' },
   'iCOOL': { icon: Box, color: 'purple' },
   'Other Products Miscellaneous': { icon: Filter, color: 'pink' },
+
+  // ✅ iZONE / Fan Coil families (optional categories you may use)
+  'iZONE': { icon: Wind, color: 'blue' },
+  'Fan Coil': { icon: Wind, color: 'blue' },
+
+  // ✅ iVOLT categories
+  'iVOLT – Solar Panel': { icon: Sun, color: 'yellow' },
+  'iVOLT – Inverter': { icon: Zap, color: 'purple' },
+  'iVOLT – Battery': { icon: Battery, color: 'green' },
+
   'Uncategorized': { icon: Package, color: 'gray' },
 };
 
 // ----------------------------------------------------------------------
-// ✅ NEW HELPERS: HP + Name Normalization
+// ✅ HELPERS: HP + Name Normalization
 // ----------------------------------------------------------------------
 
 // Panasonic iCOOL customers look for HP in name.
@@ -299,12 +310,10 @@ const ProductManager = ({ user }) => {
     createdAt: null,
     lastModified: null,
 
-    // ✅ ADD FAN COIL FIELDS (safe add)
+    // ✅ FAN COIL FIELDS:
     coilType: '',
     mountingType: '',
     kW_Heating_Nominal: 0,
-    CoolingCapacity_H_W: 0,
-    HeatingCapacity_H_W: 0,
     Airflow_H_m3h: 0,
     Airflow_M_m3h: 0,
     Airflow_L_m3h: 0,
@@ -312,12 +321,41 @@ const ProductManager = ({ user }) => {
     Noise_M_dBA: 0,
     Noise_L_dBA: 0,
     PowerInput_W: 0,
-    WaterFlow_Cooling_m3h: 0,
-    WaterFlow_Heating_m3h: 0,
-    WaterPressureDrop_Cooling_kPa: 0,
-    WaterPressureDrop_Heating_kPa: 0,
     WaterConnection: '',
     DrainConnection: '',
+    WaterFlow_Cooling_m3h: 0,
+    WaterFlow_Heating_m3h: 0,
+
+    // ✅ iVOLT: SOLAR PANEL FIELDS
+    pv_Watt_Rated: 0,
+    pv_Cell_Type: '',
+    pv_Efficiency_pct: 0,
+    pv_Voc_V: 0,
+    pv_Vmp_V: 0,
+    pv_Isc_A: 0,
+    pv_Imp_A: 0,
+    pv_Dimensions_mm: '',
+    pv_Weight_kg: 0,
+    pv_Warranty_years: 0,
+
+    // ✅ iVOLT: INVERTER FIELDS
+    inv_kW_Rated: 0,
+    inv_Phase: '', // 1P / 3P
+    inv_MPPT_Count: 0,
+    inv_Max_PV_Input_kW: 0,
+    inv_Max_PV_Voltage_V: 0,
+    inv_Battery_Compatible: false,
+    inv_Warranty_years: 0,
+
+    // ✅ iVOLT: BATTERY FIELDS
+    bat_kWh_Nominal: 0,
+    bat_Chemistry: 'LFP',
+    bat_Voltage_V: 0,
+    bat_Ah: 0,
+    bat_DoD_pct: 0,
+    bat_Cycle_Life: 0,
+    bat_Max_Discharge_kW: 0,
+    bat_Warranty_years: 0,
   };
 
   const [formData, setFormData] = useState(defaultFormData);
@@ -416,10 +454,8 @@ const ProductManager = ({ user }) => {
       Gross_Weight: parseFloat(product.Gross_Weight || 0),
       isReversible: product.isReversible !== undefined ? product.isReversible : true,
 
-      // ✅ FAN COIL numeric parsing (safe)
+      // ✅ fan coil numeric normalize
       kW_Heating_Nominal: parseFloat(product.kW_Heating_Nominal || 0),
-      CoolingCapacity_H_W: parseFloat(product.CoolingCapacity_H_W || 0),
-      HeatingCapacity_H_W: parseFloat(product.HeatingCapacity_H_W || 0),
       Airflow_H_m3h: parseFloat(product.Airflow_H_m3h || 0),
       Airflow_M_m3h: parseFloat(product.Airflow_M_m3h || 0),
       Airflow_L_m3h: parseFloat(product.Airflow_L_m3h || 0),
@@ -429,8 +465,31 @@ const ProductManager = ({ user }) => {
       PowerInput_W: parseFloat(product.PowerInput_W || 0),
       WaterFlow_Cooling_m3h: parseFloat(product.WaterFlow_Cooling_m3h || 0),
       WaterFlow_Heating_m3h: parseFloat(product.WaterFlow_Heating_m3h || 0),
-      WaterPressureDrop_Cooling_kPa: parseFloat(product.WaterPressureDrop_Cooling_kPa || 0),
-      WaterPressureDrop_Heating_kPa: parseFloat(product.WaterPressureDrop_Heating_kPa || 0),
+
+      // ✅ iVOLT normalize
+      pv_Watt_Rated: parseFloat(product.pv_Watt_Rated || 0),
+      pv_Efficiency_pct: parseFloat(product.pv_Efficiency_pct || 0),
+      pv_Voc_V: parseFloat(product.pv_Voc_V || 0),
+      pv_Vmp_V: parseFloat(product.pv_Vmp_V || 0),
+      pv_Isc_A: parseFloat(product.pv_Isc_A || 0),
+      pv_Imp_A: parseFloat(product.pv_Imp_A || 0),
+      pv_Weight_kg: parseFloat(product.pv_Weight_kg || 0),
+      pv_Warranty_years: parseFloat(product.pv_Warranty_years || 0),
+
+      inv_kW_Rated: parseFloat(product.inv_kW_Rated || 0),
+      inv_MPPT_Count: parseFloat(product.inv_MPPT_Count || 0),
+      inv_Max_PV_Input_kW: parseFloat(product.inv_Max_PV_Input_kW || 0),
+      inv_Max_PV_Voltage_V: parseFloat(product.inv_Max_PV_Voltage_V || 0),
+      inv_Warranty_years: parseFloat(product.inv_Warranty_years || 0),
+      inv_Battery_Compatible: product.inv_Battery_Compatible === true || String(product.inv_Battery_Compatible).toLowerCase() === 'true',
+
+      bat_kWh_Nominal: parseFloat(product.bat_kWh_Nominal || 0),
+      bat_Voltage_V: parseFloat(product.bat_Voltage_V || 0),
+      bat_Ah: parseFloat(product.bat_Ah || 0),
+      bat_DoD_pct: parseFloat(product.bat_DoD_pct || 0),
+      bat_Cycle_Life: parseFloat(product.bat_Cycle_Life || 0),
+      bat_Max_Discharge_kW: parseFloat(product.bat_Max_Discharge_kW || 0),
+      bat_Warranty_years: parseFloat(product.bat_Warranty_years || 0),
     });
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -550,15 +609,15 @@ const ProductManager = ({ user }) => {
       'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current',
       'Sound_Power_Level', 'Net_Weight', 'Gross_Weight',
 
-      // ✅ FAN COIL numeric fields
-      'kW_Heating_Nominal',
-      'CoolingCapacity_H_W',
-      'HeatingCapacity_H_W',
-      'Airflow_H_m3h', 'Airflow_M_m3h', 'Airflow_L_m3h',
-      'Noise_H_dBA', 'Noise_M_dBA', 'Noise_L_dBA',
-      'PowerInput_W',
+      // ✅ FAN COIL numeric
+      'kW_Heating_Nominal', 'Airflow_H_m3h', 'Airflow_M_m3h', 'Airflow_L_m3h',
+      'Noise_H_dBA', 'Noise_M_dBA', 'Noise_L_dBA', 'PowerInput_W',
       'WaterFlow_Cooling_m3h', 'WaterFlow_Heating_m3h',
-      'WaterPressureDrop_Cooling_kPa', 'WaterPressureDrop_Heating_kPa'
+
+      // ✅ iVOLT numeric
+      'pv_Watt_Rated', 'pv_Efficiency_pct', 'pv_Voc_V', 'pv_Vmp_V', 'pv_Isc_A', 'pv_Imp_A', 'pv_Weight_kg', 'pv_Warranty_years',
+      'inv_kW_Rated', 'inv_MPPT_Count', 'inv_Max_PV_Input_kW', 'inv_Max_PV_Voltage_V', 'inv_Warranty_years',
+      'bat_kWh_Nominal', 'bat_Voltage_V', 'bat_Ah', 'bat_DoD_pct', 'bat_Cycle_Life', 'bat_Max_Discharge_kW', 'bat_Warranty_years'
     ].includes(field);
 
     let finalValue = value;
@@ -661,7 +720,6 @@ const ProductManager = ({ user }) => {
       "Sales Price": p.salesPriceUSD,
       "Cost Price": p.costPriceUSD,
       "kW_DHW_Nominal": p.kW_DHW_Nominal,
-      "kW_Heating_Nominal": p.kW_Heating_Nominal, // ✅ add
       "kW_Cooling_Nominal": p.kW_Cooling_Nominal,
       "COP_DHW": p.COP_DHW,
       "SCOP_DHW_Avg": p.SCOP_DHW_Avg,
@@ -691,11 +749,10 @@ const ProductManager = ({ user }) => {
       "Order Reference": p.Order_Reference,
       "Specs": p.specs,
 
-      // ✅ fan coil export fields (safe)
+      // ✅ FAN COIL EXPORT FIELDS
       "Coil Type": p.coilType,
       "Mounting Type": p.mountingType,
-      "CoolingCapacity_H_W": p.CoolingCapacity_H_W,
-      "HeatingCapacity_H_W": p.HeatingCapacity_H_W,
+      "kW_Heating_Nominal": p.kW_Heating_Nominal,
       "Airflow_H_m3h": p.Airflow_H_m3h,
       "Airflow_M_m3h": p.Airflow_M_m3h,
       "Airflow_L_m3h": p.Airflow_L_m3h,
@@ -703,12 +760,39 @@ const ProductManager = ({ user }) => {
       "Noise_M_dBA": p.Noise_M_dBA,
       "Noise_L_dBA": p.Noise_L_dBA,
       "PowerInput_W": p.PowerInput_W,
-      "WaterFlow_Cooling_m3h": p.WaterFlow_Cooling_m3h,
-      "WaterFlow_Heating_m3h": p.WaterFlow_Heating_m3h,
-      "WaterPressureDrop_Cooling_kPa": p.WaterPressureDrop_Cooling_kPa,
-      "WaterPressureDrop_Heating_kPa": p.WaterPressureDrop_Heating_kPa,
       "WaterConnection": p.WaterConnection,
       "DrainConnection": p.DrainConnection,
+      "WaterFlow_Cooling_m3h": p.WaterFlow_Cooling_m3h,
+      "WaterFlow_Heating_m3h": p.WaterFlow_Heating_m3h,
+
+      // ✅ iVOLT EXPORT FIELDS
+      "pv_Watt_Rated": p.pv_Watt_Rated,
+      "pv_Cell_Type": p.pv_Cell_Type,
+      "pv_Efficiency_pct": p.pv_Efficiency_pct,
+      "pv_Voc_V": p.pv_Voc_V,
+      "pv_Vmp_V": p.pv_Vmp_V,
+      "pv_Isc_A": p.pv_Isc_A,
+      "pv_Imp_A": p.pv_Imp_A,
+      "pv_Dimensions_mm": p.pv_Dimensions_mm,
+      "pv_Weight_kg": p.pv_Weight_kg,
+      "pv_Warranty_years": p.pv_Warranty_years,
+
+      "inv_kW_Rated": p.inv_kW_Rated,
+      "inv_Phase": p.inv_Phase,
+      "inv_MPPT_Count": p.inv_MPPT_Count,
+      "inv_Max_PV_Input_kW": p.inv_Max_PV_Input_kW,
+      "inv_Max_PV_Voltage_V": p.inv_Max_PV_Voltage_V,
+      "inv_Battery_Compatible": p.inv_Battery_Compatible,
+      "inv_Warranty_years": p.inv_Warranty_years,
+
+      "bat_kWh_Nominal": p.bat_kWh_Nominal,
+      "bat_Chemistry": p.bat_Chemistry,
+      "bat_Voltage_V": p.bat_Voltage_V,
+      "bat_Ah": p.bat_Ah,
+      "bat_DoD_pct": p.bat_DoD_pct,
+      "bat_Cycle_Life": p.bat_Cycle_Life,
+      "bat_Max_Discharge_kW": p.bat_Max_Discharge_kW,
+      "bat_Warranty_years": p.bat_Warranty_years,
     }));
 
     const csv = Papa.unparse(exportData);
@@ -785,7 +869,7 @@ const ProductManager = ({ user }) => {
           'order reference': 'Order_Reference',
           'specs': 'specs',
 
-          // ✅ ADD THESE FAN COIL MAPPINGS:
+          // ✅ FAN COIL MAPPINGS
           'coiltype': 'coilType',
           'coil type': 'coilType',
           'mountingtype': 'mountingType',
@@ -807,17 +891,34 @@ const ProductManager = ({ user }) => {
           'waterconnection': 'WaterConnection',
           'drainconnection': 'DrainConnection',
 
-          // ✅ IMPORTANT: Support your existing template camelCase headers
-          'systemid': 'id',
-          'salespriceusd': 'salesPriceUSD',
-          'costpriceusd': 'costPriceUSD',
-          'powersupply': 'Power_Supply',
-          'dimensions_mm': 'Unit_Dimensions',
-          'netweight_kg': 'Net_Weight',
-          'grossweight_kg': 'Gross_Weight',
-          // Also allow plain "name" and "id" columns if present
-          'name': 'name',
-          'id': 'id',
+          // ✅ iVOLT MAPPINGS (accept both snake_case and your export headers)
+          'pv_watt_rated': 'pv_Watt_Rated',
+          'pv_cell_type': 'pv_Cell_Type',
+          'pv_efficiency_pct': 'pv_Efficiency_pct',
+          'pv_voc_v': 'pv_Voc_V',
+          'pv_vmp_v': 'pv_Vmp_V',
+          'pv_isc_a': 'pv_Isc_A',
+          'pv_imp_a': 'pv_Imp_A',
+          'pv_dimensions_mm': 'pv_Dimensions_mm',
+          'pv_weight_kg': 'pv_Weight_kg',
+          'pv_warranty_years': 'pv_Warranty_years',
+
+          'inv_kw_rated': 'inv_kW_Rated',
+          'inv_phase': 'inv_Phase',
+          'inv_mppt_count': 'inv_MPPT_Count',
+          'inv_max_pv_input_kw': 'inv_Max_PV_Input_kW',
+          'inv_max_pv_voltage_v': 'inv_Max_PV_Voltage_V',
+          'inv_battery_compatible': 'inv_Battery_Compatible',
+          'inv_warranty_years': 'inv_Warranty_years',
+
+          'bat_kwh_nominal': 'bat_kWh_Nominal',
+          'bat_chemistry': 'bat_Chemistry',
+          'bat_voltage_v': 'bat_Voltage_V',
+          'bat_ah': 'bat_Ah',
+          'bat_dod_pct': 'bat_DoD_pct',
+          'bat_cycle_life': 'bat_Cycle_Life',
+          'bat_max_discharge_kw': 'bat_Max_Discharge_kW',
+          'bat_warranty_years': 'bat_Warranty_years',
         };
 
         const numericFields = [
@@ -834,10 +935,8 @@ const ProductManager = ({ user }) => {
           'Net_Weight',
           'Gross_Weight',
 
-          // ✅ FAN COIL numeric fields
+          // ✅ fan coil numeric
           'kW_Heating_Nominal',
-          'CoolingCapacity_H_W',
-          'HeatingCapacity_H_W',
           'Airflow_H_m3h',
           'Airflow_M_m3h',
           'Airflow_L_m3h',
@@ -847,14 +946,45 @@ const ProductManager = ({ user }) => {
           'PowerInput_W',
           'WaterFlow_Cooling_m3h',
           'WaterFlow_Heating_m3h',
-          'WaterPressureDrop_Cooling_kPa',
-          'WaterPressureDrop_Heating_kPa',
+
+          // ✅ iVOLT numeric
+          'pv_Watt_Rated',
+          'pv_Efficiency_pct',
+          'pv_Voc_V',
+          'pv_Vmp_V',
+          'pv_Isc_A',
+          'pv_Imp_A',
+          'pv_Weight_kg',
+          'pv_Warranty_years',
+
+          'inv_kW_Rated',
+          'inv_MPPT_Count',
+          'inv_Max_PV_Input_kW',
+          'inv_Max_PV_Voltage_V',
+          'inv_Warranty_years',
+
+          'bat_kWh_Nominal',
+          'bat_Voltage_V',
+          'bat_Ah',
+          'bat_DoD_pct',
+          'bat_Cycle_Life',
+          'bat_Max_Discharge_kW',
+          'bat_Warranty_years',
         ];
 
+        const booleanFields = [
+          'inv_Battery_Compatible',
+        ];
+
+        const parseBoolean = (raw) => {
+          const s = String(raw ?? '').trim().toLowerCase();
+          if (s === 'true' || s === 'yes' || s === '1' || s === 'y') return true;
+          if (s === 'false' || s === 'no' || s === '0' || s === 'n') return false;
+          return false;
+        };
+
         dataRows.forEach(row => {
-          // ✅ Support: "System ID", "id", and your template "systemId"
-          const csvSystemId = (row['System ID'] || row['id'] || row['systemId'] || row['systemid'] || '').toString().trim();
-          // ✅ Support: "Product Name", "name"
+          const csvSystemId = (row['System ID'] || row['id'] || '').toString().trim();
           const csvProductName = (row['Product Name'] || row['name'] || '').toString().trim();
 
           if (!csvSystemId && !csvProductName) {
@@ -878,6 +1008,11 @@ const ProductManager = ({ user }) => {
               const raw = row[csvHeader];
               if (raw === undefined || raw === null) return;
 
+              if (booleanFields.includes(firestoreKey)) {
+                data[firestoreKey] = parseBoolean(raw);
+                return;
+              }
+
               if (numericFields.includes(firestoreKey)) {
                 const parsed = parseFloat(raw);
                 if (!isNaN(parsed)) data[firestoreKey] = parsed;
@@ -890,7 +1025,7 @@ const ProductManager = ({ user }) => {
             if (data.name || data.category || data.kW_Cooling_Nominal || data.kW_DHW_Nominal) {
               data.name = ensureHpInName({
                 name: data.name || csvProductName || '',
-                category: data.category || row['Category'] || row['category'] || '',
+                category: data.category || row['Category'] || '',
                 kW_Cooling_Nominal: data.kW_Cooling_Nominal,
                 kW_DHW_Nominal: data.kW_DHW_Nominal
               });
@@ -950,6 +1085,16 @@ const ProductManager = ({ user }) => {
   // ----------------------------------------------------------------------
   // --- Final JSX Return ---
   // ----------------------------------------------------------------------
+  const catLower = (formData.category || '').toLowerCase();
+  const isFanCoil =
+    catLower.includes('fan coil') ||
+    catLower.includes('izone');
+
+  const isIVOLT = catLower.includes('ivolt');
+  const isIVoltPanel = isIVOLT && (catLower.includes('panel') || catLower.includes('solar'));
+  const isIVoltInverter = isIVOLT && catLower.includes('inverter');
+  const isIVoltBattery = isIVOLT && catLower.includes('battery');
+
   return (
     <div className="w-full pb-20">
       {showDuplicateModal && (
@@ -1130,9 +1275,8 @@ const ProductManager = ({ user }) => {
             </div>
           </div>
 
-          {/* ✅ ADD THIS FAN COIL SECTION */}
-          {(formData.category || '').toLowerCase().includes('fan coil') ||
-           (formData.category || '').toLowerCase().includes('izone') ? (
+          {/* ✅ FAN COIL SECTION */}
+          {isFanCoil ? (
             <div className="bg-white p-4 rounded-lg border border-blue-200 mb-4">
               <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
                 <Wind size={16} className="text-blue-600" /> Fan Coil Specifications
@@ -1213,6 +1357,96 @@ const ProductManager = ({ user }) => {
                   onChange={handleInputChange('WaterConnection')}
                   placeholder='e.g., ZG3/4"'
                 />
+
+                <Input
+                  label="Drain Connection"
+                  value={formData.DrainConnection || ''}
+                  onChange={handleInputChange('DrainConnection')}
+                  placeholder='e.g., 20mm'
+                />
+                <Input
+                  label="Water Flow Cooling (m³/h)"
+                  type="number"
+                  value={formData.WaterFlow_Cooling_m3h || 0}
+                  onChange={handleInputChange('WaterFlow_Cooling_m3h')}
+                />
+                <Input
+                  label="Water Flow Heating (m³/h)"
+                  type="number"
+                  value={formData.WaterFlow_Heating_m3h || 0}
+                  onChange={handleInputChange('WaterFlow_Heating_m3h')}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          {/* ✅ iVOLT: SOLAR PANEL SECTION */}
+          {isIVoltPanel ? (
+            <div className="bg-white p-4 rounded-lg border border-yellow-200 mb-4">
+              <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <Sun size={16} className="text-yellow-600" /> iVOLT Solar Panel Specs
+              </h5>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Input label="Rated Power (W)" type="number" value={formData.pv_Watt_Rated || 0} onChange={handleInputChange('pv_Watt_Rated')} />
+                <Input label="Cell Type" value={formData.pv_Cell_Type || ''} onChange={handleInputChange('pv_Cell_Type')} placeholder="e.g., N-type mono" />
+                <Input label="Efficiency (%)" type="number" value={formData.pv_Efficiency_pct || 0} onChange={handleInputChange('pv_Efficiency_pct')} />
+                <Input label="Warranty (years)" type="number" value={formData.pv_Warranty_years || 0} onChange={handleInputChange('pv_Warranty_years')} />
+
+                <Input label="Voc (V)" type="number" value={formData.pv_Voc_V || 0} onChange={handleInputChange('pv_Voc_V')} />
+                <Input label="Vmp (V)" type="number" value={formData.pv_Vmp_V || 0} onChange={handleInputChange('pv_Vmp_V')} />
+                <Input label="Isc (A)" type="number" value={formData.pv_Isc_A || 0} onChange={handleInputChange('pv_Isc_A')} />
+                <Input label="Imp (A)" type="number" value={formData.pv_Imp_A || 0} onChange={handleInputChange('pv_Imp_A')} />
+
+                <Input label="Dimensions (mm)" value={formData.pv_Dimensions_mm || ''} onChange={handleInputChange('pv_Dimensions_mm')} placeholder="e.g., 1762×1134×30" />
+                <Input label="Weight (kg)" type="number" value={formData.pv_Weight_kg || 0} onChange={handleInputChange('pv_Weight_kg')} />
+              </div>
+            </div>
+          ) : null}
+
+          {/* ✅ iVOLT: INVERTER SECTION */}
+          {isIVoltInverter ? (
+            <div className="bg-white p-4 rounded-lg border border-purple-200 mb-4">
+              <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <Zap size={16} className="text-purple-600" /> iVOLT Inverter Specs
+              </h5>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Input label="Rated Power (kW)" type="number" value={formData.inv_kW_Rated || 0} onChange={handleInputChange('inv_kW_Rated')} />
+                <Input label="Phase" value={formData.inv_Phase || ''} onChange={handleInputChange('inv_Phase')} placeholder="1P / 3P" />
+                <Input label="MPPT Count" type="number" value={formData.inv_MPPT_Count || 0} onChange={handleInputChange('inv_MPPT_Count')} />
+                <Input label="Warranty (years)" type="number" value={formData.inv_Warranty_years || 0} onChange={handleInputChange('inv_Warranty_years')} />
+
+                <Input label="Max PV Input (kW)" type="number" value={formData.inv_Max_PV_Input_kW || 0} onChange={handleInputChange('inv_Max_PV_Input_kW')} />
+                <Input label="Max PV Voltage (V)" type="number" value={formData.inv_Max_PV_Voltage_V || 0} onChange={handleInputChange('inv_Max_PV_Voltage_V')} />
+                <div className="md:col-span-2 flex items-center mt-2">
+                  <Checkbox
+                    label="Battery Compatible (Hybrid)?"
+                    checked={!!formData.inv_Battery_Compatible}
+                    onChange={handleInputChange('inv_Battery_Compatible')}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {/* ✅ iVOLT: BATTERY SECTION */}
+          {isIVoltBattery ? (
+            <div className="bg-white p-4 rounded-lg border border-green-200 mb-4">
+              <h5 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <Battery size={16} className="text-green-600" /> iVOLT Battery Specs
+              </h5>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Input label="Nominal Energy (kWh)" type="number" value={formData.bat_kWh_Nominal || 0} onChange={handleInputChange('bat_kWh_Nominal')} />
+                <Input label="Chemistry" value={formData.bat_Chemistry || ''} onChange={handleInputChange('bat_Chemistry')} placeholder="LFP / NMC etc" />
+                <Input label="Voltage (V)" type="number" value={formData.bat_Voltage_V || 0} onChange={handleInputChange('bat_Voltage_V')} />
+                <Input label="Capacity (Ah)" type="number" value={formData.bat_Ah || 0} onChange={handleInputChange('bat_Ah')} />
+
+                <Input label="DoD (%)" type="number" value={formData.bat_DoD_pct || 0} onChange={handleInputChange('bat_DoD_pct')} />
+                <Input label="Cycle Life" type="number" value={formData.bat_Cycle_Life || 0} onChange={handleInputChange('bat_Cycle_Life')} />
+                <Input label="Max Discharge (kW)" type="number" value={formData.bat_Max_Discharge_kW || 0} onChange={handleInputChange('bat_Max_Discharge_kW')} />
+                <Input label="Warranty (years)" type="number" value={formData.bat_Warranty_years || 0} onChange={handleInputChange('bat_Warranty_years')} />
               </div>
             </div>
           ) : null}
@@ -1297,7 +1531,7 @@ const ProductManager = ({ user }) => {
 
                       <td className="px-6 py-4 text-right text-sm text-gray-500">
                         <span className="font-semibold text-gray-700">
-                          {p.kW_DHW_Nominal ? `${p.kW_DHW_Nominal} kW` : (p.kW_Heating_Nominal ? `${p.kW_Heating_Nominal} kW` : '-')}
+                          {p.kW_DHW_Nominal ? `${p.kW_DHW_Nominal} kW` : '-'}
                         </span>
                       </td>
 
