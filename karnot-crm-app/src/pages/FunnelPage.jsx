@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, getDocs } from "firebase/firestore";
-import { Plus, X, Edit, Trash2, FileText, DollarSign, Building, TrendingUp, Calendar } from 'lucide-react';
+import { Plus, X, Edit, Trash2, FileText, DollarSign, Building, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
 const STAGE_ORDER = [
@@ -18,10 +18,17 @@ const STAGE_ORDER = [
 const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThisOpp, companyData }) => {
     const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
     const nextStage = STAGE_ORDER[currentStageIndex + 1];
+    const previousStage = STAGE_ORDER[currentStageIndex - 1];
 
     const handleMoveForward = () => {
         if (nextStage) {
             onUpdate(opp.id, nextStage);
+        }
+    };
+
+    const handleMoveBackward = () => {
+        if (previousStage) {
+            onUpdate(opp.id, previousStage);
         }
     };
 
@@ -97,11 +104,28 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
             <Button onClick={() => onOpen(opp)} variant="secondary" className="w-full text-xs py-1 mt-3">
                 <FileText size={14} className="mr-2"/> View Details / Notes
             </Button>
-            {nextStage && opp.stage !== 'Closed-Won' && opp.stage !== 'Closed-Lost' && (
-                <div className="mt-2">
-                    <Button onClick={handleMoveForward} variant="secondary" className="w-full text-xs py-1">
-                        Move to {nextStage} Stage
-                    </Button>
+
+            {/* NEW: Move Backward and Forward buttons */}
+            {(opp.stage !== 'Closed-Won' && opp.stage !== 'Closed-Lost') && (
+                <div className="mt-2 flex gap-2">
+                    {previousStage && (
+                        <Button 
+                            onClick={handleMoveBackward} 
+                            variant="secondary" 
+                            className="flex-1 text-xs py-1 flex items-center justify-center"
+                        >
+                            <ChevronLeft size={14} className="mr-1" /> Back
+                        </Button>
+                    )}
+                    {nextStage && (
+                        <Button 
+                            onClick={handleMoveForward} 
+                            variant="secondary" 
+                            className="flex-1 text-xs py-1 flex items-center justify-center"
+                        >
+                            Forward <ChevronRight size={14} className="ml-1" />
+                        </Button>
+                    )}
                 </div>
             )}
         </Card>
@@ -377,7 +401,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
         return quotes.filter(quote => quote.opportunityId === opportunityId);
     };
 
-    // NEW: Calculate company history data
+    // Calculate company history data
     const getCompanyData = (companyName) => {
         const companyQuotes = quotes.filter(q => q.customerName === companyName || q.customer?.name === companyName);
         
