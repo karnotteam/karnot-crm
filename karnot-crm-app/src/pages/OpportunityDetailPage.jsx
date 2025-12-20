@@ -5,17 +5,17 @@ import {
 } from 'lucide-react';
 import { db } from '../firebase'; 
 import { 
-    collection, addDoc, serverTimestamp, doc, updateDoc,
+    collection, addDoc, serverTimestamp, doc, updateDoc, getDoc,
     query, onSnapshot, orderBy 
 } from "firebase/firestore";
 
 import { Card, Button, Section, Input, Textarea } from '../data/constants.jsx';
 
-const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, onOpenQuote, user }) => {
+const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, onOpenQuote, user, companies = [] }) => {
     
     const [newNoteText, setNewNoteText] = useState('');
     const [notes, setNotes] = useState([]); 
-    const [interactions, setInteractions] = useState(opportunity?.interactions || []);
+    const [interactions, setInteractions] = useState([]);
     const [newLogType, setNewLogType] = useState('Call');
     const [newLogOutcome, setNewLogOutcome] = useState('');
     const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
@@ -27,12 +27,31 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
         return 'text-red-600';
     };
 
-    // Load interactions from opportunity data
+    // NEW: Load interactions from BOTH opportunity AND company
     useEffect(() => {
-        if (opportunity?.interactions) {
-            setInteractions(opportunity.interactions);
-        }
-    }, [opportunity]);
+        if (!opportunity || !companies || !user) return;
+
+        // Get interactions from opportunity
+        const oppInteractions = opportunity.interactions || [];
+
+        // Find the matching company and get its interactions
+        const matchingCompany = companies.find(c => 
+            c.companyName.toLowerCase() === opportunity.customerName.toLowerCase()
+        );
+
+        const companyInteractions = matchingCompany?.interactions || [];
+
+        // Merge both sets of interactions and sort by date
+        const allInteractions = [...oppInteractions, ...companyInteractions]
+            .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // Remove duplicates by ID
+        const uniqueInteractions = allInteractions.filter((item, index, self) =>
+            index === self.findIndex((t) => t.id === item.id)
+        );
+
+        setInteractions(uniqueInteractions);
+    }, [opportunity, companies, user]);
 
     useEffect(() => {
         if (!opportunity?.id || !user?.uid) {
@@ -54,15 +73,30 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
         return () => unsubscribe();
     }, [opportunity, user]); 
 
-    // Save interactions to Firebase
+    // NEW: Save interactions to BOTH opportunity AND company
     const saveInteractionsToFirebase = async (updatedInteractions) => {
         if (!user || !opportunity) return;
+        
         try {
+            // Save to opportunity
             const oppRef = doc(db, "users", user.uid, "opportunities", opportunity.id);
             await updateDoc(oppRef, {
                 interactions: updatedInteractions,
                 lastModified: serverTimestamp()
             });
+
+            // ALSO save to company if it exists
+            const matchingCompany = companies.find(c => 
+                c.companyName.toLowerCase() === opportunity.customerName.toLowerCase()
+            );
+
+            if (matchingCompany) {
+                const companyRef = doc(db, "users", user.uid, "companies", matchingCompany.id);
+                await updateDoc(companyRef, {
+                    interactions: updatedInteractions,
+                    lastModified: serverTimestamp()
+                });
+            }
         } catch (error) {
             console.error("Error saving interactions:", error);
         }
@@ -86,7 +120,6 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
         }
     };
 
-    // NEW: Add structured interaction (like Companies page)
     const handleAddInteraction = async () => {
         if (!newLogOutcome) return;
         
@@ -131,7 +164,6 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
         );
     }
 
-    // Flexible matching for quotes
     const relatedQuotes = (quotes || []).filter(q => 
         (q.customer?.name && q.customer.name.toLowerCase().includes(opportunity.customerName.toLowerCase())) || 
         (q.opportunityId === opportunity.id)
@@ -214,7 +246,6 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                     <Card className="max-h-[600px] flex flex-col">
                         <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4">Activity Log</h3>
                         
-                        {/* NEW: Structured Activity Form (like Companies page) */}
                         <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2 mb-4">
                             <div className="flex gap-2">
                                 <Input 
@@ -264,7 +295,6 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                             </div>
                         </div>
 
-                        {/* Activity Log Display */}
                         <div className="flex-1 overflow-y-auto space-y-3 pr-2">
                             {interactions.length > 0 && interactions.map(log => (
                                 <div key={log.id} className="bg-white p-4 rounded-xl border shadow-sm group relative hover:border-orange-200 transition-all">
@@ -311,7 +341,6 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                                 </div>
                             ))}
 
-                            {/* Legacy Notes Display (keeping backward compatibility) */}
                             {notes.length > 0 && notes.map(note => (
                                 <div key={note.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                     <p className="text-sm text-gray-700 font-medium leading-relaxed">{note.text}</p>
