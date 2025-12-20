@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, getDocs } from "firebase/firestore";
-import { Plus, X, Edit, Trash2, FileText, DollarSign } from 'lucide-react';
+import { Plus, X, Edit, Trash2, FileText, DollarSign, Building, TrendingUp, Calendar } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
 const STAGE_ORDER = [
@@ -14,8 +14,8 @@ const STAGE_ORDER = [
     'Closed-Lost'
 ];
 
-// --- OpportunityCard Component ---
-const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThisOpp }) => {
+// --- OpportunityCard Component with Company History ---
+const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThisOpp, companyData }) => {
     const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
     const nextStage = STAGE_ORDER[currentStageIndex + 1];
 
@@ -24,6 +24,11 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
             onUpdate(opp.id, nextStage);
         }
     };
+
+    // Calculate company stats
+    const companyQuoteCount = companyData?.quoteCount || 0;
+    const companyTotalValue = companyData?.totalValue || 0;
+    const companyLastQuoteDate = companyData?.lastQuoteDate || null;
     
     return (
         <Card className="p-4 mb-3 rounded-lg shadow border border-gray-200">
@@ -36,7 +41,9 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
                     <Button onClick={() => onDelete(opp.id)} variant="danger" className="p-1 h-auto w-auto"><Trash2 size={14}/></Button>
                 </div>
             </div>
-            <p className="text-sm text-gray-600">{opp.project}</p>
+            <p className="text-sm text-gray-600 mb-2">{opp.project}</p>
+            
+            {/* Opportunity Value & Probability */}
             <div className="mt-3 flex justify-between items-center">
                 <span className="text-lg font-semibold text-orange-600">
                     ${(opp.estimatedValue || 0).toLocaleString()}
@@ -46,11 +53,44 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
                 </span>
             </div>
             
-            {/* Show number of quotes if any exist */}
+            {/* Quote count for THIS opportunity */}
             {quotesForThisOpp && quotesForThisOpp.length > 0 && (
                 <div className="mt-2 flex items-center gap-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
                     <DollarSign size={12} />
-                    <span>{quotesForThisOpp.length} Quote{quotesForThisOpp.length > 1 ? 's' : ''} Created</span>
+                    <span>{quotesForThisOpp.length} Quote{quotesForThisOpp.length > 1 ? 's' : ''} for this Opportunity</span>
+                </div>
+            )}
+
+            {/* Company History Data */}
+            {companyData && (
+                <div className="mt-3 pt-3 border-t border-gray-200 space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1 text-gray-600">
+                            <Building size={12} />
+                            <span>Company History</span>
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-500">Total Quotes:</span>
+                        <span className="font-semibold text-gray-700">{companyQuoteCount}</span>
+                    </div>
+                    
+                    {companyTotalValue > 0 && (
+                        <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">Total Value:</span>
+                            <span className="font-semibold text-green-600">${companyTotalValue.toLocaleString()}</span>
+                        </div>
+                    )}
+                    
+                    {companyLastQuoteDate && (
+                        <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">Last Quote:</span>
+                            <span className="font-semibold text-gray-700">
+                                {new Date(companyLastQuoteDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                        </div>
+                    )}
                 </div>
             )}
             
@@ -303,12 +343,12 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
 const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingOpportunity, setEditingOpportunity] = useState(null);
-    const [quotes, setQuotes] = useState([]); // NEW: State for quotes
-    const [loadingQuotes, setLoadingQuotes] = useState(true); // NEW: Loading state
+    const [quotes, setQuotes] = useState([]);
+    const [loadingQuotes, setLoadingQuotes] = useState(true);
     
     const STAGES = STAGE_ORDER;
 
-    // NEW: Fetch quotes from Firebase
+    // Fetch quotes from Firebase
     useEffect(() => {
         const fetchQuotes = async () => {
             if (!user || !user.uid) return;
@@ -332,9 +372,28 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
         fetchQuotes();
     }, [user]);
 
-    // NEW: Helper function to get quotes for a specific opportunity
+    // Helper function to get quotes for a specific opportunity
     const getQuotesForOpportunity = (opportunityId) => {
         return quotes.filter(quote => quote.opportunityId === opportunityId);
+    };
+
+    // NEW: Calculate company history data
+    const getCompanyData = (companyName) => {
+        const companyQuotes = quotes.filter(q => q.customerName === companyName || q.customer?.name === companyName);
+        
+        if (companyQuotes.length === 0) return null;
+
+        const totalValue = companyQuotes.reduce((sum, q) => sum + (q.finalSalesPrice || 0), 0);
+        const lastQuoteDate = companyQuotes
+            .map(q => q.createdAt)
+            .filter(Boolean)
+            .sort((a, b) => new Date(b) - new Date(a))[0];
+
+        return {
+            quoteCount: companyQuotes.length,
+            totalValue: totalValue,
+            lastQuoteDate: lastQuoteDate
+        };
     };
 
     const handleSaveOpportunity = async (newOppData) => {
@@ -512,6 +571,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
                                             onEdit={handleOpenEditModal}
                                             onOpen={onOpen}
                                             quotesForThisOpp={getQuotesForOpportunity(opp.id)}
+                                            companyData={getCompanyData(opp.customerName)}
                                         />
                                     ))
                                 }
