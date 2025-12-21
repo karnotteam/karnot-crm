@@ -2,49 +2,43 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Card, Button } from '../data/constants.jsx'; 
 import { 
     Printer, BookOpen, FileText, PieChart, TrendingUp, 
-    AlertTriangle, AlertCircle, ArrowDownCircle, Save, History, Lock 
+    AlertTriangle, AlertCircle, ArrowDownCircle, Lock, Leaf, History
 } from 'lucide-react';
 import { db } from '../firebase'; 
-import { collection, query, where, orderBy, limit, getDocs, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { collection, query, orderBy, addDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
     // --- STATE ---
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-    const [activeBook, setActiveBook] = useState('SALES'); 
+    const [activeBook, setActiveBook] = useState('SALES'); // SALES, RECEIPT, PURCHASE, DISBURSEMENT, GENERAL, LEDGER
     
-    // TAX FILING STATE
+    // TAX FILING & BOI STATE
     const [prevExcessVat, setPrevExcessVat] = useState(0); 
     const [filingHistory, setFilingHistory] = useState([]);
     const [isFiling, setIsFiling] = useState(false);
+    const [isBOIMode, setIsBOIMode] = useState(false); // Green Energy Incentives
 
     const auth = getAuth();
     const user = auth.currentUser;
 
-    // --- 1. FETCH FILING HISTORY & AUTO-CARRY OVER ---
+    // --- 1. FETCH FILING HISTORY ---
     useEffect(() => {
         if (!user) return;
-
-        // A. Listen to Filing History
         const qHistory = query(collection(db, "users", user.uid, "tax_filings"), orderBy("periodEnd", "desc"));
         const unsub = onSnapshot(qHistory, (snap) => {
             const history = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setFilingHistory(history);
-
-            // B. Auto-Calculate Carry Over (Find the most recent filing)
             if (history.length > 0) {
-                // Ideally, we find the filing specifically for the *previous* quarter/month
-                // For simplicity, we take the most recent "Excess" available
                 const lastFiling = history[0]; 
                 if (lastFiling.action === 'CARRY_OVER') {
                     setPrevExcessVat(lastFiling.carryOverAmount || 0);
                 } else {
-                    setPrevExcessVat(0); // If last was 'PAID', start fresh
+                    setPrevExcessVat(0); 
                 }
             }
         });
-
         return () => unsub();
     }, [user]);
 
@@ -57,7 +51,7 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
         });
     };
 
-    // --- 2. DATA PROCESSING (Sales & Expenses) ---
+    // --- 2. SALES JOURNAL (Output VAT) ---
     const salesData = useMemo(() => {
         const revenueQuotes = quotes.filter(q => ['WON', 'APPROVED', 'INVOICED'].includes(q.status));
         return filterByDate(revenueQuotes, 'createdAt').map(q => {
@@ -65,50 +59,94 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
             const isExport = q.customer?.saleType === 'Export';
             const grossUSD = Number(q.finalSalesPrice || 0);
             const grossPHP = grossUSD * rate;
+            
             let vatableSales = 0, vatOutput = 0, zeroRated = 0;
 
-            if (isExport) { zeroRated = grossPHP; } 
-            else { vatableSales = grossPHP / 1.12; vatOutput = grossPHP - vatableSales; }
+            // BOI LOGIC: Domestic sales from RE projects are Zero-Rated
+            if (isBOIMode || isExport) { 
+                zeroRated = grossPHP; 
+            } else { 
+                vatableSales = grossPHP / 1.12; 
+                vatOutput = grossPHP - vatableSales; 
+            }
 
-            return { date: q.createdAt, ref: q.id, customer: q.customer?.name, tin: q.customer?.tin, grossPHP, vatableSales, vatOutput, zeroRated };
+            return { 
+                date: q.createdAt, ref: q.id, customer: q.customer?.name, tin: q.customer?.tin, 
+                grossPHP, vatableSales, vatOutput, zeroRated, isBOIApplied: isBOIMode 
+            };
         });
-    }, [quotes, selectedMonth, selectedYear]);
+    }, [quotes, selectedMonth, selectedYear, isBOIMode]);
 
+    // --- 3. PURCHASE JOURNAL (Input VAT) ---
     const expenseData = useMemo(() => {
         return filterByDate(ledgerEntries, 'date').map(e => {
             const grossPHP = parseFloat(e.amountPHP) || 0;
             const isNonVat = e.taxStatus === 'NON-VAT';
+            
+            // Detect Importation / Capital Equipment
+            const isImportOrCapital = e.category?.toLowerCase().includes('duties') || 
+                                      e.description?.toLowerCase().includes('import') ||
+                                      e.category?.toLowerCase().includes('equipment');
+
             let netPurchase = 0, inputVat = 0;
 
-            if (isNonVat) { netPurchase = grossPHP; } 
-            else { netPurchase = grossPHP / 1.12; inputVat = grossPHP - netPurchase; }
+            if (isBOIMode && isImportOrCapital) {
+                // BOI LOGIC: Duty-Free Importation (No VAT paid = No Credit)
+                netPurchase = grossPHP;
+                inputVat = 0; 
+            } else if (isImportOrCapital && !isBOIMode) {
+                // STANDARD: Paid VAT at Customs = Input Tax Credit
+                netPurchase = 0;
+                inputVat = grossPHP; 
+            } else if (isNonVat) { 
+                netPurchase = grossPHP; 
+            } else { 
+                netPurchase = grossPHP / 1.12; 
+                inputVat = grossPHP - netPurchase; 
+            }
 
             return { 
                 id: e.id, date: e.date, payee: e.supplierName || e.description, tin: e.supplierTIN, 
                 ref: e.reference, category: e.category, subCategory: e.subCategory, 
-                grossPHP, netPurchase, inputVat, isNonVat 
+                grossPHP, netPurchase, inputVat, isNonVat, 
+                isDutyFree: (isBOIMode && isImportOrCapital)
             };
         });
-    }, [ledgerEntries, selectedMonth, selectedYear]);
+    }, [ledgerEntries, selectedMonth, selectedYear, isBOIMode]);
 
-    // --- 3. VAT COMPUTATION ---
+    // --- 4. GENERAL LEDGER SUMMARY (Restored) ---
+    const generalLedgerSummary = useMemo(() => {
+        const summary = {};
+        
+        // Process Expenses (Debits)
+        expenseData.forEach(e => {
+            const key = e.subCategory || e.category || 'Uncategorized Expense';
+            if (!summary[key]) summary[key] = { debit: 0, credit: 0, count: 0 };
+            summary[key].debit += e.grossPHP; // Using Gross for simple Cash basis visualization
+            summary[key].count += 1;
+        });
+
+        // Process Sales (Credits)
+        const totalSalesGross = salesData.reduce((sum, s) => sum + s.grossPHP, 0);
+        if (totalSalesGross > 0) {
+            summary['Sales Revenue'] = { debit: 0, credit: totalSalesGross, count: salesData.length };
+        }
+
+        return Object.entries(summary).sort((a, b) => b[1].debit - a[1].debit);
+    }, [expenseData, salesData]);
+
+    // --- 5. VAT COMPUTATION ---
     const totals = useMemo(() => {
         const outputVAT = salesData.reduce((sum, i) => sum + (i.vatOutput || 0), 0);
         const currentInputVAT = expenseData.reduce((sum, i) => sum + (i.inputVat || 0), 0);
         
-        // TOTAL CREDITS = Current Purchases + Previous Carry Over
         const totalTaxCredits = currentInputVAT + Number(prevExcessVat);
-        
-        // NET PAYABLE = Output - Total Credits
         const netVAT = outputVAT - totalTaxCredits;
         
-        const totalSales = salesData.reduce((sum, i) => sum + (i.grossPHP || 0), 0);
-        const totalPurchases = expenseData.reduce((sum, i) => sum + (i.grossPHP || 0), 0);
-
-        return { outputVAT, currentInputVAT, totalTaxCredits, netVAT, totalSales, totalPurchases };
+        return { outputVAT, currentInputVAT, totalTaxCredits, netVAT };
     }, [salesData, expenseData, prevExcessVat]);
 
-    // --- 4. HANDLE CLOSE PERIOD ---
+    // --- 6. HANDLE CLOSE PERIOD ---
     const handleClosePeriod = async () => {
         if (!user) return;
         const confirmMsg = totals.netVAT >= 0 
@@ -122,21 +160,18 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
             await addDoc(collection(db, "users", user.uid, "tax_filings"), {
                 periodMonth: selectedMonth,
                 periodYear: selectedYear,
-                periodEnd: new Date(selectedYear, selectedMonth + 1, 0), // Last day of month
+                periodEnd: new Date(selectedYear, selectedMonth + 1, 0),
                 filedAt: serverTimestamp(),
-                
-                // Financials
                 outputVat: totals.outputVAT,
                 inputVat: totals.currentInputVAT,
                 prevExcessUsed: prevExcessVat,
                 netAmount: totals.netVAT,
-                
-                // Result
                 action: totals.netVAT >= 0 ? 'PAYMENT_DUE' : 'CARRY_OVER',
                 carryOverAmount: totals.netVAT < 0 ? Math.abs(totals.netVAT) : 0,
-                status: 'FILED'
+                status: 'FILED',
+                regime: isBOIMode ? 'BOI_RE_INCENTIVE' : 'STANDARD_VAT'
             });
-            alert("Period Closed Successfully! Your balance has been recorded.");
+            alert("Period Closed Successfully!");
         } catch (error) {
             console.error("Filing Error:", error);
             alert("Failed to close period.");
@@ -157,16 +192,26 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
                 {/* HEADER & CONTROLS */}
                 <div className="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-[30px] shadow-sm border border-gray-100 gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="p-3 bg-orange-100 text-orange-600 rounded-2xl">
-                            <BookOpen size={24} />
+                        <div className={`p-3 rounded-2xl ${isBOIMode ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'}`}>
+                            {isBOIMode ? <Leaf size={24}/> : <BookOpen size={24} />}
                         </div>
                         <div>
-                            <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tight">BIR Books</h1>
-                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Compliance Module</p>
+                            <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tight">
+                                {isBOIMode ? 'Green Energy Books' : 'Standard BIR Books'}
+                            </h1>
+                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                                {isBOIMode ? 'BOI Incentives (RA 9513) Active' : 'Standard VAT Compliance'}
+                            </p>
                         </div>
                     </div>
                     
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-4">
+                        {/* BOI TOGGLE */}
+                        <div className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl cursor-pointer" onClick={() => setIsBOIMode(!isBOIMode)}>
+                            <span className={`text-[10px] font-black uppercase px-3 py-2 rounded-lg transition-all ${!isBOIMode ? 'bg-white shadow text-gray-800' : 'text-gray-400'}`}>Standard</span>
+                            <span className={`text-[10px] font-black uppercase px-3 py-2 rounded-lg transition-all ${isBOIMode ? 'bg-green-500 shadow text-white' : 'text-gray-400'}`}>BOI / Green</span>
+                        </div>
+
                         <div className="bg-gray-50 p-1 rounded-xl flex border border-gray-200">
                             <select 
                                 value={selectedMonth} 
@@ -191,13 +236,14 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
 
                 {/* VAT SUMMARY CARDS */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Card className="p-5 border-l-4 border-blue-500 bg-white shadow-sm">
-                        <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-1">Output VAT</p>
+                    <Card className={`p-5 border-l-4 bg-white shadow-sm ${isBOIMode ? 'border-green-500' : 'border-blue-500'}`}>
+                        <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-1">Output VAT (Sales)</p>
                         <p className="text-xl font-black text-gray-800">{formatCurrency(totals.outputVAT)}</p>
+                        {isBOIMode && <span className="text-[9px] text-green-600 font-bold uppercase bg-green-50 px-2 py-0.5 rounded">Zero-Rated (RE)</span>}
                     </Card>
 
                     <Card className="p-5 border-l-4 border-red-500 bg-white shadow-sm">
-                        <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-1">Input VAT</p>
+                        <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-1">Input VAT (Credits)</p>
                         <p className="text-xl font-black text-gray-800">{formatCurrency(totals.currentInputVAT)}</p>
                     </Card>
 
@@ -206,48 +252,55 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
                             <p className="text-[9px] text-purple-400 font-black uppercase tracking-widest">Less: Prev. Excess</p>
                             <ArrowDownCircle size={14} className="text-purple-400"/>
                         </div>
-                        <div className="flex items-center">
-                            {/* Auto-filled but editable if needed */}
-                            <input 
-                                type="number" 
-                                value={prevExcessVat} 
-                                onChange={(e) => setPrevExcessVat(e.target.value)}
-                                className="bg-transparent text-xl font-black text-purple-700 w-full outline-none placeholder-purple-300"
-                            />
-                        </div>
-                        <div className="absolute top-full left-0 mt-2 w-48 bg-gray-800 text-white text-[10px] p-2 rounded hidden group-hover:block z-10">
-                            Auto-pulled from last closed quarter. Edit only if opening balance is incorrect.
-                        </div>
+                        <input 
+                            type="number" 
+                            value={prevExcessVat} 
+                            onChange={(e) => setPrevExcessVat(e.target.value)}
+                            className="bg-transparent text-xl font-black text-purple-700 w-full outline-none placeholder-purple-300"
+                        />
                     </Card>
 
                     <Card className={`p-5 border-l-4 shadow-md bg-white ${totals.netVAT >= 0 ? 'border-orange-500' : 'border-green-500'}`}>
                         <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest mb-1">
-                            {totals.netVAT >= 0 ? 'Net Payable' : 'New Excess'}
+                            {totals.netVAT >= 0 ? 'Net Payable' : 'Excess Input VAT'}
                         </p>
                         <p className={`text-xl font-black ${totals.netVAT >= 0 ? 'text-orange-600' : 'text-green-600'}`}>
                             {totals.netVAT < 0 ? `(${formatCurrency(Math.abs(totals.netVAT))})` : formatCurrency(totals.netVAT)}
                         </p>
+                        <p className={`text-[9px] font-bold mt-1 uppercase ${totals.netVAT >= 0 ? 'text-orange-500' : 'text-green-600'}`}>
+                            {totals.netVAT >= 0 ? 'Remit to BIR' : 'Carry Over'}
+                        </p>
                     </Card>
                 </div>
 
-                {/* BOOKS CONTENT (Hidden if printing history) */}
+                {/* BOOKS NAVIGATION */}
                 <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-1">
-                    {['SALES', 'PURCHASE', 'CASH DISBURSEMENT'].map(book => (
+                    {[
+                        { id: 'SALES', label: 'Sales Journal', icon: TrendingUp },
+                        { id: 'RECEIPT', label: 'Cash Receipt', icon: FileText },
+                        { id: 'PURCHASE', label: 'Purchase Journal', icon: BookOpen },
+                        { id: 'DISBURSEMENT', label: 'Cash Disbursement', icon: FileText },
+                        { id: 'GENERAL', label: 'General Journal', icon: BookOpen },
+                        { id: 'LEDGER', label: 'General Ledger', icon: PieChart }
+                    ].map(book => (
                         <button
-                            key={book}
-                            onClick={() => setActiveBook(book)}
-                            className={`px-4 py-2 rounded-t-lg font-bold text-[10px] uppercase tracking-widest transition-all ${
-                                activeBook === book 
+                            key={book.id}
+                            onClick={() => setActiveBook(book.id)}
+                            className={`px-4 py-2 rounded-t-lg font-bold text-[10px] uppercase tracking-widest transition-all flex items-center gap-2 ${
+                                activeBook === book.id
                                 ? 'bg-white text-orange-600 border-t-2 border-x-2 border-gray-100 shadow-sm relative top-[1px]' 
                                 : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
                             }`}
                         >
-                            {book} Book
+                            <book.icon size={14}/> {book.label}
                         </button>
                     ))}
                 </div>
 
+                {/* BOOK CONTENT AREA */}
                 <Card className="rounded-b-[30px] rounded-tr-[30px] border-none shadow-xl overflow-hidden bg-white min-h-[400px]">
+                    
+                    {/* 1. SALES JOURNAL */}
                     {activeBook === 'SALES' && (
                         <div className="overflow-x-auto">
                             <table className="w-full text-xs text-left">
@@ -259,6 +312,7 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
                                         <th className="p-4 text-right">VATable</th>
                                         <th className="p-4 text-right">Output VAT</th>
                                         <th className="p-4 text-right">Gross</th>
+                                        <th className="p-4 text-center">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
@@ -270,17 +324,114 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
                                             <td className="p-4 text-right font-mono">{formatCurrency(row.vatableSales)}</td>
                                             <td className="p-4 text-right font-mono text-blue-600">{formatCurrency(row.vatOutput)}</td>
                                             <td className="p-4 text-right font-black">{formatCurrency(row.grossPHP)}</td>
+                                            <td className="p-4 text-center">
+                                                {row.zeroRated > 0 && <span className="text-[9px] font-black bg-green-100 text-green-700 px-2 py-1 rounded">ZERO-RATED</span>}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
                     )}
-                    {/* Add other book tables here as previously implemented */}
+                    
+                    {/* 2. RECEIPT JOURNAL */}
+                    {activeBook === 'RECEIPT' && (
+                        <div className="p-8 text-center text-gray-400 italic">
+                            <p className="mb-2">This book tracks Official Receipts (OR) issued.</p>
+                            <p className="text-xs">Currently proxied by Sales Journal data for estimation.</p>
+                        </div>
+                    )}
+
+                    {/* 3. PURCHASE / DISBURSEMENT JOURNAL */}
+                    {(activeBook === 'PURCHASE' || activeBook === 'DISBURSEMENT') && (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-left">
+                                <thead className="bg-gray-50 text-gray-500 uppercase font-black text-[9px] tracking-widest">
+                                    <tr>
+                                        <th className="p-4">Date</th>
+                                        <th className="p-4">Ref #</th>
+                                        <th className="p-4">Payee</th>
+                                        <th className="p-4">Category</th>
+                                        <th className="p-4 text-right">Net</th>
+                                        <th className="p-4 text-right">Input VAT</th>
+                                        <th className="p-4 text-right">Gross</th>
+                                        <th className="p-4 text-center">Class</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {expenseData.map((row, i) => (
+                                        <tr key={i}>
+                                            <td className="p-4 text-gray-500">{new Date(row.date).toLocaleDateString()}</td>
+                                            <td className="p-4 font-mono text-gray-500">{row.ref}</td>
+                                            <td className="p-4 font-bold">{row.payee}</td>
+                                            <td className="p-4 text-[10px] uppercase font-bold text-gray-400">{row.subCategory || row.category}</td>
+                                            <td className="p-4 text-right font-mono">{formatCurrency(row.netPurchase)}</td>
+                                            <td className={`p-4 text-right font-mono ${row.isDutyFree ? 'text-green-600 font-black' : 'text-red-500'}`}>
+                                                {formatCurrency(row.inputVat)}
+                                            </td>
+                                            <td className="p-4 text-right font-black">{formatCurrency(row.grossPHP)}</td>
+                                            <td className="p-4 text-center">
+                                                {row.isDutyFree && <span className="text-[9px] font-black bg-green-100 text-green-700 px-2 py-1 rounded">DUTY FREE</span>}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {/* 4. GENERAL LEDGER (Summary) */}
+                    {activeBook === 'LEDGER' && (
+                        <div className="p-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                                    <div className="p-4 bg-gray-50 border-b border-gray-100">
+                                        <h4 className="font-black text-gray-700 uppercase text-xs tracking-widest">Expenses (Debits)</h4>
+                                    </div>
+                                    <table className="w-full text-xs">
+                                        <tbody className="divide-y divide-gray-50">
+                                            {generalLedgerSummary.map(([account, data]) => (
+                                                data.debit > 0 && (
+                                                    <tr key={account}>
+                                                        <td className="p-3 font-bold text-gray-700">{account}</td>
+                                                        <td className="p-3 text-right font-mono">{formatCurrency(data.debit)}</td>
+                                                    </tr>
+                                                )
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden h-fit">
+                                    <div className="p-4 bg-gray-50 border-b border-gray-100">
+                                        <h4 className="font-black text-gray-700 uppercase text-xs tracking-widest">Revenue (Credits)</h4>
+                                    </div>
+                                    <table className="w-full text-xs">
+                                        <tbody className="divide-y divide-gray-50">
+                                            {generalLedgerSummary.map(([account, data]) => (
+                                                data.credit > 0 && (
+                                                    <tr key={account}>
+                                                        <td className="p-3 font-bold text-gray-700">{account}</td>
+                                                        <td className="p-3 text-right font-black text-green-600">{formatCurrency(data.credit)}</td>
+                                                    </tr>
+                                                )
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 5. GENERAL JOURNAL */}
+                    {activeBook === 'GENERAL' && (
+                        <div className="p-8 text-center text-gray-400 italic">
+                            <p>General Journal (GJ) for adjusting entries.</p>
+                        </div>
+                    )}
                 </Card>
             </div>
 
-            {/* RIGHT SIDE: FILING ENGINE & HISTORY */}
+            {/* RIGHT SIDE: FILING ENGINE & NOTES */}
             <div className="w-full lg:w-80 space-y-6">
                 
                 {/* CLOSE PERIOD ACTION */}
@@ -317,17 +468,16 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
                             Action creates a permanent tax record.
                         </p>
                     </div>
-                    {/* Decor */}
                     <Lock size={120} className="absolute -bottom-6 -right-6 text-slate-800 opacity-50 rotate-[-15deg]"/>
                 </Card>
 
-                {/* HISTORY FEED */}
+                {/* FILING HISTORY */}
                 <Card className="border-0 shadow-sm">
                     <div className="p-4 border-b border-gray-100 flex items-center gap-2">
                         <History size={16} className="text-gray-400"/>
                         <h4 className="font-black text-gray-600 uppercase text-xs tracking-widest">Filing History</h4>
                     </div>
-                    <div className="max-h-[400px] overflow-y-auto">
+                    <div className="max-h-[300px] overflow-y-auto">
                         {filingHistory.length === 0 && <p className="p-4 text-xs text-gray-400 italic">No filings recorded yet.</p>}
                         {filingHistory.map(record => (
                             <div key={record.id} className="p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors group">
@@ -353,6 +503,28 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
                         ))}
                     </div>
                 </Card>
+
+                {/* NOTES & COMPLIANCE */}
+                <div className="bg-yellow-50 p-6 rounded-2xl border border-yellow-100">
+                    <div className="flex items-center gap-2 mb-4 text-yellow-700">
+                        <AlertCircle size={20} />
+                        <h4 className="font-black uppercase tracking-widest text-xs">BIR Compliance</h4>
+                    </div>
+                    <ul className="list-disc list-inside text-xs space-y-2 text-yellow-800">
+                        <li>File <strong>Form 2550M/Q</strong> on or before the 20th/25th.</li>
+                        <li><strong>Input VAT</strong> requires valid TINs.</li>
+                        <li><strong>Zero-Rated Sales</strong> need proof of inward remittance.</li>
+                        {isBOIMode && <li><strong>BOI Mode Active:</strong> Ensure all import entries are supported by Certificate of Authority (CA).</li>}
+                    </ul>
+                </div>
+                
+                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                    <h4 className="font-black uppercase tracking-widest text-xs text-gray-400 mb-4">Accountant Notes</h4>
+                    <textarea 
+                        className="w-full h-24 p-4 bg-gray-50 rounded-xl text-sm border-0 focus:ring-2 focus:ring-orange-500 resize-none"
+                        placeholder="Notes for bookkeeper..."
+                    ></textarea>
+                </div>
 
             </div>
         </div>
