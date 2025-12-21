@@ -3,15 +3,17 @@ import { Card, Button, Input } from '../data/constants.jsx';
 import { 
     Landmark, ArrowRightLeft, CheckCircle, XCircle, 
     Upload, Search, Filter, TrendingUp, TrendingDown, Link2, 
-    PlusCircle, Trash2, Edit2, Ban // Added Ban icon for Void
+    PlusCircle, Trash2, Edit2, Ban, RotateCcw, AlertTriangle
 } from 'lucide-react';
 import { db } from '../firebase'; 
-import { collection, query, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, orderBy, deleteDoc, setDoc } from "firebase/firestore";
+import { collection, query, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, orderBy, deleteDoc, writeBatch, where, getDocs } from "firebase/firestore";
+
+const PASSWORD = "Edmund18931!";
 
 const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
     // --- STATE ---
     const [bankLines, setBankLines] = useState([]); 
-    const [formLine, setFormLine] = useState({ date: '', description: '', amount: '', type: 'DEBIT' }); // Default to Debit (Money Out)
+    const [formLine, setFormLine] = useState({ date: '', description: '', amount: '', type: 'DEBIT' }); 
     const [editingLineId, setEditingLineId] = useState(null); 
     
     const [selectedBookEntry, setSelectedBookEntry] = useState(null);
@@ -112,6 +114,28 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
         }
     };
 
+    const handlePurgeFeed = async () => {
+        if (!confirm("WARNING: This will delete ALL 'Unmatched' and 'Voided' transactions from your Bank Feed.\n\nReconciled items will be kept safe.\n\nAre you sure you want to clean up?")) return;
+        
+        try {
+            const batch = writeBatch(db);
+            const targets = bankLines.filter(l => l.status === 'UNMATCHED' || l.status === 'VOIDED');
+            
+            targets.forEach(line => {
+                const ref = doc(db, "users", user.uid, "bank_feed", line.id);
+                batch.delete(ref);
+            });
+
+            await batch.commit();
+            alert(`Successfully cleaned up ${targets.length} entries.`);
+            setSelectedBankLine(null);
+
+        } catch (error) {
+            console.error("Error purging feed:", error);
+            alert("Failed to clear feed.");
+        }
+    };
+
     const handleCancelEdit = () => {
         setEditingLineId(null);
         setFormLine({ date: '', description: '', amount: '', type: 'DEBIT' });
@@ -122,7 +146,6 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
         if (!selectedBookEntry || !selectedBankLine) return alert("Select one item from both sides to match.");
         if (selectedBankLine.status === 'VOIDED') return alert("Cannot reconcile a VOIDED transaction.");
 
-        // Type Check: Ensure we aren't matching a Credit to a Debit
         if (selectedBookEntry.type !== selectedBankLine.type) {
             return alert(`Mismatch! You are trying to match a ${selectedBookEntry.type} (Book) with a ${selectedBankLine.type} (Bank).`);
         }
@@ -140,12 +163,13 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
                 await updateDoc(doc(db, "users", user.uid, "ledger", selectedBookEntry.id), { isReconciled: true, reconciledDate: new Date().toISOString() });
             }
 
-            // Update Bank Side (Mark as RECONCILED, don't delete so we keep history)
+            // Update Bank Side (Mark as RECONCILED)
             await updateDoc(doc(db, "users", user.uid, "bank_feed", selectedBankLine.id), { status: 'RECONCILED' });
 
             // Create Audit Log
             await addDoc(collection(db, "users", user.uid, "reconciliations"), {
                 bookId: selectedBookEntry.id,
+                bankLineId: selectedBankLine.id,
                 bankLineDesc: selectedBankLine.description,
                 amount: selectedBookEntry.amount,
                 date: new Date().toISOString().split('T')[0],
@@ -160,6 +184,57 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
         } catch (error) {
             console.error(error);
             alert("Reconciliation failed.");
+        }
+    };
+
+    // --- 5. HARD RESET LOGIC (Undo All Reconciliations) ---
+    const handleResetAllHistory = async () => {
+        const inputPass = prompt("WARNING: This will undo ALL reconciliations.\n\nAll matched items will return to the feed as Unmatched.\n\nEnter Security Password to proceed:");
+        
+        if (inputPass !== PASSWORD) {
+            return alert("Incorrect Password. Action cancelled.");
+        }
+
+        try {
+            const batch = writeBatch(db);
+            let count = 0;
+
+            // 1. Delete all history logs
+            const historySnapshot = await getDocs(collection(db, "users", user.uid, "reconciliations"));
+            historySnapshot.forEach(doc => {
+                batch.delete(doc.ref);
+                count++;
+            });
+
+            // 2. Reset Bank Feed items (RECONCILED -> UNMATCHED)
+            const bankSnapshot = await getDocs(query(collection(db, "users", user.uid, "bank_feed"), where("status", "==", "RECONCILED")));
+            bankSnapshot.forEach(doc => {
+                batch.update(doc.ref, { status: "UNMATCHED" });
+            });
+
+            // 3. Reset Quotes (isReconciled -> false)
+            // Note: In a large app, you might want to only fetch reconciled ones, but we iterate connected props here or simple query
+            const quotesRef = collection(db, "users", user.uid, "quotes");
+            const qQuotes = query(quotesRef, where("isReconciled", "==", true));
+            const quotesSnap = await getDocs(qQuotes);
+            quotesSnap.forEach(doc => {
+                batch.update(doc.ref, { isReconciled: false, reconciledDate: null });
+            });
+
+            // 4. Reset Ledger (isReconciled -> false)
+            const ledgerRef = collection(db, "users", user.uid, "ledger");
+            const qLedger = query(ledgerRef, where("isReconciled", "==", true));
+            const ledgerSnap = await getDocs(qLedger);
+            ledgerSnap.forEach(doc => {
+                batch.update(doc.ref, { isReconciled: false, reconciledDate: null });
+            });
+
+            await batch.commit();
+            alert(`System Reset Complete. ${count} reconciliation records removed. Items restored.`);
+
+        } catch (error) {
+            console.error("Reset Failed:", error);
+            alert("Failed to reset history.");
         }
     };
 
@@ -193,13 +268,18 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
             {/* MAIN WORKSPACE */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
-                {/* LEFT: BANK STATEMENT FEED (IMPROVED) */}
+                {/* LEFT: BANK STATEMENT FEED */}
                 <Card className="border-t-4 border-purple-500 shadow-lg flex flex-col h-[650px]">
                     <div className="p-4 bg-purple-50 border-b border-purple-100 flex justify-between items-center">
                         <h3 className="font-black text-purple-800 uppercase tracking-widest text-xs flex items-center gap-2">
                             <Landmark size={16}/> Bank Statement Feed
                         </h3>
-                        <span className="text-[9px] font-bold bg-white text-purple-600 px-2 py-1 rounded border border-purple-200">HSBC / EXTERNAL</span>
+                        <div className="flex items-center gap-2">
+                            <button onClick={handlePurgeFeed} className="flex items-center gap-1 text-[9px] font-black bg-red-50 text-red-600 px-2 py-1 rounded border border-red-100 hover:bg-red-100 transition-colors" title="Delete all unmatched items">
+                                <Trash2 size={12}/> Clear Feed
+                            </button>
+                            <span className="text-[9px] font-bold bg-white text-purple-600 px-2 py-1 rounded border border-purple-200">HSBC / EXTERNAL</span>
+                        </div>
                     </div>
                     
                     {/* INPUT FORM */}
@@ -234,7 +314,6 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
                             />
                         </div>
                         <div className="col-span-2 flex flex-col justify-end gap-1">
-                            {/* Toggle Debit/Credit */}
                             <div className="flex bg-gray-100 rounded p-0.5 mb-1">
                                 <button onClick={() => setFormLine({...formLine, type: 'DEBIT'})} className={`flex-1 py-0.5 text-[8px] font-black rounded ${formLine.type === 'DEBIT' ? 'bg-white shadow text-red-600' : 'text-gray-400'}`}>DR</button>
                                 <button onClick={() => setFormLine({...formLine, type: 'CREDIT'})} className={`flex-1 py-0.5 text-[8px] font-black rounded ${formLine.type === 'CREDIT' ? 'bg-white shadow text-green-600' : 'text-gray-400'}`}>CR</button>
@@ -319,7 +398,7 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
                     </div>
                 </Card>
 
-                {/* RIGHT: INTERNAL BOOKS (Unchanged Logic, visual tweak) */}
+                {/* RIGHT: INTERNAL BOOKS */}
                 <Card className="border-t-4 border-orange-500 shadow-lg flex flex-col h-[650px]">
                     <div className="p-4 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
                         <h3 className="font-black text-orange-800 uppercase tracking-widest text-xs flex items-center gap-2">
@@ -380,7 +459,12 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
 
             {/* RECONCILED HISTORY */}
             <div className="mt-12">
-                <h3 className="font-black text-gray-400 uppercase text-xs tracking-widest mb-4">Reconciliation History</h3>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-black text-gray-400 uppercase text-xs tracking-widest">Reconciliation History</h3>
+                    <button onClick={handleResetAllHistory} className="flex items-center gap-1 text-[10px] font-black text-red-400 hover:text-red-600 bg-red-50 px-3 py-1.5 rounded-full hover:bg-red-100 transition-colors">
+                        <RotateCcw size={12}/> Reset History
+                    </button>
+                </div>
                 <Card className="border-0 shadow-sm overflow-hidden">
                     <table className="w-full text-xs text-left">
                         <thead className="bg-gray-50 border-b font-black text-gray-500 uppercase">
