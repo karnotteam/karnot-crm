@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Eye, Plus, Trash2, Save, Search, Check, Briefcase, Grid, List, PlusCircle } from 'lucide-react';
+import { Eye, Plus, Trash2, Save, Search, Check, Briefcase, Grid, List, PlusCircle, Truck } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, Section, PRICING_TIERS } from '../data/constants.jsx';
 
 // --- FIREBASE IMPORTS ---
@@ -15,9 +15,14 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     const [opportunityId, setOpportunityId] = useState(initialData?.opportunityId || null);
     
     const [customer, setCustomer] = useState({ 
-        id: '', name: '', number: '', tin: '', address: '', saleType: 'Export',
+        id: '', name: '', number: '', tin: '', 
+        address: '', // Billing Address
+        deliveryAddress: '', // New Delivery Address
+        saleType: 'Export',
         contactId: '', contactName: '', contactEmail: '', tier: 'STANDARD' 
     });
+
+    const [sameAsBilling, setSameAsBilling] = useState(true);
     
     const [commercial, setCommercial] = useState({ 
         shippingTerms: 'Ex-Works Warehouse', 
@@ -27,10 +32,11 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         wht: 0 
     });
     
+    // Standard Payment Terms
     const [docControl, setDocControl] = useState({ 
         quoteNumber: nextQuoteNumber, 
         revision: 'A', 
-        paymentTerms: 'Full payment is required upon order confirmation.' 
+        paymentTerms: '50% Down Payment upon Order Confirmation\n40% upon Delivery to Site\n10% upon Commissioning or 45 days after delivery (whichever comes sooner)' 
     });
     
     const [costing, setCosting] = useState({ 
@@ -45,13 +51,14 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         generateInPHP: false, 
         generateQuote: true, 
         generateProForma: true, 
-        generateBirInvoice: false, 
+        generateBirInvoice: false,
+        generateDeliveryReceipt: false,
+        generateOfficialReceipt: false,
         includeLandedCost: true 
     });
     
     const [selectedProducts, setSelectedProducts] = useState({});
     const [manualItems, setManualItems] = useState([]);
-    // UPDATED: Added 'cost' to manual item state
     const [manualItemInput, setManualItemInput] = useState({ name: '', price: '', cost: '', specs: '' });
     
     // UI State
@@ -101,13 +108,18 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     // --- LOAD INITIAL DATA ---
     useEffect(() => {
         const defaultCustomer = { 
-            id: '', name: '', number: '', tin: '', address: '', saleType: 'Export',
+            id: '', name: '', number: '', tin: '', address: '', deliveryAddress: '', saleType: 'Export',
             contactId: '', contactName: '', contactEmail: '', tier: 'STANDARD'
         };
         
         if (initialData) {
             setCustomer({ ...defaultCustomer, ...initialData.customer });
             setCompanySearch(initialData.customer?.name || ''); 
+            // Check if billing matches delivery to set checkbox state
+            const billing = initialData.customer?.address || '';
+            const delivery = initialData.customer?.deliveryAddress || '';
+            setSameAsBilling(billing === delivery || !delivery);
+
             setCommercial({ 
                 shippingTerms: 'Ex-Works Warehouse', 
                 deliveryTime: '3-5 days from payment', 
@@ -119,7 +131,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             setDocControl({ 
                 quoteNumber: nextQuoteNumber, 
                 revision: 'A', 
-                paymentTerms: 'Full payment is required upon order confirmation.', 
+                paymentTerms: '50% Down Payment upon Order Confirmation\n40% upon Delivery to Site\n10% upon Commissioning or 45 days after delivery (whichever comes sooner)', 
                 ...initialData.docControl, 
                 quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber 
             });
@@ -135,7 +147,9 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                 generateInPHP: false, 
                 generateQuote: true, 
                 generateProForma: true, 
-                generateBirInvoice: false, 
+                generateBirInvoice: false,
+                generateDeliveryReceipt: false,
+                generateOfficialReceipt: false,
                 includeLandedCost: true, 
                 ...initialData.docGeneration 
             });
@@ -144,6 +158,13 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             setOpportunityId(initialData.opportunityId || null);
         }
     }, [initialData, nextQuoteNumber]);
+
+    // Sync delivery address if checkbox is checked
+    useEffect(() => {
+        if (sameAsBilling) {
+            setCustomer(prev => ({ ...prev, deliveryAddress: prev.address }));
+        }
+    }, [customer.address, sameAsBilling]);
 
     // --- RELATED DATA ---
     const relatedOpportunities = useMemo(() => {
@@ -179,13 +200,16 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             id: company.id,
             name: company.companyName,
             address: company.address || prev.address,
+            deliveryAddress: company.address || prev.address, // Default delivery to billing
             tin: company.tin || prev.tin,
+            saleType: company.isExport ? 'Export' : 'Domestic', 
             contactId: '', 
             contactName: '', 
             contactEmail: '',
             tier: detectedTier 
         }));
         
+        setSameAsBilling(true);
         setCompanySearch(company.companyName);
         setIsCompanyDropdownOpen(false);
 
@@ -195,7 +219,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             shippingTerms: detectedTier === 'EXPORT' ? 'FOB' : prev.shippingTerms 
         }));
         
-        // Auto-link to funnel
         const latestOpp = opportunities?.find(o => o.customerName === company.companyName);
         if (latestOpp) setOpportunityId(latestOpp.id);
     };
@@ -245,13 +268,11 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         }
     };
     
-    // UPDATED: Manual Item Adder with Cost
     const addManualItem = () => {
         if (manualItemInput.name && manualItemInput.price) {
             setManualItems(prev => [...prev, { 
                 ...manualItemInput, 
                 priceUSD: parseFloat(manualItemInput.price),
-                // Hidden cost field for ROI
                 costPriceUSD: parseFloat(manualItemInput.cost) || 0,
                 quantity: 1, 
                 id: `manual_${Date.now()}` 
@@ -280,7 +301,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const subtotalUSD = allItems.reduce((acc, item) => 
             acc + (item.salesPriceUSD || item.priceUSD || 0) * item.quantity, 0
         );
-        // UPDATED: Calculates cost including manual items
         const costSubtotalUSD = allItems.reduce((acc, item) => 
             acc + (item.costPriceUSD || 0) * item.quantity, 0
         );
@@ -299,7 +319,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         };
     }, [selectedProducts, manualItems, commercial.discount, dbProducts]);
 
-    // --- COMPREHENSIVE QUOTE PREVIEW (CLAUDE ENGINE) ---
+    // --- PDF GENERATION ENGINE ---
     const generateQuotePreview = () => {
         const { allItems, subtotalUSD } = quoteTotals;
         
@@ -331,30 +351,10 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const priceColumnHeader = `Unit Price (${docGeneration.generateInPHP ? 'PHP' : 'USD'})`;
         const amountColumnHeader = `Amount (${docGeneration.generateInPHP ? 'PHP' : 'USD'})`;
 
-        // Bank Details
-        const bankDetailsPHP = `<h3>Bank Account Details (For PHP Payments)</h3>
-            <p style="font-size:13px; line-height:1.8;">
-                <strong>Account Name:</strong> STUART EDMUND COX<br>
-                <strong>Account Number:</strong> 027-102383-132<br>
-                <strong>Bank:</strong> HSBC - The Hongkong and Shanghai Banking Corporation Ltd<br>
-                <strong>Bank Address:</strong> HSBC Centre, 3058 Fifth Avenue West, BGC, Taguig City, 1632 Philippines
-            </p>`;
-            
-        const bankDetailsUSD = `<h3>Bank Account Details (For USD Payments)</h3>
-            <p style="font-size:13px; line-height:1.8;">
-                <strong>Payment Type:</strong> PDDTS (real-time aka GSRT or EOD batch aka LP USA DOLLARS)<br>
-                <strong>Remit Currency:</strong> USA DOLLARS<br>
-                <strong>Account Name:</strong> STUART EDMUND COX<br>
-                <strong>Account Number:</strong> 027-102383-132<br>
-                <strong>Bank:</strong> HSBC - The Hongkong and Shanghai Banking Corporation Ltd<br>
-                <strong>Bank Address:</strong><br>
-                HSBC Centre<br>
-                3058 Fifth Avenue West<br>
-                Bonifacio Global City<br>
-                Taguig City, Metro Manila, 1632 Philippines<br>
-                <strong>Telephone:</strong> +632 8858 0000<br>
-                <strong>SWIFT Code:</strong> HSBCPHMMXXX
-            </p>`;
+        // --- BANK DETAILS ---
+        const bankDetailsPHP = `<h3>Bank Account Details (For PHP Payments)</h3><p style="font-size:14px; line-height:1.6;"><strong>Account Name:</strong> STUART EDMUND COX<br><strong>Account Number:</strong> 027-102383-132<br><strong>Bank:</strong> HSBC - The Hongkong and Shanghai Banking Corporation Ltd<br><strong>Bank Address:</strong> HSBC Centre, 3058 Fifth Avenue West, BGC, Taguig City, 1632 Philippines</p>`;
+        
+        const bankDetailsUSD = `<h3>Bank Account Details (For USD Payments)</h3><p style="font-size:14px; line-height:1.6; white-space: pre-wrap;"><strong>Payment Type:</strong> PDDTS (real-time aka GSRT or EOD batch aka LP USA DOLLARS)<br><strong>Remit Currency:</strong> USA DOLLARS<br><strong>Account Name:</strong> STUART EDMUND COX<br><strong>Account Number:</strong> 027-102383-132<br><strong>Bank:</strong> HSBC - The Hongkong and Shanghai Banking Corporation Ltd<br><strong>Bank Address:</strong><br>HSBC Centre<br>3058 Fifth Avenue West<br>Bonifacio Global City<br>Taguig City, Metro Manila, 1632 Philippines<br><strong>Telephone:</strong> +632 8858 0000<br><strong>SWIFT Code:</strong> HSBCPHMMXXX</p>`;
 
         // Terms & Conditions
         const termsAndConditionsHTML = `<div class="terms-section">
@@ -417,19 +417,21 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             ${customer.address.replace(/\n/g, "<br>") || "N/A"}
         </div>`;
         
-        const billToInfoHTML = `<div class="customer-box">
-            <strong>Bill To:</strong><br>
-            Customer No.: ${customer.number || "N/A"}<br>
-            ${customer.name || "N/A"}${contactLine}<br>
-            ${customer.address.replace(/\n/g, "<br>") || "N/A"}
-        </div>`;
-        
         const soldToInfoHTML = `<div class="customer-box">
             <strong>SOLD TO:</strong><br>
             <strong>Customer No.:</strong> ${customer.number || "N/A"}<br>
             <strong>Registered Name:</strong> ${customer.name || "N/A"}<br>
             <strong>TIN:</strong> ${customer.tin || "N/A"}<br>
             <strong>Business Address:</strong> ${customer.address.replace(/\n/g, "<br>") || "N/A"}${contactLine}
+        </div>`;
+
+        // Delivery Address Box
+        const deliveryAddressToUse = customer.deliveryAddress || customer.address;
+        const deliverToInfoHTML = `<div class="customer-box" style="border-left-color: #3b82f6; background-color: #eff6ff;">
+            <strong>DELIVER TO:</strong><br>
+            ${customer.name || "N/A"}<br>
+            <strong>Destination Address:</strong><br>
+            ${deliveryAddressToUse.replace(/\n/g, "<br>") || "Same as Billing Address"}
         </div>`;
 
         let generatedDocumentsHTML = '';
@@ -459,166 +461,85 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             </div>`;
         }
 
-        // GENERATE SALES QUOTATION
+        // 1. SALES QUOTATION
         if (docGeneration.generateQuote) {
-            const quoteHeaderHTML = `<div class="doc-header">
-                ${companyHeaderHTML}
-                <div class="doc-title">
-                    <h2 style="color:#ea580c; font-size:20px; margin:0; text-transform:uppercase;">SALES QUOTATION</h2>
-                    <p style="font-size:13px; margin:8px 0 0 0;">
-                        <strong>Date:</strong> ${todayFormatted}<br>
-                        <strong>Quote ID:</strong> ${quoteId}
-                    </p>
-                </div>
-            </div>`;
-            
-            const quoteSummaryHTML = `<table style="width:100%; max-width:350px; margin-left:auto; margin-top:30px; font-size:14px;">
-                <tr><td style="padding:6px 0; text-align:left;">Subtotal</td><td style="padding:6px 0; text-align:right;">${primaryFormat(subtotalPrimary)}</td></tr>
-                ${discountAmountPrimary > 0 ? `<tr><td style="padding:6px 0; text-align:left;">Discount (${commercial.discount}%)</td><td style="padding:6px 0; text-align:right; color:#dc2626;">-${primaryFormat(discountAmountPrimary)}</td></tr>` : ''}
-                <tr style="border-top:2px solid #1f2937; font-size:16px; font-weight:bold;">
-                    <td style="padding:12px 0; text-align:left;">Total Amount</td>
-                    <td style="padding:12px 0; text-align:right;">${primaryFormat(totalAfterDiscountPrimary)}</td>
-                </tr>
-            </table>`;
-            
-            generatedDocumentsHTML += `<div class="page">${quoteHeaderHTML}${customerInfoHTML}<h3 style="margin-top:30px;">Products & Services</h3><table class="items-table"><thead><tr><th>Description</th><th style="text-align:center; width:80px;">Qty</th><th style="text-align:right; width:130px;">${priceColumnHeader}</th><th style="text-align:right; width:130px;">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table>${quoteSummaryHTML}${landedCostHTML}${termsAndConditionsHTML}</div>`;
+            const quoteHeaderHTML = `<div class="doc-header">${companyHeaderHTML}<div class="doc-title"><h2 style="color:#ea580c;">SALES QUOTATION</h2><p><strong>Date:</strong> ${todayFormatted}<br><strong>Quote ID:</strong> ${quoteId}</p></div></div>`;
+            const quoteSummaryHTML = `<table style="width:100%; max-width:350px; margin-left:auto; margin-top:30px;"><tr><td>Subtotal</td><td class="text-right">${primaryFormat(subtotalPrimary)}</td></tr>${discountAmountPrimary > 0 ? `<tr><td>Discount (${commercial.discount}%)</td><td class="text-right">-${primaryFormat(discountAmountPrimary)}</td></tr>` : ''}<tr class="grand-total-row"><td><strong>Total Amount</strong></td><td class="text-right"><strong>${primaryFormat(totalAfterDiscountPrimary)}</strong></td></tr></table>`;
+            generatedDocumentsHTML += `<div class="page">${quoteHeaderHTML}${customerInfoHTML}<h3>Products & Services</h3><table class="items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">${priceColumnHeader}</th><th class="text-right">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table>${quoteSummaryHTML}${landedCostHTML}${termsAndConditionsHTML}</div>`;
         }
 
-        // GENERATE PRO FORMA INVOICE
+        // 2. PRO FORMA INVOICE
         if (docGeneration.generateProForma) {
-            const proFormaHeaderHTML = `<div class="doc-header">
-                ${companyHeaderHTML}
-                <div class="doc-title">
-                    <h2 style="color:#ea580c; font-size:20px; margin:0; text-transform:uppercase;">PRO FORMA INVOICE</h2>
-                    <p style="font-size:13px; margin:8px 0 0 0;">
-                        <strong>Date:</strong> ${todayFormatted}<br>
-                        <strong>Reference:</strong> PF-${quoteId}<br>
-                        <strong>Due Date:</strong> ${commercial.dueDate || ''}
-                    </p>
-                </div>
-            </div>`;
-            
-            const proFormaSummaryHTML = `<table style="width:100%; max-width:350px; margin-left:auto; margin-top:30px; font-size:14px;">
-                <tr><td style="padding:6px 0; text-align:left;">Subtotal</td><td style="padding:6px 0; text-align:right;">${primaryFormat(subtotalPrimary)}</td></tr>
-                ${discountAmountPrimary > 0 ? `<tr><td style="padding:6px 0; text-align:left;">Discount (${commercial.discount}%)</td><td style="padding:6px 0; text-align:right; color:#dc2626;">-${primaryFormat(discountAmountPrimary)}</td></tr>` : ''}
-                <tr style="border-top:2px solid #1f2937; font-size:16px; font-weight:bold;">
-                    <td style="padding:12px 0; text-align:left;">Total Amount Due</td>
-                    <td style="padding:12px 0; text-align:right;">${primaryFormat(totalAfterDiscountPrimary)}</td>
-                </tr>
-            </table>`;
-            
+            const proFormaHeaderHTML = `<div class="doc-header">${companyHeaderHTML}<div class="doc-title"><h2 style="color:#ea580c;">PRO FORMA INVOICE</h2><p><strong>Date:</strong> ${todayFormatted}<br><strong>Reference:</strong> PF-${quoteId}<br><strong>Due Date: ${commercial.dueDate}</strong></p></div></div>`;
+            const proFormaSummaryHTML = `<table style="width:100%; max-width:350px; margin-left:auto; margin-top:30px;"><tr><td>Subtotal</td><td class="text-right">${primaryFormat(subtotalPrimary)}</td></tr>${discountAmountPrimary > 0 ? `<tr><td>Discount (${commercial.discount}%)</td><td class="text-right">-${primaryFormat(discountAmountPrimary)}</td></tr>` : ''}<tr class="grand-total-row"><td><strong>Total Amount Due</strong></td><td class="text-right"><strong>${primaryFormat(totalAfterDiscountPrimary)}</strong></td></tr></table>`;
             const bankDetailsHTML = docGeneration.generateInPHP ? bankDetailsPHP : bankDetailsUSD;
-            
-            generatedDocumentsHTML += `<div class="page">${proFormaHeaderHTML}${billToInfoHTML}<h3 style="margin-top:30px;">Details</h3><table class="items-table"><thead><tr><th>Description</th><th style="text-align:center; width:80px;">Qty</th><th style="text-align:right; width:130px;">${priceColumnHeader}</th><th style="text-align:right; width:130px;">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table>${proFormaSummaryHTML}${landedCostHTML}${bankDetailsHTML}</div>`;
+            generatedDocumentsHTML += `<div class="page">${proFormaHeaderHTML}${customerInfoHTML}<h3>Details</h3><table class="items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">${priceColumnHeader}</th><th class="text-right">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table>${proFormaSummaryHTML}${landedCostHTML}${bankDetailsHTML}</div>`;
         }
 
-        // GENERATE BIR SALES INVOICE
+        // 3. BIR SALES INVOICE
         if (docGeneration.generateBirInvoice) {
+            const isExport = customer.saleType === 'Export';
             const totalAfterDiscountPHP = totalAfterDiscountUSD * costing.forexRate;
-            const vatableSales = totalAfterDiscountPHP / 1.12;
-            const vatAmount = vatableSales * 0.12;
+            
+            let vatableSales = 0, vatAmount = 0, zeroRatedSales = 0, vatExemptSales = 0;
+
+            if (isExport) {
+                zeroRatedSales = totalAfterDiscountPHP;
+            } else {
+                vatableSales = totalAfterDiscountPHP / 1.12; 
+                vatAmount = vatableSales * 0.12;
+            }
+
             const withholdingTaxAmount = vatableSales * (commercial.wht / 100);
             const totalAmountDue = totalAfterDiscountPHP - withholdingTaxAmount;
             
             const birLineItemsHTML = allItems.map(p => {
                 const unitPricePHP = (p.salesPriceUSD || p.priceUSD || 0) * costing.forexRate;
                 const lineTotalPHP = unitPricePHP * (p.quantity || 1);
-                return `<tr>
-                    <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;"><strong>${p.name}</strong></td>
-                    <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:center;">${p.quantity || 1}</td>
-                    <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:right;">${formatPHP(unitPricePHP)}</td>
-                    <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:right;"><strong>${formatPHP(lineTotalPHP)}</strong></td>
-                </tr>`;
+                return `<tr><td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;"><strong>${p.name}</strong></td><td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:center;">${p.quantity || 1}</td><td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:right;">${formatPHP(unitPricePHP)}</td><td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:right;"><strong>${formatPHP(lineTotalPHP)}</strong></td></tr>`;
             }).join('');
 
-            const birHeaderHTML = `<div class="doc-header">
-                ${companyHeaderHTML}
-                <div class="doc-title">
-                    <h2 style="color:#ea580c; font-size:20px; margin:0; text-transform:uppercase;">SALES INVOICE</h2>
-                    <p style="font-size:13px; margin:8px 0 0 0;">
-                        <strong>No:</strong> ${String(docControl.quoteNumber).padStart(4, '0')}<br>
-                        <strong>Date:</strong> ${todayFormatted}<br>
-                        <strong>Due Date:</strong> ${commercial.dueDate || ''}
-                    </p>
-                </div>
-            </div>`;
-            
-            const birSummaryHTML = `<table style="width:100%; font-size:13px; margin-top:30px; border-collapse:collapse;">
-                <tr style="background:#f9fafb;">
-                    <td style="padding:8px; border:1px solid #d1d5db; font-weight:600;">VATable Sales</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(vatableSales)}</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; font-weight:600;">Total Sales (VAT-Inclusive)</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(totalAfterDiscountPHP)}</td>
-                </tr>
-                <tr>
-                    <td style="padding:8px; border:1px solid #d1d5db;">VAT-Exempt Sales</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(0)}</td>
-                    <td style="padding:8px; border:1px solid #d1d5db;">Less: 12% VAT</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(vatAmount)}</td>
-                </tr>
-                <tr style="background:#f9fafb;">
-                    <td style="padding:8px; border:1px solid #d1d5db;">Zero-Rated Sales</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(0)}</td>
-                    <td style="padding:8px; border:1px solid #d1d5db;">Net of VAT</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(vatableSales)}</td>
-                </tr>
-                <tr>
-                    <td style="padding:8px; border:1px solid #d1d5db; font-weight:bold;">Total Sales</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right; font-weight:bold;">${formatPHP(vatableSales)}</td>
-                    <td style="padding:8px; border:1px solid #d1d5db;">Less: Withholding Tax (${commercial.wht}%)</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(withholdingTaxAmount)}</td>
-                </tr>
-                <tr style="background:#fef3c7; border-top:3px double #1f2937;">
-                    <td colspan="2" style="padding:8px; border:1px solid #d1d5db;"></td>
-                    <td style="padding:12px 8px; border:1px solid #d1d5db; font-weight:bold; font-size:15px;">TOTAL AMOUNT DUE</td>
-                    <td style="padding:12px 8px; border:1px solid #d1d5db; text-align:right; font-weight:bold; font-size:15px;">${formatPHP(totalAmountDue)}</td>
-                </tr>
-            </table>`;
-            
-            generatedDocumentsHTML += `<div class="page">${birHeaderHTML}${soldToInfoHTML}<h3>Details</h3><table class="items-table"><thead><tr><th>Description</th><th style="text-align:center; width:80px;">Qty</th><th style="text-align:right; width:130px;">Unit Price (PHP)</th><th style="text-align:right; width:130px;">Amount (PHP)</th></tr></thead><tbody>${birLineItemsHTML}</tbody></table>${birSummaryHTML}${bankDetailsPHP}</div>`;
+            const birHeaderHTML = `<div class="doc-header">${companyHeaderHTML}<div class="doc-title"><h2 style="color:#ea580c;">SALES INVOICE</h2><p><strong>No:</strong> ${String(docControl.quoteNumber).padStart(4, '0')}<br><strong>Date:</strong> ${todayFormatted}<br><strong>Due Date: ${commercial.dueDate}</strong></p></div></div>`;
+            const birSummaryHTML = `<table class="summary-table"><tr><td>VATable Sales</td><td class="text-right">${formatPHP(vatableSales)}</td><td>Total Sales (VAT-Inclusive)</td><td class="text-right">${formatPHP(totalAfterDiscountPHP)}</td></tr><tr><td>VAT-Exempt Sales</td><td class="text-right">${formatPHP(vatExemptSales)}</td><td>Less: 12% VAT</td><td class="text-right">${formatPHP(vatAmount)}</td></tr><tr><td>Zero-Rated Sales</td><td class="text-right">${formatPHP(zeroRatedSales)}</td><td>Net of VAT</td><td class="text-right">${formatPHP(vatableSales + zeroRatedSales)}</td></tr><tr><td><strong>Total Sales</strong></td><td class="text-right"><strong>${formatPHP(vatableSales + zeroRatedSales)}</strong></td><td>Less: Withholding Tax (${commercial.wht}%)</td><td class="text-right">${formatPHP(withholdingTaxAmount)}</td></tr><tr class="bir-grand-total-row"><td></td><td></td><td><strong>TOTAL AMOUNT DUE</strong></td><td class="text-right"><strong>${formatPHP(totalAmountDue)}</strong></td></tr></table>`;
+            const paymentFooter = `<div style="margin-top:40px; border-top:2px dashed #ccc; padding-top:20px;"><h4>Payment & Collection (Official Use Only)</h4><div style="display:flex; justify-content:space-between; margin-top:15px;"><div style="border-bottom:1px solid #000; width:30%;">Date Paid:</div><div style="border-bottom:1px solid #000; width:30%;">Amount Paid:</div><div style="border-bottom:1px solid #000; width:30%;">OR / Ref #:</div></div><p style="margin-top:10px; font-size:11px; font-style:italic;">Issue Official Receipt upon full payment or delivery as per terms.</p></div>`;
+
+            generatedDocumentsHTML += `<div class="page">${birHeaderHTML}${soldToInfoHTML}<h3>Details</h3><table class="items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">Unit Price (PHP)</th><th class="text-right">Amount (PHP)</th></tr></thead><tbody>${birLineItemsHTML}</tbody></table><div class="summary-wrapper">${birSummaryHTML}</div>${paymentFooter}</div>`;
         }
 
-        // PROFESSIONAL PDF-MATCHING CSS
-        const finalReportHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Quote Preview - ${quoteId}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1f2937; background: #f3f4f6; padding: 20px; }
-        .page { background: white; max-width: 800px; margin: 0 auto 40px; padding: 50px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); page-break-after: always; }
-        .page:last-child { page-break-after: auto; }
-        .doc-header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 3px solid #ea580c; margin-bottom: 30px; }
-        .company-info { flex: 1; }
-        .doc-title { text-align: right; }
-        .customer-box { background: #fef3c7; border-left: 4px solid #ea580c; padding: 15px 20px; margin: 25px 0; font-size: 13px; line-height: 1.8; }
-        h3 { color: #4b5563; font-size: 15px; margin: 25px 0 15px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; text-transform: uppercase; letter-spacing: 0.5px; }
-        .items-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
-        .items-table thead { background: #ea580c; color: white; }
-        .items-table th { padding: 12px 8px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .items-table tbody tr:hover { background: #f9fafb; }
-        .landed-cost-section { margin: 30px 0; padding: 20px; background: #f9fafb; border-radius: 8px; }
-        .terms-section { margin-top: 50px; padding-top: 30px; border-top: 2px solid #e5e7eb; }
-        .terms-content { font-size: 12px; line-height: 1.6; color: #6b7280; }
-        .term-item { margin: 15px 0; }
-        .term-item strong { display: block; color: #374151; margin-bottom: 5px; font-size: 13px; }
-        @media print { 
-            body { background: white; padding: 0; }
-            .page { box-shadow: none; margin: 0; max-width: none; page-break-after: always; }
-            .page:last-child { page-break-after: auto; }
+        // 4. DELIVERY RECEIPT
+        if (docGeneration.generateDeliveryReceipt) {
+            const drHeaderHTML = `<div class="doc-header">${companyHeaderHTML}<div class="doc-title"><h2 style="color:#ea580c;">DELIVERY RECEIPT</h2><p><strong>Ref:</strong> DR-${quoteId}<br><strong>Date:</strong> ${todayFormatted}</p></div></div>`;
+            const drLineItemsHTML = allItems.map(p => `<tr><td style="padding:12px;"><strong>${p.name}</strong><br><span style="font-size:11px; color:#666;">${p.specs || ''}</span></td><td style="text-align:center; padding:12px;">${p.quantity}</td><td style="padding:12px;">__________________</td></tr>`).join('');
+            const drFooter = `<div style="margin-top:50px; display:flex; justify-content:space-between;"><div style="width:45%; border-top:1px solid #000; padding-top:10px;"><strong>Prepared By:</strong><br>Karnot Energy Solutions Inc.</div><div style="width:45%; border-top:1px solid #000; padding-top:10px;"><strong>Received By (Signature over Printed Name):</strong><br>Date Received: _________________</div></div><div style="margin-top:20px; font-size:12px; font-style:italic; text-align:center;">Received the above items in good order and condition.</div>`;
+
+            generatedDocumentsHTML += `<div class="page">${drHeaderHTML}${deliverToInfoHTML}<h3>Items Delivered</h3><table class="items-table"><thead><tr><th>Description</th><th class="text-center" width="80">Qty</th><th width="150">Remarks</th></tr></thead><tbody>${drLineItemsHTML}</tbody></table>${drFooter}</div>`;
         }
-    </style>
-</head>
-<body>${generatedDocumentsHTML}</body>
-</html>`;
+
+        // 5. OFFICIAL RECEIPT
+        if (docGeneration.generateOfficialReceipt) {
+            const orHeaderHTML = `<div class="doc-header">${companyHeaderHTML}<div class="doc-title"><h2 style="color:#ea580c;">OFFICIAL RECEIPT</h2><p><strong>OR No:</strong> ___________<br><strong>Date:</strong> ${todayFormatted}</p></div></div>`;
+            const totalAmountPHP = totalAfterDiscountUSD * costing.forexRate; 
+            
+            const isExport = customer.saleType === 'Export';
+            const vatable = isExport ? 0 : totalAmountPHP / 1.12;
+            const vat = isExport ? 0 : vatable * 0.12;
+            const zeroRated = isExport ? totalAmountPHP : 0;
+
+            const orBody = `<div style="margin:20px 0; font-size:14px; line-height:2;"><div style="border-bottom:1px solid #ccc;"><strong>Received From:</strong> ${customer.name}</div><div style="border-bottom:1px solid #ccc;"><strong>TIN:</strong> ${customer.tin}</div><div style="border-bottom:1px solid #ccc;"><strong>Address:</strong> ${customer.address}</div><div style="border-bottom:1px solid #ccc; margin-top:15px;"><strong>The Sum of (Amount in Words):</strong> __________________________________________________________________________</div><div style="text-align:right; font-size:18px; font-weight:bold; margin-top:10px;">Amount: ${formatPHP(totalAmountPHP)}</div><div style="border-bottom:1px solid #ccc; margin-top:15px;"><strong>In full/partial settlement of:</strong> Invoice No. ${String(docControl.quoteNumber).padStart(4, '0')}</div></div>`;
+            const orPaymentDetails = `<table style="width:100%; border:1px solid #ccc; margin-top:20px; font-size:12px;"><tr style="background:#eee;"><th style="border:1px solid #ccc; padding:5px;">Form of Payment</th><th style="border:1px solid #ccc; padding:5px;">Amount</th><th style="border:1px solid #ccc; padding:5px;">Bank / Check No.</th><th style="border:1px solid #ccc; padding:5px;">Date</th></tr><tr><td style="border:1px solid #ccc; padding:10px;">Cash</td><td style="border:1px solid #ccc;"></td><td style="border:1px solid #ccc;"></td><td style="border:1px solid #ccc;"></td></tr><tr><td style="border:1px solid #ccc; padding:10px;">Check</td><td style="border:1px solid #ccc;"></td><td style="border:1px solid #ccc;"></td><td style="border:1px solid #ccc;"></td></tr></table>`;
+            const orTaxTable = `<table style="width:50%; font-size:10px; margin-top:20px; border-collapse:collapse;"><tr><td style="border:1px solid #ccc; padding:2px;">VATable Sales</td><td style="border:1px solid #ccc; text-align:right; padding:2px;">${formatPHP(vatable)}</td></tr><tr><td style="border:1px solid #ccc; padding:2px;">VAT-Exempt</td><td style="border:1px solid #ccc; text-align:right; padding:2px;">0.00</td></tr><tr><td style="border:1px solid #ccc; padding:2px;">Zero-Rated</td><td style="border:1px solid #ccc; text-align:right; padding:2px;">${formatPHP(zeroRated)}</td></tr><tr><td style="border:1px solid #ccc; padding:2px;">12% VAT</td><td style="border:1px solid #ccc; text-align:right; padding:2px;">${formatPHP(vat)}</td></tr><tr><td style="border:1px solid #ccc; padding:2px;"><strong>TOTAL</strong></td><td style="border:1px solid #ccc; text-align:right; padding:2px;"><strong>${formatPHP(totalAmountPHP)}</strong></td></tr></table>`;
+            const orFooter = `<div style="margin-top:40px; text-align:right;"><div style="display:inline-block; text-align:center; border-top:1px solid #000; width:200px; padding-top:5px;">Authorized Signature</div></div>`;
+
+            generatedDocumentsHTML += `<div class="page">${orHeaderHTML}${orBody}${orPaymentDetails}<div style="display:flex; justify-content:space-between;">${orTaxTable}${orFooter}</div></div>`;
+        }
+
+        const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Quote Preview - ${quoteId}</title><style> * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1f2937; background: #f3f4f6; padding: 20px; } .page { background: white; max-width: 800px; margin: 0 auto 40px; padding: 50px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); page-break-after: always; } .page:last-child { page-break-after: auto; } .doc-header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 3px solid #ea580c; margin-bottom: 30px; } .company-info { flex: 1; } .doc-title { text-align: right; } .customer-box { background: #fef3c7; border-left: 4px solid #ea580c; padding: 15px 20px; margin: 25px 0; font-size: 13px; line-height: 1.8; } h3 { color: #4b5563; font-size: 15px; margin: 25px 0 15px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; text-transform: uppercase; letter-spacing: 0.5px; } .items-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; } .items-table thead { background: #ea580c; color: white; } .items-table th { padding: 12px 8px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; } .items-table tbody tr:hover { background: #f9fafb; } .landed-cost-section { margin: 30px 0; padding: 20px; background: #f9fafb; border-radius: 8px; } .terms-section { margin-top: 50px; padding-top: 30px; border-top: 2px solid #e5e7eb; } .terms-content { font-size: 12px; line-height: 1.6; color: #6b7280; } .term-item { margin: 15px 0; } .term-item strong { display: block; color: #374151; margin-bottom: 5px; font-size: 13px; } .summary-table { width: 100%; font-size: 13px; border-collapse: collapse; } .summary-table td { border: 1px solid #d1d5db; padding: 8px; } .text-right { text-align: right; } .text-center { text-align: center; } @media print { body { background: white; padding: 0; } .page { box-shadow: none; margin: 0; max-width: none; page-break-after: always; } .page:last-child { page-break-after: auto; } }</style></head><body>${generatedDocumentsHTML}</body></html>`;
         
         const win = window.open("", "QuotePreview");
         win.document.write(finalReportHTML);
         win.document.close();
     };
     
-    // --- SAVE QUOTE ---
     const handleSave = () => {
         if (!customer.name) return alert("Please select or enter a customer.");
         
@@ -650,7 +571,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         onSaveQuote(newQuote);
     };
 
-    // --- PRODUCT CATEGORIES ---
     const productCategories = useMemo(() => {
         return filteredProducts.reduce((acc, p) => {
             const cat = p.category || 'Uncategorized';
@@ -743,7 +663,55 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                             <Input label="TIN" value={customer.tin} onChange={handleInputChange(setCustomer, 'tin')} />
                         </div>
 
-                        <Textarea label="Address" value={customer.address} onChange={handleInputChange(setCustomer, 'address')} rows="3" />
+                        <Textarea label="Billing Address" value={customer.address} onChange={handleInputChange(setCustomer, 'address')} rows="2" />
+                        
+                        {/* Delivery Address Section */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <label className="text-[10px] font-black uppercase text-gray-400">Delivery Address</label>
+                                <Checkbox 
+                                    label="Same as Billing" 
+                                    checked={sameAsBilling} 
+                                    onChange={(e) => {
+                                        setSameAsBilling(e.target.checked);
+                                        if (e.target.checked) setCustomer(prev => ({...prev, deliveryAddress: prev.address}));
+                                    }} 
+                                />
+                            </div>
+                            {!sameAsBilling && (
+                                <Textarea 
+                                    value={customer.deliveryAddress} 
+                                    onChange={handleInputChange(setCustomer, 'deliveryAddress')} 
+                                    rows="2" 
+                                    className="bg-blue-50 border-blue-200"
+                                />
+                            )}
+                        </div>
+                        
+                        {/* Sale Type Selector (VAT Logic) */}
+                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Sale Type (VAT Logic)</label>
+                            <div className="flex gap-4">
+                                <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                                    <input 
+                                        type="radio" 
+                                        name="saleType" 
+                                        value="Export" 
+                                        checked={customer.saleType === 'Export'} 
+                                        onChange={(e) => setCustomer({...customer, saleType: e.target.value})}
+                                    /> Export (Zero-Rated)
+                                </label>
+                                <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                                    <input 
+                                        type="radio" 
+                                        name="saleType" 
+                                        value="Domestic" 
+                                        checked={customer.saleType === 'Domestic'} 
+                                        onChange={(e) => setCustomer({...customer, saleType: e.target.value})}
+                                    /> Domestic (12% VAT)
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </Section>
 
@@ -817,6 +785,16 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                                 label="BIR Sales Invoice" 
                                 checked={docGeneration.generateBirInvoice} 
                                 onChange={handleCheckboxChange(setDocGeneration, 'generateBirInvoice')} 
+                            />
+                            <Checkbox 
+                                label="Delivery Receipt" 
+                                checked={docGeneration.generateDeliveryReceipt} 
+                                onChange={handleCheckboxChange(setDocGeneration, 'generateDeliveryReceipt')} 
+                            />
+                            <Checkbox 
+                                label="Official Receipt" 
+                                checked={docGeneration.generateOfficialReceipt} 
+                                onChange={handleCheckboxChange(setDocGeneration, 'generateOfficialReceipt')} 
                             />
                             <Checkbox 
                                 label="Include Landed Cost Breakdown" 
