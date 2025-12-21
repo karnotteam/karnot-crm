@@ -1,11 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, Button, Input } from '../data/constants.jsx';
-import { Calculator, Briefcase, Landmark, Clock, Target, Flame, TrendingUp, AlertCircle, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Calculator, Briefcase, Landmark, Clock, Target, Flame, TrendingUp, AlertCircle, ArrowUpRight, ArrowDownRight, CheckCircle } from 'lucide-react';
+import { db } from '../firebase'; 
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] }) => {
     const [selectedQuoteId, setSelectedQuoteId] = useState('');
     const [targetLabor, setTargetLabor] = useState(0);
     const [targetMaterials, setTargetMaterials] = useState(0);
+    const [estimateFound, setEstimateFound] = useState(false);
 
     // Get active projects (Won or Invoiced)
     const activeProjects = quotes.filter(q => 
@@ -14,47 +18,59 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
 
     const selectedQuote = activeProjects.find(q => q.id === selectedQuoteId);
     
-    // --- ROBUST LINKING LOGIC ---
-    const clientId = selectedQuote?.customer?.id;
-    const clientName = selectedQuote?.customer?.name?.toLowerCase().trim();
+    // --- 1. AUTO-FETCH ESTIMATES (If available) ---
+    useEffect(() => {
+        const fetchEstimate = async () => {
+            if (!selectedQuoteId) return;
+            const auth = getAuth();
+            if (!auth.currentUser) return;
 
-    // 1. Calculate Actual Expenses from Ledger
+            // Try to find a saved Installation Estimate for this quote
+            const q = query(collection(db, "users", auth.currentUser.uid, "installation_proposals"), where("quoteId", "==", selectedQuoteId));
+            const snapshot = await getDocs(q);
+            
+            if (!snapshot.empty) {
+                const estData = snapshot.docs[0].data();
+                setTargetLabor(estData.costs?.labor || 0);
+                setTargetMaterials((estData.costs?.materials || 0) + (estData.costs?.logistics || 0)); // Combine mats + logistics for budget
+                setEstimateFound(true);
+            } else {
+                setTargetLabor(0);
+                setTargetMaterials(0);
+                setEstimateFound(false);
+            }
+        };
+        fetchEstimate();
+    }, [selectedQuoteId]);
+
+    // --- 2. CALCULATE ACTUALS ---
+    
+    // A. Expenses from Ledger (Now using projectId)
     const projectExpenses = ledgerEntries
-        .filter(e => {
-            const entryId = e.companyId;
-            const entryName = e.companyName?.toLowerCase().trim();
-            return (clientId && entryId === clientId) || (clientName && entryName === clientName);
-        })
+        .filter(e => e.projectId === selectedQuoteId)
         .reduce((sum, e) => sum + parseFloat(e.amountPHP || 0), 0);
 
-    // 2. Calculate Actual Labor from Manpower Logs
+    // B. Labor from Manpower Logs (Now using companyId/projectId)
     const projectManpower = manpowerLogs
-        .filter(m => {
-            const logId = m.companyId;
-            const logName = m.companyName?.toLowerCase().trim();
-            return (clientId && logId === clientId) || (clientName && logName === clientName);
-        })
+        .filter(m => m.companyId === selectedQuoteId)
         .reduce((sum, m) => sum + parseFloat(m.totalCost || 0), 0);
 
     const totalActualBurn = projectExpenses + projectManpower;
 
-    // --- ROI & MARGIN CALCULATIONS ---
+    // --- 3. ROI & MARGIN MATH ---
     const forexRate = selectedQuote?.costing?.forexRate || 58.5;
     
-    // Pull the EXACT cost price from quote
+    // Pull the EXACT cost price from quote (Machine Cost)
     const equipmentCostUSD = selectedQuote?.totalCost || 0; 
     const salesPriceUSD = selectedQuote?.finalSalesPrice || 0;
 
-    // Convert to PHP for comparison
+    // Available Margin for Installation (Sales - Machine Cost) converted to PHP
     const availableMarginPHP = (salesPriceUSD - equipmentCostUSD) * forexRate;
     
-    // Actuals from Ledger & Logs (already in PHP)
-    const totalActualBurnPHP = projectExpenses + projectManpower; 
-    
-    const remainingProfitPHP = availableMarginPHP - totalActualBurnPHP;
-    const burnPercentage = availableMarginPHP > 0 ? (totalActualBurnPHP / availableMarginPHP) * 100 : 0;
+    const remainingProfitPHP = availableMarginPHP - totalActualBurn;
+    const burnPercentage = availableMarginPHP > 0 ? (totalActualBurn / availableMarginPHP) * 100 : 0;
 
-    // --- VARIANCE CALCULATIONS ---
+    // --- 4. VARIANCE MATH ---
     const laborVariance = parseFloat(targetLabor || 0) - projectManpower;
     const materialVariance = parseFloat(targetMaterials || 0) - projectExpenses;
     const totalTarget = parseFloat(targetLabor || 0) + parseFloat(targetMaterials || 0);
@@ -79,25 +95,28 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                     )}
                 </div>
 
-                <select 
-                    className="w-full p-4 border-2 border-purple-100 rounded-2xl bg-white font-black text-gray-700 mb-8 outline-none focus:ring-2 focus:ring-purple-500 shadow-sm transition-all cursor-pointer"
-                    value={selectedQuoteId} 
-                    onChange={(e) => setSelectedQuoteId(e.target.value)}
-                >
-                    <option value="">-- SELECT AN ACTIVE PROJECT ({activeProjects.length}) --</option>
-                    {activeProjects.map(q => (
-                        <option key={q.id} value={q.id}>{q.id} - {q.customer?.name}</option>
-                    ))}
-                </select>
+                <div className="relative">
+                    <select 
+                        className="w-full p-4 pl-12 border-2 border-purple-100 rounded-2xl bg-white font-black text-gray-700 mb-8 outline-none focus:ring-2 focus:ring-purple-500 shadow-sm transition-all cursor-pointer appearance-none"
+                        value={selectedQuoteId} 
+                        onChange={(e) => setSelectedQuoteId(e.target.value)}
+                    >
+                        <option value="">-- SELECT AN ACTIVE PROJECT ({activeProjects.length}) --</option>
+                        {activeProjects.map(q => (
+                            <option key={q.id} value={q.id}>{q.customer?.name} (Ref: {q.id})</option>
+                        ))}
+                    </select>
+                    <Briefcase className="absolute left-4 top-4 text-purple-300 pointer-events-none" size={20}/>
+                </div>
 
                 {selectedQuote ? (
-                    <div className="space-y-8">
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         {/* THE MONEY METRICS */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
-                                <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Equipment Margin (Buffer)</p>
+                                <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Gross Project Budget</p>
                                 <p className="text-2xl font-black text-green-600">₱{availableMarginPHP.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                                <p className="text-[10px] text-gray-400 mt-2 italic">Sales Price - Machine Cost</p>
+                                <p className="text-[10px] text-gray-400 mt-2 italic">Sales Price - Equipment Cost</p>
                             </div>
                             <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
                                 <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Actual Burn (Spent)</p>
@@ -113,6 +132,7 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                         style={{ width: `${Math.min(burnPercentage, 100)}%` }}
                                     ></div>
                                 </div>
+                                <p className="text-[9px] mt-1 text-right font-bold opacity-80">{burnPercentage.toFixed(1)}% Budget Consumed</p>
                             </div>
                         </div>
 
@@ -122,10 +142,11 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                 <h3 className="text-xs font-black uppercase text-gray-500 tracking-widest flex items-center gap-2">
                                     <Target size={16} className="text-purple-600"/> Variance Analysis: Target vs Actual
                                 </h3>
-                                <div className="flex gap-4">
-                                    <span className="text-[10px] font-bold text-green-600 flex items-center gap-1"><ArrowUpRight size={12}/> UNDER</span>
-                                    <span className="text-[10px] font-bold text-red-600 flex items-center gap-1"><ArrowDownRight size={12}/> OVER</span>
-                                </div>
+                                {estimateFound && (
+                                    <span className="text-[9px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded flex items-center gap-1">
+                                        <CheckCircle size={10}/> Linked to Estimate
+                                    </span>
+                                )}
                             </div>
                             <table className="w-full text-left">
                                 <thead className="bg-gray-50/50">
@@ -166,7 +187,7 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                         <td className="p-4">
                                             <div className="flex items-center gap-2">
                                                 <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Landmark size={16}/></div>
-                                                <span className="font-bold text-gray-700 uppercase text-xs">Materials / Consumables</span>
+                                                <span className="font-bold text-gray-700 uppercase text-xs">Materials / Logistics</span>
                                             </div>
                                         </td>
                                         <td className="p-4">
