@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { 
     Trash2, Edit, Eye, CheckCircle, XCircle, FileText, 
-    Search, ArrowUpRight, Clock, ShieldCheck, Target, Briefcase, DollarSign
+    Search, ArrowUpRight, Clock, ShieldCheck, Target, Briefcase, 
+    Send, ThumbsUp, RotateCcw
 } from 'lucide-react';
 import { Card, Button, Input } from '../data/constants.jsx';
 
@@ -13,19 +14,16 @@ const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuote
     const processedQuotes = useMemo(() => {
         return quotes.map(q => {
             // A. LINK TO FUNNEL (Win Probability)
-            // We search for an opportunity that matches the quote's opportunityId OR the leadId
             const linkedOpp = opportunities.find(o => o.id === q.opportunityId || o.id === q.leadId);
             const winChance = linkedOpp?.probability || 0;
             
-            // B. LIVE MARGIN CALCULATION (ROI Check)
-            // We use the 'totalCost' saved by the Quote Calculator to get true profit
+            // B. LIVE MARGIN CALCULATION
             const salesPrice = Number(q.finalSalesPrice || 0);
             const costPrice = Number(q.totalCost || 0); 
             const marginAmount = salesPrice - costPrice;
             const liveMarginPct = salesPrice > 0 ? (marginAmount / salesPrice) * 100 : 0;
 
-            // C. FOREX & CURRENCY NORMALIZATION
-            // Use the specific rate saved in the quote, or default to 58.5 if legacy
+            // C. FOREX & CURRENCY
             const rate = q.costing?.forexRate || 58.5;
             const grossPHP = salesPrice * rate;
 
@@ -39,7 +37,6 @@ const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuote
                 grossPHP, 
                 forexUsed: rate,
                 isExport,
-                // If opportunityId exists, we know it's linked to a project/funnel
                 hasProjectLink: !!q.opportunityId 
             };
         });
@@ -66,8 +63,6 @@ const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuote
         const officialInvoices = quotes.filter(q => q.status === 'INVOICED').length;
         const wonDeals = quotes.filter(q => q.status === 'WON').length;
         
-        // Weighted Pipeline = Sum of (Quote Value * Win Probability)
-        // Only counts active quotes (Draft, Approved, Invoiced) - excludes Lost/Won
         const weightedValue = processedQuotes
             .filter(q => ['DRAFT', 'APPROVED', 'INVOICED'].includes(q.status))
             .reduce((sum, q) => sum + (q.finalSalesPrice * (q.winChance / 100)), 0);
@@ -169,13 +164,17 @@ const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuote
                                     {/* COL 2: CUSTOMER & FUNNEL */}
                                     <td className="p-6 align-top">
                                         <p className="font-bold text-gray-800 uppercase text-xs mb-2">{q.customer?.name}</p>
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <span className={`text-[8px] font-black px-2 py-1 rounded-lg border ${q.isExport ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
+                                        <div className="flex flex-col gap-2">
+                                            <span className={`text-[8px] font-black px-2 py-1 rounded-lg border w-fit ${q.isExport ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
                                                 {q.isExport ? 'ZERO-RATED EXPORT' : 'DOMESTIC VAT'}
                                             </span>
-                                            {q.winChance > 0 && (
-                                                <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg border border-blue-100">
-                                                    <Target size={10}/> {q.winChance}% Prob.
+                                            {q.winChance > 0 ? (
+                                                <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg border border-blue-100 w-fit">
+                                                    <Target size={12}/> {q.winChance}% Probability
+                                                </p>
+                                            ) : (
+                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 px-2">
+                                                    <Target size={12}/> No Funnel Link
                                                 </p>
                                             )}
                                         </div>
@@ -197,10 +196,10 @@ const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuote
                                         </div>
                                     </td>
 
-                                    {/* COL 4: STATUS BADGE */}
+                                    {/* COL 4: STATUS CONTROL */}
                                     <td className="p-6 text-center align-middle">
-                                        <div className="flex flex-col items-center gap-3">
-                                            <span className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-sm border
+                                        <div className="flex flex-col items-center gap-2">
+                                            <span className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-sm border
                                                 ${q.status === 'INVOICED' ? 'bg-green-100 text-green-700 border-green-200' : 
                                                   q.status === 'APPROVED' ? 'bg-blue-100 text-blue-700 border-blue-200' : 
                                                   q.status === 'WON' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
@@ -209,18 +208,35 @@ const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuote
                                                 {q.status === 'APPROVED' ? 'PRO-FORMA' : q.status}
                                             </span>
                                             
-                                            {/* THE TAX TRIGGER BUTTON */}
-                                            {q.status === 'APPROVED' && (
+                                            {/* --- STATUS CHANGE BUTTONS --- */}
+                                            {q.status === 'DRAFT' && (
                                                 <button 
-                                                    onClick={() => {
-                                                        if(confirm("Confirm: Issue Official Sales Invoice? This will post 12% VAT to your books.")) {
-                                                            onUpdateQuoteStatus(q.id, 'INVOICED');
-                                                        }
-                                                    }}
-                                                    className="flex items-center gap-1.5 text-[9px] font-black text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-600 hover:text-white transition-all border border-orange-200 animate-pulse"
+                                                    onClick={() => onUpdateQuoteStatus(q.id, 'APPROVED')}
+                                                    className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-600 hover:text-white transition-all border border-blue-200"
                                                 >
-                                                    <ArrowUpRight size={12}/> ISSUE SI / POST VAT
+                                                    <ThumbsUp size={12}/> APPROVE / SEND
                                                 </button>
+                                            )}
+
+                                            {q.status === 'APPROVED' && (
+                                                <div className="flex flex-col gap-1 w-full">
+                                                    <button 
+                                                        onClick={() => {
+                                                            if(confirm("Confirm: Issue Official Sales Invoice? This triggers VAT liability.")) {
+                                                                onUpdateQuoteStatus(q.id, 'INVOICED');
+                                                            }
+                                                        }}
+                                                        className="flex items-center justify-center gap-1.5 text-[9px] font-black text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-600 hover:text-white transition-all border border-orange-200"
+                                                    >
+                                                        <ArrowUpRight size={12}/> ISSUE INVOICE
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => onUpdateQuoteStatus(q.id, 'DRAFT')}
+                                                        className="flex items-center justify-center gap-1.5 text-[9px] font-black text-gray-500 hover:text-gray-800"
+                                                    >
+                                                        <RotateCcw size={10}/> Revert to Draft
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     </td>
@@ -228,14 +244,14 @@ const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuote
                                     {/* COL 5: ACTIONS */}
                                     <td className="p-6 align-middle">
                                         <div className="flex justify-center gap-2 opacity-60 group-hover:opacity-100 transition-all duration-300">
-                                            <button onClick={() => onOpenQuote(q)} className="p-3 bg-gray-50 text-gray-500 hover:bg-blue-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Preview PDF"><Eye size={18}/></button>
-                                            <button onClick={() => onEditQuote(q)} className="p-3 bg-gray-50 text-gray-500 hover:bg-orange-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Edit Quote"><Edit size={18}/></button>
+                                            <button onClick={() => onOpenQuote(q)} className="p-2.5 bg-gray-50 text-gray-500 hover:bg-blue-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Preview PDF"><Eye size={16}/></button>
+                                            <button onClick={() => onEditQuote(q)} className="p-2.5 bg-gray-50 text-gray-500 hover:bg-orange-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Edit Quote"><Edit size={16}/></button>
                                             
                                             <div className="h-8 w-[1px] bg-gray-200 mx-2 self-center"></div>
                                             
-                                            <button onClick={() => onUpdateQuoteStatus(q.id, 'WON')} className="p-3 bg-gray-50 text-gray-500 hover:bg-green-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Mark Won"><CheckCircle size={18}/></button>
-                                            <button onClick={() => onUpdateQuoteStatus(q.id, 'LOST')} className="p-3 bg-gray-50 text-gray-500 hover:bg-red-400 hover:text-white rounded-xl transition-colors shadow-sm" title="Mark Lost"><XCircle size={18}/></button>
-                                            <button onClick={() => onDeleteQuote(q.id)} className="p-3 bg-gray-50 text-gray-500 hover:bg-red-700 hover:text-white rounded-xl transition-colors shadow-sm" title="Delete"><Trash2 size={18}/></button>
+                                            <button onClick={() => onUpdateQuoteStatus(q.id, 'WON')} className="p-2.5 bg-gray-50 text-gray-500 hover:bg-green-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Mark Won"><CheckCircle size={16}/></button>
+                                            <button onClick={() => onUpdateQuoteStatus(q.id, 'LOST')} className="p-2.5 bg-gray-50 text-gray-500 hover:bg-red-400 hover:text-white rounded-xl transition-colors shadow-sm" title="Mark Lost"><XCircle size={16}/></button>
+                                            <button onClick={() => onDeleteQuote(q.id)} className="p-2.5 bg-gray-50 text-gray-500 hover:bg-red-700 hover:text-white rounded-xl transition-colors shadow-sm" title="Delete"><Trash2 size={16}/></button>
                                         </div>
                                     </td>
                                 </tr>
