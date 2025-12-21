@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, getDocs } from "firebase/firestore";
-import { Plus, X, Edit, Trash2, FileText, DollarSign, Building, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, Edit, Trash2, FileText, DollarSign, Building, ChevronLeft, ChevronRight, Calendar, Clock } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
 
 const STAGE_ORDER = [
@@ -14,8 +14,8 @@ const STAGE_ORDER = [
     'Closed-Lost'
 ];
 
-// --- OpportunityCard Component with Company History ---
-const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThisOpp, companyData }) => {
+// --- OpportunityCard Component with Company History & Appointments ---
+const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThisOpp, companyData, upcomingAppointments }) => {
     const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
     const nextStage = STAGE_ORDER[currentStageIndex + 1];
     const previousStage = STAGE_ORDER[currentStageIndex - 1];
@@ -36,6 +36,7 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
     const companyQuoteCount = companyData?.quoteCount || 0;
     const companyTotalValue = companyData?.totalValue || 0;
     const companyLastQuoteDate = companyData?.lastQuoteDate || null;
+    const nextAppointment = upcomingAppointments && upcomingAppointments.length > 0 ? upcomingAppointments[0] : null;
     
     return (
         <Card className="p-4 mb-3 rounded-lg shadow border border-gray-200">
@@ -65,6 +66,16 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
                 <div className="mt-2 flex items-center gap-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
                     <DollarSign size={12} />
                     <span>{quotesForThisOpp.length} Quote{quotesForThisOpp.length > 1 ? 's' : ''} for this Opportunity</span>
+                </div>
+            )}
+
+            {/* Next Appointment Alert (NEW) */}
+            {nextAppointment && (
+                <div className="mt-2 flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                    <Calendar size={12} />
+                    <span className="font-semibold">
+                        {nextAppointment.purpose} - {new Date(nextAppointment.appointmentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} @ {nextAppointment.appointmentTime}
+                    </span>
                 </div>
             )}
 
@@ -98,6 +109,14 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
                             </span>
                         </div>
                     )}
+
+                    {/* Appointment Count (NEW) */}
+                    {upcomingAppointments && upcomingAppointments.length > 0 && (
+                        <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">Scheduled Visits:</span>
+                            <span className="font-semibold text-blue-600">{upcomingAppointments.length}</span>
+                        </div>
+                    )}
                 </div>
             )}
             
@@ -105,7 +124,7 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
                 <FileText size={14} className="mr-2"/> View Details / Notes
             </Button>
 
-            {/* NEW: Move Backward and Forward buttons */}
+            {/* Move Backward and Forward buttons */}
             {(opp.stage !== 'Closed-Won' && opp.stage !== 'Closed-Lost') && (
                 <div className="mt-2 flex gap-2">
                     {previousStage && (
@@ -364,7 +383,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
 };
 
 // --- MAIN FUNNEL PAGE COMPONENT ---
-const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => { 
+const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointments = [] }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingOpportunity, setEditingOpportunity] = useState(null);
     const [quotes, setQuotes] = useState([]);
@@ -418,6 +437,21 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
             totalValue: totalValue,
             lastQuoteDate: lastQuoteDate
         };
+    };
+
+    // Get upcoming appointments for a company (NEW)
+    const getUpcomingAppointments = (companyName) => {
+        if (!appointments || appointments.length === 0) return [];
+        
+        const now = new Date();
+        return appointments
+            .filter(apt => 
+                apt.companyName === companyName &&
+                apt.status !== 'Completed' &&
+                apt.status !== 'Cancelled' &&
+                new Date(apt.appointmentDate) >= now
+            )
+            .sort((a, b) => new Date(a.appointmentDate) - new Date(b.appointmentDate));
     };
 
     const handleSaveOpportunity = async (newOppData) => {
@@ -596,6 +630,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts }) => {
                                             onOpen={onOpen}
                                             quotesForThisOpp={getQuotesForOpportunity(opp.id)}
                                             companyData={getCompanyData(opp.customerName)}
+                                            upcomingAppointments={getUpcomingAppointments(opp.customerName)}
                                         />
                                     ))
                                 }
