@@ -5,7 +5,7 @@ import Papa from 'papaparse';
 import { 
     Plus, X, Edit, Trash2, Truck, Globe, Upload, Search, 
     MapPin, UserCheck, PlusCircle, Download, ShieldCheck, AlertTriangle, 
-    ShoppingCart, Package, CheckCircle, Printer, FileText, ArrowLeft
+    ShoppingCart, Package, Printer, ArrowLeft
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, KARNOT_LOGO_BASE_64 } from '../data/constants.jsx';
 
@@ -23,7 +23,7 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-// --- 2. PRINTABLE PO TEMPLATE ---
+// --- 2. PRINTABLE PO TEMPLATE (PDF VIEW) ---
 const PrintablePO = ({ po, supplier, onClose }) => {
     if (!po) return null;
 
@@ -60,19 +60,19 @@ const PrintablePO = ({ po, supplier, onClose }) => {
                     <div>
                         <h3 className="text-xs font-black uppercase text-gray-400 mb-2 tracking-widest">Vendor (Supplier)</h3>
                         <p className="font-bold text-lg">{supplier.name}</p>
-                        <p className="text-sm">{supplier.address}</p>
-                        <p className="text-sm mt-1"><span className="font-bold">Attn:</span> {supplier.contactPerson}</p>
+                        <p className="text-sm text-gray-600 whitespace-pre-line">{supplier.address}</p>
+                        <p className="text-sm mt-2"><span className="font-bold">Attn:</span> {supplier.contactPerson}</p>
                         <p className="text-sm"><span className="font-bold">Email:</span> {supplier.email}</p>
                         <p className="text-sm"><span className="font-bold">TIN:</span> {supplier.tin}</p>
                     </div>
                     <div>
                         <h3 className="text-xs font-black uppercase text-gray-400 mb-2 tracking-widest">Ship To (Delivery)</h3>
-                        <div className="text-sm whitespace-pre-wrap">{po.shipTo}</div>
+                        <div className="text-sm whitespace-pre-wrap border p-3 rounded bg-gray-50">{po.shipTo}</div>
                     </div>
                 </div>
 
                 {/* ITEMS TABLE */}
-                <table className="w-full mb-8">
+                <table className="w-full mb-8 border-collapse">
                     <thead className="bg-gray-100 border-y-2 border-gray-800">
                         <tr>
                             <th className="py-2 px-3 text-left font-black uppercase text-xs">Description / SKU</th>
@@ -134,6 +134,7 @@ const PrintablePO = ({ po, supplier, onClose }) => {
 // --- 3. Supplier Modal Component ---
 const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] }) => {
     const [activeTab, setActiveTab] = useState('PO_MANAGER'); 
+    const [loadingSave, setLoadingSave] = useState(false); // Add Loading State
     
     // Core Supplier Details
     const [name, setName] = useState(supplierToEdit?.name || '');
@@ -156,8 +157,8 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
 
     // Purchase Order State
     const [purchaseOrders, setPurchaseOrders] = useState(supplierToEdit?.purchaseOrders || []);
-    const [editingPOId, setEditingPOId] = useState(null); // Track if editing a PO
-    const [viewingPO, setViewingPO] = useState(null); // For Print View
+    const [editingPOId, setEditingPOId] = useState(null); 
+    const [viewingPO, setViewingPO] = useState(null); 
 
     // PO Form Fields
     const [poReference, setPoReference] = useState(`PO-${Math.floor(1000 + Math.random() * 9000)}`);
@@ -170,7 +171,7 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
     const [selectedProductId, setSelectedProductId] = useState('');
     const [newItem, setNewItem] = useState({ name: '', qty: 1, cost: 0, sku: '' });
 
-    // --- LOG HANDLERS ---
+    // --- HANDLERS ---
     const handleAddInteraction = () => {
         if (!newLogOutcome) return;
         const newInteraction = { id: Date.now(), date: newLogDate, type: newLogType, outcome: newLogOutcome };
@@ -178,7 +179,6 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
         setNewLogOutcome('');
     };
 
-    // --- PO CRUD HANDLERS ---
     const handleProductSelect = (e) => {
         const prodId = e.target.value;
         setSelectedProductId(prodId);
@@ -213,11 +213,10 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
     const editPO = (po) => {
         setEditingPOId(po.id);
         setPoReference(po.reference);
-        setPoItems(po.items);
+        setPoItems(po.items || []);
         setShipTo(po.shipTo || shipTo);
         setPaymentTerms(po.paymentTerms || paymentTerms);
         setPoTerms(po.terms || poTerms);
-        // Scroll to top of PO creator
         document.getElementById('po-creator')?.scrollIntoView({ behavior: 'smooth' });
     };
 
@@ -238,19 +237,19 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
             date: new Date().toISOString(),
             items: poItems,
             totalAmount: grandTotal,
-            shipTo,
-            paymentTerms,
-            terms: poTerms,
+            shipTo: shipTo || '',
+            paymentTerms: paymentTerms || '',
+            terms: poTerms || '',
             status: 'Draft'
         };
 
         let newOrders;
         if (editingPOId) {
-            // Update existing
+            // Update
             newOrders = purchaseOrders.map(p => p.id === editingPOId ? poData : p);
             setEditingPOId(null);
         } else {
-            // Create new
+            // Create
             newOrders = [poData, ...purchaseOrders];
             // Auto-log
             const logEntry = { id: Date.now(), date: new Date().toISOString().split('T')[0], type: 'Order', outcome: `Created PO ${poReference} ($${grandTotal.toLocaleString()})` };
@@ -262,7 +261,20 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
         // Reset Form
         setPoItems([]);
         setPoReference(`PO-${Math.floor(1000 + Math.random() * 9000)}`);
-        alert("Purchase Order Saved!");
+        alert("Purchase Order Saved locally. Click 'Save Supplier' to persist.");
+    };
+
+    const handleMainSave = async () => {
+        setLoadingSave(true);
+        // SANITIZE DATA: Remove undefined values before sending to Firestore
+        const safeData = JSON.parse(JSON.stringify({
+            name, contactPerson, email, phone, tin, address, 
+            isInternational, isApproved, isCritical, isOnboarded, 
+            notes, interactions, purchaseOrders
+        }));
+
+        await onSave(safeData);
+        setLoadingSave(false);
     };
 
     const formatMoney = (val) => `$${Number(val).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
@@ -275,7 +287,7 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
         <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
             <Card className="w-full max-w-7xl h-[90vh] overflow-hidden flex flex-col md:flex-row shadow-2xl bg-white rounded-2xl p-0 border-t-8 border-blue-600">
                 
-                {/* LEFT PANEL: SUPPLIER DETAILS */}
+                {/* LEFT PANEL */}
                 <div className="w-full md:w-1/3 p-6 overflow-y-auto border-r border-gray-100 bg-white space-y-5">
                     <h2 className="text-2xl font-black text-gray-800 uppercase tracking-tighter flex items-center gap-2">
                         <Truck className="text-blue-600"/> {supplierToEdit ? 'Edit Vendor' : 'New Vendor'}
@@ -307,10 +319,9 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
                     <Textarea label="Bank / Payment Notes" value={notes} onChange={e => setNotes(e.target.value)} rows="3" placeholder="Account Number, Swift Code..." />
                 </div>
 
-                {/* RIGHT PANEL: PO MANAGER & LOGS */}
+                {/* RIGHT PANEL */}
                 <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden">
                     
-                    {/* TABS */}
                     <div className="flex border-b border-gray-200 bg-white">
                         <button onClick={() => setActiveTab('PO_MANAGER')} className={`flex-1 py-4 text-[11px] font-black uppercase tracking-widest transition-colors ${activeTab === 'PO_MANAGER' ? 'text-indigo-600 border-b-4 border-indigo-600 bg-indigo-50/50' : 'text-gray-400 hover:bg-gray-50'}`}>
                             Purchase Orders
@@ -322,7 +333,6 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
 
                     <div className="flex-1 overflow-y-auto p-6">
                         
-                        {/* --- TAB: PURCHASE ORDERS --- */}
                         {activeTab === 'PO_MANAGER' && (
                             <div className="space-y-6">
                                 {/* PO CREATOR */}
@@ -338,7 +348,7 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
                                         />
                                     </div>
 
-                                    {/* Item Entry Row */}
+                                    {/* Item Entry */}
                                     <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3 mb-4">
                                         <div>
                                             <label className="text-[9px] font-bold text-gray-400 uppercase mb-1 block">Select From Product Master</label>
@@ -455,12 +465,13 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
                                                 <p className="font-black text-gray-800 text-xs">{po.reference}</p>
                                                 <p className="text-[10px] text-gray-400">{new Date(po.date).toLocaleDateString()} • {po.items.length} Items</p>
                                             </div>
-                                            <div className="flex items-center gap-3">
+                                            <div className="flex items-center gap-2">
                                                 <div className="text-right mr-2">
                                                     <p className="font-black text-indigo-600">{formatMoney(po.totalAmount)}</p>
                                                     <span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold uppercase">{po.status}</span>
                                                 </div>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {/* VISIBLE ACTIONS */}
+                                                <div className="flex gap-1">
                                                     <button onClick={() => setViewingPO(po)} className="p-2 bg-gray-100 hover:bg-blue-100 text-blue-600 rounded" title="Print PDF"><Printer size={14}/></button>
                                                     <button onClick={() => editPO(po)} className="p-2 bg-gray-100 hover:bg-orange-100 text-orange-600 rounded" title="Edit PO"><Edit size={14}/></button>
                                                     <button onClick={() => deletePO(po.id)} className="p-2 bg-gray-100 hover:bg-red-100 text-red-600 rounded" title="Delete PO"><Trash2 size={14}/></button>
@@ -510,8 +521,8 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
 
                     <div className="p-5 bg-white border-t flex justify-end gap-3">
                         <Button onClick={onClose} variant="secondary" className="px-6 py-3 text-xs uppercase font-bold tracking-widest">Discard</Button>
-                        <Button onClick={() => onSave({ name, contactPerson, email, phone, tin, address, isInternational, isApproved, isCritical, isOnboarded, notes, interactions, purchaseOrders })} variant="primary" className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white shadow-lg text-xs uppercase font-bold tracking-widest">
-                            Save Supplier
+                        <Button onClick={handleMainSave} variant="primary" className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white shadow-lg text-xs uppercase font-bold tracking-widest" disabled={loadingSave}>
+                            {loadingSave ? 'Saving...' : 'Save Supplier'}
                         </Button>
                     </div>
                 </div>
