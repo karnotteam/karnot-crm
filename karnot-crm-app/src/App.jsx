@@ -18,6 +18,7 @@ import SupplierManager from './pages/SupplierManager.jsx';
 import TerritoryManagement from './pages/TerritoryManagement.jsx';
 import AgentManagement from './pages/AgentManagement.jsx';
 import AppointmentScheduler from './pages/AppointmentScheduler.jsx';
+import BankReconciliation from './pages/BankReconciliation.jsx'; // Newly created page
 
 // --- 2. Import Components (Verified Paths: ./components/) ---
 import QuoteCalculator from './components/QuoteCalculator.jsx';
@@ -38,30 +39,37 @@ import {
     MapPin, Calendar, UserCheck
 } from 'lucide-react'; 
 
-// --- 5. Header Component (Territory Management Navigation Added) ---
+// --- 5. Header Component ---
 const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, userRole }) => ( 
     <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
         <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveView('funnel')}>
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveView('dashboard')}>
                 <img src={KARNOT_LOGO_BASE_64} alt="Karnot Logo" style={{height: '40px'}}/>
                 <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tighter">Karnot <span className="text-orange-600">CRM</span></h1>
             </div>
             <nav className="flex flex-wrap gap-2 justify-center lg:justify-end">
+                {/* PRIMARY MODULES */}
+                <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><BarChart2 className="mr-1" size={14} /> Dashboard</Button>
                 <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><HardHat className="mr-1" size={14} /> Funnel</Button>
-                <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Building className="mr-1" size={14} /> Companies</Button>
+                <Button onClick={() => setActiveView('commissioning')} variant={activeView === 'commissioning' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest text-teal-700 border-teal-200 bg-teal-50"><Activity className="mr-1" size={14} /> Install / QC</Button>
                 
-                {/* CONTACTS BUTTON */}
-                <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Users className="mr-1" size={14} /> Contacts</Button>
-                
-                {/* TERRITORY MANAGEMENT SECTION */}
                 <div className="h-8 w-px bg-gray-200 mx-1 hidden lg:block"></div>
+
+                {/* DIRECTORY */}
+                <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Building className="mr-1" size={14} /> Companies</Button>
+                <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Users className="mr-1" size={14} /> Contacts</Button>
+                <Button onClick={() => setActiveView('suppliers')} variant={activeView === 'suppliers' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Truck className="mr-1" size={14} /> Suppliers</Button>
+                
+                <div className="h-8 w-px bg-gray-200 mx-1 hidden lg:block"></div>
+
+                {/* TERRITORY & AGENTS */}
                 <Button onClick={() => setActiveView('territories')} variant={activeView === 'territories' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"><MapPin className="mr-1" size={14} /> Territories</Button>
                 <Button onClick={() => setActiveView('agents')} variant={activeView === 'agents' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"><UserCheck className="mr-1" size={14} /> Agents</Button>
                 <Button onClick={() => setActiveView('appointments')} variant={activeView === 'appointments' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"><Calendar className="mr-1" size={14} /> Call Centre</Button>
+                
                 <div className="h-8 w-px bg-gray-200 mx-1 hidden lg:block"></div>
                 
-                <Button onClick={() => setActiveView('suppliers')} variant={activeView === 'suppliers' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Truck className="mr-1" size={14} /> Suppliers</Button>
-                
+                {/* TOOLS */}
                 <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc', 'warmRoomCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
                     <Calculator className="mr-1" size={14} /> Calculators
                 </Button>
@@ -90,7 +98,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 export default function App() {
     const [user, setUser] = useState(null); 
     const [userRole, setUserRole] = useState(null); 
-    const [activeView, setActiveView] = useState('funnel');
+    const [activeView, setActiveView] = useState('dashboard'); // Default to Dashboard
     const [subView, setSubView] = useState('ledger'); 
     
     const [opportunities, setOpportunities] = useState([]);
@@ -132,7 +140,7 @@ export default function App() {
         return () => unsubscribe(); 
     }, []);
 
-    // --- Data Stream (ENHANCED WITH TERRITORY COLLECTIONS) ---
+    // --- Data Stream ---
     useEffect(() => {
         if (user) {
             setLoadingData(true); 
@@ -247,6 +255,8 @@ export default function App() {
             />
             <main className="container mx-auto p-4 md:p-8">
                 {/* EXISTING VIEWS */}
+                {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
+                
                 {activeView === 'funnel' && (
                     <FunnelPage 
                         opportunities={opportunities} 
@@ -259,6 +269,8 @@ export default function App() {
                         appointments={appointments}
                     />
                 )}
+                
+                {activeView === 'commissioning' && <CommissioningPage quotes={quotes} />}
                 
                 {activeView === 'opportunityDetail' && (
                     <OpportunityDetailPage 
@@ -348,7 +360,6 @@ export default function App() {
                     />
                 )}
 
-                {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 {activeView === 'heatPumpCalc' && (
                     <div className="max-w-5xl mx-auto">
@@ -372,7 +383,9 @@ export default function App() {
                                 <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Clock size={14} className="mr-1" /> Manpower</Button>
                                 <Button onClick={() => setSubView('projectOps')} variant={subView === 'projectOps' ? 'primary' : 'secondary'}><Briefcase size={14} className="mr-1" /> Project ROI</Button>
                                 <Button onClick={() => setSubView('birBooks')} variant={subView === 'birBooks' ? 'primary' : 'secondary'} className="border-orange-500 text-orange-700"><BookOpen size={14} className="mr-1" /> BIR Books</Button>
-                                <Button onClick={() => setSubView('commissioning')} variant={subView === 'commissioning' ? 'primary' : 'secondary'}><Activity size={14} className="mr-1" /> Install & QC</Button>
+                                <Button onClick={() => setSubView('bankRecon')} variant={subView === 'bankRecon' ? 'primary' : 'secondary'} className="border-purple-200 text-purple-700">
+                                    <Landmark size={14} className="mr-1" /> Bank Recon
+                                </Button>
                             </div>
                         </div>
 
@@ -380,7 +393,7 @@ export default function App() {
                         {subView === 'manpower' && <ManpowerLogger companies={companies} />}
                         {subView === 'projectOps' && <ProjectOperations quotes={quotes} manpowerLogs={manpowerLogs} ledgerEntries={ledgerEntries} />}
                         {subView === 'birBooks' && <BIRBookPrep quotes={quotes} ledgerEntries={ledgerEntries} />}
-                        {subView === 'commissioning' && <CommissioningPage quotes={quotes} />}
+                        {subView === 'bankRecon' && <BankReconciliation user={user} quotes={quotes} ledgerEntries={ledgerEntries} />}
                     </div>
                 )}
             </main>
