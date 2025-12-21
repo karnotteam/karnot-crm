@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from '../data/constants.jsx';
-import { Briefcase, Target, Clock, Landmark, AlertCircle, Calculator, CheckCircle } from 'lucide-react';
+import { Briefcase, Target, Clock, Landmark, AlertCircle, Calculator, CheckCircle, Package } from 'lucide-react';
 import { db } from '../firebase'; 
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
@@ -8,7 +8,7 @@ import { getAuth } from "firebase/auth";
 const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] }) => {
     const [selectedQuoteId, setSelectedQuoteId] = useState('');
     const [targetLabor, setTargetLabor] = useState(0);
-    const [targetMaterials, setTargetMaterials] = useState(0);
+    const [targetMaterials, setTargetMaterials] = useState(0); // This is strictly INSTALL materials (pipes/wires)
     const [estimateFound, setEstimateFound] = useState(false);
 
     // Get active projects (Won or Invoiced)
@@ -32,7 +32,7 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
             if (!snapshot.empty) {
                 const estData = snapshot.docs[0].data();
                 setTargetLabor(estData.costs?.labor || 0);
-                setTargetMaterials((estData.costs?.materials || 0) + (estData.costs?.logistics || 0)); // Combine mats + logistics for budget
+                setTargetMaterials((estData.costs?.materials || 0) + (estData.costs?.logistics || 0)); 
                 setEstimateFound(true);
             } else {
                 setTargetLabor(0);
@@ -45,38 +45,40 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
 
     // --- 2. CALCULATE ACTUALS ---
     
-    // A. Expenses from Ledger (Now using projectId)
+    // A. Expenses from Ledger (Includes Equipment Purchase + Install Mats)
     const projectExpenses = ledgerEntries
         .filter(e => e.projectId === selectedQuoteId)
         .reduce((sum, e) => sum + parseFloat(e.amountPHP || 0), 0);
 
-    // B. Labor from Manpower Logs (Now using companyId/projectId)
+    // B. Labor from Manpower Logs
     const projectManpower = manpowerLogs
         .filter(m => m.companyId === selectedQuoteId)
         .reduce((sum, m) => sum + parseFloat(m.totalCost || 0), 0);
 
     const totalActualBurn = projectExpenses + projectManpower;
 
-    // --- 3. ROI & MARGIN MATH (UPDATED PER REQUEST) ---
+    // --- 3. ROI & MARGIN MATH ---
     const forexRate = selectedQuote?.costing?.forexRate || 58.5;
     const salesPriceUSD = selectedQuote?.finalSalesPrice || 0;
+    const equipmentCostUSD = selectedQuote?.totalCost || 0; // Machine Cost from Quote
 
-    // GROSS BUDGET = Full Sales Price in PHP (Starting point to buy machine + install)
-    const grossProjectBudgetPHP = salesPriceUSD * forexRate;
+    // BUDGET COMPONENTS
+    const grossProjectBudgetPHP = salesPriceUSD * forexRate; // Total Revenue
+    const equipmentBudgetPHP = equipmentCostUSD * forexRate; // Budget allocated for buying the machine
     
-    // Net Profit = Gross Sales (PHP) - Total Spent (Labor + Materials + Equipment Purchase from Ledger)
+    // Net Profit
     const remainingProfitPHP = grossProjectBudgetPHP - totalActualBurn;
-    
-    // Burn % = (Spent / Total Sales) * 100
     const burnPercentage = grossProjectBudgetPHP > 0 ? (totalActualBurn / grossProjectBudgetPHP) * 100 : 0;
 
-    // --- 4. VARIANCE MATH ---
+    // --- 4. VARIANCE MATH (FIXED) ---
     const laborVariance = parseFloat(targetLabor || 0) - projectManpower;
-    const materialVariance = parseFloat(targetMaterials || 0) - projectExpenses;
-    const totalTarget = parseFloat(targetLabor || 0) + parseFloat(targetMaterials || 0);
     
-    // Note: Total Target here usually refers to Installation Budget, not Equipment Purchase
-    // Variance is just comparing Installation Estimate vs Installation Actuals
+    // Material Variance now includes the Equipment Budget to balance against the Ledger
+    // Target = (Install Mats Estimate) + (Machine Cost from Quote)
+    const totalMaterialTarget = parseFloat(targetMaterials || 0) + equipmentBudgetPHP;
+    const materialVariance = totalMaterialTarget - projectExpenses;
+
+    const totalTarget = totalMaterialTarget + parseFloat(targetLabor || 0);
     const totalVariance = totalTarget - totalActualBurn; 
 
     return (
@@ -121,14 +123,14 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                             <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
                                 <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Gross Project Sales (Budget)</p>
                                 <p className="text-2xl font-black text-green-600">₱{grossProjectBudgetPHP.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                                <p className="text-[10px] text-gray-400 mt-2 italic">Total Contract Price (PHP)</p>
+                                <p className="text-[10px] text-gray-400 mt-2 italic">Total Contract Price</p>
                             </div>
 
                             {/* CARD 2: ACTUAL SPEND */}
                             <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
                                 <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Actual Burn (Total Spent)</p>
                                 <p className="text-2xl font-black text-red-600">₱{totalActualBurn.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                                <p className="text-[10px] text-gray-400 mt-2 italic">Equipment Purchase + Labor + Logistics</p>
+                                <p className="text-[10px] text-gray-400 mt-2 italic">Machine + Materials + Labor</p>
                             </div>
 
                             {/* CARD 3: NET PROFIT */}
@@ -149,11 +151,15 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                         <div className="bg-white border-2 border-gray-100 rounded-3xl overflow-hidden shadow-sm">
                             <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                                 <h3 className="text-xs font-black uppercase text-gray-500 tracking-widest flex items-center gap-2">
-                                    <Target size={16} className="text-purple-600"/> Installation Cost Analysis
+                                    <Target size={16} className="text-purple-600"/> Variance Analysis: Target vs Actual
                                 </h3>
-                                {estimateFound && (
+                                {estimateFound ? (
                                     <span className="text-[9px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded flex items-center gap-1">
                                         <CheckCircle size={10}/> Linked to Estimate
+                                    </span>
+                                ) : (
+                                    <span className="text-[9px] font-bold bg-yellow-100 text-yellow-700 px-2 py-1 rounded flex items-center gap-1">
+                                        <AlertCircle size={10}/> Manual Targets
                                     </span>
                                 )}
                             </div>
@@ -161,13 +167,13 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                 <thead className="bg-gray-50/50">
                                     <tr>
                                         <th className="p-4 text-[10px] font-black uppercase text-gray-400">Description</th>
-                                        <th className="p-4 text-[10px] font-black uppercase text-gray-400">Estimated Budget</th>
+                                        <th className="p-4 text-[10px] font-black uppercase text-gray-400">Target Budget</th>
                                         <th className="p-4 text-[10px] font-black uppercase text-gray-400">Actual Cost</th>
                                         <th className="p-4 text-[10px] font-black uppercase text-gray-400">Variance</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
-                                    {/* LABOR ROW */}
+                                    {/* ROW 1: LABOR */}
                                     <tr>
                                         <td className="p-4">
                                             <div className="flex items-center gap-2">
@@ -191,23 +197,24 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                             {laborVariance < 0 ? '-' : '+'}₱{Math.abs(laborVariance).toLocaleString()}
                                         </td>
                                     </tr>
-                                    {/* MATERIALS ROW */}
+
+                                    {/* ROW 2: MATERIALS + EQUIPMENT */}
                                     <tr>
                                         <td className="p-4">
                                             <div className="flex items-center gap-2">
-                                                <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Landmark size={16}/></div>
-                                                <span className="font-bold text-gray-700 uppercase text-xs">Materials / Logistics</span>
+                                                <div className="p-2 bg-blue-50 rounded-lg text-blue-600"><Package size={16}/></div>
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-gray-700 uppercase text-xs">Equipment & Materials</span>
+                                                    <span className="text-[9px] text-gray-400">Machine Cost (From Quote) + Install Items</span>
+                                                </div>
                                             </div>
                                         </td>
                                         <td className="p-4">
-                                            <div className="relative">
-                                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">₱</span>
-                                                <input 
-                                                    type="number" 
-                                                    className="w-32 p-2 pl-6 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-black text-sm"
-                                                    value={targetMaterials} 
-                                                    onChange={(e) => setTargetMaterials(e.target.value)} 
-                                                />
+                                            <div className="flex flex-col">
+                                                <span className="font-mono font-bold text-gray-800 text-sm">₱{totalMaterialTarget.toLocaleString()}</span>
+                                                <span className="text-[9px] text-gray-400 italic">
+                                                    (Machine: ₱{equipmentBudgetPHP.toLocaleString()})
+                                                </span>
                                             </div>
                                         </td>
                                         <td className="p-4 font-mono font-bold text-gray-800">₱{projectExpenses.toLocaleString()}</td>
@@ -215,9 +222,10 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                             {materialVariance < 0 ? '-' : '+'}₱{Math.abs(materialVariance).toLocaleString()}
                                         </td>
                                     </tr>
+
                                     {/* TOTAL FOOTER ROW */}
                                     <tr className="bg-slate-50 border-t-2 border-gray-100">
-                                        <td className="p-4 font-black text-slate-800 uppercase text-xs">TOTAL INSTALLATION COST</td>
+                                        <td className="p-4 font-black text-slate-800 uppercase text-xs">TOTAL PROJECT COST</td>
                                         <td className="p-4 font-black text-slate-800 font-mono text-base">₱{totalTarget.toLocaleString()}</td>
                                         <td className="p-4 font-black text-slate-800 font-mono text-base">₱{totalActualBurn.toLocaleString()}</td>
                                         <td className={`p-4 font-black font-mono text-base ${totalVariance < 0 ? 'text-red-700 bg-red-50' : 'text-green-700 bg-green-50'}`}>
@@ -234,7 +242,17 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                 <AlertCircle size={32} />
                                 <div>
                                     <p className="text-xs font-black uppercase tracking-widest">Budget Warning</p>
-                                    <p className="font-bold text-sm">Installation actuals have exceeded the estimate by ₱{Math.abs(totalVariance).toLocaleString()}.</p>
+                                    <p className="font-bold text-sm">Project actuals have exceeded the combined budget by ₱{Math.abs(totalVariance).toLocaleString()}.</p>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {totalVariance >= 0 && (
+                            <div className="flex items-center gap-4 p-5 bg-green-50 border-2 border-green-100 rounded-3xl text-green-700">
+                                <CheckCircle size={32} />
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-widest">On Budget</p>
+                                    <p className="font-bold text-sm">Project is currently ₱{Math.abs(totalVariance).toLocaleString()} under the estimated budget.</p>
                                 </div>
                             </div>
                         )}
