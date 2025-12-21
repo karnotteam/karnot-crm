@@ -36,6 +36,7 @@ import AppointmentScheduler from './pages/AppointmentScheduler.jsx';
 
 // --- Service & Operations Modules ---
 import InstallEstimator from './pages/InstallEstimator.jsx';
+import ServiceInvoice from './pages/ServiceInvoice.jsx'; // ← NEW: Non-BOI Activity Module
 
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
@@ -63,7 +64,7 @@ import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx';
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, Clock, BookOpen, Briefcase, Truck, Activity,
-    MapPin, Calendar, UserCheck, Wrench
+    MapPin, Calendar, UserCheck, Wrench, FileText
 } from 'lucide-react'; 
 
 // ==========================================
@@ -176,6 +177,7 @@ export default function App() {
     // --- Finance Data ---
     const [ledgerEntries, setLedgerEntries] = useState([]); 
     const [manpowerLogs, setManpowerLogs] = useState([]);
+    const [serviceInvoices, setServiceInvoices] = useState([]); // ← NEW: Non-BOI Revenue
     
     // --- Territory Management Data ---
     const [territories, setTerritories] = useState([]);
@@ -217,7 +219,7 @@ export default function App() {
         if (user) {
             setLoadingData(true); 
             
-            // 1. QUOTES
+            // 1. QUOTES (BOI Activity)
             const unsubQuotes = onSnapshot(
                 query(collection(db, "users", user.uid, "quotes"), orderBy("lastModified", "desc")), 
                 (snap) => setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
@@ -253,19 +255,25 @@ export default function App() {
                 (snap) => setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 7. TERRITORIES
+            // 7. SERVICE INVOICES (Non-BOI Activity) ← NEW
+            const unsubServices = onSnapshot(
+                query(collection(db, "users", user.uid, "service_invoices"), orderBy("createdAt", "desc")), 
+                (snap) => setServiceInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+            );
+            
+            // 8. TERRITORIES
             const unsubTerritories = onSnapshot(
                 query(collection(db, "users", user.uid, "territories"), orderBy("name", "asc")), 
                 (snap) => setTerritories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 8. AGENTS
+            // 9. AGENTS
             const unsubAgents = onSnapshot(
                 query(collection(db, "users", user.uid, "agents"), orderBy("name", "asc")), 
                 (snap) => setAgents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 9. APPOINTMENTS
+            // 10. APPOINTMENTS
             const unsubAppointments = onSnapshot(
                 query(collection(db, "users", user.uid, "appointments"), orderBy("appointmentDate", "asc")), 
                 (snap) => {
@@ -276,7 +284,7 @@ export default function App() {
             
             return () => { 
                 unsubQuotes(); unsubOpps(); unsubCompanies(); unsubContacts(); 
-                unsubLedger(); unsubManpower(); unsubTerritories(); 
+                unsubLedger(); unsubManpower(); unsubServices(); unsubTerritories(); 
                 unsubAgents(); unsubAppointments();
             };
         } else {
@@ -420,7 +428,15 @@ export default function App() {
                     />
                 )}
                 
-                {/* 5. DIRECTORY: COMPANIES */}
+                {/* 5. SERVICE INVOICE (NON-BOI ACTIVITY) ← NEW */}
+                {activeView === 'serviceInvoice' && (
+                    <ServiceInvoice 
+                        companies={companies}
+                        user={user}
+                    />
+                )}
+                
+                {/* 6. DIRECTORY: COMPANIES */}
                 {activeView === 'companies' && (
                     <CompaniesPage 
                         companies={companies} 
@@ -432,7 +448,7 @@ export default function App() {
                     />
                 )}
                 
-                {/* 6. DIRECTORY: CONTACTS */}
+                {/* 7. DIRECTORY: CONTACTS */}
                 {activeView === 'contacts' && (
                     <ContactsPage 
                         contacts={contacts} 
@@ -441,10 +457,10 @@ export default function App() {
                     />
                 )}
                 
-                {/* 7. DIRECTORY: SUPPLIERS */}
+                {/* 8. DIRECTORY: SUPPLIERS */}
                 {activeView === 'suppliers' && <SupplierManager user={user} />}
                 
-                {/* 8. TERRITORY MANAGEMENT */}
+                {/* 9. TERRITORY MANAGEMENT */}
                 {activeView === 'territories' && (
                     <TerritoryManagement 
                         territories={territories} 
@@ -455,7 +471,7 @@ export default function App() {
                     />
                 )}
                 
-                {/* 9. AGENT MANAGEMENT */}
+                {/* 10. AGENT MANAGEMENT */}
                 {activeView === 'agents' && (
                     <AgentManagement 
                         agents={agents} 
@@ -465,7 +481,7 @@ export default function App() {
                     />
                 )}
                 
-                {/* 10. CALL CENTRE / APPOINTMENTS */}
+                {/* 11. CALL CENTRE / APPOINTMENTS */}
                 {activeView === 'appointments' && (
                     <AppointmentScheduler 
                         appointments={appointments} 
@@ -475,7 +491,7 @@ export default function App() {
                     />
                 )}
                 
-                {/* 11. QUOTE CALCULATOR */}
+                {/* 12. QUOTE CALCULATOR (BOI ACTIVITY) */}
                 {activeView === 'calculator' && (
                     <QuoteCalculator 
                         onSaveQuote={handleSaveQuote} 
@@ -488,7 +504,7 @@ export default function App() {
                     />
                 )}
                 
-                {/* 12. QUOTES LIST */}
+                {/* 13. QUOTES LIST */}
                 {activeView === 'list' && (
                     <QuotesListPage 
                         quotes={quotes} 
@@ -499,7 +515,7 @@ export default function App() {
                     />
                 )}
 
-                {/* 13. TECHNICAL CALCULATORS */}
+                {/* 14. TECHNICAL CALCULATORS */}
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 
                 {activeView === 'heatPumpCalc' && (
@@ -511,10 +527,10 @@ export default function App() {
                 
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 
-                {/* 14. ADMIN SETTINGS */}
+                {/* 15. ADMIN SETTINGS */}
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
-                {/* 15. ACCOUNTS HUB (FINANCE) */}
+                {/* 16. ACCOUNTS HUB (FINANCE) */}
                 {activeView === 'accounts' && (
                     <div className="space-y-6 pb-20">
                         {/* Finance Sub-Navigation */}
@@ -526,6 +542,9 @@ export default function App() {
                             <div className="flex flex-wrap gap-2">
                                 <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}><Landmark size={14} className="mr-1" /> Disbursements</Button>
                                 <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Clock size={14} className="mr-1" /> Manpower</Button>
+                                <Button onClick={() => setSubView('services')} variant={subView === 'services' ? 'primary' : 'secondary'} className="border-orange-200 text-orange-700 bg-orange-50">
+                                    <Wrench size={14} className="mr-1" /> Service Invoices
+                                </Button>
                                 <Button onClick={() => setSubView('projectOps')} variant={subView === 'projectOps' ? 'primary' : 'secondary'}><Briefcase size={14} className="mr-1" /> Project ROI</Button>
                                 <Button onClick={() => setSubView('birBooks')} variant={subView === 'birBooks' ? 'primary' : 'secondary'} className="border-orange-500 text-orange-700"><BookOpen size={14} className="mr-1" /> BIR Books</Button>
                                 <Button onClick={() => setSubView('bankRecon')} variant={subView === 'bankRecon' ? 'primary' : 'secondary'} className="border-purple-200 text-purple-700">
@@ -547,6 +566,14 @@ export default function App() {
                         )}
                         
                         {subView === 'manpower' && <ManpowerLogger companies={companies} />}
+                        
+                        {/* SERVICE INVOICES (NON-BOI) ← NEW */}
+                        {subView === 'services' && (
+                            <ServiceInvoice 
+                                companies={companies}
+                                user={user}
+                            />
+                        )}
                         
                         {subView === 'projectOps' && (
                             <ProjectOperations 
@@ -571,12 +598,14 @@ export default function App() {
                             />
                         )}
 
+                        {/* MANAGEMENT ACCOUNTS WITH SERVICE INVOICES ← UPDATED */}
                         {subView === 'management' && (
                             <ManagementAccounts 
                                 user={user}
                                 quotes={quotes}
                                 ledgerEntries={ledgerEntries}
                                 opportunities={opportunities}
+                                serviceInvoices={serviceInvoices}
                             />
                         )}
                     </div>
