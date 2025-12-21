@@ -255,7 +255,8 @@ export default function App() {
                         onOpenQuote={handleEditQuote} 
                         onOpen={(opp) => { setSelectedOpportunity(opp); setActiveView('opportunityDetail'); }} 
                         companies={companies} 
-                        contacts={contacts} 
+                        contacts={contacts}
+                        appointments={appointments}
                     />
                 )}
                 
@@ -280,7 +281,8 @@ export default function App() {
                         contacts={contacts} 
                         quotes={quotes} 
                         user={user} 
-                        onOpenQuote={handleEditQuote} 
+                        onOpenQuote={handleEditQuote}
+                        appointments={appointments}
                     />
                 )}
                 
@@ -300,7 +302,8 @@ export default function App() {
                         territories={territories} 
                         agents={agents} 
                         companies={companies} 
-                        user={user} 
+                        user={user}
+                        appointments={appointments}
                     />
                 )}
                 
