@@ -1200,6 +1200,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             </div>
         </Card>
     );
-};
+
 
 export default QuoteCalculator;
