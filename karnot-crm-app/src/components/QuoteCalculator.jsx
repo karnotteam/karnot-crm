@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Eye, Plus, Trash2, Save, Search, Check, Briefcase, Grid, List } from 'lucide-react';
+import { Eye, Plus, Trash2, Save, Search, Check, Briefcase, Grid, List, PlusCircle } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, Section, PRICING_TIERS } from '../data/constants.jsx';
 
-// --- FIREBASE IMPORTS (FIXED) ---
+// --- FIREBASE IMPORTS ---
 import { db } from '../firebase';
 import { collection, getDocs, serverTimestamp } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
@@ -159,12 +159,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             c.companyName.toLowerCase().includes(companySearch.toLowerCase())
         );
     }, [companies, companySearch]);
-
-    // --- COMPANY CONTACTS ---
-    const companyContacts = useMemo(() => {
-        if (!customer.name || !contacts) return [];
-        return contacts.filter(c => c.companyName === customer.name);
-    }, [contacts, customer.name]);
 
     // --- FILTERED PRODUCTS ---
     const filteredProducts = useMemo(() => {
@@ -578,7 +572,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                 </tr>
             </table>`;
             
-            generatedDocumentsHTML += `<div class="page">${birHeaderHTML}${soldToInfoHTML}<h3 style="margin-top:30px;">Details</h3><table class="items-table"><thead><tr><th>Description</th><th style="text-align:center; width:80px;">Qty</th><th style="text-align:right; width:130px;">Unit Price (PHP)</th><th style="text-align:right; width:130px;">Amount (PHP)</th></tr></thead><tbody>${birLineItemsHTML}</tbody></table>${birSummaryHTML}${bankDetailsPHP}</div>`;
+            generatedDocumentsHTML += `<div class="page">${birHeaderHTML}${soldToInfoHTML}<h3>Details</h3><table class="items-table"><thead><tr><th>Description</th><th style="text-align:center; width:80px;">Qty</th><th style="text-align:right; width:130px;">Unit Price (PHP)</th><th style="text-align:right; width:130px;">Amount (PHP)</th></tr></thead><tbody>${birLineItemsHTML}</tbody></table>${birSummaryHTML}${bankDetailsPHP}</div>`;
         }
 
         // PROFESSIONAL PDF-MATCHING CSS
@@ -620,126 +614,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         win.document.write(finalReportHTML);
         win.document.close();
     };
-        const { allItems, subtotalUSD } = quoteTotals;
-        
-        if (allItems.length === 0) {
-            alert("Please select at least one product or add a manual item.");
-            return;
-        }
-
-        const discountAmountUSD = subtotalUSD * (commercial.discount / 100);
-        const totalAfterDiscountUSD = subtotalUSD - discountAmountUSD;
-
-        const formatPHP = (num) => `₱${num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-        const formatUSD = (num) => `$${num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-
-        const today = new Date();
-        const year = today.getFullYear();
-        const todayFormatted = today.toLocaleDateString('en-CA');
-        
-        let quoteId = `QN${String(docControl.quoteNumber).padStart(4, '0')}/${year}`;
-        if (docControl.revision) {
-            quoteId += ` - Rev ${docControl.revision}`;
-        }
-
-        const primaryFormat = docGeneration.generateInPHP ? formatPHP : formatUSD;
-        const subtotalPrimary = docGeneration.generateInPHP ? subtotalUSD * costing.forexRate : subtotalUSD;
-        const discountAmountPrimary = docGeneration.generateInPHP ? discountAmountUSD * costing.forexRate : discountAmountUSD;
-        const totalAfterDiscountPrimary = docGeneration.generateInPHP ? totalAfterDiscountUSD * costing.forexRate : totalAfterDiscountUSD;
-
-        const priceColumnHeader = `Unit Price (${docGeneration.generateInPHP ? 'PHP' : 'USD'})`;
-        const amountColumnHeader = `Amount (${docGeneration.generateInPHP ? 'PHP' : 'USD'})`;
-
-        // Bank Details
-        const bankDetailsPHP = `<h3>Bank Account Details (For PHP Payments)</h3><p style="font-size:14px; line-height:1.6;"><strong>Account Name:</strong> STUART EDMUND COX<br><strong>Account Number:</strong> 027-102383-132<br><strong>Bank:</strong> HSBC - The Hongkong and Shanghai Banking Corporation Ltd<br><strong>Bank Address:</strong> HSBC Centre, 3058 Fifth Avenue West, BGC, Taguig City, 1632 Philippines</p>`;
-        const bankDetailsUSD = `<h3>Bank Account Details (For USD Payments)</h3><p style="font-size:14px; line-height:1.6; white-space: pre-wrap;"><strong>Payment Type:</strong> PDDTS (real-time aka GSRT or EOD batch aka LP USA DOLLARS)<br><strong>Remit Currency:</strong> USA DOLLARS<br><strong>Account Name:</strong> STUART EDMUND COX<br><strong>Account Number:</strong> 027-102383-132<br><strong>Bank:</strong> HSBC - The Hongkong and Shanghai Banking Corporation Ltd<br><strong>Bank Address:</strong><br>HSBC Centre<br>3058 Fifth Avenue West<br>Bonifacio Global City<br>Taguig City, Metro Manila, 1632 Philippines<br><strong>Telephone:</strong> +632 8858 0000<br><strong>SWIFT Code:</strong> HSBCPHMMXXX</p>`;
-
-        // Terms & Conditions
-        const termsAndConditionsHTML = `<div class="terms-conditions"><h3>Terms and Conditions</h3><dl><dt>Warranty</dt><dd>18 months from the date of delivery, covering manufacturing defects under normal use and service.</dd><dt>Payment Terms</dt><dd>${docControl.paymentTerms.replace(/\n/g, "<br>")}</dd><dt>Production Lead Time</dt><dd>For in-stock units, shipment within 15 working days from receipt of full payment.</dd></dl></div>`;
-
-        // Line Items HTML
-        let lineItemsHTML = allItems.map(p => {
-            const unitPrice = docGeneration.generateInPHP ? (p.salesPriceUSD || p.priceUSD || 0) * costing.forexRate : (p.salesPriceUSD || p.priceUSD || 0);
-            const lineTotal = unitPrice * (p.quantity || 1);
-            let description = p.name;
-            if (p.specs) {
-                description += `<br><small style="color:#6e6e73; font-style:italic;">${p.specs.replace(/\n/g, "<br>")}</small>`;
-            }
-            return `<tr><td>${description}</td><td class="text-center">${p.quantity || 1}</td><td class="text-right">${primaryFormat(unitPrice)}</td><td class="text-right">${primaryFormat(lineTotal)}</td></tr>`;
-        }).join('');
-
-        // Company Header
-        const logoURL = "https://img1.wsimg.com/isteam/ip/cb1de239-c2b8-4674-b57d-5ae86a72feb1/Asset%2010%404x.png/:/rs=w:400,cg:true,m";
-        const companyHeaderHTML = `<div class="company-details"><img src="${logoURL}" alt="Karnot Logo" style="width:200px; margin-bottom:15px;"><p><strong>Karnot Energy Solutions INC.</strong><br>TIN: ${customer.tin || 'N/A'}<br>Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>2429 Mapandan, Pangasinan, Philippines<br>Tel: +63 75 510 8922</p></div>`;
-        
-        let contactLine = '';
-        if (customer.contactName) {
-            contactLine = `<br><strong>Attention:</strong> ${customer.contactName}`;
-        }
-
-        // Customer Info Boxes
-        const customerInfoHTML = `<div class="customer-info-box"><strong>Quote For:</strong><br>Customer No.: ${customer.number || "N/A"}<br>${customer.name || "N/A"}${contactLine}<br>${customer.address.replace(/\n/g, "<br>") || "N/A"}</div>`;
-        const billToInfoHTML = `<div class="customer-info-box"><strong>Bill To:</strong><br>Customer No.: ${customer.number || "N/A"}<br>${customer.name || "N/A"}${contactLine}<br>${customer.address.replace(/\n/g, "<br>") || "N/A"}</div>`;
-        const soldToInfoHTML = `<div class="customer-info-box"><strong>SOLD TO:</strong><br><strong>Customer No.:</strong> ${customer.number || "N/A"}<br><strong>Registered Name:</strong> ${customer.name || "N/A"}<br><strong>TIN:</strong> ${customer.tin || "N/A"}<br><strong>Business Address:</strong> ${customer.address.replace(/\n/g, "<br>") || "N/A"}${contactLine}</div>`;
-
-        let generatedDocumentsHTML = '';
-        let landedCostHTML = '';
-
-        // Landed Cost Breakdown
-        if (docGeneration.includeLandedCost) {
-            const cifUSD = totalAfterDiscountUSD + costing.transportCost;
-            const dutiesUSD = cifUSD * (costing.dutiesRate / 100);
-            const customsValueUSD = cifUSD + dutiesUSD;
-            const vatUSD = customsValueUSD * (costing.vatRate / 100);
-            const totalLandedCostUSD = customsValueUSD + vatUSD + costing.brokerFees;
-            
-            landedCostHTML = `<h3>Estimated Landed Cost Breakdown (USD)</h3><table class="simple-summary-table"><tr><td>Equipment Price (Ex-Works, after discount)</td><td class="text-right">${formatUSD(totalAfterDiscountUSD)}</td></tr><tr><td>Freight Cost</td><td class="text-right">${formatUSD(costing.transportCost)}</td></tr><tr><td>Duties (${costing.dutiesRate}%)</td><td class="text-right">${formatUSD(dutiesUSD)}</td></tr><tr><td>VAT / IVA (${costing.vatRate}%)</td><td class="text-right">${formatUSD(vatUSD)}</td></tr><tr><td>Broker & Handling Fees</td><td class="text-right">${formatUSD(costing.brokerFees)}</td></tr><tr class="grand-total-row"><td><strong>Total Estimated Landed Cost</strong></td><td class="text-right"><strong>${formatUSD(totalLandedCostUSD)}</strong></td></tr></table>`;
-        }
-
-        // GENERATE SALES QUOTATION
-        if (docGeneration.generateQuote) {
-            const quoteHeaderHTML = `<div class="report-header">${companyHeaderHTML}<div class="report-info"><h2>Sales Quotation</h2><p><strong>Date:</strong> ${todayFormatted}<br><strong>Quote ID:</strong> ${quoteId}</p></div></div>`;
-            const quoteSummaryHTML = `<table class="simple-summary-table"><tr><td>Subtotal</td><td class="text-right">${primaryFormat(subtotalPrimary)}</td></tr>${discountAmountPrimary > 0 ? `<tr><td>Discount (${commercial.discount}%)</td><td class="text-right">-${primaryFormat(discountAmountPrimary)}</td></tr>` : ''}<tr class="grand-total-row"><td><strong>Total Amount</strong></td><td class="text-right"><strong>${primaryFormat(totalAfterDiscountPrimary)}</strong></td></tr></table>`;
-            
-            generatedDocumentsHTML += `<div class="report-page">${quoteHeaderHTML}${customerInfoHTML}<h3>Products & Services</h3><table class="line-items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">${priceColumnHeader}</th><th class="text-right">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table><div class="summary-wrapper">${quoteSummaryHTML}</div><div class="summary-wrapper">${landedCostHTML}</div>${termsAndConditionsHTML}</div>`;
-        }
-
-        // GENERATE PRO FORMA INVOICE
-        if (docGeneration.generateProForma) {
-            const proFormaHeaderHTML = `<div class="report-header">${companyHeaderHTML}<div class="report-info"><h2>Pro Forma Invoice</h2><p><strong>Date:</strong> ${todayFormatted}<br><strong>Reference:</strong> PF-${quoteId}<br><strong>Due Date: ${commercial.dueDate}</strong></p></div></div>`;
-            const proFormaSummaryHTML = `<table class="simple-summary-table"><tr><td>Subtotal</td><td class="text-right">${primaryFormat(subtotalPrimary)}</td></tr>${discountAmountPrimary > 0 ? `<tr><td>Discount (${commercial.discount}%)</td><td class="text-right">-${primaryFormat(discountAmountPrimary)}</td></tr>` : ''}<tr class="grand-total-row"><td><strong>Total Amount Due</strong></td><td class="text-right"><strong>${primaryFormat(totalAfterDiscountPrimary)}</strong></td></tr></table>`;
-            const bankDetailsHTML = docGeneration.generateInPHP ? bankDetailsPHP : bankDetailsUSD;
-            
-            generatedDocumentsHTML += `<div class="report-page">${proFormaHeaderHTML}${billToInfoHTML}<h3>Details</h3><table class="line-items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">${priceColumnHeader}</th><th class="text-right">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table><div class="summary-wrapper">${proFormaSummaryHTML}</div><div class="summary-wrapper">${landedCostHTML}</div>${bankDetailsHTML}</div>`;
-        }
-
-        // GENERATE BIR SALES INVOICE
-        if (docGeneration.generateBirInvoice) {
-            const totalAfterDiscountPHP = totalAfterDiscountUSD * costing.forexRate;
-            const vatableSales = totalAfterDiscountPHP / 1.12;
-            const vatAmount = vatableSales * 0.12;
-            const withholdingTaxAmount = vatableSales * (commercial.wht / 100);
-            const totalAmountDue = totalAfterDiscountPHP - withholdingTaxAmount;
-            
-            const birLineItemsHTML = allItems.map(p => {
-                const unitPricePHP = (p.salesPriceUSD || p.priceUSD || 0) * costing.forexRate;
-                const lineTotalPHP = unitPricePHP * (p.quantity || 1);
-                return `<tr><td>${p.name}</td><td class="text-center">${p.quantity || 1}</td><td class="text-right">${formatPHP(unitPricePHP)}</td><td class="text-right">${formatPHP(lineTotalPHP)}</td></tr>`;
-            }).join('');
-
-            const birHeaderHTML = `<div class="report-header">${companyHeaderHTML}<div class="report-info"><h2>SALES INVOICE</h2><p><strong>No:</strong> ${String(docControl.quoteNumber).padStart(4, '0')}<br><strong>Date:</strong> ${todayFormatted}<br><strong>Due Date: ${commercial.dueDate}</strong></p></div></div>`;
-            const birSummaryHTML = `<table class="summary-table"><tr><td>VATable Sales</td><td class="text-right">${formatPHP(vatableSales)}</td><td>Total Sales (VAT-Inclusive)</td><td class="text-right">${formatPHP(totalAfterDiscountPHP)}</td></tr><tr><td>VAT-Exempt Sales</td><td class="text-right">${formatPHP(0)}</td><td>Less: 12% VAT</td><td class="text-right">${formatPHP(vatAmount)}</td></tr><tr><td>Zero-Rated Sales</td><td class="text-right">${formatPHP(0)}</td><td>Net of VAT</td><td class="text-right">${formatPHP(vatableSales)}</td></tr><tr><td><strong>Total Sales</strong></td><td class="text-right"><strong>${formatPHP(vatableSales)}</strong></td><td>Less: Withholding Tax (${commercial.wht}%)</td><td class="text-right">${formatPHP(withholdingTaxAmount)}</td></tr><tr class="bir-grand-total-row"><td></td><td></td><td><strong>TOTAL AMOUNT DUE</strong></td><td class="text-right"><strong>${formatPHP(totalAmountDue)}</strong></td></tr></table>`;
-            
-            generatedDocumentsHTML += `<div class="report-page">${birHeaderHTML}${soldToInfoHTML}<h3>Details</h3><table class="line-items-table"><thead><tr><th>Description</th><th class="text-center">Qty</th><th class="text-right">Unit Price (PHP)</th><th class="text-right">Amount (PHP)</th></tr></thead><tbody>${birLineItemsHTML}</tbody></table><div class="summary-wrapper">${birSummaryHTML}</div>${bankDetailsPHP}</div>`;
-        }
-
-        // Comprehensive CSS Styling
-        const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Quote Preview</title><style>body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f3f4f6; color: #333; } .report-page { background: white; max-width: 800px; margin: 0 auto 40px auto; padding: 40px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 8px; position: relative; } .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; border-bottom: 2px solid #ea580c; padding-bottom: 20px; } .report-info h2 { color: #ea580c; margin: 0 0 10px 0; font-size: 28px; text-transform: uppercase; letter-spacing: 1px; } .customer-info-box { background-color: #f9fafb; border-left: 4px solid #ea580c; padding: 15px; margin-bottom: 30px; font-size: 14px; line-height: 1.5; } h3 { color: #4b5563; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; margin-top: 0; } table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; } th { background-color: #ea580c; color: white; padding: 10px; text-align: left; font-weight: 600; } td { padding: 10px; border-bottom: 1px solid #e5e7eb; } .text-right { text-align: right; } .text-center { text-align: center; } .simple-summary-table { width: 100%; max-width: 400px; margin-left: auto; } .simple-summary-table td { border: none; padding: 5px 10px; } .summary-table { width: 100%; } .summary-table td { border: 1px solid #ddd; padding: 8px; } .grand-total-row { border-top: 2px solid #333; font-size: 16px; background-color: #f3f4f6; } .bir-grand-total-row { border-top: 3px double #333; font-size: 18px; font-weight: bold; background-color: #fef3c7; } .summary-wrapper { page-break-inside: avoid; margin-bottom: 20px; } .terms-conditions { font-size: 12px; color: #666; margin-top: 40px; border-top: 1px solid #ddd; padding-top: 20px; } dt { font-weight: bold; margin-top: 5px; color: #333; } dd { margin: 2px 0 10px 0; } @media print { body { background: white; margin: 0; padding: 0; } .report-page { box-shadow: none; margin: 0; width: 100%; max-width: none; page-break-after: always; } .report-page:last-child { page-break-after: auto; } }</style></head><body>${generatedDocumentsHTML}</body></html>`;
-        
-        const win = window.open("", "QuotePreview");
-        win.document.write(finalReportHTML);
-        win.document.close();
-    };
     
     // --- SAVE QUOTE (FIXED) ---
     const handleSave = () => {
@@ -763,7 +637,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             grossMarginPercentage: quoteTotals.grossMarginPercentage,
             status: initialData?.status || 'DRAFT',
             createdAt: initialData?.createdAt || new Date().toISOString(),
-            lastModified: serverTimestamp(),
+            lastModified: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
             
             // CRM HANDSHAKE FIELDS
             opportunityId: opportunityId || null, 
@@ -771,7 +645,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             customerName: customer.name
         };
 
-        console.log("Saving quote:", newQuote); // DEBUG
+        console.log("Saving quote:", newQuote);
         onSaveQuote(newQuote);
     };
 
@@ -1115,7 +989,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             {/* MANUAL ITEMS */}
             <div className="mt-12 bg-slate-900 p-8 rounded-[3rem] text-white">
                 <h3 className="text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2">
-                    <Plus className="text-orange-500"/> Custom Line Items
+                    <PlusCircle className="text-orange-500"/> Custom Line Items
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div className="md:col-span-2">
@@ -1200,6 +1074,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             </div>
         </Card>
     );
-
+};
 
 export default QuoteCalculator;
