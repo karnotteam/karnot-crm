@@ -1,174 +1,249 @@
-import React, { useState } from 'react';
-import { Search, FileText, Trash2, Edit, CheckCircle2, XCircle, Send, Briefcase, TrendingUp } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { 
+    Trash2, Edit, Eye, CheckCircle, XCircle, FileText, 
+    Search, ArrowUpRight, Clock, ShieldCheck, Target, Briefcase, DollarSign
+} from 'lucide-react';
 import { Card, Button, Input } from '../data/constants.jsx';
 
-const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuoteStatus, onViewProject }) => {
+const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuoteStatus, onOpenQuote, opportunities = [] }) => {
     const [searchTerm, setSearchTerm] = useState('');
-    const [filterStatus, setFilterStatus] = useState('ALL');
+    const [statusFilter, setStatusFilter] = useState('ALL');
 
-    const filteredQuotes = (quotes || []).filter(q => {
-        const matchesSearch = q.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                             (q.customer?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = filterStatus === 'ALL' || q.status === filterStatus;
-        return matchesSearch && matchesStatus;
-    });
+    // --- 1. DATA ENRICHMENT & CALCULATIONS ---
+    const processedQuotes = useMemo(() => {
+        return quotes.map(q => {
+            // A. LINK TO FUNNEL (Win Probability)
+            // We search for an opportunity that matches the quote's opportunityId OR the leadId
+            const linkedOpp = opportunities.find(o => o.id === q.opportunityId || o.id === q.leadId);
+            const winChance = linkedOpp?.probability || 0;
+            
+            // B. LIVE MARGIN CALCULATION (ROI Check)
+            // We use the 'totalCost' saved by the Quote Calculator to get true profit
+            const salesPrice = Number(q.finalSalesPrice || 0);
+            const costPrice = Number(q.totalCost || 0); 
+            const marginAmount = salesPrice - costPrice;
+            const liveMarginPct = salesPrice > 0 ? (marginAmount / salesPrice) * 100 : 0;
 
-    const getStatusStyle = (status) => {
-        switch (status) {
-            case 'WON':
-            case 'APPROVED': 
-                return 'bg-green-100 text-green-700 border-green-200';
-            case 'LOST':
-            case 'REJECTED': 
-                return 'bg-red-100 text-red-700 border-red-200';
-            case 'SENT': 
-                return 'bg-blue-100 text-blue-700 border-blue-200';
-            case 'DRAFT':
-                return 'bg-orange-100 text-orange-700 border-orange-200';
-            default: 
-                return 'bg-gray-100 text-gray-600 border-gray-200';
-        }
-    };
+            // C. FOREX & CURRENCY NORMALIZATION
+            // Use the specific rate saved in the quote, or default to 58.5 if legacy
+            const rate = q.costing?.forexRate || 58.5;
+            const grossPHP = salesPrice * rate;
+
+            // D. TAX STATUS
+            const isExport = q.customer?.saleType === 'Export';
+
+            return { 
+                ...q, 
+                winChance, 
+                liveMarginPct, 
+                grossPHP, 
+                forexUsed: rate,
+                isExport,
+                // If opportunityId exists, we know it's linked to a project/funnel
+                hasProjectLink: !!q.opportunityId 
+            };
+        });
+    }, [quotes, opportunities]);
+
+    // --- 2. FILTERING LOGIC ---
+    const filteredQuotes = useMemo(() => {
+        return processedQuotes.filter(q => {
+            const searchLower = searchTerm.toLowerCase();
+            const matchesSearch = 
+                q.id.toLowerCase().includes(searchLower) ||
+                q.customer?.name?.toLowerCase().includes(searchLower) ||
+                (q.customerName || '').toLowerCase().includes(searchLower);
+                
+            const matchesStatus = statusFilter === 'ALL' || q.status === statusFilter;
+            
+            return matchesSearch && matchesStatus;
+        });
+    }, [processedQuotes, searchTerm, statusFilter]);
+
+    // --- 3. STATS HEADER MATH ---
+    const stats = useMemo(() => {
+        const activeProFormas = quotes.filter(q => q.status === 'APPROVED').length;
+        const officialInvoices = quotes.filter(q => q.status === 'INVOICED').length;
+        const wonDeals = quotes.filter(q => q.status === 'WON').length;
+        
+        // Weighted Pipeline = Sum of (Quote Value * Win Probability)
+        // Only counts active quotes (Draft, Approved, Invoiced) - excludes Lost/Won
+        const weightedValue = processedQuotes
+            .filter(q => ['DRAFT', 'APPROVED', 'INVOICED'].includes(q.status))
+            .reduce((sum, q) => sum + (q.finalSalesPrice * (q.winChance / 100)), 0);
+
+        return { activeProFormas, officialInvoices, wonDeals, weightedValue };
+    }, [quotes, processedQuotes]);
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-black text-gray-800 uppercase tracking-tighter leading-none">Quote Registry</h1>
-                <div className="flex gap-2">
+        <div className="space-y-8 pb-20">
+            {/* STATS DASHBOARD */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className="p-5 border-l-4 border-blue-500 bg-white shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Pro-Formas</p>
+                    <p className="text-3xl font-black text-gray-800">{stats.activeProFormas}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Awaiting Payment</p>
+                </Card>
+                <Card className="p-5 border-l-4 border-green-600 bg-white shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">BIR Invoiced</p>
+                    <p className="text-3xl font-black text-gray-800">{stats.officialInvoices}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Tax Liability Active</p>
+                </Card>
+                <Card className="p-5 border-l-4 border-orange-500 bg-white shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Weighted Pipeline</p>
+                    <p className="text-3xl font-black text-orange-600">${stats.weightedValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Risk-Adjusted Value</p>
+                </Card>
+                <Card className="p-5 border-l-4 border-slate-800 bg-white shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Proposals</p>
+                    <p className="text-3xl font-black text-gray-800">{quotes.length}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">All Time Volume</p>
+                </Card>
+            </div>
+
+            {/* CONTROL BAR */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-6 rounded-[35px] shadow-sm border border-gray-100">
+                <div className="relative flex-1 w-full">
+                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-300" size={20} />
+                    <Input 
+                        placeholder="Search Quote ID, Customer Name..." 
+                        value={searchTerm} 
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-14 py-5 rounded-[25px] border-gray-100 bg-gray-50/50 text-lg"
+                    />
+                </div>
+                <div className="w-full md:w-auto">
                     <select 
-                        value={filterStatus} 
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="p-2 border border-gray-200 rounded-xl text-[10px] font-black uppercase bg-white outline-none focus:ring-2 focus:ring-orange-500"
+                        value={statusFilter} 
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full p-4 bg-white border-2 border-gray-100 rounded-[20px] font-black text-[11px] uppercase tracking-widest outline-none focus:border-orange-500 transition-all cursor-pointer"
                     >
-                        <option value="ALL">All Quotes</option>
-                        <option value="DRAFT">Drafts</option>
-                        <option value="SENT">Sent</option>
-                        <option value="APPROVED">Approved</option>
-                        <option value="WON">Won</option>
-                        <option value="LOST">Lost</option>
+                        <option value="ALL">Show All Statuses</option>
+                        <option value="DRAFT">Drafts (Editing)</option>
+                        <option value="APPROVED">Pro-Forma Issued</option>
+                        <option value="INVOICED">BIR Invoiced</option>
+                        <option value="WON">Closed Won</option>
+                        <option value="LOST">Closed Lost</option>
                     </select>
                 </div>
             </div>
 
-            <div className="relative">
-                <Input 
-                    placeholder="Search by ID, Company or Project..." 
-                    value={searchTerm} 
-                    onChange={(e) => setSearchTerm(e.target.value)} 
-                    className="pl-12 h-14 rounded-2xl shadow-sm border-gray-200 focus:border-orange-500" 
-                />
-                <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            </div>
+            {/* DATA TABLE */}
+            <Card className="rounded-[40px] border-none shadow-xl overflow-hidden p-0 bg-white">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Proposal & Project</th>
+                                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Customer / Pipeline</th>
+                                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Value & Margin</th>
+                                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Current Status</th>
+                                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50 bg-white">
+                            {filteredQuotes.map((q) => (
+                                <tr key={q.id} className="hover:bg-orange-50/20 transition-all group">
+                                    {/* COL 1: ID & PROJECT LINK */}
+                                    <td className="p-6 align-top">
+                                        <div className="flex items-start gap-3">
+                                            <div className={`p-2.5 rounded-2xl mt-1 ${q.hasProjectLink ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                                                <Briefcase size={18}/>
+                                            </div>
+                                            <div>
+                                                <p className="font-black text-gray-800 uppercase tracking-tighter leading-none mb-1 text-sm">{q.id}</p>
+                                                {q.hasProjectLink ? (
+                                                    <span className="text-[9px] font-black text-green-600 uppercase flex items-center gap-1 tracking-wider">
+                                                        <ShieldCheck size={10}/> Linked to ROI
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[9px] font-black text-gray-400 uppercase italic tracking-wider">Stand-alone Quote</span>
+                                                )}
+                                                <div className="mt-2 text-[9px] text-gray-400 font-bold flex items-center gap-1">
+                                                    <Clock size={10}/> {new Date(q.createdAt).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
 
-            <div className="grid gap-4">
-                {filteredQuotes.length > 0 ? filteredQuotes.map(quote => {
-                    const isWon = quote.status === 'WON' || quote.status === 'APPROVED';
-                    
-                    // FIXED: Calculate margin using the saved values
-                    const revenue = Number(quote.finalSalesPrice || 0);
-                    const cost = Number(quote.totalCost || 0);
-                    const margin = revenue - cost;
-                    const marginPercentage = revenue > 0 ? ((margin / revenue) * 100) : 0;
-                    
-                    return (
-                        <Card key={quote.id} className="p-0 overflow-hidden border-gray-100 bg-white group hover:border-orange-400 transition-all shadow-sm">
-                            <div className="flex flex-col md:flex-row items-center justify-between p-5 gap-4">
-                                
-                                {/* Quote Info */}
-                                <div className="flex items-center gap-4 flex-1">
-                                    <div className="p-3 bg-slate-50 rounded-2xl text-slate-300 group-hover:text-orange-500 group-hover:bg-orange-50 transition-all">
-                                        <FileText size={28} />
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-3 mb-1">
-                                            <h3 className="font-black text-gray-800 uppercase text-base tracking-tight">{quote.id}</h3>
-                                            <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border uppercase tracking-widest shadow-sm ${getStatusStyle(quote.status)}`}>
-                                                {quote.status || 'DRAFT'}
+                                    {/* COL 2: CUSTOMER & FUNNEL */}
+                                    <td className="p-6 align-top">
+                                        <p className="font-bold text-gray-800 uppercase text-xs mb-2">{q.customer?.name}</p>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className={`text-[8px] font-black px-2 py-1 rounded-lg border ${q.isExport ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
+                                                {q.isExport ? 'ZERO-RATED EXPORT' : 'DOMESTIC VAT'}
                                             </span>
+                                            {q.winChance > 0 && (
+                                                <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg border border-blue-100">
+                                                    <Target size={10}/> {q.winChance}% Prob.
+                                                </p>
+                                            )}
                                         </div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{quote.customer?.name || 'Unknown Client'}</p>
-                                    </div>
-                                </div>
+                                    </td>
 
-                                {/* Price & Margin Section */}
-                                <div className="text-center md:text-right px-8 md:border-r md:border-l border-gray-50 flex flex-col justify-center min-w-[180px]">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Value</p>
-                                    <p className="text-xl font-black text-gray-800 leading-none mb-2">
-                                        ${revenue.toLocaleString()}
-                                    </p>
-                                    {isWon && cost > 0 && (
-                                        <div className="space-y-1">
-                                            <div className="flex items-center justify-end gap-1 text-orange-600 font-bold text-[10px]">
-                                                <span>Cost: ${cost.toLocaleString()}</span>
-                                            </div>
-                                            <div className="flex items-center justify-end gap-1 text-green-600 font-bold text-[10px]">
-                                                <TrendingUp size={12} />
-                                                <span>Margin: ${margin.toLocaleString()} ({marginPercentage.toFixed(1)}%)</span>
+                                    {/* COL 3: MONEY & MARGIN */}
+                                    <td className="p-6 text-right align-top">
+                                        <p className="font-black text-xl text-gray-900 leading-none">₱{q.grossPHP.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                                            $ {Number(q.finalSalesPrice).toLocaleString()} USD
+                                        </p>
+                                        <div className="mt-3 flex justify-end items-center gap-2">
+                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded ${q.liveMarginPct < 30 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                                {q.liveMarginPct.toFixed(1)}% MARGIN
+                                            </span>
+                                            <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                                                <div className={`h-full ${q.liveMarginPct < 30 ? 'bg-red-500' : 'bg-green-500'}`} style={{width: `${Math.min(q.liveMarginPct, 100)}%`}}></div>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
+                                    </td>
 
-                                {/* Actions */}
-                                <div className="flex items-center gap-2">
-                                    {/* Project Management Trigger - Only for Won Quotes */}
-                                    {isWon && (
-                                        <button 
-                                            onClick={() => onViewProject(quote)}
-                                            className="flex flex-col items-center justify-center p-2 bg-purple-50 text-purple-600 rounded-xl hover:bg-purple-600 hover:text-white transition-all border border-purple-100 group/btn"
-                                            title="View Project ROI"
-                                        >
-                                            <Briefcase size={20}/>
-                                            <span className="text-[8px] font-black mt-1 uppercase">Project</span>
-                                        </button>
-                                    )}
+                                    {/* COL 4: STATUS BADGE */}
+                                    <td className="p-6 text-center align-middle">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <span className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-sm border
+                                                ${q.status === 'INVOICED' ? 'bg-green-100 text-green-700 border-green-200' : 
+                                                  q.status === 'APPROVED' ? 'bg-blue-100 text-blue-700 border-blue-200' : 
+                                                  q.status === 'WON' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
+                                                  q.status === 'LOST' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-100 text-gray-500 border-gray-200'}
+                                            `}>
+                                                {q.status === 'APPROVED' ? 'PRO-FORMA' : q.status}
+                                            </span>
+                                            
+                                            {/* THE TAX TRIGGER BUTTON */}
+                                            {q.status === 'APPROVED' && (
+                                                <button 
+                                                    onClick={() => {
+                                                        if(confirm("Confirm: Issue Official Sales Invoice? This will post 12% VAT to your books.")) {
+                                                            onUpdateQuoteStatus(q.id, 'INVOICED');
+                                                        }
+                                                    }}
+                                                    className="flex items-center gap-1.5 text-[9px] font-black text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-600 hover:text-white transition-all border border-orange-200 animate-pulse"
+                                                >
+                                                    <ArrowUpRight size={12}/> ISSUE SI / POST VAT
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
 
-                                    <div className="flex flex-col gap-1 mr-2 border-l pl-2 border-gray-100">
-                                        <button 
-                                            onClick={() => onUpdateQuoteStatus(quote.id, 'SENT')}
-                                            className={`p-1.5 rounded-lg transition-all border ${quote.status === 'SENT' ? 'bg-blue-600 text-white border-blue-600' : 'bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-600 hover:text-white'}`}
-                                            title="Mark as Sent"
-                                        >
-                                            <Send size={16}/>
-                                        </button>
-                                        <button 
-                                            onClick={() => onUpdateQuoteStatus(quote.id, 'WON')}
-                                            className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all border border-green-100"
-                                            title="Mark as Won"
-                                        >
-                                            <CheckCircle2 size={16}/>
-                                        </button>
-                                        <button 
-                                            onClick={() => onUpdateQuoteStatus(quote.id, 'LOST')}
-                                            className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all border border-red-100"
-                                            title="Mark as Lost"
-                                        >
-                                            <XCircle size={16}/>
-                                        </button>
-                                    </div>
-
-                                    <Button onClick={() => onEditQuote(quote)} variant="primary" className="!p-3 shadow-lg shadow-orange-100">
-                                        <Edit size={18}/>
-                                    </Button>
-                                    
-                                    <Button 
-                                        onClick={() => { if(window.confirm(`Delete Quote ${quote.id}?`)) onDeleteQuote(quote.id); }} 
-                                        variant="secondary" 
-                                        className="!p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 border-gray-200"
-                                    >
-                                        <Trash2 size={18}/>
-                                    </Button>
-                                </div>
-                            </div>
-                        </Card>
-                    );
-                }) : (
-                    <div className="text-center py-24 bg-white rounded-3xl border-2 border-dashed border-gray-100 shadow-inner">
-                        <FileText size={48} className="mx-auto text-gray-100 mb-4" />
-                        <p className="font-black text-gray-300 uppercase tracking-[0.3em]">No matching quotes found</p>
-                    </div>
-                )}
-            </div>
+                                    {/* COL 5: ACTIONS */}
+                                    <td className="p-6 align-middle">
+                                        <div className="flex justify-center gap-2 opacity-60 group-hover:opacity-100 transition-all duration-300">
+                                            <button onClick={() => onOpenQuote(q)} className="p-3 bg-gray-50 text-gray-500 hover:bg-blue-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Preview PDF"><Eye size={18}/></button>
+                                            <button onClick={() => onEditQuote(q)} className="p-3 bg-gray-50 text-gray-500 hover:bg-orange-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Edit Quote"><Edit size={18}/></button>
+                                            
+                                            <div className="h-8 w-[1px] bg-gray-200 mx-2 self-center"></div>
+                                            
+                                            <button onClick={() => onUpdateQuoteStatus(q.id, 'WON')} className="p-3 bg-gray-50 text-gray-500 hover:bg-green-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Mark Won"><CheckCircle size={18}/></button>
+                                            <button onClick={() => onUpdateQuoteStatus(q.id, 'LOST')} className="p-3 bg-gray-50 text-gray-500 hover:bg-red-400 hover:text-white rounded-xl transition-colors shadow-sm" title="Mark Lost"><XCircle size={18}/></button>
+                                            <button onClick={() => onDeleteQuote(q.id)} className="p-3 bg-gray-50 text-gray-500 hover:bg-red-700 hover:text-white rounded-xl transition-colors shadow-sm" title="Delete"><Trash2 size={18}/></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
         </div>
     );
 };
