@@ -547,29 +547,26 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const companyId = customer.id || (companies?.find(c => c.companyName === customer.name)?.id) || '';
 
         const newQuote = {
-            id: quoteId,
-            customer: { ...customer, id: companyId },
-            commercial,
-            docControl,
-            costing,
-            docGeneration,
-            selectedProducts,
-            manualItems,
-            finalSalesPrice: quoteTotals.finalSalesPrice,
-            totalCost: quoteTotals.costSubtotalUSD, 
-            grossMarginAmount: quoteTotals.grossMarginAmount,
-            grossMarginPercentage: quoteTotals.grossMarginPercentage,
-            status: initialData?.status || 'DRAFT',
-            createdAt: initialData?.createdAt || new Date().toISOString(),
-            lastModified: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
-            opportunityId: opportunityId || null, 
-            companyId: companyId,
-            customerName: customer.name
-        };
-
-        console.log("Saving quote:", newQuote);
-        onSaveQuote(newQuote);
-    };
+    id: quoteId,
+    customer: { ...customer, id: companyId },
+    commercial,
+    docControl,
+    costing,
+    docGeneration,
+    selectedProducts,
+    manualItems,
+    finalSalesPrice: quoteTotals.finalSalesPrice,
+    totalCost: quoteTotals.costSubtotalUSD, 
+    grossMarginAmount: quoteTotals.grossMarginAmount,
+    grossMarginPercentage: quoteTotals.grossMarginPercentage,
+    status: initialData?.status || 'DRAFT',
+    createdAt: initialData?.createdAt || new Date().toISOString(),
+    lastModified: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
+    opportunityId: opportunityId || null, 
+    companyId: companyId,
+    customerName: customer.name,
+    boiActivity: true // ← BOI REGISTERED ACTIVITY (Natural Refrigerant Systems)
+};
 
     const productCategories = useMemo(() => {
         return filteredProducts.reduce((acc, p) => {
