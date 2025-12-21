@@ -3,7 +3,7 @@ import { auth, db } from './firebase';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { collection, onSnapshot, query, doc, getDoc, setDoc, deleteDoc, serverTimestamp, addDoc, updateDoc, orderBy } from "firebase/firestore"; 
 
-// --- 1. Import Pages (Verified Paths: ./pages/) ---
+// --- 1. Import Pages ---
 import LoginPage from './pages/LoginPage.jsx';
 import FunnelPage from './pages/FunnelPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
@@ -11,7 +11,8 @@ import QuotesListPage from './pages/QuotesListPage.jsx';
 import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
 import CompaniesPage from './pages/CompaniesPage.jsx'; 
 import ContactsPage from './pages/ContactsPage.jsx';
-import CommissioningPage from './pages/CommissioningPage.jsx'; 
+// Renamed CommissioningPage to InstallEstimator per user request
+import InstallEstimator from './pages/InstallEstimator.jsx'; 
 import AdminPage from './pages/AdminPage.jsx';
 import CalculatorsPage from './pages/CalculatorsPage.jsx'; 
 import SupplierManager from './pages/SupplierManager.jsx';
@@ -20,12 +21,12 @@ import AgentManagement from './pages/AgentManagement.jsx';
 import AppointmentScheduler from './pages/AppointmentScheduler.jsx';
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
 
-// --- 2. Import Components (Verified Paths: ./components/) ---
+// --- 2. Import Components ---
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
 
-// --- 3. Import Data & Financial (Verified Paths: ./data/) ---
+// --- 3. Import Data & Financial ---
 import FinancialEntryLogger from './data/FinancialEntryLogger.jsx';
 import ManpowerLogger from './data/ManpowerLogger.jsx';
 import ProjectOperations from './data/ProjectOperations.jsx'; 
@@ -36,7 +37,7 @@ import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx';
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, Clock, BookOpen, Briefcase, Truck, Activity,
-    MapPin, Calendar, UserCheck
+    MapPin, Calendar, UserCheck, Wrench
 } from 'lucide-react'; 
 
 // --- 5. Header Component ---
@@ -48,24 +49,46 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                 <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tighter">Karnot <span className="text-orange-600">CRM</span></h1>
             </div>
             <nav className="flex flex-wrap gap-2 justify-center lg:justify-end">
+                
                 {/* PRIMARY MODULES */}
-                <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><BarChart2 className="mr-1" size={14} /> Dashboard</Button>
-                <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><HardHat className="mr-1" size={14} /> Funnel</Button>
-                <Button onClick={() => setActiveView('commissioning')} variant={activeView === 'commissioning' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest text-teal-700 border-teal-200 bg-teal-50"><Activity className="mr-1" size={14} /> Install / QC</Button>
+                <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
+                    <BarChart2 className="mr-1" size={14} /> Dashboard
+                </Button>
+                
+                <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
+                    <HardHat className="mr-1" size={14} /> Funnel
+                </Button>
+                
+                {/* MOVED: Install & QC to Main Header */}
+                <Button onClick={() => setActiveView('installEstimator')} variant={activeView === 'installEstimator' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest text-teal-700 border-teal-200 bg-teal-50 hover:bg-teal-100">
+                    <Wrench className="mr-1" size={14} /> Install & QC
+                </Button>
                 
                 <div className="h-8 w-px bg-gray-200 mx-1 hidden lg:block"></div>
 
                 {/* DIRECTORY */}
-                <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Building className="mr-1" size={14} /> Companies</Button>
-                <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Users className="mr-1" size={14} /> Contacts</Button>
-                <Button onClick={() => setActiveView('suppliers')} variant={activeView === 'suppliers' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Truck className="mr-1" size={14} /> Suppliers</Button>
+                <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
+                    <Building className="mr-1" size={14} /> Companies
+                </Button>
+                <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
+                    <Users className="mr-1" size={14} /> Contacts
+                </Button>
+                <Button onClick={() => setActiveView('suppliers')} variant={activeView === 'suppliers' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
+                    <Truck className="mr-1" size={14} /> Suppliers
+                </Button>
                 
                 <div className="h-8 w-px bg-gray-200 mx-1 hidden lg:block"></div>
 
                 {/* TERRITORY & AGENTS */}
-                <Button onClick={() => setActiveView('territories')} variant={activeView === 'territories' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"><MapPin className="mr-1" size={14} /> Territories</Button>
-                <Button onClick={() => setActiveView('agents')} variant={activeView === 'agents' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"><UserCheck className="mr-1" size={14} /> Agents</Button>
-                <Button onClick={() => setActiveView('appointments')} variant={activeView === 'appointments' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"><Calendar className="mr-1" size={14} /> Call Centre</Button>
+                <Button onClick={() => setActiveView('territories')} variant={activeView === 'territories' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100">
+                    <MapPin className="mr-1" size={14} /> Territories
+                </Button>
+                <Button onClick={() => setActiveView('agents')} variant={activeView === 'agents' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100">
+                    <UserCheck className="mr-1" size={14} /> Agents
+                </Button>
+                <Button onClick={() => setActiveView('appointments')} variant={activeView === 'appointments' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">
+                    <Calendar className="mr-1" size={14} /> Call Centre
+                </Button>
                 
                 <div className="h-8 w-px bg-gray-200 mx-1 hidden lg:block"></div>
                 
@@ -86,7 +109,9 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                     <Plus className="mr-1" size={14} /> New Quote
                 </Button>
                 
-                <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><List className="mr-1" size={14} /> Quotes ({quoteCount})</Button>
+                <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
+                    <List className="mr-1" size={14} /> Quotes ({quoteCount})
+                </Button>
                 
                 <Button onClick={() => setActiveView('admin')} variant={activeView === 'admin' ? 'primary' : 'secondary'} className="!p-2"><Settings size={16} /></Button>
                 <Button onClick={onLogout} variant="secondary" className="!p-2 text-red-500 hover:bg-red-50 border-red-100"><LogOut size={16} /></Button>
@@ -145,7 +170,7 @@ export default function App() {
         if (user) {
             setLoadingData(true); 
             
-            // EXISTING COLLECTIONS
+            // CORE COLLECTIONS
             const unsubQuotes = onSnapshot(
                 query(collection(db, "users", user.uid, "quotes"), orderBy("lastModified", "desc")), 
                 (snap) => setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
@@ -176,7 +201,7 @@ export default function App() {
                 (snap) => setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // NEW TERRITORY MANAGEMENT COLLECTIONS
+            // TERRITORY COLLECTIONS
             const unsubTerritories = onSnapshot(
                 query(collection(db, "users", user.uid, "territories"), orderBy("name", "asc")), 
                 (snap) => setTerritories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
@@ -196,15 +221,9 @@ export default function App() {
             );
             
             return () => { 
-                unsubQuotes(); 
-                unsubOpps(); 
-                unsubCompanies(); 
-                unsubContacts(); 
-                unsubLedger(); 
-                unsubManpower();
-                unsubTerritories();
-                unsubAgents();
-                unsubAppointments();
+                unsubQuotes(); unsubOpps(); unsubCompanies(); unsubContacts(); 
+                unsubLedger(); unsubManpower(); unsubTerritories(); 
+                unsubAgents(); unsubAppointments();
             };
         } else {
             setLoadingData(false);
@@ -254,9 +273,11 @@ export default function App() {
                 userRole={userRole} 
             />
             <main className="container mx-auto p-4 md:p-8">
-                {/* EXISTING VIEWS */}
+                
+                {/* 1. DASHBOARD */}
                 {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
                 
+                {/* 2. FUNNEL & SALES */}
                 {activeView === 'funnel' && (
                     <FunnelPage 
                         opportunities={opportunities} 
@@ -269,8 +290,6 @@ export default function App() {
                         appointments={appointments}
                     />
                 )}
-                
-                {activeView === 'commissioning' && <CommissioningPage quotes={quotes} />}
                 
                 {activeView === 'opportunityDetail' && (
                     <OpportunityDetailPage 
@@ -286,7 +305,11 @@ export default function App() {
                         }} 
                     />
                 )}
+
+                {/* 3. INSTALLATION & QC (NEW) */}
+                {activeView === 'installEstimator' && <InstallEstimator quotes={quotes} user={user} />}
                 
+                {/* 4. DIRECTORY & CRM */}
                 {activeView === 'companies' && (
                     <CompaniesPage 
                         companies={companies} 
@@ -308,7 +331,7 @@ export default function App() {
                 
                 {activeView === 'suppliers' && <SupplierManager user={user} />}
                 
-                {/* TERRITORY MANAGEMENT VIEWS */}
+                {/* 5. TERRITORY MANAGEMENT */}
                 {activeView === 'territories' && (
                     <TerritoryManagement 
                         territories={territories} 
@@ -337,7 +360,7 @@ export default function App() {
                     />
                 )}
                 
-                {/* CALCULATOR VIEWS */}
+                {/* 6. CALCULATORS & TOOLS */}
                 {activeView === 'calculator' && (
                     <QuoteCalculator 
                         onSaveQuote={handleSaveQuote} 
@@ -370,7 +393,7 @@ export default function App() {
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
-                {/* ACCOUNTS HUB */}
+                {/* 7. ACCOUNTS HUB */}
                 {activeView === 'accounts' && (
                     <div className="space-y-6 pb-20">
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
@@ -389,7 +412,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* UPDATED: Pass quotes and opportunities to the Ledger */}
                         {subView === 'ledger' && (
                             <FinancialEntryLogger 
                                 companies={companies} 
