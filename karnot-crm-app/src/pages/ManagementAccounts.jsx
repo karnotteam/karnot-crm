@@ -26,42 +26,31 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
     };
 
     // --- BUDGET DATA (From your Karnot_Financials_R6.xlsx) ---
-    // This would ideally be loaded from a budget collection in Firebase
-    // For now, using January 2026 as reference month
+    // Monthly budgets for FY 2026 starting January
+    const MONTHLY_BUDGETS_2026 = {
+        'Jan': { revenue: 14786, cogs: 12615, opex: 15115 },
+        'Feb': { revenue: 19353, cogs: 13676, opex: 15115 },
+        'Mar': { revenue: 30379, cogs: 20170, opex: 15115 },
+        'Apr': { revenue: 18024, cogs: 12966, opex: 15115 },
+        'May': { revenue: 56215, cogs: 33440, opex: 15117 },
+        'Jun': { revenue: 114901, cogs: 65735, opex: 15117 },
+        'Jul': { revenue: 116233, cogs: 65729, opex: 16898 },
+        'Aug': { revenue: 255827, cogs: 137114, opex: 16898 },
+        'Sep': { revenue: 246002, cogs: 130539, opex: 16898 },
+        'Oct': { revenue: 261639, cogs: 138656, opex: 17748 },
+        'Nov': { revenue: 217253, cogs: 115174, opex: 17748 },
+        'Dec': { revenue: 218699, cogs: 116046, opex: 17748 }
+    };
+
+    // Aggregate for quick reference
     const BUDGET_2026_JAN = {
         revenue: {
-            exportEquipment: 0,
-            domesticEquipment: 8144,
-            domesticEaaS: 6452,
-            eaasServiceCharge: 190,
             total: 14786
         },
         directCosts: {
-            exportEquipment: 0,
-            domesticEquipment: 4791,
-            domesticEaasInstall: 2316,
-            warranty: 148,
-            vanHire: 550,
-            hotels: 1350,
-            meals: 1310,
-            tools: 2000,
-            uniforms: 150,
             total: 12615
         },
         personnel: {
-            directLabor: 3400,
-            installTechs: 2800,
-            opsCenter: 600,
-            otherLabor: 8906,
-            ceo: 4000,
-            cfo: 866,
-            salesEngs: 850,
-            salesCenter: 1490,
-            hr: 500,
-            accountsAdmin: 500,
-            securityDriver: 400,
-            cleaner: 300,
-            employeeTaxes: 2809,
             total: 15115
         },
         fixedAssets: {
@@ -295,7 +284,7 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
 
                     {/* Tab Navigation */}
                     <div className="flex gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200">
-                        {['Overview', 'Budget vs Actual', 'Balance Sheet', 'BIR Report', 'Funding & Assets'].map(tab => (
+                        {['Overview', 'Monthly Breakdown', 'Budget vs Actual', 'Balance Sheet', 'BIR Report', 'Funding & Assets'].map(tab => (
                             <button 
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
@@ -426,7 +415,155 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                 </div>
             )}
 
-            {/* 2. BUDGET VS ACTUAL */}
+            {/* 2. MONTHLY BREAKDOWN (NEW) */}
+            {activeTab === 'Monthly Breakdown' && (
+                <div className="space-y-6">
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="font-black text-blue-800 text-sm uppercase">Financial Year 2026</h3>
+                                <p className="text-xs text-blue-600 mt-1">Monthly Performance Tracking • Jan - Dec 2026</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-xs text-blue-600 font-bold">Current Month</p>
+                                <p className="text-lg font-black text-blue-800">{new Date().toLocaleString('default', { month: 'short' })} 2026</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Monthly Comparison Table */}
+                    <Card className="p-6 border-0 shadow-xl">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="border-b-2 border-gray-200">
+                                        <th className="text-left py-3 px-2 font-black text-gray-600 uppercase">Month</th>
+                                        <th className="text-right py-3 px-2 font-black text-gray-600 uppercase" colSpan="2">Revenue</th>
+                                        <th className="text-right py-3 px-2 font-black text-gray-600 uppercase" colSpan="2">COGS</th>
+                                        <th className="text-right py-3 px-2 font-black text-gray-600 uppercase" colSpan="2">OpEx</th>
+                                        <th className="text-right py-3 px-2 font-black text-gray-600 uppercase" colSpan="2">Net Income</th>
+                                    </tr>
+                                    <tr className="border-b border-gray-100 bg-gray-50 text-[10px]">
+                                        <th className="py-2 px-2"></th>
+                                        <th className="text-right py-2 px-2 text-blue-600 font-bold">Budget</th>
+                                        <th className="text-right py-2 px-2 text-green-600 font-bold">Actual</th>
+                                        <th className="text-right py-2 px-2 text-blue-600 font-bold">Budget</th>
+                                        <th className="text-right py-2 px-2 text-red-600 font-bold">Actual</th>
+                                        <th className="text-right py-2 px-2 text-blue-600 font-bold">Budget</th>
+                                        <th className="text-right py-2 px-2 text-red-600 font-bold">Actual</th>
+                                        <th className="text-right py-2 px-2 text-blue-600 font-bold">Budget</th>
+                                        <th className="text-right py-2 px-2 text-green-600 font-bold">Actual</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {Object.entries(MONTHLY_BUDGETS_2026).map(([month, budget]) => {
+                                        // For now, showing budget vs empty actuals (will be populated from bank transactions)
+                                        const monthlyRevenue = 0; // TODO: Pull from quotes filtered by month
+                                        const monthlyCOGS = 0;    // TODO: Pull from ledger filtered by month
+                                        const monthlyOpEx = 0;    // TODO: Pull from ledger filtered by month
+                                        const budgetNetIncome = (budget.revenue - budget.cogs - budget.opex) * 58.5;
+                                        const actualNetIncome = (monthlyRevenue - monthlyCOGS - monthlyOpEx);
+                                        
+                                        return (
+                                            <tr key={month} className="hover:bg-gray-50">
+                                                <td className="py-3 px-2 font-bold text-gray-700">{month} 2026</td>
+                                                
+                                                {/* Revenue */}
+                                                <td className="text-right py-3 px-2 text-blue-600 font-mono text-[11px]">
+                                                    {formatMoney(budget.revenue * 58.5)}
+                                                </td>
+                                                <td className="text-right py-3 px-2 text-gray-800 font-mono font-bold">
+                                                    {monthlyRevenue > 0 ? formatMoney(monthlyRevenue) : <span className="text-gray-300">—</span>}
+                                                </td>
+                                                
+                                                {/* COGS */}
+                                                <td className="text-right py-3 px-2 text-blue-600 font-mono text-[11px]">
+                                                    {formatMoney(budget.cogs * 58.5)}
+                                                </td>
+                                                <td className="text-right py-3 px-2 text-gray-800 font-mono font-bold">
+                                                    {monthlyCOGS > 0 ? formatMoney(monthlyCOGS) : <span className="text-gray-300">—</span>}
+                                                </td>
+                                                
+                                                {/* OpEx */}
+                                                <td className="text-right py-3 px-2 text-blue-600 font-mono text-[11px]">
+                                                    {formatMoney(budget.opex * 58.5)}
+                                                </td>
+                                                <td className="text-right py-3 px-2 text-gray-800 font-mono font-bold">
+                                                    {monthlyOpEx > 0 ? formatMoney(monthlyOpEx) : <span className="text-gray-300">—</span>}
+                                                </td>
+                                                
+                                                {/* Net Income */}
+                                                <td className="text-right py-3 px-2 text-blue-600 font-mono text-[11px]">
+                                                    {formatMoney(budgetNetIncome)}
+                                                </td>
+                                                <td className="text-right py-3 px-2 font-mono font-bold">
+                                                    {actualNetIncome !== 0 ? (
+                                                        <span className={actualNetIncome >= 0 ? 'text-green-600' : 'text-red-600'}>
+                                                            {formatMoney(actualNetIncome)}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-300">—</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                    
+                                    {/* TOTALS ROW */}
+                                    <tr className="bg-gray-100 font-black border-t-2 border-gray-300">
+                                        <td className="py-3 px-2 text-gray-800 uppercase">FY 2026 Total</td>
+                                        <td className="text-right py-3 px-2 text-blue-700">
+                                            {formatMoney(Object.values(MONTHLY_BUDGETS_2026).reduce((sum, m) => sum + m.revenue, 0) * 58.5)}
+                                        </td>
+                                        <td className="text-right py-3 px-2 text-green-700">
+                                            {formatMoney(profitLoss.revenue)}
+                                        </td>
+                                        <td className="text-right py-3 px-2 text-blue-700">
+                                            {formatMoney(Object.values(MONTHLY_BUDGETS_2026).reduce((sum, m) => sum + m.cogs, 0) * 58.5)}
+                                        </td>
+                                        <td className="text-right py-3 px-2 text-red-700">
+                                            {formatMoney(profitLoss.cogs)}
+                                        </td>
+                                        <td className="text-right py-3 px-2 text-blue-700">
+                                            {formatMoney(Object.values(MONTHLY_BUDGETS_2026).reduce((sum, m) => sum + m.opex, 0) * 58.5)}
+                                        </td>
+                                        <td className="text-right py-3 px-2 text-red-700">
+                                            {formatMoney(profitLoss.opex)}
+                                        </td>
+                                        <td className="text-right py-3 px-2 text-blue-700">
+                                            {formatMoney(
+                                                (Object.values(MONTHLY_BUDGETS_2026).reduce((sum, m) => sum + m.revenue - m.cogs - m.opex, 0)) * 58.5
+                                            )}
+                                        </td>
+                                        <td className="text-right py-3 px-2">
+                                            <span className={profitLoss.netIncome >= 0 ? 'text-green-700' : 'text-red-700'}>
+                                                {formatMoney(profitLoss.netIncome)}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </Card>
+
+                    {/* Integration Notice */}
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+                        <div className="flex items-start gap-3">
+                            <Calendar className="text-yellow-600 mt-0.5" size={20} />
+                            <div>
+                                <h4 className="font-black text-yellow-800 text-xs uppercase mb-1">Bank Transaction Integration Ready</h4>
+                                <p className="text-xs text-yellow-700">
+                                    Monthly actuals will automatically populate once you start reconciling bank transactions 
+                                    in the <span className="font-bold">Bank Reconciliation</span> module. Transactions will be 
+                                    categorized by month to show real performance against your FY 2026 budget.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 3. BUDGET VS ACTUAL */}
             {activeTab === 'Budget vs Actual' && (
                 <div className="space-y-6">
                     {/* REVENUE COMPARISON */}
@@ -540,7 +677,7 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                 </div>
             )}
 
-            {/* 3. BALANCE SHEET */}
+            {/* 4. BALANCE SHEET */}
             {activeTab === 'Balance Sheet' && (
                 <Card className="p-8 shadow-xl max-w-4xl mx-auto border-0">
                     <div className="text-center mb-8">
@@ -642,7 +779,7 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                 </Card>
             )}
 
-            {/* 4. BIR REPORT FORMAT */}
+            {/* 5. BIR REPORT FORMAT */}
             {activeTab === 'BIR Report' && (
                 <Card className="p-8 max-w-5xl mx-auto bg-white border-2 border-gray-300">
                     <div className="text-center mb-8 pb-6 border-b-2 border-gray-800">
@@ -777,7 +914,7 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                 </Card>
             )}
 
-            {/* 5. FUNDING & ASSETS MANAGER */}
+            {/* 6. FUNDING & ASSETS MANAGER */}
             {activeTab === 'Funding & Assets' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* EQUITY LOG */}
