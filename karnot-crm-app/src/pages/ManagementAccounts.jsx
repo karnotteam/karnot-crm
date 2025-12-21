@@ -80,17 +80,23 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
         return () => { unsubEquity(); unsubAssets(); };
     }, [user]);
 
-    // --- 2. CALCULATE P&L (Real-Time) ---
+    // --- 2. CALCULATE P&L (Real-Time with BOI/Non-BOI Split) ---
     const profitLoss = useMemo(() => {
         const rate = 58.5; // PHP per USD
         
-        // Revenue (Won Quotes)
-        const revenue = quotes
-            .filter(q => ['WON', 'INVOICED', 'PAID'].includes(q.status))
+        // BOI ACTIVITY: Revenue from Quote Calculator (all quotes have boiActivity: true)
+        const boiRevenue = quotes
+            .filter(q => ['WON', 'INVOICED', 'PAID'].includes(q.status) && q.boiActivity !== false)
             .reduce((sum, q) => {
                 const quoteRate = q.costing?.forexRate || rate;
                 return sum + (Number(q.finalSalesPrice) * quoteRate);
             }, 0);
+
+        // NON-BOI ACTIVITY: Revenue from Service Invoices (all have boiActivity: false)
+        // This will be populated when you add service invoices from the new ServiceInvoice module
+        const nonBoiRevenue = 0; // TODO: Pull from service_invoices collection
+        
+        const totalRevenue = boiRevenue + nonBoiRevenue;
 
         // COGS (Direct Project Expenses)
         const cogs = ledgerEntries
@@ -108,21 +114,29 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
         const budgetOpEx = BUDGET_2026_JAN.personnel.total * rate;
 
         return {
-            revenue,
+            // Revenue Split
+            boiRevenue,
+            nonBoiRevenue,
+            revenue: totalRevenue,
+            boiPercentage: totalRevenue > 0 ? (boiRevenue / totalRevenue) * 100 : 0,
+            nonBoiPercentage: totalRevenue > 0 ? (nonBoiRevenue / totalRevenue) * 100 : 0,
+            
+            // Standard P&L
             cogs,
-            grossProfit: revenue - cogs,
+            grossProfit: totalRevenue - cogs,
             opex,
-            netIncome: revenue - cogs - opex,
-            margin: revenue > 0 ? ((revenue - cogs - opex) / revenue) * 100 : 0,
+            netIncome: totalRevenue - cogs - opex,
+            margin: totalRevenue > 0 ? ((totalRevenue - cogs - opex) / totalRevenue) * 100 : 0,
+            
             // Budget comparison
             budgetRevenue,
             budgetCOGS,
             budgetOpEx,
             budgetNetIncome: budgetRevenue - budgetCOGS - budgetOpEx,
-            revenueVariance: revenue - budgetRevenue,
+            revenueVariance: totalRevenue - budgetRevenue,
             cogsVariance: cogs - budgetCOGS,
             opexVariance: opex - budgetOpEx,
-            netIncomeVariance: (revenue - cogs - opex) - (budgetRevenue - budgetCOGS - budgetOpEx)
+            netIncomeVariance: (totalRevenue - cogs - opex) - (budgetRevenue - budgetCOGS - budgetOpEx)
         };
     }, [quotes, ledgerEntries]);
 
@@ -799,11 +813,11 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                             <div className="pl-4 space-y-2 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-gray-700">Sales - BOI Registered Activity</span>
-                                    <span className="font-mono">{formatMoney(profitLoss.revenue * 0.7)}</span>
+                                    <span className="font-mono">{formatMoney(profitLoss.boiRevenue)}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-700">Sales - Non-BOI Activity</span>
-                                    <span className="font-mono">{formatMoney(profitLoss.revenue * 0.3)}</span>
+                                    <span className="font-mono">{formatMoney(profitLoss.nonBoiRevenue)}</span>
                                 </div>
                                 <div className="flex justify-between border-t border-gray-200 pt-2 font-bold">
                                     <span className="text-gray-800">TOTAL REVENUE</span>
