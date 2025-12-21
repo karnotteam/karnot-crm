@@ -1,287 +1,189 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Users, Trash2, Save, Check, X, Briefcase } from 'lucide-react';
-import { Card, Button, Input } from '../data/constants.jsx';
 import { db } from '../firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, doc, deleteDoc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, onSnapshot, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
+import { Card, Button, Input } from '../data/constants.jsx';
+import { Clock, Trash2, User, Briefcase, Plus, Calendar } from 'lucide-react';
 import { getAuth } from "firebase/auth";
 
-const ManpowerLogger = ({ quotes = [] }) => {
-    const [loading, setLoading] = useState(false);
-    const [timeLogs, setTimeLogs] = useState([]);
-    const [editingId, setEditingId] = useState(null);
-    const [log, setLog] = useState({
-        date: new Date().toISOString().split('T')[0],
+const ManpowerLogger = ({ quotes = [] }) => { // Updated prop to quotes
+    const [logs, setLogs] = useState([]);
+    const [newLog, setNewLog] = useState({
         staffName: '',
+        date: new Date().toISOString().split('T')[0],
         hours: '',
-        hourlyRate: 500,
-        quoteId: '', // CHANGED from companyId
-        quoteName: '', // For display
-        description: ''
+        rate: '',
+        quoteId: '', // Changed from companyId to quoteId
+        taskDescription: ''
     });
 
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    // Fetch Logs
     useEffect(() => {
-        const auth = getAuth();
-        if (!auth.currentUser) return;
+        if (!user) return;
+        const q = query(collection(db, "users", user.uid, "manpower_logs"), orderBy("date", "desc"));
+        const unsub = onSnapshot(q, (snap) => {
+            setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsub();
+    }, [user]);
 
-        const q = query(
-            collection(db, "users", auth.currentUser.uid, "manpower_logs"),
-            orderBy("date", "desc")
-        );
+    // Derived Lists
+    const activeProjects = quotes.filter(q => ['WON', 'APPROVED', 'INVOICED'].includes(q.status));
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setTimeLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const handleAddLog = async () => {
+        if (!newLog.staffName || !newLog.hours || !newLog.rate || !newLog.quoteId) {
+            alert("Please fill all required fields");
+            return;
+        }
+
+        // Find Project Name for easy reading later
+        const selectedProject = quotes.find(q => q.id === newLog.quoteId);
+        const projectLabel = selectedProject ? `${selectedProject.customer?.name} (${selectedProject.id})` : 'Unknown';
+
+        const totalCost = parseFloat(newLog.hours) * parseFloat(newLog.rate);
+
+        await addDoc(collection(db, "users", user.uid, "manpower_logs"), {
+            ...newLog,
+            projectLabel, 
+            totalCost,
+            createdAt: serverTimestamp()
         });
 
-        return () => unsubscribe();
-    }, []);
-
-    // Filter only active projects (Won, Approved, Invoiced)
-    const activeProjects = quotes.filter(q => 
-        ['WON', 'APPROVED', 'INVOICED'].includes(q.status)
-    );
-
-    const handleSave = async () => {
-        const auth = getAuth();
-        if (!auth.currentUser) return;
-        if (!log.staffName || !log.hours || !log.quoteId) {
-            return alert("Please fill in Staff Name, Hours, and Project.");
-        }
-
-        setLoading(true);
-        
-        // Find the selected quote to get customer name
-        const selectedQuote = quotes.find(q => q.id === log.quoteId);
-        const quoteName = selectedQuote 
-            ? `${selectedQuote.id} - ${selectedQuote.customer?.name}` 
-            : log.quoteId;
-        
-        const totalCost = parseFloat(log.hours) * parseFloat(log.hourlyRate);
-
-        try {
-            const logData = {
-                ...log,
-                quoteName: quoteName, // For display in table
-                totalCost: totalCost,
-                updatedAt: new Date().toISOString()
-            };
-
-            if (editingId) {
-                await updateDoc(doc(db, "users", auth.currentUser.uid, "manpower_logs", editingId), logData);
-                setEditingId(null);
-            } else {
-                await addDoc(collection(db, "users", auth.currentUser.uid, "manpower_logs"), {
-                    ...logData,
-                    createdAt: new Date().toISOString()
-                });
-            }
-            // Reset form but keep quote and date for faster logging
-            setLog(prev => ({ ...prev, staffName: '', hours: '', description: '' }));
-        } catch (error) {
-            console.error("Error saving log:", error);
-            alert("Error saving log.");
-        } finally {
-            setLoading(false);
-        }
+        setNewLog({ ...newLog, hours: '', taskDescription: '' }); // Reset fields but keep staff/project for speed
     };
 
     const handleDelete = async (id) => {
-        if (window.confirm("Delete this time log?")) {
-            const auth = getAuth();
-            try {
-                await deleteDoc(doc(db, "users", auth.currentUser.uid, "manpower_logs", id));
-            } catch (error) {
-                console.error("Error deleting:", error);
-            }
+        if (confirm("Delete this log entry?")) {
+            await deleteDoc(doc(db, "users", user.uid, "manpower_logs", id));
         }
     };
 
-    const startEdit = (item) => {
-        setEditingId(item.id);
-        setLog({
-            date: item.date,
-            staffName: item.staffName,
-            hours: item.hours,
-            hourlyRate: item.hourlyRate || 500,
-            quoteId: item.quoteId,
-            quoteName: item.quoteName || '',
-            description: item.description || ''
-        });
-    };
-
     return (
-        <div className="space-y-8">
-            <Card className="border-t-4 border-blue-500 shadow-lg">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-2 text-gray-800">
-                        <Clock className="text-blue-600" /> {editingId ? "Edit Time Log" : "Log Manpower Hours"}
-                    </h2>
-                    {editingId && (
-                        <Button onClick={() => {setEditingId(null); setLog({...log, staffName: '', hours: ''})}} variant="secondary">
-                            <X size={16} className="mr-2"/> Cancel
-                        </Button>
-                    )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <Input label="Date" type="date" value={log.date} onChange={e => setLog({...log, date: e.target.value})} />
-                    <Input label="Staff Name" placeholder="e.g. Juan Dela Cruz" value={log.staffName} onChange={e => setLog({...log, staffName: e.target.value})} />
-                    
-                    {/* UPDATED: Project Dropdown using Quotes */}
+        <div className="space-y-6 pb-20">
+            {/* INPUT CARD */}
+            <Card className="p-6 bg-white shadow-sm border border-gray-100 rounded-2xl">
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                        <Clock size={24} />
+                    </div>
                     <div>
-                        <label className="block text-[10px] font-black uppercase text-gray-400 mb-1 ml-1 flex items-center gap-1">
-                            <Briefcase size={10}/> Project / Quote
-                        </label>
-                        <select 
-                            className="w-full p-2 border-2 border-gray-100 rounded-xl bg-white font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer" 
-                            value={log.quoteId} 
-                            onChange={e => {
-                                const selectedQuote = quotes.find(q => q.id === e.target.value);
-                                setLog({
-                                    ...log, 
-                                    quoteId: e.target.value,
-                                    quoteName: selectedQuote 
-                                        ? `${selectedQuote.id} - ${selectedQuote.customer?.name}`
-                                        : ''
-                                });
-                            }}
-                        >
-                            <option value="">-- Select Active Project --</option>
-                            {activeProjects.map(q => (
-                                <option key={q.id} value={q.id}>
-                                    {q.id} - {q.customer?.name} ({q.status})
-                                </option>
-                            ))}
-                        </select>
-                        {activeProjects.length === 0 && (
-                            <p className="text-xs text-orange-500 mt-1 italic">No active projects. Create a Won/Approved quote first.</p>
-                        )}
+                        <h2 className="text-lg font-black text-gray-800 uppercase tracking-tight">Manpower & Labor Log</h2>
+                        <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Track project hours for ROI Analysis</p>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                    <Input label="Hours Worked" type="number" value={log.hours} onChange={e => setLog({...log, hours: e.target.value})} />
-                    <Input label="Hourly Rate (₱)" type="number" value={log.hourlyRate} onChange={e => setLog({...log, hourlyRate: e.target.value})} />
-                    <div className="mt-8 p-3 bg-blue-50 rounded-xl border border-blue-100 font-black text-blue-700 text-center">
-                        Total Cost: ₱{(parseFloat(log.hours || 0) * parseFloat(log.hourlyRate || 0)).toLocaleString()}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                    <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1">Date</label>
+                        <Input type="date" value={newLog.date} onChange={e => setNewLog({...newLog, date: e.target.value})} />
                     </div>
-                </div>
-
-                <div className="mt-4">
-                    <Input 
-                        label="Description / Notes (Optional)" 
-                        placeholder="e.g., Installation work at customer site"
-                        value={log.description} 
-                        onChange={e => setLog({...log, description: e.target.value})} 
-                    />
-                </div>
-
-                <div className="flex justify-end mt-6">
-                    <Button onClick={handleSave} variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white px-8" disabled={loading}>
-                        <Save className="mr-2" size={16} /> {editingId ? "Update Log" : "Save Work Log"}
-                    </Button>
-                </div>
-            </Card>
-
-            <Card className="shadow-md">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-black text-xs uppercase text-gray-400 tracking-widest">Recent Manpower History</h3>
-                    <div className="text-xs font-bold text-gray-500">
-                        {timeLogs.length} {timeLogs.length === 1 ? 'Record' : 'Records'}
-                    </div>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left border-collapse">
-                        <thead className="bg-gray-50 uppercase text-[10px] font-black text-gray-500">
-                            <tr>
-                                <th className="p-4 border-b">Date</th>
-                                <th className="p-4 border-b">Project / Quote</th>
-                                <th className="p-4 border-b">Staff</th>
-                                <th className="p-4 border-b text-center">Hours</th>
-                                <th className="p-4 border-b text-right">Rate</th>
-                                <th className="p-4 border-b text-right">Cost</th>
-                                <th className="p-4 border-b text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {timeLogs.length === 0 && (
-                                <tr>
-                                    <td colSpan="7" className="p-8 text-center text-gray-400 italic">
-                                        No manpower logs yet. Start tracking labor costs above.
-                                    </td>
-                                </tr>
-                            )}
-                            {timeLogs.map(item => {
-                                // Find matching quote to display current customer name
-                                const matchingQuote = quotes.find(q => q.id === item.quoteId);
-                                const displayName = matchingQuote 
-                                    ? `${matchingQuote.id} - ${matchingQuote.customer?.name}`
-                                    : item.quoteName || item.quoteId || 'Unknown Project';
-                                
-                                return (
-                                    <tr key={item.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="p-4 text-gray-600">{item.date}</td>
-                                        <td className="p-4">
-                                            <div className="flex items-center gap-2">
-                                                <Briefcase size={14} className="text-blue-500"/>
-                                                <span className="font-bold text-gray-800">{displayName}</span>
-                                            </div>
-                                            {item.description && (
-                                                <p className="text-xs text-gray-400 mt-1 italic">{item.description}</p>
-                                            )}
-                                        </td>
-                                        <td className="p-4 text-gray-700 font-medium">{item.staffName}</td>
-                                        <td className="p-4 text-center font-mono font-bold">{item.hours}h</td>
-                                        <td className="p-4 text-right font-mono text-gray-600">₱{parseFloat(item.hourlyRate || 0).toLocaleString()}</td>
-                                        <td className="p-4 text-blue-700 font-black font-mono text-right">₱{(item.totalCost || 0).toLocaleString()}</td>
-                                        <td className="p-4 text-center space-x-2">
-                                            <button 
-                                                onClick={() => startEdit(item)} 
-                                                className="text-gray-400 hover:text-blue-600 transition-colors"
-                                                title="Edit"
-                                            >
-                                                <Save size={16}/>
-                                            </button>
-                                            <button 
-                                                onClick={() => handleDelete(item.id)} 
-                                                className="text-gray-400 hover:text-red-500 transition-colors"
-                                                title="Delete"
-                                            >
-                                                <Trash2 size={16}/>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Summary Footer */}
-                {timeLogs.length > 0 && (
-                    <div className="mt-6 p-4 bg-blue-50 rounded-xl border-2 border-blue-100">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                            <div>
-                                <p className="text-xs font-black uppercase text-blue-400 mb-1">Total Hours</p>
-                                <p className="text-2xl font-black text-blue-700">
-                                    {timeLogs.reduce((sum, log) => sum + parseFloat(log.hours || 0), 0).toFixed(1)}h
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-xs font-black uppercase text-blue-400 mb-1">Total Labor Cost</p>
-                                <p className="text-2xl font-black text-blue-700">
-                                    ₱{timeLogs.reduce((sum, log) => sum + parseFloat(log.totalCost || 0), 0).toLocaleString()}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-xs font-black uppercase text-blue-400 mb-1">Active Projects</p>
-                                <p className="text-2xl font-black text-blue-700">
-                                    {new Set(timeLogs.map(log => log.quoteId).filter(Boolean)).size}
-                                </p>
-                            </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1">Staff Name</label>
+                        <div className="relative">
+                            <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                            <Input 
+                                placeholder="Technician Name" 
+                                value={newLog.staffName} 
+                                onChange={e => setNewLog({...newLog, staffName: e.target.value})} 
+                                className="pl-9"
+                            />
                         </div>
                     </div>
-                )}
+                    <div className="lg:col-span-2">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1">Project Assignment</label>
+                        <div className="relative">
+                            <Briefcase size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                            <select 
+                                className="w-full p-3 pl-9 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                                value={newLog.quoteId}
+                                onChange={e => setNewLog({...newLog, quoteId: e.target.value})}
+                            >
+                                <option value="">-- Select Active Project --</option>
+                                {activeProjects.map(q => (
+                                    <option key={q.id} value={q.id}>
+                                        {q.customer?.name} (Ref: {q.id})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1">Hourly Rate</label>
+                        <Input 
+                            type="number" 
+                            placeholder="0.00" 
+                            value={newLog.rate} 
+                            onChange={e => setNewLog({...newLog, rate: e.target.value})} 
+                        />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4 items-end">
+                    <div className="md:col-span-3">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase mb-1">Task Details</label>
+                        <Input 
+                            placeholder="Description of work performed..." 
+                            value={newLog.taskDescription} 
+                            onChange={e => setNewLog({...newLog, taskDescription: e.target.value})} 
+                        />
+                    </div>
+                    <div className="flex gap-2">
+                        <div className="flex-1">
+                            <label className="text-[10px] font-bold text-gray-400 uppercase mb-1">Hours</label>
+                            <Input 
+                                type="number" 
+                                placeholder="0" 
+                                value={newLog.hours} 
+                                onChange={e => setNewLog({...newLog, hours: e.target.value})} 
+                            />
+                        </div>
+                        <Button onClick={handleAddLog} variant="primary" className="h-[46px] px-6 bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200">
+                            <Plus size={20} />
+                        </Button>
+                    </div>
+                </div>
             </Card>
+
+            {/* LOGS LIST */}
+            <div className="space-y-2">
+                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Recent Logs</h3>
+                {logs.map(log => (
+                    <div key={log.id} className="bg-white p-4 rounded-xl border border-gray-100 flex justify-between items-center hover:shadow-md transition-shadow group">
+                        <div className="flex items-center gap-4">
+                            <div className="p-2 bg-gray-100 rounded-lg text-gray-500 font-bold text-xs flex flex-col items-center min-w-[60px]">
+                                <Calendar size={14} className="mb-1"/>
+                                {new Date(log.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
+                            </div>
+                            <div>
+                                <h4 className="font-bold text-gray-800 text-sm">{log.staffName}</h4>
+                                <p className="text-xs text-blue-600 font-bold flex items-center gap-1">
+                                    <Briefcase size={10}/> {log.projectLabel}
+                                </p>
+                                <p className="text-[10px] text-gray-400 mt-0.5">{log.taskDescription}</p>
+                            </div>
+                        </div>
+                        <div className="text-right flex items-center gap-6">
+                            <div>
+                                <p className="text-lg font-black text-gray-800">{log.hours} <span className="text-[10px] text-gray-400 font-bold uppercase">Hrs</span></p>
+                                <p className="text-xs text-gray-500">@ ₱{log.rate}/hr</p>
+                            </div>
+                            <div className="text-right w-24">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase">Total Cost</p>
+                                <p className="text-lg font-black text-blue-600">₱{log.totalCost?.toLocaleString()}</p>
+                            </div>
+                            <button 
+                                onClick={() => handleDelete(log.id)}
+                                className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                            >
+                                <Trash2 size={16}/>
+                            </button>
+                        </div>
+                    </div>
+                ))}
+                {logs.length === 0 && <p className="text-center text-gray-400 text-xs italic py-8">No manpower logs recorded yet.</p>}
+            </div>
         </div>
     );
 };
