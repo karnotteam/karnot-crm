@@ -5,9 +5,23 @@ import Papa from 'papaparse';
 import { 
     Plus, X, Edit, Trash2, Building, Upload, Search, 
     CheckSquare, FileText, UserCheck, Mail, PlusCircle, 
-    ExternalLink, Download, Send, Handshake, Map as MapIcon, Copy
+    ExternalLink, Download, Send, Handshake, Map as MapIcon, Copy,
+    Navigation, Target
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, PRICING_TIERS } from '../data/constants.jsx';
+
+// --- Haversine Distance Calculator ---
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in kilometers
+};
 
 // --- 1. StatBadge Component ---
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
@@ -30,6 +44,203 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
                     {count} <span className="text-xs text-gray-400 font-normal">({percentage}%)</span>
                 </p>
             </div>
+        </div>
+    );
+};
+
+// --- 1B. Proximity Search Panel ---
+const ProximitySearch = ({ companies, onSelectCompany, onClose }) => {
+    const [currentLat, setCurrentLat] = useState('');
+    const [currentLon, setCurrentLon] = useState('');
+    const [radiusKm, setRadiusKm] = useState(50);
+    const [isLocating, setIsLocating] = useState(false);
+    const [nearbyResults, setNearbyResults] = useState([]);
+
+    const getCurrentLocation = () => {
+        setIsLocating(true);
+        if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    setCurrentLat(position.coords.latitude.toFixed(6));
+                    setCurrentLon(position.coords.longitude.toFixed(6));
+                    setIsLocating(false);
+                },
+                (error) => {
+                    alert("Unable to get location: " + error.message);
+                    setIsLocating(false);
+                }
+            );
+        } else {
+            alert("Geolocation not supported by your browser");
+            setIsLocating(false);
+        }
+    };
+
+    const findNearby = () => {
+        if (!currentLat || !currentLon) {
+            alert("Please set your current location first");
+            return;
+        }
+
+        const lat = parseFloat(currentLat);
+        const lon = parseFloat(currentLon);
+        
+        const companiesWithGPS = companies.filter(c => c.latitude && c.longitude);
+        const results = companiesWithGPS.map(c => ({
+            ...c,
+            distance: calculateDistance(lat, lon, parseFloat(c.latitude), parseFloat(c.longitude))
+        }))
+        .filter(c => c.distance <= radiusKm)
+        .sort((a, b) => a.distance - b.distance);
+
+        setNearbyResults(results);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl bg-white rounded-3xl">
+                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h2 className="text-2xl font-black uppercase tracking-tighter">Nearby Companies</h2>
+                            <p className="text-xs font-bold text-indigo-100 mt-1">Find accounts near your location</p>
+                        </div>
+                        <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-colors">
+                            <X size={24} />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    {/* Location Input Section */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                        <div className="flex justify-between items-center">
+                            <span className="text-[10px] font-black uppercase text-slate-500">Your Current Location</span>
+                            <Button 
+                                onClick={getCurrentLocation} 
+                                variant="secondary" 
+                                disabled={isLocating}
+                                className="!py-1.5 !px-3 text-xs"
+                            >
+                                <Navigation size={14} className="mr-1" />
+                                {isLocating ? 'Locating...' : 'Use GPS'}
+                            </Button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <Input 
+                                placeholder="Latitude" 
+                                value={currentLat} 
+                                onChange={e => setCurrentLat(e.target.value)}
+                                className="bg-white"
+                            />
+                            <Input 
+                                placeholder="Longitude" 
+                                value={currentLon} 
+                                onChange={e => setCurrentLon(e.target.value)}
+                                className="bg-white"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Radius Slider */}
+                    <div className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] font-black uppercase text-slate-500">Search Radius</span>
+                            <span className="text-2xl font-black text-orange-600">{radiusKm} km</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="5" 
+                            max="200" 
+                            step="5"
+                            value={radiusKm} 
+                            onChange={e => setRadiusKm(parseInt(e.target.value))}
+                            className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
+                        />
+                        <div className="flex justify-between text-[9px] text-gray-400 font-bold mt-1">
+                            <span>5 km</span>
+                            <span>200 km</span>
+                        </div>
+                    </div>
+
+                    {/* Search Button */}
+                    <Button onClick={findNearby} variant="primary" className="w-full !py-3">
+                        <Target size={18} className="mr-2" />
+                        Find Companies Within {radiusKm} km
+                    </Button>
+                </div>
+
+                {/* Results Section */}
+                {nearbyResults.length > 0 && (
+                    <div className="flex-1 overflow-y-auto border-t bg-slate-50 p-6">
+                        <h3 className="text-sm font-black uppercase text-gray-500 mb-4">
+                            Found {nearbyResults.length} Companies
+                        </h3>
+                        <div className="space-y-3">
+                            {nearbyResults.map(company => (
+                                <div 
+                                    key={company.id}
+                                    onClick={() => onSelectCompany(company)}
+                                    className="bg-white p-4 rounded-2xl border border-gray-200 hover:border-indigo-400 cursor-pointer transition-all group"
+                                >
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="flex-1">
+                                            <h4 className="font-black text-gray-800 uppercase text-sm">
+                                                {company.companyName}
+                                            </h4>
+                                            <p className="text-[10px] font-bold text-orange-600 uppercase">
+                                                {company.industry || 'Account'}
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="text-2xl font-black text-indigo-600">
+                                                {company.distance.toFixed(1)} km
+                                            </div>
+                                            <p className="text-[9px] text-gray-400 font-bold uppercase">Away</p>
+                                        </div>
+                                    </div>
+                                    
+                                    {company.address && (
+                                        <p className="text-xs text-gray-500 font-bold mb-2">{company.address}</p>
+                                    )}
+                                    
+                                    <div className="flex gap-2 pt-2 border-t">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                window.open(`https://www.google.com/maps?q=${company.latitude},${company.longitude}`, '_blank');
+                                            }}
+                                            className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+                                        >
+                                            <MapIcon size={12} />
+                                            Navigate
+                                        </button>
+                                        {company.isCustomer && (
+                                            <span className="text-[10px] font-black uppercase px-2 py-1 bg-teal-50 text-teal-600 rounded-lg">
+                                                <Handshake size={12} className="inline mr-1" />
+                                                Customer
+                                            </span>
+                                        )}
+                                        {company.isTarget && (
+                                            <span className="text-[10px] font-black uppercase px-2 py-1 bg-purple-50 text-purple-600 rounded-lg">
+                                                <Target size={12} className="inline mr-1" />
+                                                Target
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {nearbyResults.length === 0 && currentLat && currentLon && (
+                    <div className="p-12 text-center text-gray-400">
+                        <Navigation size={48} className="mx-auto mb-3 opacity-30" />
+                        <p className="font-bold text-sm">Click "Find Companies" to search nearby accounts</p>
+                    </div>
+                )}
+            </Card>
         </div>
     );
 };
@@ -405,6 +616,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
     const [activeFilter, setActiveFilter] = useState('ALL');
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [isImporting, setIsImporting] = useState(false);
+    const [showProximitySearch, setShowProximitySearch] = useState(false);
     const fileInputRef = useRef(null);
 
     const activeCompanies = useMemo(() => 
@@ -568,6 +780,19 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                     existingCompanies={activeCompanies}
                 />
             )}
+
+            {/* PROXIMITY SEARCH MODAL */}
+            {showProximitySearch && (
+                <ProximitySearch
+                    companies={activeCompanies}
+                    onSelectCompany={(company) => {
+                        setEditingCompany(company);
+                        setShowProximitySearch(false);
+                        setShowModal(true);
+                    }}
+                    onClose={() => setShowProximitySearch(false)}
+                />
+            )}
             
             {/* STAT BADGES */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -615,7 +840,15 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                         {selectedIds.size === filtered.length ? 'Deselect' : 'Select'} All
                     </button>
                 </h2>
-                <div className="flex gap-2 w-full md:w-auto">
+                <div className="flex gap-2 w-full md:w-auto flex-wrap">
+                    <Button 
+                        onClick={() => setShowProximitySearch(true)} 
+                        variant="secondary"
+                        className="bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
+                    >
+                        <Navigation size={16} className="mr-1"/> 
+                        Nearby
+                    </Button>
                     <Button 
                         onClick={() => fileInputRef.current.click()} 
                         variant="secondary" 
