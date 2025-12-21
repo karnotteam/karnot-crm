@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Card, Button } from '../data/constants.jsx'; 
-import { Printer, BookOpen, FileText, PieChart, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Printer, BookOpen, FileText, PieChart, TrendingUp, AlertTriangle, AlertCircle } from 'lucide-react';
 
 const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
     // --- STATE ---
@@ -12,7 +12,6 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
     const filterByDate = (items, dateField) => {
         return items.filter(item => {
             if (!item[dateField]) return false;
-            // Handle Firestore Timestamp or String
             const date = item[dateField].seconds ? new Date(item[dateField].seconds * 1000) : new Date(item[dateField]);
             return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
         });
@@ -20,7 +19,6 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
 
     // --- 1. SALES JOURNAL & CASH RECEIPT (Revenue) ---
     const salesData = useMemo(() => {
-        // Filter for valid revenue-generating quotes
         const revenueQuotes = quotes.filter(q => ['WON', 'APPROVED', 'INVOICED'].includes(q.status));
         const filtered = filterByDate(revenueQuotes, 'createdAt');
 
@@ -37,7 +35,6 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
             if (isExport) {
                 zeroRated = grossPHP;
             } else {
-                // Domestic: Gross is VAT Inclusive
                 vatableSales = grossPHP / 1.12;
                 vatOutput = grossPHP - vatableSales;
             }
@@ -93,18 +90,16 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
     const generalLedgerSummary = useMemo(() => {
         const summary = {};
         
-        // Summarize Expenses
         expenseData.forEach(e => {
             const key = e.subCategory || 'Uncategorized Expense';
             if (!summary[key]) summary[key] = { debit: 0, credit: 0, count: 0 };
-            summary[key].debit += e.netPurchase; // Expenses are Debits
+            summary[key].debit += e.netPurchase; 
             summary[key].count += 1;
         });
 
-        // Summarize Sales
         const totalSalesNet = salesData.reduce((sum, s) => sum + (s.vatableSales + s.zeroRated), 0);
         if (totalSalesNet > 0) {
-            summary['Sales Revenue'] = { debit: 0, credit: totalSalesNet, count: salesData.length }; // Revenue is Credit
+            summary['Sales Revenue'] = { debit: 0, credit: totalSalesNet, count: salesData.length };
         }
 
         return Object.entries(summary).sort((a, b) => b[1].debit - a[1].debit);
@@ -384,6 +379,30 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
                 )}
 
             </Card>
+
+            {/* NOTES & COMPLIANCE SECTION */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                <div className="bg-yellow-50 p-6 rounded-2xl border border-yellow-100">
+                    <div className="flex items-center gap-2 mb-4 text-yellow-700">
+                        <AlertCircle size={20} />
+                        <h4 className="font-black uppercase tracking-widest text-xs">BIR Compliance Reminders</h4>
+                    </div>
+                    <ul className="list-disc list-inside text-xs space-y-2 text-yellow-800">
+                        <li>Ensure all <strong>Official Receipts (OR)</strong> and <strong>Sales Invoices (SI)</strong> are chronologically filed.</li>
+                        <li><strong>Input VAT</strong> can only be claimed from VAT-Registered suppliers with valid TINs.</li>
+                        <li>For <strong>Zero-Rated Sales (Exports)</strong>, maintain proof of inward remittance (bank certs) and shipping documents.</li>
+                        <li>File <strong>Form 2550M/Q</strong> on or before the 20th/25th of the following month/quarter.</li>
+                    </ul>
+                </div>
+                
+                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
+                    <h4 className="font-black uppercase tracking-widest text-xs text-gray-400 mb-4">Accountant Notes</h4>
+                    <textarea 
+                        className="w-full h-32 p-4 bg-gray-50 rounded-xl text-sm border-0 focus:ring-2 focus:ring-orange-500 resize-none"
+                        placeholder="Add notes for the bookkeeper regarding this period's transactions..."
+                    ></textarea>
+                </div>
+            </div>
         </div>
     );
 };
