@@ -565,8 +565,12 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     opportunityId: opportunityId || null, 
     companyId: companyId,
     customerName: customer.name,
-    boiActivity: true // ← BOI REGISTERED ACTIVITY (Natural Refrigerant Systems)
+   boiActivity: true // ← BOI REGISTERED ACTIVITY (Natural Refrigerant Systems)
 };
+
+console.log("Saving quote:", newQuote);
+onSaveQuote(newQuote);
+};  // ← This closes the handleSave function
 
     const productCategories = useMemo(() => {
         return filteredProducts.reduce((acc, p) => {
