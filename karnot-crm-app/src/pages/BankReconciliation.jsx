@@ -3,7 +3,7 @@ import { Card, Button, Input } from '../data/constants.jsx';
 import { 
     Landmark, ArrowRightLeft, CheckCircle, XCircle, 
     Upload, Search, Filter, TrendingUp, TrendingDown, Link2, 
-    PlusCircle, Trash2, Edit2 // Added Trash2 and Edit2
+    PlusCircle, Trash2, Edit2, Ban // Added Ban icon for Void
 } from 'lucide-react';
 import { db } from '../firebase'; 
 import { collection, query, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, orderBy, deleteDoc, setDoc } from "firebase/firestore";
@@ -11,8 +11,8 @@ import { collection, query, onSnapshot, doc, updateDoc, serverTimestamp, addDoc,
 const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
     // --- STATE ---
     const [bankLines, setBankLines] = useState([]); 
-    const [formLine, setFormLine] = useState({ date: '', description: '', amount: '', type: 'DEBIT' });
-    const [editingLineId, setEditingLineId] = useState(null); // Track if editing
+    const [formLine, setFormLine] = useState({ date: '', description: '', amount: '', type: 'DEBIT' }); // Default to Debit (Money Out)
+    const [editingLineId, setEditingLineId] = useState(null); 
     
     const [selectedBookEntry, setSelectedBookEntry] = useState(null);
     const [selectedBankLine, setSelectedBankLine] = useState(null);
@@ -28,10 +28,8 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
             setReconciledHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });
 
-        // Fetch Saved Bank Lines (Unmatched)
-        // In a real app, you'd save these to Firestore. For now, we use local state or a temporary collection.
-        // Let's assume we fetch them from a "bank_feed" collection for persistence.
-        const qBank = query(collection(db, "users", user.uid, "bank_feed"));
+        // Fetch Bank Feed
+        const qBank = query(collection(db, "users", user.uid, "bank_feed"), orderBy("date", "desc"));
         const unsubBank = onSnapshot(qBank, (snap) => {
             setBankLines(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });
@@ -73,18 +71,16 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
         
         try {
             if (editingLineId) {
-                // UPDATE
                 await updateDoc(doc(db, "users", user.uid, "bank_feed", editingLineId), formLine);
                 setEditingLineId(null);
             } else {
-                // CREATE
                 await addDoc(collection(db, "users", user.uid, "bank_feed"), {
                     ...formLine,
                     status: 'UNMATCHED',
                     createdAt: serverTimestamp()
                 });
             }
-            setFormLine({ date: '', description: '', amount: '', type: 'DEBIT' }); // Reset form
+            setFormLine({ date: '', description: '', amount: '', type: 'DEBIT' }); 
         } catch (error) {
             console.error("Error saving bank line:", error);
         }
@@ -93,16 +89,26 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
     const handleEditBankLine = (line) => {
         setFormLine(line);
         setEditingLineId(line.id);
-        setSelectedBankLine(null); // Deselect if editing
+        setSelectedBankLine(null); 
     };
 
     const handleDeleteBankLine = async (id) => {
-        if (!confirm("Delete this bank line?")) return;
+        if (!confirm("Permanently delete this line?")) return;
         try {
             await deleteDoc(doc(db, "users", user.uid, "bank_feed", id));
             if (selectedBankLine?.id === id) setSelectedBankLine(null);
         } catch (error) {
-            console.error("Error deleting bank line:", error);
+            console.error(error);
+        }
+    };
+
+    const handleVoidBankLine = async (id) => {
+        if (!confirm("Void this transaction? It will remain in history but cannot be reconciled.")) return;
+        try {
+            await updateDoc(doc(db, "users", user.uid, "bank_feed", id), { status: 'VOIDED' });
+            if (selectedBankLine?.id === id) setSelectedBankLine(null);
+        } catch (error) {
+            console.error(error);
         }
     };
 
@@ -114,6 +120,12 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
     // --- 4. RECONCILIATION LOGIC ---
     const handleReconcile = async () => {
         if (!selectedBookEntry || !selectedBankLine) return alert("Select one item from both sides to match.");
+        if (selectedBankLine.status === 'VOIDED') return alert("Cannot reconcile a VOIDED transaction.");
+
+        // Type Check: Ensure we aren't matching a Credit to a Debit
+        if (selectedBookEntry.type !== selectedBankLine.type) {
+            return alert(`Mismatch! You are trying to match a ${selectedBookEntry.type} (Book) with a ${selectedBankLine.type} (Bank).`);
+        }
         
         const variance = Math.abs(selectedBookEntry.amount - parseFloat(selectedBankLine.amount));
         if (variance > 1.00) {
@@ -121,17 +133,17 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
         }
 
         try {
-            // Mark Book Entry as Reconciled
+            // Update Book Side
             if (selectedBookEntry.source === 'QUOTE') {
                 await updateDoc(doc(db, "users", user.uid, "quotes", selectedBookEntry.id), { isReconciled: true, reconciledDate: new Date().toISOString() });
             } else {
                 await updateDoc(doc(db, "users", user.uid, "ledger", selectedBookEntry.id), { isReconciled: true, reconciledDate: new Date().toISOString() });
             }
 
-            // Remove/Mark Bank Line as Reconciled (Delete from feed or mark status)
-            await deleteDoc(doc(db, "users", user.uid, "bank_feed", selectedBankLine.id));
+            // Update Bank Side (Mark as RECONCILED, don't delete so we keep history)
+            await updateDoc(doc(db, "users", user.uid, "bank_feed", selectedBankLine.id), { status: 'RECONCILED' });
 
-            // Save Audit Record
+            // Create Audit Log
             await addDoc(collection(db, "users", user.uid, "reconciliations"), {
                 bookId: selectedBookEntry.id,
                 bankLineDesc: selectedBankLine.description,
@@ -181,8 +193,8 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
             {/* MAIN WORKSPACE */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 
-                {/* LEFT: BANK STATEMENT FEED */}
-                <Card className="border-t-4 border-purple-500 shadow-lg flex flex-col h-[600px]">
+                {/* LEFT: BANK STATEMENT FEED (IMPROVED) */}
+                <Card className="border-t-4 border-purple-500 shadow-lg flex flex-col h-[650px]">
                     <div className="p-4 bg-purple-50 border-b border-purple-100 flex justify-between items-center">
                         <h3 className="font-black text-purple-800 uppercase tracking-widest text-xs flex items-center gap-2">
                             <Landmark size={16}/> Bank Statement Feed
@@ -190,89 +202,125 @@ const BankReconciliation = ({ user, quotes = [], ledgerEntries = [] }) => {
                         <span className="text-[9px] font-bold bg-white text-purple-600 px-2 py-1 rounded border border-purple-200">HSBC / EXTERNAL</span>
                     </div>
                     
-                    {/* INPUT FORM (ADD / EDIT) */}
-                    <div className="p-4 border-b border-gray-100 bg-white grid grid-cols-4 gap-2 items-end">
-                        <div className="col-span-1">
+                    {/* INPUT FORM */}
+                    <div className="p-4 border-b border-gray-100 bg-white grid grid-cols-12 gap-2 items-end">
+                        <div className="col-span-3">
                             <label className="text-[9px] font-bold text-gray-400">Date</label>
                             <input 
                                 type="date" 
-                                className="w-full p-2 text-xs border rounded-lg font-bold outline-none focus:border-purple-500 transition-colors" 
+                                className="w-full p-2 text-xs border rounded-lg font-bold outline-none focus:border-purple-500" 
                                 value={formLine.date} 
                                 onChange={e => setFormLine({...formLine, date: e.target.value})} 
                             />
                         </div>
-                        <div className="col-span-1">
+                        <div className="col-span-4">
+                            <label className="text-[9px] font-bold text-gray-400">Description</label>
+                            <input 
+                                type="text" 
+                                className="w-full p-2 text-xs border rounded-lg font-bold outline-none focus:border-purple-500" 
+                                value={formLine.description} 
+                                onChange={e => setFormLine({...formLine, description: e.target.value})} 
+                                placeholder="Details..." 
+                            />
+                        </div>
+                        <div className="col-span-3">
                             <label className="text-[9px] font-bold text-gray-400">Amount</label>
                             <input 
                                 type="number" 
-                                className="w-full p-2 text-xs border rounded-lg font-bold outline-none focus:border-purple-500 transition-colors" 
+                                className="w-full p-2 text-xs border rounded-lg font-bold outline-none focus:border-purple-500" 
                                 value={formLine.amount} 
                                 onChange={e => setFormLine({...formLine, amount: e.target.value})} 
                                 placeholder="0.00" 
                             />
                         </div>
-                        <div className="col-span-1">
-                            <label className="text-[9px] font-bold text-gray-400">Desc</label>
-                            <input 
-                                type="text" 
-                                className="w-full p-2 text-xs border rounded-lg font-bold outline-none focus:border-purple-500 transition-colors" 
-                                value={formLine.description} 
-                                onChange={e => setFormLine({...formLine, description: e.target.value})} 
-                                placeholder="Ref..." 
-                            />
-                        </div>
-                        <div className="flex gap-1">
-                            <Button onClick={handleSaveBankLine} size="sm" variant="secondary" className={`h-[34px] flex-1 ${editingLineId ? 'bg-orange-100 text-orange-600' : ''}`}>
-                                {editingLineId ? <CheckCircle size={16}/> : <PlusCircle size={16}/>}
+                        <div className="col-span-2 flex flex-col justify-end gap-1">
+                            {/* Toggle Debit/Credit */}
+                            <div className="flex bg-gray-100 rounded p-0.5 mb-1">
+                                <button onClick={() => setFormLine({...formLine, type: 'DEBIT'})} className={`flex-1 py-0.5 text-[8px] font-black rounded ${formLine.type === 'DEBIT' ? 'bg-white shadow text-red-600' : 'text-gray-400'}`}>DR</button>
+                                <button onClick={() => setFormLine({...formLine, type: 'CREDIT'})} className={`flex-1 py-0.5 text-[8px] font-black rounded ${formLine.type === 'CREDIT' ? 'bg-white shadow text-green-600' : 'text-gray-400'}`}>CR</button>
+                            </div>
+                            <Button onClick={handleSaveBankLine} size="sm" variant="secondary" className={`h-[28px] w-full ${editingLineId ? 'bg-orange-100 text-orange-600' : ''}`}>
+                                {editingLineId ? <CheckCircle size={14}/> : <PlusCircle size={14}/>}
                             </Button>
-                            {editingLineId && (
-                                <Button onClick={handleCancelEdit} size="sm" variant="secondary" className="h-[34px] text-red-500">
-                                    <XCircle size={16}/>
-                                </Button>
-                            )}
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-2 space-y-2 bg-gray-50/50">
-                        {bankLines.length === 0 && <div className="text-center text-gray-400 text-xs mt-10 italic">No bank lines added. Input manually or upload CSV.</div>}
-                        {bankLines.map(line => (
-                            <div 
-                                key={line.id} 
-                                onClick={() => !editingLineId && setSelectedBankLine(line)}
-                                className={`p-3 rounded-xl border cursor-pointer transition-all flex justify-between items-center group relative ${
-                                    selectedBankLine?.id === line.id 
-                                    ? 'bg-purple-600 text-white border-purple-600 shadow-md transform scale-[1.02]' 
-                                    : 'bg-white border-gray-200 hover:border-purple-300 text-gray-700'
-                                }`}
-                            >
-                                <div>
-                                    <p className="font-bold text-xs">{line.date}</p>
-                                    <p className={`text-[10px] uppercase font-bold tracking-wider ${selectedBankLine?.id === line.id ? 'opacity-80' : 'text-gray-400'}`}>
-                                        {line.description || 'Bank Transaction'}
-                                    </p>
-                                </div>
-                                <div className="text-right">
-                                    <p className="font-mono font-black">{formatMoney(line.amount)}</p>
-                                </div>
-
-                                {/* EDIT/DELETE ACTIONS (Only show on hover and when not already selected/editing) */}
-                                {selectedBankLine?.id !== line.id && !editingLineId && (
-                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 p-1 rounded-lg shadow-sm">
-                                        <button onClick={(e) => { e.stopPropagation(); handleEditBankLine(line); }} className="p-1 hover:bg-orange-50 text-gray-400 hover:text-orange-500 rounded">
-                                            <Edit2 size={12}/>
-                                        </button>
-                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteBankLine(line.id); }} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded">
-                                            <Trash2 size={12}/>
-                                        </button>
-                                    </div>
+                    {/* TABLE VIEW FOR BANK LINES */}
+                    <div className="flex-1 overflow-y-auto bg-gray-50/30">
+                        <table className="w-full text-xs text-left border-collapse">
+                            <thead className="bg-gray-50 text-gray-500 font-bold sticky top-0 z-10 shadow-sm">
+                                <tr>
+                                    <th className="p-3 border-b">Date</th>
+                                    <th className="p-3 border-b">Description</th>
+                                    <th className="p-3 border-b text-right text-red-500">Debit (Out)</th>
+                                    <th className="p-3 border-b text-right text-green-600">Credit (In)</th>
+                                    <th className="p-3 border-b text-center w-20">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 bg-white">
+                                {bankLines.filter(l => l.status !== 'RECONCILED').map(line => {
+                                    const isVoid = line.status === 'VOIDED';
+                                    const isSelected = selectedBankLine?.id === line.id;
+                                    
+                                    return (
+                                        <tr 
+                                            key={line.id} 
+                                            onClick={() => !isVoid && !editingLineId && setSelectedBankLine(line)}
+                                            className={`cursor-pointer transition-colors hover:bg-gray-50 
+                                                ${isSelected ? 'bg-purple-50 ring-1 ring-inset ring-purple-500' : ''}
+                                                ${isVoid ? 'opacity-50 bg-gray-50 pointer-events-none' : ''}
+                                            `}
+                                        >
+                                            <td className={`p-3 font-medium ${isVoid ? 'line-through' : ''}`}>{line.date}</td>
+                                            <td className={`p-3 text-gray-600 ${isVoid ? 'line-through italic' : ''}`}>
+                                                {line.description} {isVoid && <span className="text-red-500 font-black ml-1">(VOID)</span>}
+                                            </td>
+                                            <td className="p-3 text-right font-mono text-red-600 font-bold">
+                                                {line.type === 'DEBIT' && !isVoid ? formatMoney(line.amount) : ''}
+                                            </td>
+                                            <td className="p-3 text-right font-mono text-green-600 font-bold">
+                                                {line.type === 'CREDIT' && !isVoid ? formatMoney(line.amount) : ''}
+                                            </td>
+                                            <td className="p-3 flex justify-center gap-1 pointer-events-auto">
+                                                {!isVoid && (
+                                                    <>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleEditBankLine(line); }} 
+                                                            className="p-1 hover:bg-orange-100 text-gray-400 hover:text-orange-500 rounded" 
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 size={12}/>
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleVoidBankLine(line.id); }} 
+                                                            className="p-1 hover:bg-gray-200 text-gray-400 hover:text-gray-700 rounded" 
+                                                            title="Void Transaction"
+                                                        >
+                                                            <Ban size={12}/>
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleDeleteBankLine(line.id); }} 
+                                                            className="p-1 hover:bg-red-100 text-gray-400 hover:text-red-500 rounded" 
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 size={12}/>
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                                {bankLines.length === 0 && (
+                                    <tr><td colSpan="5" className="p-8 text-center text-gray-400 italic">No bank transactions found.</td></tr>
                                 )}
-                            </div>
-                        ))}
+                            </tbody>
+                        </table>
                     </div>
                 </Card>
 
-                {/* RIGHT: INTERNAL BOOKS (No changes needed here, keeping logic intact) */}
-                <Card className="border-t-4 border-orange-500 shadow-lg flex flex-col h-[600px]">
+                {/* RIGHT: INTERNAL BOOKS (Unchanged Logic, visual tweak) */}
+                <Card className="border-t-4 border-orange-500 shadow-lg flex flex-col h-[650px]">
                     <div className="p-4 bg-orange-50 border-b border-orange-100 flex justify-between items-center">
                         <h3 className="font-black text-orange-800 uppercase tracking-widest text-xs flex items-center gap-2">
                             <ArrowRightLeft size={16}/> Internal Books
