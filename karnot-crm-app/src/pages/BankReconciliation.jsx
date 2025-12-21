@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Card, Button, Input } from '../data/constants.jsx'; 
 import { 
     Landmark, ArrowRightLeft, CheckCircle, XCircle, 
-    Upload, Search, Filter, TrendingUp, TrendingDown, Link2
+    Upload, Search, Filter, TrendingUp, TrendingDown, Link2, 
+    PlusCircle // <--- Added this missing import
 } from 'lucide-react';
 import { db } from '../firebase'; 
 import { collection, query, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, orderBy } from "firebase/firestore";
