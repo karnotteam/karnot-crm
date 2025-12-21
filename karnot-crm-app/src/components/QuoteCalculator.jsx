@@ -56,7 +56,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
     // UI State
     const [companySearch, setCompanySearch] = useState('');
     const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
-    const [productViewMode, setProductViewMode] = useState('grid'); // grid or compact
+    const [productViewMode, setProductViewMode] = useState('grid'); 
     const [productSearchTerm, setProductSearchTerm] = useState('');
     const dropdownRef = useRef(null);
 
@@ -144,7 +144,7 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         }
     }, [initialData, nextQuoteNumber]);
 
-    // --- RELATED OPPORTUNITIES ---
+    // --- RELATED DATA ---
     const relatedOpportunities = useMemo(() => {
         if (!opportunities || !customer.name) return [];
         return opportunities.filter(opp => 
@@ -152,7 +152,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         );
     }, [opportunities, customer.name]);
 
-    // --- FILTERED COMPANIES ---
     const filteredCompanies = useMemo(() => {
         if (!companies) return [];
         return companies.filter(c => 
@@ -160,7 +159,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         );
     }, [companies, companySearch]);
 
-    // --- FILTERED PRODUCTS ---
     const filteredProducts = useMemo(() => {
         if (!productSearchTerm) return dbProducts;
         const term = productSearchTerm.toLowerCase();
@@ -206,18 +204,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const newDiscount = PRICING_TIERS[newTier] ? PRICING_TIERS[newTier].discount : 0;
         setCustomer(prev => ({ ...prev, tier: newTier }));
         setCommercial(prev => ({ ...prev, discount: newDiscount }));
-    };
-
-    const handleSelectContact = (e) => {
-        const contact = contacts.find(c => c.id === e.target.value);
-        if (contact) {
-            setCustomer(prev => ({
-                ...prev,
-                contactId: contact.id,
-                contactName: `${contact.firstName} ${contact.lastName}`,
-                contactEmail: contact.email
-            }));
-        }
     };
 
     const handleInputChange = (setter, field, isNumber = false) => (e) => {
@@ -296,12 +282,12 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         };
     }, [selectedProducts, manualItems, commercial.discount, dbProducts]);
 
-    // --- COMPREHENSIVE QUOTE PREVIEW WITH PROFESSIONAL PDF LAYOUT ---
+    // --- PDF GENERATION ---
     const generateQuotePreview = () => {
         const { allItems, subtotalUSD } = quoteTotals;
         
         if (allItems.length === 0) {
-            alert("Please select at least one product or add a manual item.");
+            alert("Please select at least one product.");
             return;
         }
 
@@ -328,294 +314,51 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const priceColumnHeader = `Unit Price (${docGeneration.generateInPHP ? 'PHP' : 'USD'})`;
         const amountColumnHeader = `Amount (${docGeneration.generateInPHP ? 'PHP' : 'USD'})`;
 
-        // Bank Details
-        const bankDetailsPHP = `<h3>Bank Account Details (For PHP Payments)</h3>
-            <p style="font-size:13px; line-height:1.8;">
-                <strong>Account Name:</strong> STUART EDMUND COX<br>
-                <strong>Account Number:</strong> 027-102383-132<br>
-                <strong>Bank:</strong> HSBC - The Hongkong and Shanghai Banking Corporation Ltd<br>
-                <strong>Bank Address:</strong> HSBC Centre, 3058 Fifth Avenue West, BGC, Taguig City, 1632 Philippines
-            </p>`;
-            
-        const bankDetailsUSD = `<h3>Bank Account Details (For USD Payments)</h3>
-            <p style="font-size:13px; line-height:1.8;">
-                <strong>Payment Type:</strong> PDDTS (real-time aka GSRT or EOD batch aka LP USA DOLLARS)<br>
-                <strong>Remit Currency:</strong> USA DOLLARS<br>
-                <strong>Account Name:</strong> STUART EDMUND COX<br>
-                <strong>Account Number:</strong> 027-102383-132<br>
-                <strong>Bank:</strong> HSBC - The Hongkong and Shanghai Banking Corporation Ltd<br>
-                <strong>Bank Address:</strong><br>
-                HSBC Centre<br>
-                3058 Fifth Avenue West<br>
-                Bonifacio Global City<br>
-                Taguig City, Metro Manila, 1632 Philippines<br>
-                <strong>Telephone:</strong> +632 8858 0000<br>
-                <strong>SWIFT Code:</strong> HSBCPHMMXXX
-            </p>`;
+        const bankDetailsPHP = `<h3>Bank Account Details (For PHP Payments)</h3><p style="font-size:13px; line-height:1.8;"><strong>Account Name:</strong> STUART EDMUND COX<br><strong>Account Number:</strong> 027-102383-132<br><strong>Bank:</strong> HSBC - The Hongkong and Shanghai Banking Corporation Ltd<br><strong>Bank Address:</strong> HSBC Centre, 3058 Fifth Avenue West, BGC, Taguig City, 1632 Philippines</p>`;
+        const bankDetailsUSD = `<h3>Bank Account Details (For USD Payments)</h3><p style="font-size:13px; line-height:1.8;"><strong>Payment Type:</strong> PDDTS (real-time aka GSRT or EOD batch aka LP USA DOLLARS)<br><strong>Remit Currency:</strong> USA DOLLARS<br><strong>Account Name:</strong> STUART EDMUND COX<br><strong>Account Number:</strong> 027-102383-132<br><strong>Bank:</strong> HSBC - The Hongkong and Shanghai Banking Corporation Ltd<br><strong>Bank Address:</strong><br>HSBC Centre, 3058 Fifth Avenue West<br>Bonifacio Global City<br>Taguig City, Metro Manila, 1632 Philippines<br><strong>SWIFT Code:</strong> HSBCPHMMXXX</p>`;
 
-        // Terms & Conditions
-        const termsAndConditionsHTML = `<div class="terms-section">
-            <h3>Terms and Conditions</h3>
-            <div class="terms-content">
-                <div class="term-item">
-                    <strong>Warranty</strong>
-                    <p>18 months from the date of delivery, covering manufacturing defects under normal use and service.</p>
-                </div>
-                <div class="term-item">
-                    <strong>Payment Terms</strong>
-                    <p>${docControl.paymentTerms.replace(/\n/g, "<br>")}</p>
-                </div>
-                <div class="term-item">
-                    <strong>Production Lead Time</strong>
-                    <p>For in-stock units, shipment within 15 working days from receipt of full payment.</p>
-                </div>
-            </div>
-        </div>`;
+        const termsAndConditionsHTML = `<div class="terms-section"><h3>Terms and Conditions</h3><div class="terms-content"><div class="term-item"><strong>Warranty</strong><p>18 months from the date of delivery.</p></div><div class="term-item"><strong>Payment Terms</strong><p>${docControl.paymentTerms.replace(/\n/g, "<br>")}</p></div></div></div>`;
 
-        // Line Items HTML
         let lineItemsHTML = allItems.map(p => {
             const unitPrice = docGeneration.generateInPHP ? (p.salesPriceUSD || p.priceUSD || 0) * costing.forexRate : (p.salesPriceUSD || p.priceUSD || 0);
             const lineTotal = unitPrice * (p.quantity || 1);
             let description = `<strong>${p.name}</strong>`;
-            if (p.specs) {
-                description += `<br><span style="color:#666; font-size:12px; font-style:italic;">${p.specs.replace(/\n/g, "<br>")}</span>`;
-            }
-            return `<tr>
-                <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;">${description}</td>
-                <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:center;">${p.quantity || 1}</td>
-                <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:right;">${primaryFormat(unitPrice)}</td>
-                <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:right;"><strong>${primaryFormat(lineTotal)}</strong></td>
-            </tr>`;
+            if (p.specs) description += `<br><span style="color:#666; font-size:12px; font-style:italic;">${p.specs.replace(/\n/g, "<br>")}</span>`;
+            return `<tr><td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;">${description}</td><td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:center;">${p.quantity || 1}</td><td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:right;">${primaryFormat(unitPrice)}</td><td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:right;"><strong>${primaryFormat(lineTotal)}</strong></td></tr>`;
         }).join('');
 
-        // Company Header
         const logoURL = "https://img1.wsimg.com/isteam/ip/cb1de239-c2b8-4674-b57d-5ae86a72feb1/Asset%2010%404x.png/:/rs=w:400,cg:true,m";
-        const companyHeaderHTML = `<div class="company-info">
-            <img src="${logoURL}" alt="Karnot Logo" style="width:140px; margin-bottom:12px;">
-            <p style="font-size:12px; line-height:1.6; margin:0;">
-                <strong>Karnot Energy Solutions INC.</strong><br>
-                TIN: ${customer.tin || 'N/A'}<br>
-                Low Carbon Innovation Centre, Cosmos Street, Nilombot,<br>
-                2429 Mapandan, Pangasinan, Philippines<br>
-                Tel: +63 75 510 8922
-            </p>
-        </div>`;
+        const companyHeaderHTML = `<div class="company-info"><img src="${logoURL}" alt="Karnot Logo" style="width:140px; margin-bottom:12px;"><p style="font-size:12px; line-height:1.6; margin:0;"><strong>Karnot Energy Solutions INC.</strong><br>TIN: ${customer.tin || 'N/A'}<br>Low Carbon Innovation Centre, Mapandan, Philippines</p></div>`;
         
-        let contactLine = '';
-        if (customer.contactName) {
-            contactLine = `<br><strong>Attention:</strong> ${customer.contactName}`;
-        }
-
-        // Customer Info Boxes
-        const customerInfoHTML = `<div class="customer-box">
-            <strong>Quote For:</strong><br>
-            Customer No.: ${customer.number || "N/A"}<br>
-            ${customer.name || "N/A"}${contactLine}<br>
-            ${customer.address.replace(/\n/g, "<br>") || "N/A"}
-        </div>`;
-        
-        const billToInfoHTML = `<div class="customer-box">
-            <strong>Bill To:</strong><br>
-            Customer No.: ${customer.number || "N/A"}<br>
-            ${customer.name || "N/A"}${contactLine}<br>
-            ${customer.address.replace(/\n/g, "<br>") || "N/A"}
-        </div>`;
-        
-        const soldToInfoHTML = `<div class="customer-box">
-            <strong>SOLD TO:</strong><br>
-            <strong>Customer No.:</strong> ${customer.number || "N/A"}<br>
-            <strong>Registered Name:</strong> ${customer.name || "N/A"}<br>
-            <strong>TIN:</strong> ${customer.tin || "N/A"}<br>
-            <strong>Business Address:</strong> ${customer.address.replace(/\n/g, "<br>") || "N/A"}${contactLine}
-        </div>`;
-
         let generatedDocumentsHTML = '';
         let landedCostHTML = '';
 
-        // Landed Cost Breakdown
         if (docGeneration.includeLandedCost) {
-            const cifUSD = totalAfterDiscountUSD + costing.transportCost;
-            const dutiesUSD = cifUSD * (costing.dutiesRate / 100);
-            const customsValueUSD = cifUSD + dutiesUSD;
-            const vatUSD = customsValueUSD * (costing.vatRate / 100);
-            const totalLandedCostUSD = customsValueUSD + vatUSD + costing.brokerFees;
-            
-            landedCostHTML = `<div class="landed-cost-section">
-                <h3>Estimated Landed Cost Breakdown (USD)</h3>
-                <table style="width:100%; max-width:450px; margin-left:auto; font-size:13px;">
-                    <tr><td style="padding:6px 12px; text-align:left;">Equipment Price (Ex-Works, after discount)</td><td style="padding:6px 12px; text-align:right;"><strong>${formatUSD(totalAfterDiscountUSD)}</strong></td></tr>
-                    <tr><td style="padding:6px 12px; text-align:left;">Freight Cost</td><td style="padding:6px 12px; text-align:right;">${formatUSD(costing.transportCost)}</td></tr>
-                    <tr><td style="padding:6px 12px; text-align:left;">Duties (${costing.dutiesRate}%)</td><td style="padding:6px 12px; text-align:right;">${formatUSD(dutiesUSD)}</td></tr>
-                    <tr><td style="padding:6px 12px; text-align:left;">VAT / IVA (${costing.vatRate}%)</td><td style="padding:6px 12px; text-align:right;">${formatUSD(vatUSD)}</td></tr>
-                    <tr><td style="padding:6px 12px; text-align:left;">Broker & Handling Fees</td><td style="padding:6px 12px; text-align:right;">${formatUSD(costing.brokerFees)}</td></tr>
-                    <tr style="border-top:2px solid #333; background-color:#f9fafb;">
-                        <td style="padding:10px 12px; text-align:left;"><strong>Total Estimated Landed Cost</strong></td>
-                        <td style="padding:10px 12px; text-align:right;"><strong>${formatUSD(totalLandedCostUSD)}</strong></td>
-                    </tr>
-                </table>
-            </div>`;
+            const totalLandedCostUSD = (totalAfterDiscountUSD + costing.transportCost) * (1 + costing.dutiesRate/100) * (1 + costing.vatRate/100) + costing.brokerFees;
+            landedCostHTML = `<div class="landed-cost-section"><h3>Estimated Landed Cost Breakdown (USD)</h3><table style="width:100%; max-width:450px; margin-left:auto; font-size:13px;"><tr><td>Total Estimated Landed Cost</td><td style="text-align:right;"><strong>${formatUSD(totalLandedCostUSD)}</strong></td></tr></table></div>`;
         }
 
-        // GENERATE SALES QUOTATION
         if (docGeneration.generateQuote) {
-            const quoteHeaderHTML = `<div class="doc-header">
-                ${companyHeaderHTML}
-                <div class="doc-title">
-                    <h2 style="color:#ea580c; font-size:20px; margin:0; text-transform:uppercase;">SALES QUOTATION</h2>
-                    <p style="font-size:13px; margin:8px 0 0 0;">
-                        <strong>Date:</strong> ${todayFormatted}<br>
-                        <strong>Quote ID:</strong> ${quoteId}
-                    </p>
-                </div>
-            </div>`;
-            
-            const quoteSummaryHTML = `<table style="width:100%; max-width:350px; margin-left:auto; margin-top:30px; font-size:14px;">
-                <tr><td style="padding:6px 0; text-align:left;">Subtotal</td><td style="padding:6px 0; text-align:right;">${primaryFormat(subtotalPrimary)}</td></tr>
-                ${discountAmountPrimary > 0 ? `<tr><td style="padding:6px 0; text-align:left;">Discount (${commercial.discount}%)</td><td style="padding:6px 0; text-align:right; color:#dc2626;">-${primaryFormat(discountAmountPrimary)}</td></tr>` : ''}
-                <tr style="border-top:2px solid #1f2937; font-size:16px; font-weight:bold;">
-                    <td style="padding:12px 0; text-align:left;">Total Amount</td>
-                    <td style="padding:12px 0; text-align:right;">${primaryFormat(totalAfterDiscountPrimary)}</td>
-                </tr>
-            </table>`;
-            
-            generatedDocumentsHTML += `<div class="page">${quoteHeaderHTML}${customerInfoHTML}<h3 style="margin-top:30px;">Products & Services</h3><table class="items-table"><thead><tr><th>Description</th><th style="text-align:center; width:80px;">Qty</th><th style="text-align:right; width:130px;">${priceColumnHeader}</th><th style="text-align:right; width:130px;">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table>${quoteSummaryHTML}${landedCostHTML}${termsAndConditionsHTML}</div>`;
+            const quoteHeaderHTML = `<div class="doc-header">${companyHeaderHTML}<div class="doc-title"><h2 style="color:#ea580c;">SALES QUOTATION</h2><p>Quote ID: ${quoteId}</p></div></div>`;
+            const quoteSummaryHTML = `<table style="width:100%; max-width:350px; margin-left:auto; margin-top:30px;"><tr><td>Total Amount</td><td style="text-align:right;">${primaryFormat(totalAfterDiscountPrimary)}</td></tr></table>`;
+            generatedDocumentsHTML += `<div class="page">${quoteHeaderHTML}<h3>Products & Services</h3><table class="items-table"><thead><tr><th>Description</th><th style="text-align:center;">Qty</th><th style="text-align:right;">${priceColumnHeader}</th><th style="text-align:right;">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table>${quoteSummaryHTML}${landedCostHTML}${termsAndConditionsHTML}</div>`;
         }
 
-        // GENERATE PRO FORMA INVOICE
         if (docGeneration.generateProForma) {
-            const proFormaHeaderHTML = `<div class="doc-header">
-                ${companyHeaderHTML}
-                <div class="doc-title">
-                    <h2 style="color:#ea580c; font-size:20px; margin:0; text-transform:uppercase;">PRO FORMA INVOICE</h2>
-                    <p style="font-size:13px; margin:8px 0 0 0;">
-                        <strong>Date:</strong> ${todayFormatted}<br>
-                        <strong>Reference:</strong> PF-${quoteId}<br>
-                        <strong>Due Date:</strong> ${commercial.dueDate || ''}
-                    </p>
-                </div>
-            </div>`;
-            
-            const proFormaSummaryHTML = `<table style="width:100%; max-width:350px; margin-left:auto; margin-top:30px; font-size:14px;">
-                <tr><td style="padding:6px 0; text-align:left;">Subtotal</td><td style="padding:6px 0; text-align:right;">${primaryFormat(subtotalPrimary)}</td></tr>
-                ${discountAmountPrimary > 0 ? `<tr><td style="padding:6px 0; text-align:left;">Discount (${commercial.discount}%)</td><td style="padding:6px 0; text-align:right; color:#dc2626;">-${primaryFormat(discountAmountPrimary)}</td></tr>` : ''}
-                <tr style="border-top:2px solid #1f2937; font-size:16px; font-weight:bold;">
-                    <td style="padding:12px 0; text-align:left;">Total Amount Due</td>
-                    <td style="padding:12px 0; text-align:right;">${primaryFormat(totalAfterDiscountPrimary)}</td>
-                </tr>
-            </table>`;
-            
+            const proFormaHeaderHTML = `<div class="doc-header">${companyHeaderHTML}<div class="doc-title"><h2 style="color:#ea580c;">PRO FORMA INVOICE</h2><p>Ref: PF-${quoteId}</p></div></div>`;
+            const proFormaSummaryHTML = `<table style="width:100%; max-width:350px; margin-left:auto; margin-top:30px;"><tr><td>Total Amount Due</td><td style="text-align:right;">${primaryFormat(totalAfterDiscountPrimary)}</td></tr></table>`;
             const bankDetailsHTML = docGeneration.generateInPHP ? bankDetailsPHP : bankDetailsUSD;
-            
-            generatedDocumentsHTML += `<div class="page">${proFormaHeaderHTML}${billToInfoHTML}<h3 style="margin-top:30px;">Details</h3><table class="items-table"><thead><tr><th>Description</th><th style="text-align:center; width:80px;">Qty</th><th style="text-align:right; width:130px;">${priceColumnHeader}</th><th style="text-align:right; width:130px;">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table>${proFormaSummaryHTML}${landedCostHTML}${bankDetailsHTML}</div>`;
+            generatedDocumentsHTML += `<div class="page">${proFormaHeaderHTML}<h3>Details</h3><table class="items-table"><thead><tr><th>Description</th><th style="text-align:center;">Qty</th><th style="text-align:right;">${priceColumnHeader}</th><th style="text-align:right;">${amountColumnHeader}</th></tr></thead><tbody>${lineItemsHTML}</tbody></table>${proFormaSummaryHTML}${landedCostHTML}${bankDetailsHTML}</div>`;
         }
 
-        // GENERATE BIR SALES INVOICE
-        if (docGeneration.generateBirInvoice) {
-            const totalAfterDiscountPHP = totalAfterDiscountUSD * costing.forexRate;
-            const vatableSales = totalAfterDiscountPHP / 1.12;
-            const vatAmount = vatableSales * 0.12;
-            const withholdingTaxAmount = vatableSales * (commercial.wht / 100);
-            const totalAmountDue = totalAfterDiscountPHP - withholdingTaxAmount;
-            
-            const birLineItemsHTML = allItems.map(p => {
-                const unitPricePHP = (p.salesPriceUSD || p.priceUSD || 0) * costing.forexRate;
-                const lineTotalPHP = unitPricePHP * (p.quantity || 1);
-                return `<tr>
-                    <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;"><strong>${p.name}</strong></td>
-                    <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:center;">${p.quantity || 1}</td>
-                    <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:right;">${formatPHP(unitPricePHP)}</td>
-                    <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:right;"><strong>${formatPHP(lineTotalPHP)}</strong></td>
-                </tr>`;
-            }).join('');
-
-            const birHeaderHTML = `<div class="doc-header">
-                ${companyHeaderHTML}
-                <div class="doc-title">
-                    <h2 style="color:#ea580c; font-size:20px; margin:0; text-transform:uppercase;">SALES INVOICE</h2>
-                    <p style="font-size:13px; margin:8px 0 0 0;">
-                        <strong>No:</strong> ${String(docControl.quoteNumber).padStart(4, '0')}<br>
-                        <strong>Date:</strong> ${todayFormatted}<br>
-                        <strong>Due Date:</strong> ${commercial.dueDate || ''}
-                    </p>
-                </div>
-            </div>`;
-            
-            const birSummaryHTML = `<table style="width:100%; font-size:13px; margin-top:30px; border-collapse:collapse;">
-                <tr style="background:#f9fafb;">
-                    <td style="padding:8px; border:1px solid #d1d5db; font-weight:600;">VATable Sales</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(vatableSales)}</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; font-weight:600;">Total Sales (VAT-Inclusive)</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(totalAfterDiscountPHP)}</td>
-                </tr>
-                <tr>
-                    <td style="padding:8px; border:1px solid #d1d5db;">VAT-Exempt Sales</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(0)}</td>
-                    <td style="padding:8px; border:1px solid #d1d5db;">Less: 12% VAT</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(vatAmount)}</td>
-                </tr>
-                <tr style="background:#f9fafb;">
-                    <td style="padding:8px; border:1px solid #d1d5db;">Zero-Rated Sales</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(0)}</td>
-                    <td style="padding:8px; border:1px solid #d1d5db;">Net of VAT</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(vatableSales)}</td>
-                </tr>
-                <tr>
-                    <td style="padding:8px; border:1px solid #d1d5db; font-weight:bold;">Total Sales</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right; font-weight:bold;">${formatPHP(vatableSales)}</td>
-                    <td style="padding:8px; border:1px solid #d1d5db;">Less: Withholding Tax (${commercial.wht}%)</td>
-                    <td style="padding:8px; border:1px solid #d1d5db; text-align:right;">${formatPHP(withholdingTaxAmount)}</td>
-                </tr>
-                <tr style="background:#fef3c7; border-top:3px double #1f2937;">
-                    <td colspan="2" style="padding:8px; border:1px solid #d1d5db;"></td>
-                    <td style="padding:12px 8px; border:1px solid #d1d5db; font-weight:bold; font-size:15px;">TOTAL AMOUNT DUE</td>
-                    <td style="padding:12px 8px; border:1px solid #d1d5db; text-align:right; font-weight:bold; font-size:15px;">${formatPHP(totalAmountDue)}</td>
-                </tr>
-            </table>`;
-            
-            generatedDocumentsHTML += `<div class="page">${birHeaderHTML}${soldToInfoHTML}<h3>Details</h3><table class="items-table"><thead><tr><th>Description</th><th style="text-align:center; width:80px;">Qty</th><th style="text-align:right; width:130px;">Unit Price (PHP)</th><th style="text-align:right; width:130px;">Amount (PHP)</th></tr></thead><tbody>${birLineItemsHTML}</tbody></table>${birSummaryHTML}${bankDetailsPHP}</div>`;
-        }
-
-        // PROFESSIONAL PDF-MATCHING CSS
-        const finalReportHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Quote Preview - ${quoteId}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1f2937; background: #f3f4f6; padding: 20px; }
-        .page { background: white; max-width: 800px; margin: 0 auto 40px; padding: 50px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); page-break-after: always; }
-        .page:last-child { page-break-after: auto; }
-        .doc-header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 3px solid #ea580c; margin-bottom: 30px; }
-        .company-info { flex: 1; }
-        .doc-title { text-align: right; }
-        .customer-box { background: #fef3c7; border-left: 4px solid #ea580c; padding: 15px 20px; margin: 25px 0; font-size: 13px; line-height: 1.8; }
-        h3 { color: #4b5563; font-size: 15px; margin: 25px 0 15px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; text-transform: uppercase; letter-spacing: 0.5px; }
-        .items-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
-        .items-table thead { background: #ea580c; color: white; }
-        .items-table th { padding: 12px 8px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .items-table tbody tr:hover { background: #f9fafb; }
-        .landed-cost-section { margin: 30px 0; padding: 20px; background: #f9fafb; border-radius: 8px; }
-        .terms-section { margin-top: 50px; padding-top: 30px; border-top: 2px solid #e5e7eb; }
-        .terms-content { font-size: 12px; line-height: 1.6; color: #6b7280; }
-        .term-item { margin: 15px 0; }
-        .term-item strong { display: block; color: #374151; margin-bottom: 5px; font-size: 13px; }
-        @media print { 
-            body { background: white; padding: 0; }
-            .page { box-shadow: none; margin: 0; max-width: none; page-break-after: always; }
-            .page:last-child { page-break-after: auto; }
-        }
-    </style>
-</head>
-<body>${generatedDocumentsHTML}</body>
-</html>`;
+        const finalReportHTML = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Quote Preview - ${quoteId}</title><style>body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 20px; background: #f3f4f6; } .page { background: white; max-width: 800px; margin: 0 auto 40px; padding: 50px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); } .doc-header { display: flex; justify-content: space-between; border-bottom: 3px solid #ea580c; padding-bottom: 20px; margin-bottom: 30px; } .items-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; } .items-table th { background: #ea580c; color: white; padding: 10px; text-align: left; } .items-table td { padding: 10px; border-bottom: 1px solid #e5e7eb; } .landed-cost-section { background: #f9fafb; padding: 20px; margin: 30px 0; border-radius: 8px; }</style></head><body>${generatedDocumentsHTML}</body></html>`;
         
         const win = window.open("", "QuotePreview");
         win.document.write(finalReportHTML);
         win.document.close();
     };
     
-    // --- SAVE QUOTE (FIXED) ---
+    // --- SAVE QUOTE ---
     const handleSave = () => {
         if (!customer.name) return alert("Please select or enter a customer.");
         
@@ -638,8 +381,6 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             status: initialData?.status || 'DRAFT',
             createdAt: initialData?.createdAt || new Date().toISOString(),
             lastModified: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
-            
-            // CRM HANDSHAKE FIELDS
             opportunityId: opportunityId || null, 
             companyId: companyId,
             customerName: customer.name
