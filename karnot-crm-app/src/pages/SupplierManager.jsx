@@ -1,13 +1,13 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react'; // <--- Added useRef here
+import React, { useState, useRef, useMemo, useEffect } from 'react'; 
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, updateDoc, writeBatch, query, orderBy, onSnapshot } from "firebase/firestore";
 import Papa from 'papaparse'; 
 import { 
     Plus, X, Edit, Trash2, Truck, Globe, Upload, Search, 
     MapPin, UserCheck, PlusCircle, Download, ShieldCheck, AlertTriangle, 
-    ShoppingCart, Package, CheckCircle
+    ShoppingCart, Package, CheckCircle, Printer, FileText, ArrowLeft
 } from 'lucide-react';
-import { Card, Button, Input, Textarea, Checkbox } from '../data/constants.jsx';
+import { Card, Button, Input, Textarea, Checkbox, KARNOT_LOGO_BASE_64 } from '../data/constants.jsx';
 
 // --- 1. StatBadge Component ---
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
@@ -23,7 +23,115 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-// --- 2. Supplier Modal Component ---
+// --- 2. PRINTABLE PO TEMPLATE ---
+const PrintablePO = ({ po, supplier, onClose }) => {
+    if (!po) return null;
+
+    const handlePrint = () => {
+        window.print();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-white z-[100] overflow-y-auto flex flex-col items-center p-8">
+            {/* SCREEN ONLY CONTROLS */}
+            <div className="w-full max-w-[210mm] flex justify-between mb-8 print:hidden">
+                <Button onClick={onClose} variant="secondary"><ArrowLeft size={16} className="mr-2"/> Back to Manager</Button>
+                <Button onClick={handlePrint} variant="primary"><Printer size={16} className="mr-2"/> Print PDF</Button>
+            </div>
+
+            {/* A4 PAPER PREVIEW */}
+            <div className="w-full max-w-[210mm] bg-white p-[10mm] shadow-2xl print:shadow-none print:w-full print:max-w-none print:p-0 text-gray-800">
+                
+                {/* HEADER */}
+                <div className="flex justify-between items-start border-b-2 border-gray-800 pb-6 mb-6">
+                    <div>
+                        <img src={KARNOT_LOGO_BASE_64} alt="Karnot" className="h-12 mb-2" />
+                        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Enterprise Procurement</p>
+                    </div>
+                    <div className="text-right">
+                        <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tighter mb-1">Purchase Order</h1>
+                        <p className="text-lg font-mono font-bold text-blue-600">{po.reference}</p>
+                        <p className="text-sm font-bold text-gray-500">Date: {new Date(po.date).toLocaleDateString()}</p>
+                    </div>
+                </div>
+
+                {/* ADDRESS BLOCK */}
+                <div className="grid grid-cols-2 gap-12 mb-8">
+                    <div>
+                        <h3 className="text-xs font-black uppercase text-gray-400 mb-2 tracking-widest">Vendor (Supplier)</h3>
+                        <p className="font-bold text-lg">{supplier.name}</p>
+                        <p className="text-sm">{supplier.address}</p>
+                        <p className="text-sm mt-1"><span className="font-bold">Attn:</span> {supplier.contactPerson}</p>
+                        <p className="text-sm"><span className="font-bold">Email:</span> {supplier.email}</p>
+                        <p className="text-sm"><span className="font-bold">TIN:</span> {supplier.tin}</p>
+                    </div>
+                    <div>
+                        <h3 className="text-xs font-black uppercase text-gray-400 mb-2 tracking-widest">Ship To (Delivery)</h3>
+                        <div className="text-sm whitespace-pre-wrap">{po.shipTo}</div>
+                    </div>
+                </div>
+
+                {/* ITEMS TABLE */}
+                <table className="w-full mb-8">
+                    <thead className="bg-gray-100 border-y-2 border-gray-800">
+                        <tr>
+                            <th className="py-2 px-3 text-left font-black uppercase text-xs">Description / SKU</th>
+                            <th className="py-2 px-3 text-center font-black uppercase text-xs">Qty</th>
+                            <th className="py-2 px-3 text-right font-black uppercase text-xs">Unit Cost</th>
+                            <th className="py-2 px-3 text-right font-black uppercase text-xs">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                        {po.items.map((item, idx) => (
+                            <tr key={idx}>
+                                <td className="py-3 px-3">
+                                    <p className="font-bold text-sm">{item.name}</p>
+                                    <p className="text-xs text-gray-500 font-mono">{item.sku}</p>
+                                </td>
+                                <td className="py-3 px-3 text-center text-sm font-bold">{item.qty}</td>
+                                <td className="py-3 px-3 text-right text-sm font-mono">${Number(item.cost).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                <td className="py-3 px-3 text-right text-sm font-black font-mono">${Number(item.total).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                    <tfoot className="border-t-2 border-gray-800">
+                        <tr>
+                            <td colSpan="3" className="py-3 px-3 text-right font-black uppercase text-sm">Grand Total (USD)</td>
+                            <td className="py-3 px-3 text-right font-black text-xl">${Number(po.totalAmount).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                {/* TERMS & CONDITIONS */}
+                <div className="grid grid-cols-2 gap-8 border-t border-gray-200 pt-6">
+                    <div>
+                        <h3 className="text-xs font-black uppercase text-gray-400 mb-2">Payment Terms</h3>
+                        <p className="text-xs font-bold text-gray-800 p-3 bg-gray-50 rounded border">{po.paymentTerms}</p>
+                    </div>
+                    <div>
+                        <h3 className="text-xs font-black uppercase text-gray-400 mb-2">Terms & Conditions</h3>
+                        <p className="text-[10px] text-gray-600 whitespace-pre-wrap">{po.terms}</p>
+                    </div>
+                </div>
+
+                {/* SIGNATURES */}
+                <div className="mt-16 grid grid-cols-2 gap-12">
+                    <div>
+                        <div className="border-b border-gray-400 mb-2 h-8"></div>
+                        <p className="text-xs font-bold uppercase text-gray-500">Authorized Signature (Karnot)</p>
+                    </div>
+                    <div>
+                        <div className="border-b border-gray-400 mb-2 h-8"></div>
+                        <p className="text-xs font-bold uppercase text-gray-500">Date</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    );
+};
+
+// --- 3. Supplier Modal Component ---
 const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] }) => {
     const [activeTab, setActiveTab] = useState('PO_MANAGER'); 
     
@@ -40,7 +148,7 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
     const [isOnboarded, setIsOnboarded] = useState(supplierToEdit?.isOnboarded || false);
     const [notes, setNotes] = useState(supplierToEdit?.notes || '');
     
-    // Interactions (Logs)
+    // Interactions
     const [interactions, setInteractions] = useState(supplierToEdit?.interactions || []);
     const [newLogType, setNewLogType] = useState('Order');
     const [newLogOutcome, setNewLogOutcome] = useState('');
@@ -48,9 +156,16 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
 
     // Purchase Order State
     const [purchaseOrders, setPurchaseOrders] = useState(supplierToEdit?.purchaseOrders || []);
+    const [editingPOId, setEditingPOId] = useState(null); // Track if editing a PO
+    const [viewingPO, setViewingPO] = useState(null); // For Print View
+
+    // PO Form Fields
     const [poReference, setPoReference] = useState(`PO-${Math.floor(1000 + Math.random() * 9000)}`);
     const [poItems, setPoItems] = useState([]);
-    
+    const [shipTo, setShipTo] = useState("Karnot Warehouse\nUnit 123 Industrial Park\nManila, Philippines");
+    const [paymentTerms, setPaymentTerms] = useState("50% Downpayment, 50% Before Shipment");
+    const [poTerms, setPoTerms] = useState("1. Goods must meet Karnot QC Standards.\n2. Delay penalty of 1% per week applies.\n3. Warranty: 12 Months from delivery.");
+
     // PO Item Entry State
     const [selectedProductId, setSelectedProductId] = useState('');
     const [newItem, setNewItem] = useState({ name: '', qty: 1, cost: 0, sku: '' });
@@ -63,7 +178,7 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
         setNewLogOutcome('');
     };
 
-    // --- PO HANDLERS (With Product Master Integration) ---
+    // --- PO CRUD HANDLERS ---
     const handleProductSelect = (e) => {
         const prodId = e.target.value;
         setSelectedProductId(prodId);
@@ -74,7 +189,7 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
                 setNewItem({
                     name: product.name,
                     qty: 1,
-                    cost: product.costPriceUSD || 0, // Auto-fill Cost Price from Master
+                    cost: product.costPriceUSD || 0,
                     sku: product.Order_Reference || ''
                 });
             }
@@ -87,8 +202,6 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
         if (!newItem.name || newItem.cost <= 0) return alert("Enter Item Name and Cost Price");
         const lineTotal = parseFloat(newItem.qty) * parseFloat(newItem.cost);
         setPoItems([...poItems, { ...newItem, total: lineTotal, id: Date.now() }]);
-        
-        // Reset Item Form
         setNewItem({ name: '', qty: 1, cost: 0, sku: '' });
         setSelectedProductId('');
     };
@@ -97,36 +210,66 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
         setPoItems(poItems.filter(i => i.id !== id));
     };
 
+    const editPO = (po) => {
+        setEditingPOId(po.id);
+        setPoReference(po.reference);
+        setPoItems(po.items);
+        setShipTo(po.shipTo || shipTo);
+        setPaymentTerms(po.paymentTerms || paymentTerms);
+        setPoTerms(po.terms || poTerms);
+        // Scroll to top of PO creator
+        document.getElementById('po-creator')?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    const deletePO = (poId) => {
+        if(confirm("Permanently delete this Purchase Order?")) {
+            setPurchaseOrders(purchaseOrders.filter(p => p.id !== poId));
+        }
+    };
+
     const savePurchaseOrder = () => {
         if (poItems.length === 0) return alert("Add items to the PO first.");
         
         const grandTotal = poItems.reduce((sum, item) => sum + item.total, 0);
-        const newPO = {
-            id: `PO_${Date.now()}`,
+        
+        const poData = {
+            id: editingPOId || `PO_${Date.now()}`,
             reference: poReference,
             date: new Date().toISOString(),
             items: poItems,
             totalAmount: grandTotal,
+            shipTo,
+            paymentTerms,
+            terms: poTerms,
             status: 'Draft'
         };
 
-        setPurchaseOrders([newPO, ...purchaseOrders]);
-        
-        // Auto-add log entry
-        const logEntry = { 
-            id: Date.now(), 
-            date: new Date().toISOString().split('T')[0], 
-            type: 'Order', 
-            outcome: `Created PO ${poReference} ($${grandTotal.toLocaleString()})` 
-        };
-        setInteractions([logEntry, ...interactions]);
+        let newOrders;
+        if (editingPOId) {
+            // Update existing
+            newOrders = purchaseOrders.map(p => p.id === editingPOId ? poData : p);
+            setEditingPOId(null);
+        } else {
+            // Create new
+            newOrders = [poData, ...purchaseOrders];
+            // Auto-log
+            const logEntry = { id: Date.now(), date: new Date().toISOString().split('T')[0], type: 'Order', outcome: `Created PO ${poReference} ($${grandTotal.toLocaleString()})` };
+            setInteractions([logEntry, ...interactions]);
+        }
 
+        setPurchaseOrders(newOrders);
+        
+        // Reset Form
         setPoItems([]);
         setPoReference(`PO-${Math.floor(1000 + Math.random() * 9000)}`);
-        alert("Purchase Order Created!");
+        alert("Purchase Order Saved!");
     };
 
     const formatMoney = (val) => `$${Number(val).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+
+    if (viewingPO) {
+        return <PrintablePO po={viewingPO} supplier={{ name, address, contactPerson, email, tin }} onClose={() => setViewingPO(null)} />;
+    }
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
@@ -183,10 +326,10 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
                         {activeTab === 'PO_MANAGER' && (
                             <div className="space-y-6">
                                 {/* PO CREATOR */}
-                                <div className="bg-white p-5 rounded-2xl border border-indigo-100 shadow-sm">
+                                <div id="po-creator" className={`bg-white p-5 rounded-2xl border shadow-sm ${editingPOId ? 'border-orange-400 ring-2 ring-orange-100' : 'border-indigo-100'}`}>
                                     <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-black text-indigo-900 text-sm uppercase tracking-widest flex items-center gap-2">
-                                            <ShoppingCart size={16}/> Create New PO
+                                        <h3 className={`font-black text-sm uppercase tracking-widest flex items-center gap-2 ${editingPOId ? 'text-orange-600' : 'text-indigo-900'}`}>
+                                            <ShoppingCart size={16}/> {editingPOId ? 'Edit Purchase Order' : 'Create New PO'}
                                         </h3>
                                         <input 
                                             value={poReference} 
@@ -196,8 +339,7 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
                                     </div>
 
                                     {/* Item Entry Row */}
-                                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
-                                        {/* Product Selector */}
+                                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3 mb-4">
                                         <div>
                                             <label className="text-[9px] font-bold text-gray-400 uppercase mb-1 block">Select From Product Master</label>
                                             <select 
@@ -233,9 +375,25 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
                                         </div>
                                     </div>
 
+                                    {/* LOGISTICS DETAILS */}
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label className="text-[9px] font-bold text-gray-400 uppercase">Ship To Address</label>
+                                            <textarea className="w-full p-2 text-xs border rounded h-16 font-medium" value={shipTo} onChange={e => setShipTo(e.target.value)} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-bold text-gray-400 uppercase">Payment Terms</label>
+                                            <textarea className="w-full p-2 text-xs border rounded h-16 font-medium" value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)} />
+                                        </div>
+                                    </div>
+                                    <div className="mb-4">
+                                        <label className="text-[9px] font-bold text-gray-400 uppercase">Terms & Conditions</label>
+                                        <textarea className="w-full p-2 text-xs border rounded h-16" value={poTerms} onChange={e => setPoTerms(e.target.value)} />
+                                    </div>
+
                                     {/* Items List */}
-                                    {poItems.length > 0 ? (
-                                        <div className="border rounded-xl overflow-hidden mb-4 mt-4">
+                                    {poItems.length > 0 && (
+                                        <div className="border rounded-xl overflow-hidden mb-4">
                                             <table className="w-full text-xs text-left">
                                                 <thead className="bg-indigo-50 font-bold text-indigo-800 uppercase">
                                                     <tr>
@@ -273,15 +431,18 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
                                                 </tfoot>
                                             </table>
                                         </div>
-                                    ) : (
-                                        <div className="text-center py-6 text-gray-400 text-xs italic border-2 border-dashed border-gray-100 rounded-xl mt-4 mb-4">
-                                            Add items from Master to generate a PO
-                                        </div>
                                     )}
 
-                                    <Button onClick={savePurchaseOrder} variant="secondary" className="w-full py-3 font-bold uppercase text-xs tracking-widest border-indigo-200 text-indigo-600 hover:bg-indigo-50" disabled={poItems.length === 0}>
-                                        <Package className="mr-2" size={16}/> Save Purchase Order
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        {editingPOId && (
+                                            <Button onClick={() => setEditingPOId(null)} variant="secondary" className="flex-1 py-3 text-xs font-bold uppercase">
+                                                Cancel Edit
+                                            </Button>
+                                        )}
+                                        <Button onClick={savePurchaseOrder} variant="primary" className={`flex-1 py-3 font-bold uppercase text-xs tracking-widest text-white shadow-lg ${editingPOId ? 'bg-orange-600 hover:bg-orange-700' : 'bg-indigo-600 hover:bg-indigo-700'}`} disabled={poItems.length === 0}>
+                                            <Package className="mr-2" size={16}/> {editingPOId ? 'Update Order' : 'Save Order'}
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 {/* PO HISTORY */}
@@ -289,14 +450,21 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
                                     <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest ml-1">PO History</h4>
                                     {purchaseOrders.length === 0 && <p className="text-xs text-gray-400 italic ml-1">No past orders.</p>}
                                     {purchaseOrders.map(po => (
-                                        <div key={po.id} className="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                                        <div key={po.id} className="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center shadow-sm hover:shadow-md transition-shadow group">
                                             <div>
                                                 <p className="font-black text-gray-800 text-xs">{po.reference}</p>
                                                 <p className="text-[10px] text-gray-400">{new Date(po.date).toLocaleDateString()} • {po.items.length} Items</p>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="font-black text-indigo-600">{formatMoney(po.totalAmount)}</p>
-                                                <span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold uppercase">{po.status}</span>
+                                            <div className="flex items-center gap-3">
+                                                <div className="text-right mr-2">
+                                                    <p className="font-black text-indigo-600">{formatMoney(po.totalAmount)}</p>
+                                                    <span className="text-[9px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold uppercase">{po.status}</span>
+                                                </div>
+                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => setViewingPO(po)} className="p-2 bg-gray-100 hover:bg-blue-100 text-blue-600 rounded" title="Print PDF"><Printer size={14}/></button>
+                                                    <button onClick={() => editPO(po)} className="p-2 bg-gray-100 hover:bg-orange-100 text-orange-600 rounded" title="Edit PO"><Edit size={14}/></button>
+                                                    <button onClick={() => deletePO(po.id)} className="p-2 bg-gray-100 hover:bg-red-100 text-red-600 rounded" title="Delete PO"><Trash2 size={14}/></button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -352,10 +520,10 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] })
     );
 };
 
-// --- 3. Main Page Component ---
+// --- 4. Main Page Component ---
 const SupplierManager = ({ user }) => {
     const [suppliers, setSuppliers] = useState([]);
-    const [products, setProducts] = useState([]); // PRODUCT MASTER DATA
+    const [products, setProducts] = useState([]); 
     const [showModal, setShowModal] = useState(false);
     const [editingSupplier, setEditingSupplier] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -442,7 +610,7 @@ const SupplierManager = ({ user }) => {
                     onClose={() => setShowModal(false)} 
                     onSave={handleSave} 
                     supplierToEdit={editingSupplier} 
-                    productCatalog={products} // PASS PRODUCT CATALOG TO MODAL
+                    productCatalog={products} 
                 />
             )}
             
