@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react'; 
+import React, { useState, useMemo, useEffect, useRef } from 'react'; // <--- Added useRef here
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, updateDoc, writeBatch, query, orderBy, onSnapshot } from "firebase/firestore";
 import Papa from 'papaparse'; 
