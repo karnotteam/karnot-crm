@@ -107,18 +107,22 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
 
     // --- 4. VAT COMPUTATION (For 2550Q) ---
     const totals = useMemo(() => {
-        const outputVAT = salesData.reduce((sum, i) => sum + i.vatOutput, 0);
-        const inputVAT = expenseData.reduce((sum, i) => sum + i.inputVat, 0);
+        const outputVAT = salesData.reduce((sum, i) => sum + (i.vatOutput || 0), 0);
+        const inputVAT = expenseData.reduce((sum, i) => sum + (i.inputVat || 0), 0);
         const netVAT = outputVAT - inputVAT;
         
-        const totalSales = salesData.reduce((sum, i) => sum + i.grossPHP, 0);
-        const totalPurchases = expenseData.reduce((sum, i) => sum + i.grossPHP, 0);
+        const totalSales = salesData.reduce((sum, i) => sum + (i.grossPHP || 0), 0);
+        const totalPurchases = expenseData.reduce((sum, i) => sum + (i.grossPHP || 0), 0);
 
         return { outputVAT, inputVAT, netVAT, totalSales, totalPurchases };
     }, [salesData, expenseData]);
 
     // --- HELPERS ---
-    const formatCurrency = (val) => `₱${val.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const formatCurrency = (val) => {
+        const num = Number(val) || 0;
+        return `₱${num.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    };
+    
     const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
     return (
@@ -172,10 +176,13 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
                     <p className="text-[10px] font-bold text-red-600 mt-1 uppercase">Form 2550Q: Box 20B</p>
                 </Card>
 
-                <Card className={`p-6 border-l-4 shadow-md text-white ${totals.netVAT >= 0 ? 'bg-slate-800 border-orange-500' : 'bg-green-700 border-green-400'}`}>
-                    <p className="text-[10px] text-gray-300 font-black uppercase tracking-widest mb-2">Net VAT Payable</p>
-                    <p className="text-3xl font-black">{formatCurrency(totals.netVAT)}</p>
-                    <p className="text-[10px] font-bold text-orange-400 mt-1 uppercase">
+                {/* FIXED: Using consistent white bg style so text is visible */}
+                <Card className={`p-6 border-l-4 shadow-md bg-white ${totals.netVAT >= 0 ? 'border-orange-500' : 'border-green-500'}`}>
+                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-2">Net VAT Payable</p>
+                    <p className={`text-3xl font-black ${totals.netVAT >= 0 ? 'text-gray-800' : 'text-green-600'}`}>
+                        {formatCurrency(totals.netVAT)}
+                    </p>
+                    <p className={`text-[10px] font-bold mt-1 uppercase ${totals.netVAT >= 0 ? 'text-orange-500' : 'text-green-600'}`}>
                         {totals.netVAT >= 0 ? 'Remit to BIR (Box 26)' : 'Excess Input / Carry Over'}
                     </p>
                 </Card>
