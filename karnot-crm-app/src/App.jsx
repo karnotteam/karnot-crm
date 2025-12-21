@@ -36,7 +36,7 @@ import AppointmentScheduler from './pages/AppointmentScheduler.jsx';
 
 // --- Service & Operations Modules ---
 import InstallEstimator from './pages/InstallEstimator.jsx';
-import ServiceInvoice from './pages/ServiceInvoice.jsx'; // ← NEW: Non-BOI Activity Module
+import ServiceInvoice from './pages/ServiceInvoice.jsx'; // Non-BOI Activity Module
 
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
@@ -64,7 +64,7 @@ import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx';
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, Clock, BookOpen, Briefcase, Truck, Activity,
-    MapPin, Calendar, UserCheck, Wrench, FileText
+    MapPin, Calendar, UserCheck, Wrench
 } from 'lucide-react'; 
 
 // ==========================================
@@ -177,7 +177,7 @@ export default function App() {
     // --- Finance Data ---
     const [ledgerEntries, setLedgerEntries] = useState([]); 
     const [manpowerLogs, setManpowerLogs] = useState([]);
-    const [serviceInvoices, setServiceInvoices] = useState([]); // ← NEW: Non-BOI Revenue
+    const [serviceInvoices, setServiceInvoices] = useState([]); // Non-BOI Revenue
     
     // --- Territory Management Data ---
     const [territories, setTerritories] = useState([]);
@@ -255,7 +255,7 @@ export default function App() {
                 (snap) => setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 7. SERVICE INVOICES (Non-BOI Activity) ← NEW
+            // 7. SERVICE INVOICES (Non-BOI Activity)
             const unsubServices = onSnapshot(
                 query(collection(db, "users", user.uid, "service_invoices"), orderBy("createdAt", "desc")), 
                 (snap) => setServiceInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
@@ -428,7 +428,7 @@ export default function App() {
                     />
                 )}
                 
-                {/* 5. SERVICE INVOICE (NON-BOI ACTIVITY) ← NEW */}
+                {/* 5. SERVICE INVOICE (NON-BOI ACTIVITY) */}
                 {activeView === 'serviceInvoice' && (
                     <ServiceInvoice 
                         companies={companies}
@@ -565,9 +565,12 @@ export default function App() {
                             />
                         )}
                         
-                        {subView === 'manpower' && <ManpowerLogger companies={companies} />}
+                        {subView === 'manpower' && (
+                            <ManpowerLogger 
+                                quotes={quotes} // [CRITICAL FIX]: Changed from 'companies' to 'quotes'
+                            />
+                        )}
                         
-                        {/* SERVICE INVOICES (NON-BOI) ← NEW */}
                         {subView === 'services' && (
                             <ServiceInvoice 
                                 companies={companies}
@@ -598,7 +601,6 @@ export default function App() {
                             />
                         )}
 
-                        {/* MANAGEMENT ACCOUNTS WITH SERVICE INVOICES ← UPDATED */}
                         {subView === 'management' && (
                             <ManagementAccounts 
                                 user={user}
