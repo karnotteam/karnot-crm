@@ -18,7 +18,7 @@ import SupplierManager from './pages/SupplierManager.jsx';
 import TerritoryManagement from './pages/TerritoryManagement.jsx';
 import AgentManagement from './pages/AgentManagement.jsx';
 import AppointmentScheduler from './pages/AppointmentScheduler.jsx';
-import BankReconciliation from './pages/BankReconciliation.jsx'; // Newly created page
+import BankReconciliation from './pages/BankReconciliation.jsx'; 
 
 // --- 2. Import Components (Verified Paths: ./components/) ---
 import QuoteCalculator from './components/QuoteCalculator.jsx';
@@ -389,7 +389,15 @@ export default function App() {
                             </div>
                         </div>
 
-                        {subView === 'ledger' && <FinancialEntryLogger companies={companies} />}
+                        {/* UPDATED: Pass quotes and opportunities to the Ledger */}
+                        {subView === 'ledger' && (
+                            <FinancialEntryLogger 
+                                companies={companies} 
+                                quotes={quotes} 
+                                opportunities={opportunities}
+                            />
+                        )}
+                        
                         {subView === 'manpower' && <ManpowerLogger companies={companies} />}
                         {subView === 'projectOps' && <ProjectOperations quotes={quotes} manpowerLogs={manpowerLogs} ledgerEntries={ledgerEntries} />}
                         {subView === 'birBooks' && <BIRBookPrep quotes={quotes} ledgerEntries={ledgerEntries} />}
