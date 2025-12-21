@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Landmark, ArrowRightLeft, Trash2, Edit2, RefreshCw, XCircle, Truck } from 'lucide-react';
+import { Save, Landmark, ArrowRightLeft, Trash2, Edit2, RefreshCw, XCircle, Briefcase } from 'lucide-react';
 import { Card, Button, Input, Textarea, Section, KARNOT_CHART_OF_ACCOUNTS } from '../data/constants.jsx';
 import { db } from '../firebase';
 import { collection, addDoc, query, orderBy, onSnapshot, doc, deleteDoc, updateDoc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
-const FinancialEntryLogger = ({ companies = [] }) => {
+// Added quotes and opportunities to props
+const FinancialEntryLogger = ({ companies = [], quotes = [], opportunities = [] }) => {
     const [loading, setLoading] = useState(false);
     const [ledgerEntries, setLedgerEntries] = useState([]);
-    const [suppliers, setSuppliers] = useState([]); // Store fetched suppliers
+    const [suppliers, setSuppliers] = useState([]); 
     const [editingId, setEditingId] = useState(null);
     const [fetchingForex, setFetchingForex] = useState(false);
     
-    // Initial State
+    // Initial State - ADDED projectId and projectLabel
     const initialEntryState = {
         date: new Date().toISOString().split('T')[0],
         category: '',
@@ -23,14 +24,16 @@ const FinancialEntryLogger = ({ companies = [] }) => {
         supplierId: '',
         supplierName: '',
         supplierTIN: '',
-        reference: '', // OR# or Invoice#
+        reference: '', 
         taxStatus: 'VAT',
-        description: ''
+        description: '',
+        projectId: '', // New Field for Costing Module
+        projectLabel: '' // For display purposes
     };
 
     const [entry, setEntry] = useState(initialEntryState);
 
-    // --- 1. DATA FETCHING (Ledger & Suppliers) ---
+    // --- 1. DATA FETCHING ---
     useEffect(() => {
         const auth = getAuth();
         if (!auth.currentUser) return;
@@ -41,7 +44,7 @@ const FinancialEntryLogger = ({ companies = [] }) => {
             setLedgerEntries(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
-        // Fetch Suppliers (for the dropdown)
+        // Fetch Suppliers
         const qSuppliers = query(collection(db, "users", auth.currentUser.uid, "suppliers"), orderBy("name", "asc"));
         const unsubSuppliers = onSnapshot(qSuppliers, (snapshot) => {
             setSuppliers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -55,7 +58,6 @@ const FinancialEntryLogger = ({ companies = [] }) => {
 
     // --- 2. LOGIC HANDLERS ---
     
-    // Auto-fill Supplier TIN when Name is selected
     const handleSupplierSelect = (e) => {
         const selectedId = e.target.value;
         const supplier = suppliers.find(s => s.id === selectedId);
@@ -72,9 +74,23 @@ const FinancialEntryLogger = ({ companies = [] }) => {
         }
     };
 
+    // New Handler for Project Selection
+    const handleProjectSelect = (e) => {
+        const pId = e.target.value;
+        if (!pId) {
+            setEntry(prev => ({ ...prev, projectId: '', projectLabel: '' }));
+            return;
+        }
+
+        // Find the quote to get a nice label
+        const quote = quotes.find(q => q.id === pId);
+        const label = quote ? `${quote.id} - ${quote.customer?.name}` : pId;
+
+        setEntry(prev => ({ ...prev, projectId: pId, projectLabel: label }));
+    };
+
     const fetchLatestRate = () => {
         setFetchingForex(true);
-        // Simulate API Fetch (Replace with real API if needed)
         setTimeout(() => {
             const mockRate = (58.50 + Math.random()).toFixed(2);
             setEntry(prev => {
@@ -111,7 +127,7 @@ const FinancialEntryLogger = ({ companies = [] }) => {
     const handleEdit = (item) => {
         setEntry(item);
         setEditingId(item.id);
-        window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to form
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleCancelEdit = () => {
@@ -135,18 +151,15 @@ const FinancialEntryLogger = ({ companies = [] }) => {
             };
 
             if (editingId) {
-                // UPDATE EXISTING
                 await updateDoc(doc(db, "users", auth.currentUser.uid, "ledger", editingId), payload);
                 setEditingId(null);
             } else {
-                // CREATE NEW
                 await addDoc(collection(db, "users", auth.currentUser.uid, "ledger"), {
                     ...payload,
                     createdAt: new Date().toISOString(),
-                    type: 'EXPENSE' // Default type
+                    type: 'EXPENSE'
                 });
             }
-            // Reset form
             setEntry(initialEntryState);
         } catch (error) {
             console.error("Error saving ledger entry:", error);
@@ -202,6 +215,25 @@ const FinancialEntryLogger = ({ companies = [] }) => {
                                     <option value="">-- Select Supplier --</option>
                                     {suppliers.map(s => (
                                         <option key={s.id} value={s.id}>{s.name} (TIN: {s.tin})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* NEW: PROJECT ASSIGNMENT DROPDOWN */}
+                            <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                                <label className="text-[10px] font-black text-blue-400 uppercase mb-1 block flex items-center gap-1">
+                                    <Briefcase size={10} /> Cost Allocation (Project)
+                                </label>
+                                <select 
+                                    className="w-full p-2 border border-blue-200 rounded-lg bg-white font-bold text-blue-900 text-sm outline-none focus:border-blue-500" 
+                                    value={entry.projectId || ''} 
+                                    onChange={handleProjectSelect}
+                                >
+                                    <option value="">-- General Overhead (No Project) --</option>
+                                    {quotes.map(q => (
+                                        <option key={q.id} value={q.id}>
+                                            {q.id} | {q.customer?.name} ({q.status})
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -303,7 +335,7 @@ const FinancialEntryLogger = ({ companies = [] }) => {
                             <tr className="bg-white border-b">
                                 <th className="p-4 text-gray-400 font-black uppercase">Date</th>
                                 <th className="p-4 text-gray-400 font-black uppercase">Payee / Supplier</th>
-                                <th className="p-4 text-gray-400 font-black uppercase">Category</th>
+                                <th className="p-4 text-gray-400 font-black uppercase">Category & Project</th>
                                 <th className="p-4 text-gray-400 font-black uppercase">Ref</th>
                                 <th className="p-4 text-right text-gray-400 font-black uppercase">PHP Value</th>
                                 <th className="p-4 text-center text-gray-400 font-black uppercase">Actions</th>
@@ -319,7 +351,13 @@ const FinancialEntryLogger = ({ companies = [] }) => {
                                     </td>
                                     <td className="p-4">
                                         <span className="font-black text-gray-700 uppercase block">{item.subCategory}</span>
-                                        <span className="text-[10px] text-gray-400">{item.category}</span>
+                                        <span className="text-[10px] text-gray-400 block">{item.category}</span>
+                                        {/* DISPLAY LINKED PROJECT */}
+                                        {item.projectId && (
+                                            <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[9px] font-bold border border-blue-100">
+                                                <Briefcase size={8} /> {item.projectLabel || item.projectId}
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="p-4 font-mono text-gray-500">{item.reference}</td>
                                     <td className="p-4 text-right">
