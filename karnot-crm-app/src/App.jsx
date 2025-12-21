@@ -35,10 +35,11 @@ import AgentManagement from './pages/AgentManagement.jsx';
 import AppointmentScheduler from './pages/AppointmentScheduler.jsx';
 
 // --- Service & Operations Modules ---
-import InstallEstimator from './pages/InstallEstimator.jsx'; // The new Estimator/Commissioning Tool
+import InstallEstimator from './pages/InstallEstimator.jsx';
 
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
+import ManagementAccounts from './pages/ManagementAccounts.jsx';
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -62,7 +63,7 @@ import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx';
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, Clock, BookOpen, Briefcase, Truck, Activity,
-    MapPin, Calendar, UserCheck, Wrench, FileCheck
+    MapPin, Calendar, UserCheck, Wrench
 } from 'lucide-react'; 
 
 // ==========================================
@@ -161,7 +162,7 @@ export default function App() {
     // --- Application State ---
     const [user, setUser] = useState(null); 
     const [userRole, setUserRole] = useState(null); 
-    const [activeView, setActiveView] = useState('dashboard'); // Start at Dashboard
+    const [activeView, setActiveView] = useState('dashboard');
     const [subView, setSubView] = useState('ledger'); 
     const [loadingAuth, setLoadingAuth] = useState(true);
     const [loadingData, setLoadingData] = useState(true);
@@ -269,7 +270,7 @@ export default function App() {
                 query(collection(db, "users", user.uid, "appointments"), orderBy("appointmentDate", "asc")), 
                 (snap) => {
                     setAppointments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                    setLoadingData(false); // Data load complete after final query
+                    setLoadingData(false);
                 }
             );
             
@@ -331,7 +332,6 @@ export default function App() {
         setActiveView('calculator'); 
     };
 
-    // Calculate next ID intelligently
     const nextQuoteNumber = useMemo(() => {
         if (quotes.length === 0) return 2501;
         const lastQuoteNum = quotes
@@ -521,7 +521,7 @@ export default function App() {
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
                             <div>
                                 <h1 className="text-3xl font-black text-gray-800 tracking-tight uppercase leading-none mb-1">Accounts Hub</h1>
-                                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">FYE: Dec 31 | PEZA Export Enterprise Status</p>
+                                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">FYE: Dec 31 | BOI-SIPP Registered Enterprise</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}><Landmark size={14} className="mr-1" /> Disbursements</Button>
@@ -530,6 +530,9 @@ export default function App() {
                                 <Button onClick={() => setSubView('birBooks')} variant={subView === 'birBooks' ? 'primary' : 'secondary'} className="border-orange-500 text-orange-700"><BookOpen size={14} className="mr-1" /> BIR Books</Button>
                                 <Button onClick={() => setSubView('bankRecon')} variant={subView === 'bankRecon' ? 'primary' : 'secondary'} className="border-purple-200 text-purple-700">
                                     <Landmark size={14} className="mr-1" /> Bank Recon
+                                </Button>
+                                <Button onClick={() => setSubView('management')} variant={subView === 'management' ? 'primary' : 'secondary'} className="border-indigo-200 text-indigo-700 bg-indigo-50">
+                                    <Activity size={14} className="mr-1" /> Mgmt. Accounts
                                 </Button>
                             </div>
                         </div>
@@ -565,6 +568,15 @@ export default function App() {
                                 user={user} 
                                 quotes={quotes} 
                                 ledgerEntries={ledgerEntries} 
+                            />
+                        )}
+
+                        {subView === 'management' && (
+                            <ManagementAccounts 
+                                user={user}
+                                quotes={quotes}
+                                ledgerEntries={ledgerEntries}
+                                opportunities={opportunities}
                             />
                         )}
                     </div>
