@@ -1,11 +1,11 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react'; 
+import React, { useState, useMemo, useEffect } from 'react'; 
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, updateDoc, writeBatch, query, orderBy, onSnapshot } from "firebase/firestore";
 import Papa from 'papaparse'; 
 import { 
     Plus, X, Edit, Trash2, Truck, Globe, Upload, Search, 
-    MapPin, UserCheck, PlusCircle, Download, Landmark, ShieldCheck, AlertTriangle, 
-    ShoppingCart, Printer, FileText, Package
+    MapPin, UserCheck, PlusCircle, Download, ShieldCheck, AlertTriangle, 
+    ShoppingCart, Package, CheckCircle
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox } from '../data/constants.jsx';
 
@@ -23,9 +23,9 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     );
 };
 
-// --- 2. Supplier Modal Component (Now with PO Manager) ---
-const SupplierModal = ({ onClose, onSave, supplierToEdit }) => {
-    const [activeTab, setActiveTab] = useState('PO_MANAGER'); // Default to POs for quick access
+// --- 2. Supplier Modal Component ---
+const SupplierModal = ({ onClose, onSave, supplierToEdit, productCatalog = [] }) => {
+    const [activeTab, setActiveTab] = useState('PO_MANAGER'); 
     
     // Core Supplier Details
     const [name, setName] = useState(supplierToEdit?.name || '');
@@ -46,11 +46,14 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit }) => {
     const [newLogOutcome, setNewLogOutcome] = useState('');
     const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
 
-    // Purchase Order State (New Feature)
+    // Purchase Order State
     const [purchaseOrders, setPurchaseOrders] = useState(supplierToEdit?.purchaseOrders || []);
     const [poReference, setPoReference] = useState(`PO-${Math.floor(1000 + Math.random() * 9000)}`);
     const [poItems, setPoItems] = useState([]);
-    const [newItem, setNewItem] = useState({ name: '', qty: 1, cost: 0 });
+    
+    // PO Item Entry State
+    const [selectedProductId, setSelectedProductId] = useState('');
+    const [newItem, setNewItem] = useState({ name: '', qty: 1, cost: 0, sku: '' });
 
     // --- LOG HANDLERS ---
     const handleAddInteraction = () => {
@@ -60,12 +63,34 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit }) => {
         setNewLogOutcome('');
     };
 
-    // --- PO HANDLERS ---
+    // --- PO HANDLERS (With Product Master Integration) ---
+    const handleProductSelect = (e) => {
+        const prodId = e.target.value;
+        setSelectedProductId(prodId);
+        
+        if (prodId) {
+            const product = productCatalog.find(p => p.id === prodId);
+            if (product) {
+                setNewItem({
+                    name: product.name,
+                    qty: 1,
+                    cost: product.costPriceUSD || 0, // Auto-fill Cost Price from Master
+                    sku: product.Order_Reference || ''
+                });
+            }
+        } else {
+            setNewItem({ name: '', qty: 1, cost: 0, sku: '' });
+        }
+    };
+
     const addItemToPO = () => {
         if (!newItem.name || newItem.cost <= 0) return alert("Enter Item Name and Cost Price");
         const lineTotal = parseFloat(newItem.qty) * parseFloat(newItem.cost);
         setPoItems([...poItems, { ...newItem, total: lineTotal, id: Date.now() }]);
-        setNewItem({ name: '', qty: 1, cost: 0 }); // Reset form
+        
+        // Reset Item Form
+        setNewItem({ name: '', qty: 1, cost: 0, sku: '' });
+        setSelectedProductId('');
     };
 
     const removePoItem = (id) => {
@@ -85,20 +110,27 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit }) => {
             status: 'Draft'
         };
 
-        // Save to local state (will be pushed to Firestore on "Save Supplier")
         setPurchaseOrders([newPO, ...purchaseOrders]);
         
-        // Reset PO Builder
+        // Auto-add log entry
+        const logEntry = { 
+            id: Date.now(), 
+            date: new Date().toISOString().split('T')[0], 
+            type: 'Order', 
+            outcome: `Created PO ${poReference} ($${grandTotal.toLocaleString()})` 
+        };
+        setInteractions([logEntry, ...interactions]);
+
         setPoItems([]);
         setPoReference(`PO-${Math.floor(1000 + Math.random() * 9000)}`);
         alert("Purchase Order Created!");
     };
 
-    const formatMoney = (val) => `₱${Number(val).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+    const formatMoney = (val) => `$${Number(val).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm z-50 flex justify-center items-center p-4">
-            <Card className="w-full max-w-6xl h-[85vh] overflow-hidden flex flex-col md:flex-row shadow-2xl bg-white rounded-2xl p-0 border-t-8 border-blue-600">
+            <Card className="w-full max-w-7xl h-[90vh] overflow-hidden flex flex-col md:flex-row shadow-2xl bg-white rounded-2xl p-0 border-t-8 border-blue-600">
                 
                 {/* LEFT PANEL: SUPPLIER DETAILS */}
                 <div className="w-full md:w-1/3 p-6 overflow-y-auto border-r border-gray-100 bg-white space-y-5">
@@ -164,31 +196,50 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit }) => {
                                     </div>
 
                                     {/* Item Entry Row */}
-                                    <div className="grid grid-cols-12 gap-2 mb-4 items-end bg-gray-50 p-3 rounded-xl border border-gray-200">
-                                        <div className="col-span-5">
-                                            <label className="text-[9px] font-bold text-gray-400 uppercase">Item Name</label>
-                                            <input className="w-full p-2 text-xs font-bold border rounded outline-none" placeholder="Product..." value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                                    <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
+                                        {/* Product Selector */}
+                                        <div>
+                                            <label className="text-[9px] font-bold text-gray-400 uppercase mb-1 block">Select From Product Master</label>
+                                            <select 
+                                                value={selectedProductId} 
+                                                onChange={handleProductSelect}
+                                                className="w-full p-2 text-xs font-bold border rounded outline-none bg-white"
+                                            >
+                                                <option value="">-- Manual Entry / Select Product --</option>
+                                                {productCatalog.map(p => (
+                                                    <option key={p.id} value={p.id}>
+                                                        {p.name} (SKU: {p.Order_Reference || 'N/A'})
+                                                    </option>
+                                                ))}
+                                            </select>
                                         </div>
-                                        <div className="col-span-2">
-                                            <label className="text-[9px] font-bold text-gray-400 uppercase">Qty</label>
-                                            <input type="number" className="w-full p-2 text-xs font-bold border rounded outline-none" value={newItem.qty} onChange={e => setNewItem({...newItem, qty: e.target.value})} />
-                                        </div>
-                                        <div className="col-span-3">
-                                            <label className="text-[9px] font-bold text-gray-400 uppercase">Cost (Unit)</label>
-                                            <input type="number" className="w-full p-2 text-xs font-bold border rounded outline-none" placeholder="0.00" value={newItem.cost} onChange={e => setNewItem({...newItem, cost: e.target.value})} />
-                                        </div>
-                                        <div className="col-span-2">
-                                            <Button onClick={addItemToPO} variant="primary" className="w-full h-[34px] bg-indigo-600 hover:bg-indigo-700 text-xs"><Plus size={16}/></Button>
+
+                                        <div className="grid grid-cols-12 gap-2 items-end">
+                                            <div className="col-span-5">
+                                                <label className="text-[9px] font-bold text-gray-400 uppercase">Item Name</label>
+                                                <input className="w-full p-2 text-xs font-bold border rounded outline-none" placeholder="Product..." value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                                            </div>
+                                            <div className="col-span-2">
+                                                <label className="text-[9px] font-bold text-gray-400 uppercase">Qty</label>
+                                                <input type="number" className="w-full p-2 text-xs font-bold border rounded outline-none" value={newItem.qty} onChange={e => setNewItem({...newItem, qty: e.target.value})} />
+                                            </div>
+                                            <div className="col-span-3">
+                                                <label className="text-[9px] font-bold text-gray-400 uppercase">Cost (USD)</label>
+                                                <input type="number" className="w-full p-2 text-xs font-bold border rounded outline-none" placeholder="0.00" value={newItem.cost} onChange={e => setNewItem({...newItem, cost: e.target.value})} />
+                                            </div>
+                                            <div className="col-span-2">
+                                                <Button onClick={addItemToPO} variant="primary" className="w-full h-[34px] bg-indigo-600 hover:bg-indigo-700 text-xs"><Plus size={16}/></Button>
+                                            </div>
                                         </div>
                                     </div>
 
                                     {/* Items List */}
                                     {poItems.length > 0 ? (
-                                        <div className="border rounded-xl overflow-hidden mb-4">
+                                        <div className="border rounded-xl overflow-hidden mb-4 mt-4">
                                             <table className="w-full text-xs text-left">
                                                 <thead className="bg-indigo-50 font-bold text-indigo-800 uppercase">
                                                     <tr>
-                                                        <th className="p-3">Item</th>
+                                                        <th className="p-3">Item / SKU</th>
                                                         <th className="p-3 text-center">Qty</th>
                                                         <th className="p-3 text-right">Cost</th>
                                                         <th className="p-3 text-right">Total</th>
@@ -198,7 +249,10 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit }) => {
                                                 <tbody className="divide-y divide-gray-100">
                                                     {poItems.map(item => (
                                                         <tr key={item.id} className="bg-white">
-                                                            <td className="p-3 font-medium">{item.name}</td>
+                                                            <td className="p-3 font-medium">
+                                                                {item.name}
+                                                                {item.sku && <span className="block text-[9px] text-gray-400">{item.sku}</span>}
+                                                            </td>
                                                             <td className="p-3 text-center">{item.qty}</td>
                                                             <td className="p-3 text-right">{formatMoney(item.cost)}</td>
                                                             <td className="p-3 text-right font-bold">{formatMoney(item.total)}</td>
@@ -220,8 +274,8 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit }) => {
                                             </table>
                                         </div>
                                     ) : (
-                                        <div className="text-center py-6 text-gray-400 text-xs italic border-2 border-dashed border-gray-100 rounded-xl mb-4">
-                                            Add items to generate a Purchase Order
+                                        <div className="text-center py-6 text-gray-400 text-xs italic border-2 border-dashed border-gray-100 rounded-xl mt-4 mb-4">
+                                            Add items from Master to generate a PO
                                         </div>
                                     )}
 
@@ -301,6 +355,7 @@ const SupplierModal = ({ onClose, onSave, supplierToEdit }) => {
 // --- 3. Main Page Component ---
 const SupplierManager = ({ user }) => {
     const [suppliers, setSuppliers] = useState([]);
+    const [products, setProducts] = useState([]); // PRODUCT MASTER DATA
     const [showModal, setShowModal] = useState(false);
     const [editingSupplier, setEditingSupplier] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -309,11 +364,17 @@ const SupplierManager = ({ user }) => {
     const [isImporting, setIsImporting] = useState(false);
     const fileInputRef = useRef(null);
 
+    // Fetch Suppliers & Products
     useEffect(() => {
         if (!user) return;
-        const q = query(collection(db, "users", user.uid, "suppliers"), orderBy("name", "asc"));
-        const unsub = onSnapshot(q, (snap) => setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
+        
+        const qSuppliers = query(collection(db, "users", user.uid, "suppliers"), orderBy("name", "asc"));
+        const unsubSuppliers = onSnapshot(qSuppliers, (snap) => setSuppliers(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+        const qProducts = query(collection(db, "users", user.uid, "products"), orderBy("name", "asc"));
+        const unsubProducts = onSnapshot(qProducts, (snap) => setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+
+        return () => { unsubSuppliers(); unsubProducts(); };
     }, [user]);
 
     const stats = useMemo(() => ({
@@ -376,7 +437,14 @@ const SupplierManager = ({ user }) => {
 
     return (
         <div className="w-full space-y-8">
-            {showModal && <SupplierModal onClose={() => setShowModal(false)} onSave={handleSave} supplierToEdit={editingSupplier} />}
+            {showModal && (
+                <SupplierModal 
+                    onClose={() => setShowModal(false)} 
+                    onSave={handleSave} 
+                    supplierToEdit={editingSupplier} 
+                    productCatalog={products} // PASS PRODUCT CATALOG TO MODAL
+                />
+            )}
             
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
                 <StatBadge icon={Truck} label="Vendor List" count={stats.total} total={stats.total} color="blue" active={activeFilter === 'ALL'} onClick={() => setActiveFilter('ALL')} />
@@ -401,7 +469,6 @@ const SupplierManager = ({ user }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filtered.map(s => (
-                    // MODIFIED CARD: TALLER HEIGHT, BETTER SPACING
                     <Card key={s.id} className={`p-6 rounded-[20px] hover:border-blue-400 transition-all bg-white relative flex flex-col justify-between min-h-[320px] shadow-sm hover:shadow-lg ${selectedIds.has(s.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
                         <div className="absolute top-5 left-5 z-10">
                             <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => {
