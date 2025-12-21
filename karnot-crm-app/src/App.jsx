@@ -34,7 +34,7 @@ import {
     Users, Settings, Calculator, Plus, Landmark, Clock, BookOpen, Briefcase, Truck, Activity
 } from 'lucide-react'; 
 
-// --- Header Component (Updated with new Nav Items) ---
+// --- Header Component (FULLY RESTORED CONTACTS) ---
 const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, userRole }) => ( 
     <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
         <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
@@ -45,6 +45,10 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
             <nav className="flex flex-wrap gap-2 justify-center lg:justify-end">
                 <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><HardHat className="mr-1" size={14} /> Funnel</Button>
                 <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Building className="mr-1" size={14} /> Companies</Button>
+                
+                {/* RESTORED CONTACTS BUTTON */}
+                <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Users className="mr-1" size={14} /> Contacts</Button>
+                
                 <Button onClick={() => setActiveView('suppliers')} variant={activeView === 'suppliers' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Truck className="mr-1" size={14} /> Suppliers</Button>
                 
                 <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc', 'warmRoomCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
@@ -90,7 +94,7 @@ export default function App() {
     const [loadingAuth, setLoadingAuth] = useState(true);
     const [loadingData, setLoadingData] = useState(true);
 
-    // --- AUTH OBSERVER ---
+    // --- AUTH OBSERVER (Fiscal Info: FYE Dec 31) ---
     useEffect(() => {
         setLoadingAuth(true); 
         const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
@@ -141,8 +145,6 @@ export default function App() {
         }
     }, [user]); 
 
-    // --- HANDLERS ---
-    const handleLogin = (email, password) => signInWithEmailAndPassword(auth, email, password).catch((e) => alert(e.message));
     const handleLogout = () => signOut(auth);
     
     const handleUpdateQuoteStatus = async (quoteId, newStatus) => {
@@ -169,9 +171,9 @@ export default function App() {
         return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
     }, [quotes]); 
 
-    if (loadingAuth) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600 animate-pulse">Authenticating...</div>;
-    if (!user) return <LoginPage onLogin={handleLogin} />;
-    if (loadingData) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600 animate-pulse">Loading Karnot Systems...</div>;
+    if (loadingAuth) return <div className="text-center p-10 font-black uppercase text-orange-600 animate-pulse">Authenticating Stuart...</div>;
+    if (!user) return <LoginPage onLogin={(email, password) => signInWithEmailAndPassword(auth, email, password)} />;
+    if (loadingData) return <div className="text-center p-10 font-black uppercase text-orange-600 animate-pulse">Loading Karnot Inc Systems...</div>;
 
     return (
         <div className="bg-gray-100 min-h-screen font-sans text-gray-900">
@@ -205,8 +207,8 @@ export default function App() {
                     <div className="space-y-6 pb-20">
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
                             <div>
-                                <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Financial Accounts</h1>
-                                <p className="text-gray-500 text-sm">FYE: Dec 31 | SEC Registered Export Enterprise</p>
+                                <h1 className="text-3xl font-black text-gray-800 tracking-tight uppercase leading-none mb-1">Accounts Hub</h1>
+                                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">FYE: Dec 31 | PEZA Export Enterprise Status [cite: 5, 251]</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}><Landmark size={14} className="mr-1" /> Disbursements</Button>
