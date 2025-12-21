@@ -236,7 +236,8 @@ const SupplierManager = ({ user }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filtered.map(s => (
-                    <Card key={s.id} className={`p-5 rounded-2xl hover:border-blue-400 transition-all bg-white relative ${selectedIds.has(s.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
+                    // MODIFIED CARD STYLE: Increased min-height and adjusted flex layout
+                    <Card key={s.id} className={`p-5 rounded-2xl hover:border-blue-400 transition-all bg-white relative flex flex-col justify-between min-h-[220px] ${selectedIds.has(s.id) ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
                         <div className="absolute top-4 left-4 z-10">
                             <input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => {
                                 const next = new Set(selectedIds);
@@ -244,21 +245,34 @@ const SupplierManager = ({ user }) => {
                                 setSelectedIds(next);
                             }} className="w-5 h-5 accent-blue-600 cursor-pointer" />
                         </div>
-                        <div className="pl-8">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="flex-1">
-                                    <h4 className="font-black text-lg text-gray-800 uppercase tracking-tight truncate">{s.name}</h4>
-                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{s.isInternational ? 'International Factory' : 'Local Supplier'}</p>
+                        
+                        <div className="pl-8 mb-4">
+                            <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1 pr-2">
+                                    <h4 className="font-black text-lg text-gray-800 uppercase tracking-tight leading-tight line-clamp-2" title={s.name}>{s.name}</h4>
+                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">{s.isInternational ? 'International Factory' : 'Local Supplier'}</p>
                                 </div>
-                                <button onClick={() => { setEditingSupplier(s); setShowModal(true); }} className="p-2 text-gray-300 hover:text-blue-600"><Edit size={16}/></button>
+                                <button onClick={() => { setEditingSupplier(s); setShowModal(true); }} className="p-2 text-gray-300 hover:text-blue-600 flex-shrink-0"><Edit size={16}/></button>
                             </div>
-                            <Button onClick={() => { setEditingSupplier(s); setShowModal(true); }} variant="secondary" className="w-full !py-2 text-[9px] font-black uppercase mb-4">Procurement History</Button>
+                            {s.contactPerson && (
+                                <p className="text-xs text-gray-500 font-bold mb-1"><span className="text-gray-400 font-normal">Contact:</span> {s.contactPerson}</p>
+                            )}
                         </div>
-                        <div className="pt-3 border-t grid grid-cols-4 gap-1 text-[8px] text-gray-500 text-center font-black">
-                            <div className={`p-1 rounded uppercase ${s.isCritical ? 'bg-red-50 text-red-700' : ''}`}><AlertTriangle size={14} className={`mx-auto mb-1 ${s.isCritical ? 'text-red-600' : 'text-gray-300'}`}/> Critical</div>
-                            <div className={`p-1 rounded uppercase ${s.isApproved ? 'bg-green-50 text-green-700' : ''}`}><ShieldCheck size={14} className={`mx-auto mb-1 ${s.isApproved ? 'text-green-600' : 'text-gray-300'}`}/> Approved</div>
-                            <div className={`p-1 rounded uppercase ${s.isOnboarded ? 'bg-blue-50 text-blue-700' : ''}`}><UserCheck size={14} className={`mx-auto mb-1 ${s.isOnboarded ? 'text-blue-600' : 'text-gray-300'}`}/> Onboarded</div>
-                            <div className={`p-1 rounded uppercase`}><FileText size={14} className={`mx-auto mb-1 text-gray-300`}/> Active PO</div>
+
+                        <div>
+                            <Button onClick={() => { setEditingSupplier(s); setShowModal(true); }} variant="secondary" className="w-full !py-2.5 text-[9px] font-black uppercase mb-4 tracking-wider border-gray-200">View History & Orders</Button>
+                            
+                            <div className="pt-3 border-t grid grid-cols-3 gap-1 text-[8px] text-gray-500 text-center font-black">
+                                <div className={`p-1 rounded uppercase flex flex-col items-center ${s.isCritical ? 'bg-red-50 text-red-700' : ''}`}>
+                                    <AlertTriangle size={14} className={`mb-1 ${s.isCritical ? 'text-red-600' : 'text-gray-300'}`}/> Critical
+                                </div>
+                                <div className={`p-1 rounded uppercase flex flex-col items-center ${s.isApproved ? 'bg-green-50 text-green-700' : ''}`}>
+                                    <ShieldCheck size={14} className={`mb-1 ${s.isApproved ? 'text-green-600' : 'text-gray-300'}`}/> Approved
+                                </div>
+                                <div className={`p-1 rounded uppercase flex flex-col items-center ${s.isOnboarded ? 'bg-blue-50 text-blue-700' : ''}`}>
+                                    <UserCheck size={14} className={`mb-1 ${s.isOnboarded ? 'text-blue-600' : 'text-gray-300'}`}/> Onboarded
+                                </div>
+                            </div>
                         </div>
                     </Card>
                 ))}
