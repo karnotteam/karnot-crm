@@ -8,7 +8,7 @@ import { getAuth } from "firebase/auth";
 const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] }) => {
     const [selectedQuoteId, setSelectedQuoteId] = useState('');
     const [targetLabor, setTargetLabor] = useState(0);
-    const [targetMaterials, setTargetMaterials] = useState(0); // This is strictly INSTALL materials (pipes/wires)
+    const [targetMaterials, setTargetMaterials] = useState(0); // Strictly INSTALL materials
     const [estimateFound, setEstimateFound] = useState(false);
 
     // Get active projects (Won or Invoiced)
@@ -50,9 +50,9 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
         .filter(e => e.projectId === selectedQuoteId)
         .reduce((sum, e) => sum + parseFloat(e.amountPHP || 0), 0);
 
-    // B. Labor from Manpower Logs
+    // B. Labor from Manpower Logs (FIXED: Uses quoteId to match ManpowerLogger)
     const projectManpower = manpowerLogs
-        .filter(m => m.companyId === selectedQuoteId)
+        .filter(m => m.quoteId === selectedQuoteId)
         .reduce((sum, m) => sum + parseFloat(m.totalCost || 0), 0);
 
     const totalActualBurn = projectExpenses + projectManpower;
@@ -70,11 +70,10 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
     const remainingProfitPHP = grossProjectBudgetPHP - totalActualBurn;
     const burnPercentage = grossProjectBudgetPHP > 0 ? (totalActualBurn / grossProjectBudgetPHP) * 100 : 0;
 
-    // --- 4. VARIANCE MATH (FIXED) ---
+    // --- 4. VARIANCE MATH ---
     const laborVariance = parseFloat(targetLabor || 0) - projectManpower;
     
-    // Material Variance now includes the Equipment Budget to balance against the Ledger
-    // Target = (Install Mats Estimate) + (Machine Cost from Quote)
+    // Material Variance (Target includes Install Estimate + Machine Cost)
     const totalMaterialTarget = parseFloat(targetMaterials || 0) + equipmentBudgetPHP;
     const materialVariance = totalMaterialTarget - projectExpenses;
 
