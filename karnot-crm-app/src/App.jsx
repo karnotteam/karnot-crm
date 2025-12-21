@@ -1,165 +1,230 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Users, Calculator, LayoutGrid, BarChart3, Settings, 
-  LogOut, Briefcase, Truck, FileText, Landmark, Globe,
-  Activity, PenTool, UserCircle, Plus, List, HardHat, Clock, BookOpen
-} from 'lucide-react';
-import { db, auth } from './firebase';
-import { 
-    collection, onSnapshot, query, orderBy, addDoc, 
-    serverTimestamp, doc, getDoc, updateDoc, deleteDoc, setDoc 
-} from 'firebase/firestore';
-import { onAuthStateChanged, signOut, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, db } from './firebase'; 
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { collection, onSnapshot, query, doc, getDoc, setDoc, deleteDoc, serverTimestamp, addDoc, updateDoc, orderBy } from "firebase/firestore"; 
 
-// --- Page & Component Imports (Preserving your existing tools) ---
+// --- Import Pages (Located in /pages) ---
 import LoginPage from './pages/LoginPage.jsx';
-import CompaniesPage from './components/CompaniesPage';
-import ContactsPage from './components/ContactsPage';
-import QuoteCalculator from './components/QuoteCalculator';
-import QuoteList from './components/QuoteList'; // Your QuotesListPage.jsx
-import FunnelPage from './components/FunnelPage';
-import SupplierManager from './components/SupplierManager';
-import PurchaseOrderManager from './components/PurchaseOrderManager';
-import ProjectOperations from './components/ProjectOperations';
-import CommissioningPage from './components/CommissioningPage';
-import ProjectROI from './components/ProjectROI'; // Your ProjectOperations.jsx
-import FinancialEntryLogger from './components/FinancialEntryLogger';
-import BIRBookPrep from './components/BIRBookPrep';
-import AdminPage from './components/AdminPage';
+import FunnelPage from './pages/FunnelPage.jsx';
+import DashboardPage from './pages/DashboardPage.jsx';
+import QuotesListPage from './pages/QuotesListPage.jsx';
+import OpportunityDetailPage from './pages/OpportunityDetailPage.jsx';
+import CompaniesPage from './pages/CompaniesPage.jsx'; 
+import ContactsPage from './pages/ContactsPage.jsx';
+import CommissioningPage from './pages/CommissioningPage.jsx'; 
+import AdminPage from './pages/AdminPage.jsx';
+import CalculatorsPage from './pages/CalculatorsPage.jsx'; 
+import SupplierManager from './pages/SupplierManager.jsx';
 
-// --- Engineering Calculators (Preserved from your existing file) ---
+// --- Import Components (Located in /components) ---
+import QuoteCalculator from './components/QuoteCalculator.jsx';
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
 
-const App = () => {
-  const [user, setUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('FUNNEL'); // Defaulting to Funnel per your style
+// --- Import Data & Financial (Located in /data) ---
+import FinancialEntryLogger from './data/FinancialEntryLogger.jsx';
+import ManpowerLogger from './data/ManpowerLogger.jsx';
+import ProjectOperations from './data/ProjectOperations.jsx'; 
+import BIRBookPrep from './data/BIRBookPrep.jsx'; 
 
-  // --- Global Data State ---
-  const [companies, setCompanies] = useState([]);
-  const [contacts, setContacts] = useState([]);
-  const [quotes, setQuotes] = useState([]);
-  const [opportunities, setOpportunities] = useState([]);
-  const [ledgerEntries, setLedgerEntries] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [purchaseOrders, setPurchaseOrders] = useState([]);
+// --- Import Constants & Styling ---
+import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
+import { 
+    BarChart2, List, HardHat, LogOut, Building, 
+    Users, Settings, Calculator, Plus, Landmark, Clock, BookOpen, Briefcase, Truck, Activity
+} from 'lucide-react'; 
 
-  // --- AUTH OBSERVER (Restored from your file) ---
-  useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        setUser(currentUser);
-        const userRef = doc(db, "users", currentUser.uid);
-        const userSnap = await getDoc(userRef);
-        if (userSnap.exists()) {
-            setUserRole(userSnap.data().role);
-        }
-      } else {
-        setUser(null);
-        setUserRole(null);
-      }
-      setLoading(false);
-    });
-    return () => unsubscribeAuth();
-  }, []);
+// --- Header Component (Updated with new Nav Items) ---
+const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, userRole }) => ( 
+    <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
+        <div className="container mx-auto px-4 py-4 flex flex-col lg:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveView('funnel')}>
+                <img src={KARNOT_LOGO_BASE_64} alt="Karnot Logo" style={{height: '40px'}}/>
+                <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tighter">Karnot <span className="text-orange-600">CRM</span></h1>
+            </div>
+            <nav className="flex flex-wrap gap-2 justify-center lg:justify-end">
+                <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><HardHat className="mr-1" size={14} /> Funnel</Button>
+                <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Building className="mr-1" size={14} /> Companies</Button>
+                <Button onClick={() => setActiveView('suppliers')} variant={activeView === 'suppliers' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><Truck className="mr-1" size={14} /> Suppliers</Button>
+                
+                <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc', 'warmRoomCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest">
+                    <Calculator className="mr-1" size={14} /> Calculators
+                </Button>
 
-  // --- REAL-TIME DATA SYNC (Sub-collection logic preserved) ---
-  useEffect(() => {
-    if (!user) return;
+                {userRole === 'ADMIN' && (
+                    <Button onClick={() => setActiveView('accounts')} variant={activeView === 'accounts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700">
+                        <Landmark className="mr-1" size={14} /> Accounts
+                    </Button>
+                )}
 
-    const unsubC = onSnapshot(query(collection(db, "users", user.uid, "companies"), orderBy("createdAt", "desc")), (s) => setCompanies(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubCon = onSnapshot(query(collection(db, "users", user.uid, "contacts"), orderBy("lastName", "asc")), (s) => setContacts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubQ = onSnapshot(query(collection(db, "users", user.uid, "quotes"), orderBy("createdAt", "desc")), (s) => setQuotes(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubO = onSnapshot(query(collection(db, "users", user.uid, "opportunities"), orderBy("createdAt", "desc")), (s) => setOpportunities(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubL = onSnapshot(query(collection(db, "users", user.uid, "ledger"), orderBy("date", "desc")), (s) => setLedgerEntries(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubS = onSnapshot(query(collection(db, "users", user.uid, "suppliers"), orderBy("name", "asc")), (s) => setSuppliers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-    const unsubP = onSnapshot(query(collection(db, "users", user.uid, "purchaseOrders"), orderBy("createdAt", "desc")), (s) => setPurchaseOrders(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+                <div className="h-8 w-px bg-gray-200 mx-2 hidden lg:block"></div>
 
-    return () => { unsubC(); unsubCon(); unsubQ(); unsubO(); unsubL(); unsubS(); unsubP(); };
-  }, [user]);
-
-  // --- Quote Logic (Preserved nextQuoteNumber logic) ---
-  const nextQuoteNumber = useMemo(() => {
-      if (quotes.length === 0) return 2501;
-      const lastQuoteNum = quotes.map(q => parseInt(q.id.split('-')[0].replace('QN', ''), 10)).filter(n => !isNaN(n)).reduce((m, n) => Math.max(m, n), 0);
-      return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
-  }, [quotes]);
-
-  const handleSaveQuote = async (quoteData) => {
-    if (!user) return;
-    await setDoc(doc(db, "users", user.uid, "quotes", quoteData.id), { ...quoteData, lastModified: serverTimestamp() }, { merge: true });
-    setActiveTab('QUOTES');
-  };
-
-  const logout = () => signOut(auth);
-
-  if (loading) return <div className="h-screen flex items-center justify-center font-black uppercase text-orange-500 animate-pulse bg-slate-900">Initializing Karnot CRM...</div>;
-  if (!user) return <LoginPage onLogin={(email, pass) => signInWithEmailAndPassword(auth, email, pass)} />;
-
-  return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* --- SIDEBAR --- */}
-      <aside className="w-72 bg-slate-900 text-white flex flex-col p-6 shadow-2xl z-20">
-        <div className="mb-8 px-2">
-          <h1 className="text-2xl font-black tracking-tighter text-orange-500">KARNOT <span className="text-white">CRM</span></h1>
-          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mt-1">SEC Registered Export Ent.</p>
+                <Button onClick={onNewQuote} variant="primary" className="font-black uppercase text-[10px] tracking-widest shadow-lg shadow-orange-100 bg-orange-600">
+                    <Plus className="mr-1" size={14} /> New Quote
+                </Button>
+                
+                <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest"><List className="mr-1" size={14} /> Quotes ({quoteCount})</Button>
+                
+                <Button onClick={() => setActiveView('admin')} variant={activeView === 'admin' ? 'primary' : 'secondary'} className="!p-2"><Settings size={16} /></Button>
+                <Button onClick={onLogout} variant="secondary" className="!p-2 text-red-500 hover:bg-red-50 border-red-100"><LogOut size={16} /></Button>
+            </nav>
         </div>
-
-        <nav className="flex-1 space-y-1 overflow-y-auto no-scrollbar">
-          <p className="text-[9px] font-black text-slate-600 uppercase mb-2 ml-2">Sales</p>
-          <NavItem icon={Users} label="Directory" active={activeTab === 'COMPANIES'} onClick={() => setActiveTab('COMPANIES')} />
-          <NavItem icon={UserCircle} label="Contacts" active={activeTab === 'CONTACTS'} onClick={() => setActiveTab('CONTACTS')} />
-          <NavItem icon={Calculator} label="Quote Calc" active={activeTab === 'CALC'} onClick={() => setActiveTab('CALC')} />
-          <NavItem icon={FileText} label="Proposals" active={activeTab === 'QUOTES'} onClick={() => setActiveTab('QUOTES')} />
-          <NavItem icon={LayoutGrid} label="Funnel" active={activeTab === 'FUNNEL'} onClick={() => setActiveTab('FUNNEL')} />
-          
-          <p className="text-[9px] font-black text-slate-600 uppercase mt-6 mb-2 ml-2">Engineering</p>
-          <NavItem icon={HardHat} label="HP Calculator" active={activeTab === 'HPCALC'} onClick={() => setActiveTab('HPCALC')} />
-          <NavItem icon={PenTool} label="Install & QC" active={activeTab === 'INSTALL'} onClick={() => setActiveTab('INSTALL')} />
-          <NavItem icon={Activity} label="Live Ops" active={activeTab === 'OPS'} onClick={() => setActiveTab('OPS')} />
-
-          <p className="text-[9px] font-black text-slate-600 uppercase mt-6 mb-2 ml-2">Finance</p>
-          {userRole === 'ADMIN' && <NavItem icon={Landmark} label="BIR Book Prep" active={activeTab === 'BIR'} onClick={() => setActiveTab('BIR')} />}
-          <NavItem icon={Globe} label="Ledger" active={activeTab === 'LEDGER'} onClick={() => setActiveTab('LEDGER')} />
-          <NavItem icon={BarChart3} label="Project ROI" active={activeTab === 'ROI'} onClick={() => setActiveTab('ROI')} />
-          
-          <p className="text-[9px] font-black text-slate-600 uppercase mt-6 mb-2 ml-2">Supply Chain</p>
-          <NavItem icon={Truck} label="Suppliers" active={activeTab === 'SUPPLIERS'} onClick={() => setActiveTab('SUPPLIERS')} />
-        </nav>
-
-        <button onClick={logout} className="mt-6 flex items-center gap-3 p-4 text-slate-400 hover:text-red-400 font-black text-xs uppercase tracking-widest">
-          <LogOut size={18} /> Logout
-        </button>
-      </aside>
-
-      {/* --- CONTENT --- */}
-      <main className="flex-1 overflow-y-auto p-10">
-        <div className="max-w-7xl mx-auto">
-          {activeTab === 'COMPANIES' && <CompaniesPage companies={companies} user={user} quotes={quotes} contacts={contacts} />}
-          {activeTab === 'CONTACTS' && <ContactsPage contacts={contacts} companies={companies} user={user} />}
-          {activeTab === 'CALC' && <QuoteCalculator onSaveQuote={handleSaveQuote} nextQuoteNumber={nextQuoteNumber} companies={companies} contacts={contacts} opportunities={opportunities} />}
-          {activeTab === 'QUOTES' && <QuoteList quotes={quotes} user={user} opportunities={opportunities} />}
-          {activeTab === 'FUNNEL' && <FunnelPage opportunities={opportunities} companies={companies} quotes={quotes} user={user} />}
-          {activeTab === 'HPCALC' && <HeatPumpCalculator />}
-          {activeTab === 'INSTALL' && <CommissioningPage quotes={quotes} />}
-          {activeTab === 'OPS' && <ProjectOperations quotes={quotes} />}
-          {activeTab === 'SUPPLIERS' && <SupplierManager user={user} />}
-          {activeTab === 'LEDGER' && <FinancialEntryLogger companies={companies} user={user} />}
-          {activeTab === 'BIR' && <BIRBookPrep quotes={quotes} ledgerEntries={ledgerEntries} />}
-          {activeTab === 'ROI' && <ProjectROI quotes={quotes} ledgerEntries={ledgerEntries} />}
-          {activeTab === 'ADMIN' && <AdminPage user={user} />}
-        </div>
-      </main>
-    </div>
-  );
-};
-
-const NavItem = ({ icon: Icon, label, active, onClick }) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-3 p-4 rounded-2xl transition-all font-black text-[10px] uppercase tracking-widest ${active ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-white/5'}`}>
-    <Icon size={18} /> {label}
-  </button>
+    </header>
 );
 
-export default App;
+export default function App() {
+    const [user, setUser] = useState(null); 
+    const [userRole, setUserRole] = useState(null); 
+    const [activeView, setActiveView] = useState('funnel');
+    const [subView, setSubView] = useState('ledger'); 
+    
+    const [opportunities, setOpportunities] = useState([]);
+    const [quotes, setQuotes] = useState([]);
+    const [companies, setCompanies] = useState([]); 
+    const [contacts, setContacts] = useState([]);
+    const [ledgerEntries, setLedgerEntries] = useState([]); 
+    const [manpowerLogs, setManpowerLogs] = useState([]);   
+    
+    const [quoteToEdit, setQuoteToEdit] = useState(null);
+    const [selectedOpportunity, setSelectedOpportunity] = useState(null); 
+    const [loadingAuth, setLoadingAuth] = useState(true);
+    const [loadingData, setLoadingData] = useState(true);
+
+    // --- AUTH OBSERVER ---
+    useEffect(() => {
+        setLoadingAuth(true); 
+        const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+            if (authUser) {
+                setUser(authUser);
+                try {
+                    const userRef = doc(db, "users", authUser.uid);
+                    const userSnap = await getDoc(userRef);
+                    if (userSnap.exists()) {
+                        setUserRole(userSnap.data().role);
+                    }
+                } catch (err) { console.error(err); }
+            } else {
+                setUser(null);
+                setUserRole(null);
+            }
+            setLoadingAuth(false); 
+        });
+        return () => unsubscribe(); 
+    }, []);
+
+    // --- REAL-TIME DATA SYNC ---
+    useEffect(() => {
+        if (user) {
+            setLoadingData(true); 
+            const unsubQuotes = onSnapshot(query(collection(db, "users", user.uid, "quotes"), orderBy("lastModified", "desc")), (snap) => {
+                setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            });
+            const unsubOpps = onSnapshot(query(collection(db, "users", user.uid, "opportunities"), orderBy("createdAt", "desc")), (snap) => {
+                setOpportunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            });
+            const unsubCompanies = onSnapshot(query(collection(db, "users", user.uid, "companies"), orderBy("companyName", "asc")), (snap) => {
+                setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            });
+            const unsubContacts = onSnapshot(query(collection(db, "users", user.uid, "contacts"), orderBy("lastName", "asc")), (snap) => {
+                setContacts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            });
+            const unsubLedger = onSnapshot(query(collection(db, "users", user.uid, "ledger"), orderBy("date", "desc")), (snap) => {
+                setLedgerEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            });
+            const unsubManpower = onSnapshot(query(collection(db, "users", user.uid, "manpower_logs")), (snap) => {
+                setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+                setLoadingData(false);
+            });
+            return () => { unsubQuotes(); unsubOpps(); unsubCompanies(); unsubContacts(); unsubLedger(); unsubManpower(); };
+        } else {
+            setLoadingData(false);
+        }
+    }, [user]); 
+
+    // --- HANDLERS ---
+    const handleLogin = (email, password) => signInWithEmailAndPassword(auth, email, password).catch((e) => alert(e.message));
+    const handleLogout = () => signOut(auth);
+    
+    const handleUpdateQuoteStatus = async (quoteId, newStatus) => {
+        if (!user) return;
+        await updateDoc(doc(db, "users", user.uid, "quotes", quoteId), { 
+            status: newStatus, 
+            lastModified: serverTimestamp() 
+        });
+    };
+
+    const handleSaveQuote = async (quoteData) => {
+        if (!user) return;
+        await setDoc(doc(db, "users", user.uid, "quotes", quoteData.id), { ...quoteData, lastModified: serverTimestamp() }, { merge: true });
+        setActiveView('list'); 
+    };
+    
+    const handleDeleteQuote = async (id) => { if(window.confirm("Delete?")) await deleteDoc(doc(db, "users", user.uid, "quotes", id)); };
+    const handleEditQuote = (quote) => { setQuoteToEdit(quote); setActiveView('calculator'); };
+    const handleNewQuote = () => { setQuoteToEdit(null); setActiveView('calculator'); };
+
+    const nextQuoteNumber = useMemo(() => {
+        if (quotes.length === 0) return 2501;
+        const lastQuoteNum = quotes.map(q => parseInt(q.id.split('-')[0].replace('QN', ''), 10)).filter(n => !isNaN(n)).reduce((m, n) => Math.max(m, n), 0);
+        return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
+    }, [quotes]); 
+
+    if (loadingAuth) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600 animate-pulse">Authenticating...</div>;
+    if (!user) return <LoginPage onLogin={handleLogin} />;
+    if (loadingData) return <div className="text-center p-10 font-black uppercase tracking-widest text-orange-600 animate-pulse">Loading Karnot Systems...</div>;
+
+    return (
+        <div className="bg-gray-100 min-h-screen font-sans text-gray-900">
+            <Header activeView={activeView} setActiveView={setActiveView} quoteCount={quotes.length} onLogout={handleLogout} onNewQuote={handleNewQuote} userRole={userRole} />
+            <main className="container mx-auto p-4 md:p-8">
+                {activeView === 'funnel' && <FunnelPage opportunities={opportunities} user={user} quotes={quotes} onOpenQuote={handleEditQuote} onOpen={(opp) => { setSelectedOpportunity(opp); setActiveView('opportunityDetail'); }} companies={companies} contacts={contacts} />}
+                {activeView === 'opportunityDetail' && <OpportunityDetailPage opportunity={selectedOpportunity} quotes={quotes} onBack={() => setActiveView('funnel')} onOpenQuote={handleEditQuote} user={user} companies={companies} onAddQuote={() => { setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); setActiveView('calculator'); }} />}
+                {activeView === 'companies' && <CompaniesPage companies={companies} contacts={contacts} quotes={quotes} user={user} onOpenQuote={handleEditQuote} />}
+                {activeView === 'contacts' && <ContactsPage contacts={contacts} companies={companies} user={user} />}
+                {activeView === 'suppliers' && <SupplierManager user={user} />}
+                
+                {activeView === 'calculator' && <QuoteCalculator onSaveQuote={handleSaveQuote} nextQuoteNumber={nextQuoteNumber} key={quoteToEdit ? quoteToEdit.id : 'new'} initialData={quoteToEdit} companies={companies} contacts={contacts} opportunities={opportunities} />}
+                
+                {activeView === 'list' && (
+                    <QuotesListPage 
+                        quotes={quotes} 
+                        onDeleteQuote={handleDeleteQuote} 
+                        onEditQuote={handleEditQuote} 
+                        onUpdateQuoteStatus={handleUpdateQuoteStatus}
+                        opportunities={opportunities}
+                    />
+                )}
+
+                {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
+                {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
+                {activeView === 'heatPumpCalc' && <div className="max-w-5xl mx-auto"><Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">← Back</Button><HeatPumpCalculator /></div>}
+                {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
+                {activeView === 'admin' && <AdminPage user={user} />}
+                
+                {activeView === 'accounts' && (
+                    <div className="space-y-6 pb-20">
+                        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
+                            <div>
+                                <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Financial Accounts</h1>
+                                <p className="text-gray-500 text-sm">FYE: Dec 31 | SEC Registered Export Enterprise</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}><Landmark size={14} className="mr-1" /> Disbursements</Button>
+                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Clock size={14} className="mr-1" /> Manpower</Button>
+                                <Button onClick={() => setSubView('projectOps')} variant={subView === 'projectOps' ? 'primary' : 'secondary'}><Briefcase size={14} className="mr-1" /> Project ROI</Button>
+                                <Button onClick={() => setSubView('birBooks')} variant={subView === 'birBooks' ? 'primary' : 'secondary'} className="border-orange-500 text-orange-700"><BookOpen size={14} className="mr-1" /> BIR Books</Button>
+                                <Button onClick={() => setSubView('commissioning')} variant={subView === 'commissioning' ? 'primary' : 'secondary'}><Activity size={14} className="mr-1" /> Install & QC</Button>
+                            </div>
+                        </div>
+
+                        {subView === 'ledger' && <FinancialEntryLogger companies={companies} />}
+                        {subView === 'manpower' && <ManpowerLogger companies={companies} />}
+                        {subView === 'projectOps' && <ProjectOperations quotes={quotes} manpowerLogs={manpowerLogs} ledgerEntries={ledgerEntries} />}
+                        {subView === 'birBooks' && <BIRBookPrep quotes={quotes} ledgerEntries={ledgerEntries} />}
+                        {subView === 'commissioning' && <CommissioningPage quotes={quotes} />}
+                    </div>
+                )}
+            </main>
+        </div>
+    );
+}
