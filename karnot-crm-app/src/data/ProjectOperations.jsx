@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Card, Button, Input } from '../data/constants.jsx';
-import { Calculator, Briefcase, Landmark, Clock, Target, Flame, TrendingUp, AlertCircle, ArrowUpRight, ArrowDownRight, CheckCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Card } from '../data/constants.jsx';
+import { Briefcase, Target, Clock, Landmark, AlertCircle, Calculator, CheckCircle } from 'lucide-react';
 import { db } from '../firebase'; 
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
@@ -57,24 +57,27 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
 
     const totalActualBurn = projectExpenses + projectManpower;
 
-    // --- 3. ROI & MARGIN MATH ---
+    // --- 3. ROI & MARGIN MATH (UPDATED PER REQUEST) ---
     const forexRate = selectedQuote?.costing?.forexRate || 58.5;
-    
-    // Pull the EXACT cost price from quote (Machine Cost)
-    const equipmentCostUSD = selectedQuote?.totalCost || 0; 
     const salesPriceUSD = selectedQuote?.finalSalesPrice || 0;
 
-    // Available Margin for Installation (Sales - Machine Cost) converted to PHP
-    const availableMarginPHP = (salesPriceUSD - equipmentCostUSD) * forexRate;
+    // GROSS BUDGET = Full Sales Price in PHP (Starting point to buy machine + install)
+    const grossProjectBudgetPHP = salesPriceUSD * forexRate;
     
-    const remainingProfitPHP = availableMarginPHP - totalActualBurn;
-    const burnPercentage = availableMarginPHP > 0 ? (totalActualBurn / availableMarginPHP) * 100 : 0;
+    // Net Profit = Gross Sales (PHP) - Total Spent (Labor + Materials + Equipment Purchase from Ledger)
+    const remainingProfitPHP = grossProjectBudgetPHP - totalActualBurn;
+    
+    // Burn % = (Spent / Total Sales) * 100
+    const burnPercentage = grossProjectBudgetPHP > 0 ? (totalActualBurn / grossProjectBudgetPHP) * 100 : 0;
 
     // --- 4. VARIANCE MATH ---
     const laborVariance = parseFloat(targetLabor || 0) - projectManpower;
     const materialVariance = parseFloat(targetMaterials || 0) - projectExpenses;
     const totalTarget = parseFloat(targetLabor || 0) + parseFloat(targetMaterials || 0);
-    const totalVariance = totalTarget - totalActualBurn;
+    
+    // Note: Total Target here usually refers to Installation Budget, not Equipment Purchase
+    // Variance is just comparing Installation Estimate vs Installation Actuals
+    const totalVariance = totalTarget - totalActualBurn; 
 
     return (
         <div className="space-y-6">
@@ -82,7 +85,7 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h2 className="text-xl font-black uppercase tracking-tight flex items-center gap-2 text-gray-800">
-                            <Briefcase className="text-purple-600" size={24} /> Project ROI Control
+                            <Briefcase className="text-purple-600" size={24} /> Project Operations & ROI
                         </h2>
                         <p className="text-gray-500 text-[10px] mt-1 font-black uppercase tracking-[0.2em]">Monitoring Budget vs Actual Variance</p>
                     </div>
@@ -113,16 +116,22 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                         {/* THE MONEY METRICS */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            
+                            {/* CARD 1: GROSS SALES (BUDGET) */}
                             <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
-                                <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Gross Project Budget</p>
-                                <p className="text-2xl font-black text-green-600">₱{availableMarginPHP.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                                <p className="text-[10px] text-gray-400 mt-2 italic">Sales Price - Equipment Cost</p>
+                                <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Gross Project Sales (Budget)</p>
+                                <p className="text-2xl font-black text-green-600">₱{grossProjectBudgetPHP.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                                <p className="text-[10px] text-gray-400 mt-2 italic">Total Contract Price (PHP)</p>
                             </div>
+
+                            {/* CARD 2: ACTUAL SPEND */}
                             <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
-                                <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Actual Burn (Spent)</p>
+                                <p className="text-[10px] uppercase text-gray-400 font-black mb-1">Actual Burn (Total Spent)</p>
                                 <p className="text-2xl font-black text-red-600">₱{totalActualBurn.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                                <p className="text-[10px] text-gray-400 mt-2 italic">Total Labor + Ledger Expenses</p>
+                                <p className="text-[10px] text-gray-400 mt-2 italic">Equipment Purchase + Labor + Logistics</p>
                             </div>
+
+                            {/* CARD 3: NET PROFIT */}
                             <div className={`p-6 rounded-3xl shadow-lg text-white ${remainingProfitPHP > 0 ? 'bg-slate-900' : 'bg-red-700'}`}>
                                 <p className="text-[10px] uppercase opacity-70 font-black mb-1">Net Project Profit</p>
                                 <p className="text-3xl font-black">₱{remainingProfitPHP.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
@@ -132,7 +141,7 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                         style={{ width: `${Math.min(burnPercentage, 100)}%` }}
                                     ></div>
                                 </div>
-                                <p className="text-[9px] mt-1 text-right font-bold opacity-80">{burnPercentage.toFixed(1)}% Budget Consumed</p>
+                                <p className="text-[9px] mt-1 text-right font-bold opacity-80">{burnPercentage.toFixed(1)}% Revenue Consumed</p>
                             </div>
                         </div>
 
@@ -140,7 +149,7 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                         <div className="bg-white border-2 border-gray-100 rounded-3xl overflow-hidden shadow-sm">
                             <div className="p-4 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
                                 <h3 className="text-xs font-black uppercase text-gray-500 tracking-widest flex items-center gap-2">
-                                    <Target size={16} className="text-purple-600"/> Variance Analysis: Target vs Actual
+                                    <Target size={16} className="text-purple-600"/> Installation Cost Analysis
                                 </h3>
                                 {estimateFound && (
                                     <span className="text-[9px] font-bold bg-green-100 text-green-700 px-2 py-1 rounded flex items-center gap-1">
@@ -152,7 +161,7 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                 <thead className="bg-gray-50/50">
                                     <tr>
                                         <th className="p-4 text-[10px] font-black uppercase text-gray-400">Description</th>
-                                        <th className="p-4 text-[10px] font-black uppercase text-gray-400">Target Budget</th>
+                                        <th className="p-4 text-[10px] font-black uppercase text-gray-400">Estimated Budget</th>
                                         <th className="p-4 text-[10px] font-black uppercase text-gray-400">Actual Cost</th>
                                         <th className="p-4 text-[10px] font-black uppercase text-gray-400">Variance</th>
                                     </tr>
@@ -225,7 +234,7 @@ const ProjectOperations = ({ quotes = [], manpowerLogs = [], ledgerEntries = [] 
                                 <AlertCircle size={32} />
                                 <div>
                                     <p className="text-xs font-black uppercase tracking-widest">Budget Warning</p>
-                                    <p className="font-bold text-sm">Installation actuals have exceeded the set target by ₱{Math.abs(totalVariance).toLocaleString()}. Profit margin is currently being consumed.</p>
+                                    <p className="font-bold text-sm">Installation actuals have exceeded the estimate by ₱{Math.abs(totalVariance).toLocaleString()}.</p>
                                 </div>
                             </div>
                         )}
