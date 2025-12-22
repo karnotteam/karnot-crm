@@ -248,9 +248,7 @@ function parseInvestmentFromText(text) {
 
 // Schedule: Every Monday at 8:00 AM Manila Time (UTC+8 = 00:00 UTC)
 // Cron: "0 0 * * 1" = minute hour day month weekday
-const handler = schedule('0 0 * * 1', scraperHandler);
-
-module.exports = { handler };
+module.exports.handler = schedule('0 0 * * 1', scraperHandler);
 
 /*
 SETUP INSTRUCTIONS:
