@@ -6,7 +6,7 @@ import {
     Plus, X, Edit, Trash2, Building, Upload, Search, 
     CheckSquare, FileText, UserCheck, Mail, PlusCircle, 
     ExternalLink, Download, Send, Handshake, Map as MapIcon, Copy,
-    Navigation, Target, Globe, User, Phone // <--- Added User and Phone icons
+    Navigation, Target, Globe, User, Phone, Zap // <--- Added Zap for ESCO
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, PRICING_TIERS } from '../data/constants.jsx';
 
@@ -292,7 +292,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
         (q.customer?.name || '').toLowerCase().includes(targetName)
     );
 
-    // --- CONTACTS LINKING LOGIC (ADDED) ---
+    // --- CONTACTS LINKING LOGIC ---
     const relatedContacts = useMemo(() => {
         if (!contacts || !companyToEdit) return [];
         return contacts.filter(c => 
@@ -632,7 +632,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                         )}
 
                         {activeTab === 'PEOPLE' && (
-                            /* PEOPLE TAB (NEW) */
+                            /* PEOPLE TAB */
                             <div className="space-y-3">
                                 {relatedContacts.length === 0 ? (
                                     <div className="text-center py-8">
@@ -707,6 +707,8 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
         total: activeCompanies.length,
         targets: activeCompanies.filter(c => c.isTarget).length,
         customers: activeCompanies.filter(c => c.isCustomer).length,
+        // --- ADDED ESCO STAT ---
+        esco: activeCompanies.filter(c => (c.notes || '').includes('ESCO')).length,
     }), [activeCompanies]);
 
     const filtered = useMemo(() => {
@@ -718,6 +720,8 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
         );
         if (activeFilter === 'TARGETS') list = list.filter(c => c.isTarget);
         if (activeFilter === 'CUSTOMERS') list = list.filter(c => c.isCustomer);
+        // --- ADDED ESCO FILTER ---
+        if (activeFilter === 'ESCO') list = list.filter(c => (c.notes || '').includes('ESCO'));
         return list;
     }, [activeCompanies, searchTerm, activeFilter]);
 
@@ -881,7 +885,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                     onSave={handleSave} 
                     companyToEdit={editingCompany} 
                     quotes={quotes} 
-                    contacts={contacts} // <--- PASSED CONTACTS HERE
+                    contacts={contacts} 
                     onOpenQuote={onOpenQuote}
                     existingCompanies={activeCompanies}
                 />
@@ -901,7 +905,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
             )}
             
             {/* STAT BADGES */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <StatBadge 
                     icon={Building} 
                     label="Total Directory" 
@@ -928,6 +932,16 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                     color="purple" 
                     active={activeFilter === 'TARGETS'} 
                     onClick={() => setActiveFilter('TARGETS')} 
+                />
+                {/* --- NEW ESCO STAT BADGE --- */}
+                <StatBadge 
+                    icon={Zap} 
+                    label="ESCO Projects" 
+                    count={stats.esco} 
+                    total={stats.total} 
+                    color="yellow" 
+                    active={activeFilter === 'ESCO'} 
+                    onClick={() => setActiveFilter('ESCO')} 
                 />
             </div>
 
