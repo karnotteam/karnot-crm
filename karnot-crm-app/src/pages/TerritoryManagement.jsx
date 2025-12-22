@@ -502,7 +502,7 @@ return (
                     territory={territory}
                     isSelected={selectedTerritory?.id === territory.id}
                     onClick={() => {
-                        setSelectedTerritory(territory);
+                        setSelectedTerritory(territory); l
                         setShowAgentModal(true);
                     }}
                     stats={territoryStats[territory.id]}
