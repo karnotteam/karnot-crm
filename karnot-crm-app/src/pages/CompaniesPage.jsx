@@ -6,7 +6,7 @@ import {
     Plus, X, Edit, Trash2, Building, Upload, Search, 
     CheckSquare, FileText, UserCheck, Mail, PlusCircle, 
     ExternalLink, Download, Send, Handshake, Map as MapIcon, Copy,
-    Navigation, Target, Globe 
+    Navigation, Target, Globe, User, Phone // <--- Added User and Phone icons
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, PRICING_TIERS } from '../data/constants.jsx';
 
@@ -254,7 +254,7 @@ const ProximitySearch = ({ companies, onSelectCompany, onClose }) => {
 };
 
 // --- 2. Company Modal Component ---
-const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote, existingCompanies = [] }) => {
+const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = [], onOpenQuote, existingCompanies = [] }) => {
     const [activeTab, setActiveTab] = useState('ACTIVITY');
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
     const [website, setWebsite] = useState(companyToEdit?.website || '');
@@ -291,6 +291,16 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
     const relevantQuotes = (quotes || []).filter(q => 
         (q.customer?.name || '').toLowerCase().includes(targetName)
     );
+
+    // --- CONTACTS LINKING LOGIC (ADDED) ---
+    const relatedContacts = useMemo(() => {
+        if (!contacts || !companyToEdit) return [];
+        return contacts.filter(c => 
+            // Match by ID (exact) or Name (fuzzy/fallback)
+            c.companyId === companyToEdit.id || 
+            (c.companyName && c.companyName.toLowerCase().trim() === targetName)
+        );
+    }, [contacts, companyToEdit, targetName]);
 
     // ADD INTERACTION WITH QUOTE LINKING
     const handleAddInteraction = () => {
@@ -476,7 +486,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                                     : 'text-gray-400'
                             }`}
                         >
-                            Activity Log
+                            Activity
                         </button>
                         <button 
                             onClick={() => setActiveTab('DATA')} 
@@ -488,10 +498,21 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                         >
                             Quotes ({relevantQuotes.length})
                         </button>
+                        {/* NEW PEOPLE TAB */}
+                        <button 
+                            onClick={() => setActiveTab('PEOPLE')} 
+                            className={`flex-1 py-5 text-[10px] font-black uppercase tracking-widest transition-all ${
+                                activeTab === 'PEOPLE' 
+                                    ? 'text-teal-600 border-b-4 border-teal-600' 
+                                    : 'text-gray-400'
+                            }`}
+                        >
+                            People ({relatedContacts.length})
+                        </button>
                     </div>
                     
                     <div className="flex-1 overflow-y-auto p-6">
-                        {activeTab === 'ACTIVITY' ? (
+                        {activeTab === 'ACTIVITY' && (
                             <div className="space-y-4">
                                 {/* ADD NEW INTERACTION FORM */}
                                 <div className="bg-white p-4 rounded-2xl border shadow-sm space-y-3">
@@ -581,7 +602,9 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                                     </div>
                                 ))}
                             </div>
-                        ) : (
+                        )}
+
+                        {activeTab === 'DATA' && (
                             /* QUOTES TAB */
                             <div className="space-y-2">
                                 {relevantQuotes.length === 0 ? (
@@ -601,6 +624,39 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                                                     ${q.finalSalesPrice?.toLocaleString()}
                                                 </span>
                                                 <ExternalLink size={12} className="text-gray-300 group-hover:text-orange-500"/>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'PEOPLE' && (
+                            /* PEOPLE TAB (NEW) */
+                            <div className="space-y-3">
+                                {relatedContacts.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <User size={48} className="mx-auto text-gray-200 mb-2"/>
+                                        <p className="text-gray-400 text-sm font-bold">No contacts linked yet.</p>
+                                        <p className="text-[10px] text-gray-400">Add contacts via the Contacts tab and search for "{companyName}".</p>
+                                    </div>
+                                ) : (
+                                    relatedContacts.map(c => (
+                                        <div key={c.id} className="p-4 bg-white border border-gray-200 rounded-2xl hover:border-teal-400 transition-all">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <h4 className="font-bold text-gray-800">{c.firstName} {c.lastName}</h4>
+                                                    <p className="text-xs text-teal-600 font-bold uppercase">{c.jobTitle || 'No Title'}</p>
+                                                </div>
+                                                {c.phone && (
+                                                    <a href={`tel:${c.phone}`} className="p-2 bg-gray-50 rounded-full text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
+                                                        <Phone size={14} />
+                                                    </a>
+                                                )}
+                                            </div>
+                                            <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
+                                                <Mail size={12} />
+                                                <span>{c.email || 'No Email'}</span>
                                             </div>
                                         </div>
                                     ))
@@ -825,6 +881,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                     onSave={handleSave} 
                     companyToEdit={editingCompany} 
                     quotes={quotes} 
+                    contacts={contacts} // <--- PASSED CONTACTS HERE
                     onOpenQuote={onOpenQuote}
                     existingCompanies={activeCompanies}
                 />
