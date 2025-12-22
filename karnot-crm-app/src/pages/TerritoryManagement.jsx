@@ -275,8 +275,150 @@ const TerritoryCreateModal = ({ onClose, onSave, existingTerritories = [] }) => 
     const [description, setDescription] = useState('');
 
     const provinces = [
-        'Metro Manila', 'Cavite', 'Laguna', 'Batangas', 'Rizal', 'Bulacan', 
-        'Pampanga', 'Cebu', 'Davao', 'Iloilo', 'Negros Occidental', 'Baguio'
+        // NCR - National Capital Region
+        { region: 'NCR', name: 'Metro Manila - Makati' },
+        { region: 'NCR', name: 'Metro Manila - BGC/Taguig' },
+        { region: 'NCR', name: 'Metro Manila - Ortigas/Pasig' },
+        { region: 'NCR', name: 'Metro Manila - Quezon City' },
+        { region: 'NCR', name: 'Metro Manila - Manila City' },
+        { region: 'NCR', name: 'Metro Manila - Mandaluyong' },
+        { region: 'NCR', name: 'Metro Manila - San Juan' },
+        { region: 'NCR', name: 'Metro Manila - Pasay' },
+        { region: 'NCR', name: 'Metro Manila - Paranaque' },
+        { region: 'NCR', name: 'Metro Manila - Las Pinas' },
+        { region: 'NCR', name: 'Metro Manila - Muntinlupa' },
+        { region: 'NCR', name: 'Metro Manila - Caloocan' },
+        { region: 'NCR', name: 'Metro Manila - Malabon' },
+        { region: 'NCR', name: 'Metro Manila - Navotas' },
+        { region: 'NCR', name: 'Metro Manila - Valenzuela' },
+        { region: 'NCR', name: 'Metro Manila - Marikina' },
+        
+        // Region I - Ilocos Region
+        { region: 'Region I', name: 'Ilocos Norte - Laoag City' },
+        { region: 'Region I', name: 'Ilocos Sur - Vigan City' },
+        { region: 'Region I', name: 'La Union - San Fernando' },
+        { region: 'Region I', name: 'Pangasinan - Dagupan City' },
+        { region: 'Region I', name: 'Pangasinan - Urdaneta' },
+        
+        // Region II - Cagayan Valley
+        { region: 'Region II', name: 'Cagayan - Tuguegarao City' },
+        { region: 'Region II', name: 'Isabela - Ilagan City' },
+        { region: 'Region II', name: 'Nueva Vizcaya - Bayombong' },
+        { region: 'Region II', name: 'Quirino - Cabarroguis' },
+        
+        // Region III - Central Luzon
+        { region: 'Region III', name: 'Bulacan - Malolos' },
+        { region: 'Region III', name: 'Bulacan - San Jose del Monte' },
+        { region: 'Region III', name: 'Nueva Ecija - Cabanatuan City' },
+        { region: 'Region III', name: 'Pampanga - Angeles City' },
+        { region: 'Region III', name: 'Pampanga - San Fernando' },
+        { region: 'Region III', name: 'Tarlac - Tarlac City' },
+        { region: 'Region III', name: 'Zambales - Olongapo City' },
+        { region: 'Region III', name: 'Bataan - Balanga' },
+        { region: 'Region III', name: 'Aurora - Baler' },
+        
+        // Region IV-A - CALABARZON
+        { region: 'CALABARZON', name: 'Cavite - Bacoor' },
+        { region: 'CALABARZON', name: 'Cavite - Imus' },
+        { region: 'CALABARZON', name: 'Cavite - Dasmarinas' },
+        { region: 'CALABARZON', name: 'Cavite - General Trias' },
+        { region: 'CALABARZON', name: 'Laguna - Santa Rosa' },
+        { region: 'CALABARZON', name: 'Laguna - Calamba City' },
+        { region: 'CALABARZON', name: 'Laguna - San Pablo City' },
+        { region: 'CALABARZON', name: 'Batangas - Batangas City' },
+        { region: 'CALABARZON', name: 'Batangas - Lipa City' },
+        { region: 'CALABARZON', name: 'Rizal - Antipolo City' },
+        { region: 'CALABARZON', name: 'Rizal - Cainta' },
+        { region: 'CALABARZON', name: 'Quezon - Lucena City' },
+        
+        // Region IV-B - MIMAROPA
+        { region: 'MIMAROPA', name: 'Mindoro Oriental - Calapan City' },
+        { region: 'MIMAROPA', name: 'Mindoro Occidental - Mamburao' },
+        { region: 'MIMAROPA', name: 'Palawan - Puerto Princesa City' },
+        { region: 'MIMAROPA', name: 'Romblon - Romblon' },
+        { region: 'MIMAROPA', name: 'Marinduque - Boac' },
+        
+        // Region V - Bicol Region
+        { region: 'Region V', name: 'Albay - Legazpi City' },
+        { region: 'Region V', name: 'Camarines Norte - Daet' },
+        { region: 'Region V', name: 'Camarines Sur - Naga City' },
+        { region: 'Region V', name: 'Catanduanes - Virac' },
+        { region: 'Region V', name: 'Masbate - Masbate City' },
+        { region: 'Region V', name: 'Sorsogon - Sorsogon City' },
+        
+        // Region VI - Western Visayas
+        { region: 'Region VI', name: 'Aklan - Kalibo' },
+        { region: 'Region VI', name: 'Antique - San Jose' },
+        { region: 'Region VI', name: 'Capiz - Roxas City' },
+        { region: 'Region VI', name: 'Iloilo - Iloilo City' },
+        { region: 'Region VI', name: 'Negros Occidental - Bacolod City' },
+        { region: 'Region VI', name: 'Guimaras - Jordan' },
+        
+        // Region VII - Central Visayas
+        { region: 'Region VII', name: 'Bohol - Tagbilaran City' },
+        { region: 'Region VII', name: 'Cebu - Cebu City' },
+        { region: 'Region VII', name: 'Cebu - Mandaue City' },
+        { region: 'Region VII', name: 'Cebu - Lapu-Lapu City' },
+        { region: 'Region VII', name: 'Negros Oriental - Dumaguete City' },
+        { region: 'Region VII', name: 'Siquijor - Siquijor' },
+        
+        // Region VIII - Eastern Visayas
+        { region: 'Region VIII', name: 'Leyte - Tacloban City' },
+        { region: 'Region VIII', name: 'Southern Leyte - Maasin City' },
+        { region: 'Region VIII', name: 'Samar - Catbalogan City' },
+        { region: 'Region VIII', name: 'Eastern Samar - Borongan City' },
+        { region: 'Region VIII', name: 'Northern Samar - Catarman' },
+        { region: 'Region VIII', name: 'Biliran - Naval' },
+        
+        // Region IX - Zamboanga Peninsula
+        { region: 'Region IX', name: 'Zamboanga del Norte - Dipolog City' },
+        { region: 'Region IX', name: 'Zamboanga del Sur - Pagadian City' },
+        { region: 'Region IX', name: 'Zamboanga City' },
+        { region: 'Region IX', name: 'Zamboanga Sibugay - Ipil' },
+        
+        // Region X - Northern Mindanao
+        { region: 'Region X', name: 'Bukidnon - Malaybalay City' },
+        { region: 'Region X', name: 'Camiguin - Mambajao' },
+        { region: 'Region X', name: 'Lanao del Norte - Tubod' },
+        { region: 'Region X', name: 'Misamis Occidental - Oroquieta City' },
+        { region: 'Region X', name: 'Misamis Oriental - Cagayan de Oro City' },
+        
+        // Region XI - Davao Region
+        { region: 'Region XI', name: 'Davao del Norte - Tagum City' },
+        { region: 'Region XI', name: 'Davao del Sur - Digos City' },
+        { region: 'Region XI', name: 'Davao Oriental - Mati City' },
+        { region: 'Region XI', name: 'Davao de Oro - Nabunturan' },
+        { region: 'Region XI', name: 'Davao City' },
+        
+        // Region XII - SOCCSKSARGEN
+        { region: 'Region XII', name: 'Cotabato - Kidapawan City' },
+        { region: 'Region XII', name: 'South Cotabato - Koronadal City' },
+        { region: 'Region XII', name: 'South Cotabato - General Santos City' },
+        { region: 'Region XII', name: 'Sultan Kudarat - Isulan' },
+        { region: 'Region XII', name: 'Sarangani - Alabel' },
+        
+        // Region XIII - Caraga
+        { region: 'Region XIII', name: 'Agusan del Norte - Butuan City' },
+        { region: 'Region XIII', name: 'Agusan del Sur - San Francisco' },
+        { region: 'Region XIII', name: 'Surigao del Norte - Surigao City' },
+        { region: 'Region XIII', name: 'Surigao del Sur - Tandag City' },
+        { region: 'Region XIII', name: 'Dinagat Islands - San Jose' },
+        
+        // CAR - Cordillera Administrative Region
+        { region: 'CAR', name: 'Abra - Bangued' },
+        { region: 'CAR', name: 'Apayao - Kabugao' },
+        { region: 'CAR', name: 'Benguet - Baguio City' },
+        { region: 'CAR', name: 'Benguet - La Trinidad' },
+        { region: 'CAR', name: 'Ifugao - Lagawe' },
+        { region: 'CAR', name: 'Kalinga - Tabuk City' },
+        { region: 'CAR', name: 'Mountain Province - Bontoc' },
+        
+        // BARMM - Bangsamoro Autonomous Region
+        { region: 'BARMM', name: 'Basilan - Isabela City' },
+        { region: 'BARMM', name: 'Lanao del Sur - Marawi City' },
+        { region: 'BARMM', name: 'Maguindanao - Cotabato City' },
+        { region: 'BARMM', name: 'Sulu - Jolo' },
+        { region: 'BARMM', name: 'Tawi-Tawi - Bongao' }
     ];
 
     return (
@@ -296,15 +438,25 @@ const TerritoryCreateModal = ({ onClose, onSave, existingTerritories = [] }) => 
                     />
 
                     <div>
-                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">Province/Region</label>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">Province/City</label>
                         <select
                             value={province}
                             onChange={e => setProvince(e.target.value)}
-                            className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                            className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
                         >
-                            <option value="">Select Province</option>
-                            {provinces.map(p => (
-                                <option key={p} value={p}>{p}</option>
+                            <option value="">Select Location</option>
+                            {Object.entries(
+                                provinces.reduce((acc, p) => {
+                                    if (!acc[p.region]) acc[p.region] = [];
+                                    acc[p.region].push(p.name);
+                                    return acc;
+                                }, {})
+                            ).map(([region, locations]) => (
+                                <optgroup key={region} label={region}>
+                                    {locations.map(loc => (
+                                        <option key={loc} value={loc}>{loc}</option>
+                                    ))}
+                                </optgroup>
                             ))}
                         </select>
                     </div>
