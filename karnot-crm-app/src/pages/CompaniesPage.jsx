@@ -6,9 +6,17 @@ import {
     Plus, X, Edit, Trash2, Building, Upload, Search, 
     CheckSquare, FileText, UserCheck, Mail, PlusCircle, 
     ExternalLink, Download, Send, Handshake, Map as MapIcon, Copy,
-    Navigation, Target
+    Navigation, Target, Globe 
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, PRICING_TIERS } from '../data/constants.jsx';
+
+// --- HELPER: Open Website ---
+const openWebsite = (url) => {
+    if (!url) return;
+    // Auto-add https:// if missing
+    const finalUrl = url.startsWith('http') ? url : `https://${url}`;
+    window.open(finalUrl, '_blank', 'noopener,noreferrer');
+};
 
 // --- Haversine Distance Calculator ---
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -363,11 +371,26 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                             />
                         </div>
                         
-                        <Input 
-                            label="Website" 
-                            value={website} 
-                            onChange={e => setWebsite(e.target.value)} 
-                        />
+                        {/* WEBSITE FIELD WITH OPEN BUTTON */}
+                        <div className="flex items-end gap-2">
+                            <div className="flex-1">
+                                <Input 
+                                    label="Website" 
+                                    value={website} 
+                                    onChange={e => setWebsite(e.target.value)} 
+                                />
+                            </div>
+                            {website && (
+                                <Button 
+                                    onClick={() => openWebsite(website)} 
+                                    variant="secondary"
+                                    className="h-[46px] w-[46px] !p-0 flex items-center justify-center bg-blue-50 text-blue-600 border-blue-200"
+                                    title="Open Website"
+                                >
+                                    <ExternalLink size={20} />
+                                </Button>
+                            )}
+                        </div>
                         
                         {/* ADDRESS & GPS SECTION */}
                         <div className="space-y-2">
@@ -958,6 +981,17 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                                     View History
                                 </Button>
                                 
+                                {/* NEW: WEBSITE BUTTON ON CARD */}
+                                {c.website && (
+                                    <button 
+                                        onClick={() => openWebsite(c.website)} 
+                                        className="px-3 border border-gray-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 text-blue-600 transition-all"
+                                        title="Visit Website"
+                                    >
+                                        <Globe size={16}/>
+                                    </button>
+                                )}
+
                                 {/* MAP BUTTON (only if GPS exists) */}
                                 {c.latitude && c.longitude && (
                                     <button 
