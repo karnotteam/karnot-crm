@@ -475,21 +475,11 @@ const TerritoryLeadGenerator = ({ territories = [], user }) => {
                                         {place.formatted_phone_number && (
                                             <div className="flex items-center gap-2">
                                                 <Phone size={14} className="text-green-600" />
-                                                <span className="font-bold text-gray-700">
-                                                    {place.formatted_phone_number}
-                                                </span>
-                                            </div>
-                                        )}
-                                        {place.website && (
-                                            <div className="flex items-center gap-2">
-                                                <Globe size={14} className="text-blue-600" />
-                                                <a
-                                                    href={place.website}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="font-bold text-blue-600 hover:underline truncate"
+                                                <a 
+                                                    href={`tel:${place.formatted_phone_number}`}
+                                                    className="font-bold text-gray-700 hover:text-green-600"
                                                 >
-                                                    Website
+                                                    {place.formatted_phone_number}
                                                 </a>
                                             </div>
                                         )}
@@ -508,6 +498,33 @@ const TerritoryLeadGenerator = ({ territories = [], user }) => {
                                             </div>
                                         )}
                                     </div>
+
+                                    {place.website && (
+                                        <div className="mt-3 pt-3 border-t border-gray-100">
+                                            <div className="flex items-center gap-2 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                                <Globe size={16} className="text-blue-600 flex-shrink-0" />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase mb-1">Website</p>
+                                                    <a
+                                                        href={place.website}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="font-bold text-blue-600 hover:underline block truncate text-sm"
+                                                        title={place.website}
+                                                    >
+                                                        {place.website.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                                                    </a>
+                                                </div>
+                                                <Button
+                                                    onClick={() => window.open(place.website, '_blank')}
+                                                    variant="secondary"
+                                                    className="!p-2 text-blue-600 hover:bg-blue-100 flex-shrink-0"
+                                                >
+                                                    <Globe size={14} />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {place.opening_hours && (
                                         <div className="mt-3 pt-3 border-t border-gray-100">
