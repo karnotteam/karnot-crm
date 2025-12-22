@@ -1,33 +1,180 @@
 import React, { useState } from 'react';
-import { Target, Search, MapPin, Building, Phone, Mail, Globe, AlertCircle, Loader } from 'lucide-react';
+import { Target, Search, MapPin, Building, Phone, Mail, Globe, AlertCircle, Loader, Trash2, Check, X } from 'lucide-react';
 import { Card, Button, Input } from '../data/constants.jsx';
+import { db } from '../firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
-const TerritoryLeadGenerator = ({ territories = [] }) => {
+const TerritoryLeadGenerator = ({ territories = [], user }) => {
     const [selectedTerritory, setSelectedTerritory] = useState('');
     const [businessType, setBusinessType] = useState('');
+    const [customKeyword, setCustomKeyword] = useState('');
     const [searchRadius, setSearchRadius] = useState(5);
     const [results, setResults] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [selectedLeads, setSelectedLeads] = useState(new Set());
+    const [addingToCompanies, setAddingToCompanies] = useState(new Set());
 
     const businessTypes = [
-        { value: 'hotel', label: 'Hotels & Resorts', icon: '🏨' },
-        { value: 'restaurant', label: 'Restaurants & Cafes', icon: '🍽️' },
-        { value: 'hospital', label: 'Hospitals & Clinics', icon: '🏥' },
-        { value: 'school', label: 'Schools & Universities', icon: '🎓' },
-        { value: 'shopping_mall', label: 'Shopping Malls', icon: '🛍️' },
-        { value: 'gym', label: 'Gyms & Fitness Centers', icon: '💪' },
-        { value: 'supermarket', label: 'Supermarkets', icon: '🛒' },
-        { value: 'warehouse', label: 'Warehouses & Logistics', icon: '📦' },
-        { value: 'office', label: 'Office Buildings', icon: '🏢' },
-        { value: 'factory', label: 'Manufacturing Plants', icon: '🏭' }
+        // Hospitality
+        { value: 'hotel', keyword: 'hotel resort', label: 'Hotels & Resorts', icon: '🏨', category: 'Hospitality' },
+        { value: 'restaurant', keyword: 'restaurant fine dining', label: 'Fine Dining Restaurants', icon: '🍽️', category: 'Hospitality' },
+        { value: 'cafe', keyword: 'cafe coffee shop', label: 'Cafes & Coffee Shops', icon: '☕', category: 'Hospitality' },
+        { value: 'fastfood', keyword: 'fast food restaurant chain', label: 'Fast Food Chains', icon: '🍔', category: 'Hospitality' },
+        
+        // Healthcare
+        { value: 'hospital', keyword: 'hospital medical center', label: 'Hospitals & Medical Centers', icon: '🏥', category: 'Healthcare' },
+        { value: 'clinic', keyword: 'clinic polyclinic medical', label: 'Clinics & Polyclinics', icon: '⚕️', category: 'Healthcare' },
+        { value: 'pharmacy', keyword: 'pharmacy drugstore', label: 'Pharmacies', icon: '💊', category: 'Healthcare' },
+        
+        // Education
+        { value: 'university', keyword: 'university college', label: 'Universities & Colleges', icon: '🎓', category: 'Education' },
+        { value: 'school', keyword: 'school academy', label: 'Schools & Academies', icon: '🏫', category: 'Education' },
+        
+        // Retail & Commercial
+        { value: 'mall', keyword: 'shopping mall shopping center', label: 'Shopping Malls', icon: '🛍️', category: 'Retail' },
+        { value: 'supermarket', keyword: 'supermarket grocery hypermarket', label: 'Supermarkets & Hypermarkets', icon: '🛒', category: 'Retail' },
+        { value: 'convenience', keyword: '7-eleven convenience store', label: 'Convenience Stores', icon: '🏪', category: 'Retail' },
+        { value: 'department', keyword: 'department store', label: 'Department Stores', icon: '🏬', category: 'Retail' },
+        
+        // Fitness & Wellness
+        { value: 'gym', keyword: 'gym fitness center', label: 'Gyms & Fitness Centers', icon: '💪', category: 'Fitness' },
+        { value: 'spa', keyword: 'spa wellness massage', label: 'Spas & Wellness Centers', icon: '🧖', category: 'Fitness' },
+        
+        // Food & Beverage Manufacturing
+        { value: 'food_manufacturing', keyword: 'food manufacturing plant processing', label: 'Food Manufacturing Plants', icon: '🏭', category: 'Manufacturing' },
+        { value: 'beverage_plant', keyword: 'beverage bottling plant brewery distillery', label: 'Beverage Bottling Plants', icon: '🍺', category: 'Manufacturing' },
+        { value: 'bakery_factory', keyword: 'bakery factory bread production', label: 'Bakery Production Facilities', icon: '🍞', category: 'Manufacturing' },
+        { value: 'meat_processing', keyword: 'meat processing plant slaughterhouse', label: 'Meat Processing Plants', icon: '🥩', category: 'Manufacturing' },
+        { value: 'dairy_plant', keyword: 'dairy plant milk processing', label: 'Dairy Processing Facilities', icon: '🥛', category: 'Manufacturing' },
+        
+        // Industrial & Logistics
+        { value: 'warehouse', keyword: 'warehouse distribution center logistics', label: 'Warehouses & Distribution Centers', icon: '📦', category: 'Industrial' },
+        { value: 'cold_storage', keyword: 'cold storage facility refrigerated warehouse', label: 'Cold Storage Facilities', icon: '❄️', category: 'Industrial' },
+        { value: 'factory', keyword: 'factory manufacturing plant industrial', label: 'Manufacturing Factories', icon: '🏭', category: 'Industrial' },
+        { value: 'textile', keyword: 'textile factory garment manufacturing', label: 'Textile & Garment Factories', icon: '👔', category: 'Industrial' },
+        
+        // Technology & Data
+        { value: 'datacenter', keyword: 'data center server facility', label: 'Data Centers', icon: '💻', category: 'Technology' },
+        { value: 'call_center', keyword: 'call center BPO contact center', label: 'Call Centers & BPO', icon: '📞', category: 'Technology' },
+        { value: 'tech_office', keyword: 'technology company office IT', label: 'Tech Company Offices', icon: '💼', category: 'Technology' },
+        
+        // Real Estate & Construction
+        { value: 'office_building', keyword: 'office building commercial tower', label: 'Office Buildings', icon: '🏢', category: 'Real Estate' },
+        { value: 'condominium', keyword: 'condominium residential tower', label: 'Condominiums', icon: '🏙️', category: 'Real Estate' },
+        
+        // Automotive
+        { value: 'car_dealership', keyword: 'car dealership auto showroom', label: 'Car Dealerships', icon: '🚗', category: 'Automotive' },
+        { value: 'service_center', keyword: 'auto service center repair shop', label: 'Auto Service Centers', icon: '🔧', category: 'Automotive' }
     ];
 
     const selectedTerritoryData = territories.find(t => t.id === selectedTerritory);
 
+    const handleAddToCompanies = async (place) => {
+        if (!user) {
+            alert('Please log in to add companies');
+            return;
+        }
+
+        setAddingToCompanies(prev => new Set(prev).add(place.place_id));
+
+        try {
+            await addDoc(collection(db, "users", user.uid, "companies"), {
+                companyName: place.name,
+                address: place.vicinity || place.formatted_address,
+                city: selectedTerritoryData?.province || '',
+                phone: place.formatted_phone_number || '',
+                website: place.website || '',
+                email: '',
+                latitude: place.geometry?.location?.lat || null,
+                longitude: place.geometry?.location?.lng || null,
+                industry: businessType,
+                isTarget: true,
+                isCustomer: false,
+                source: 'Territory Lead Generator',
+                googlePlaceId: place.place_id,
+                rating: place.rating || null,
+                createdAt: serverTimestamp()
+            });
+
+            alert(`✅ ${place.name} added to Companies!`);
+            
+            // Mark as selected
+            setSelectedLeads(prev => new Set(prev).add(place.place_id));
+        } catch (error) {
+            console.error('Error adding to companies:', error);
+            alert('Error adding company. Please try again.');
+        } finally {
+            setAddingToCompanies(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(place.place_id);
+                return newSet;
+            });
+        }
+    };
+
+    const handleBulkAdd = async () => {
+        if (!user) {
+            alert('Please log in to add companies');
+            return;
+        }
+
+        const unselectedLeads = results.filter(r => !selectedLeads.has(r.place_id));
+        
+        if (unselectedLeads.length === 0) {
+            alert('All results have already been added!');
+            return;
+        }
+
+        if (!confirm(`Add ${unselectedLeads.length} companies to CRM?`)) return;
+
+        setLoading(true);
+        let added = 0;
+
+        for (const place of unselectedLeads) {
+            try {
+                await handleAddToCompanies(place);
+                added++;
+            } catch (error) {
+                console.error(`Failed to add ${place.name}:`, error);
+            }
+        }
+
+        setLoading(false);
+        alert(`✅ Successfully added ${added} companies!`);
+    };
+
+    const handleDeleteResult = (placeId) => {
+        if (confirm('Remove this result from the list?')) {
+            setResults(prev => prev.filter(r => r.place_id !== placeId));
+        }
+    };
+
+    const handleClearResults = () => {
+        if (confirm('Clear all search results?')) {
+            setResults([]);
+            setSelectedLeads(new Set());
+        }
+    };
+
     const handleSearch = async () => {
-        if (!selectedTerritory || !businessType) {
-            setError('Please select both a territory and business type');
+        // Determine search keyword
+        let searchKeyword = '';
+        
+        if (customKeyword.trim()) {
+            // Use custom keyword if provided
+            searchKeyword = customKeyword.trim();
+        } else if (businessType) {
+            // Use predefined keyword
+            const selectedType = businessTypes.find(t => t.value === businessType);
+            searchKeyword = selectedType?.keyword || businessType;
+        } else {
+            setError('Please select a business type or enter a custom keyword');
+            return;
+        }
+
+        if (!selectedTerritory) {
+            setError('Please select a territory');
             return;
         }
 
@@ -48,7 +195,7 @@ const TerritoryLeadGenerator = ({ territories = [] }) => {
                     latitude: selectedTerritoryData.centerLat,
                     longitude: selectedTerritoryData.centerLon,
                     radius: searchRadius * 1000,
-                    type: businessType
+                    keyword: searchKeyword  // Send keyword instead of type
                 })
             });
 
@@ -60,7 +207,7 @@ const TerritoryLeadGenerator = ({ territories = [] }) => {
             setResults(data.results || []);
             
             if (!data.results || data.results.length === 0) {
-                setError('No businesses found in this area. Try expanding the search radius.');
+                setError(`No businesses found matching "${searchKeyword}". Try different keywords or expand the search radius.`);
             }
         } catch (err) {
             setError(err.message || 'Search failed. Please try again.');
@@ -109,20 +256,60 @@ const TerritoryLeadGenerator = ({ territories = [] }) => {
 
                     <div>
                         <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
-                            Business Type
+                            Business Type (Predefined)
                         </label>
                         <select
                             value={businessType}
-                            onChange={e => setBusinessType(e.target.value)}
+                            onChange={e => {
+                                setBusinessType(e.target.value);
+                                setCustomKeyword(''); // Clear custom when selecting predefined
+                            }}
                             className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
                         >
                             <option value="">-- Choose Type --</option>
-                            {businessTypes.map(type => (
-                                <option key={type.value} value={type.value}>
-                                    {type.icon} {type.label}
-                                </option>
+                            {Object.entries(
+                                businessTypes.reduce((acc, type) => {
+                                    if (!acc[type.category]) acc[type.category] = [];
+                                    acc[type.category].push(type);
+                                    return acc;
+                                }, {})
+                            ).map(([category, types]) => (
+                                <optgroup key={category} label={category}>
+                                    {types.map(type => (
+                                        <option key={type.value} value={type.value}>
+                                            {type.icon} {type.label}
+                                        </option>
+                                    ))}
+                                </optgroup>
                             ))}
                         </select>
+                    </div>
+
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div className="relative flex justify-center text-[10px] font-black uppercase">
+                            <span className="bg-white px-3 text-gray-400">OR</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Custom Search Keywords
+                        </label>
+                        <Input
+                            value={customKeyword}
+                            onChange={e => {
+                                setCustomKeyword(e.target.value);
+                                setBusinessType(''); // Clear predefined when typing custom
+                            }}
+                            placeholder="e.g., seafood restaurant, pharmaceutical warehouse, tech startup"
+                            className="bg-white"
+                        />
+                        <p className="text-[9px] text-gray-400 mt-1 font-bold">
+                            💡 Be specific: "cold storage facility" vs "warehouse"
+                        </p>
                     </div>
 
                     <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
@@ -158,7 +345,7 @@ const TerritoryLeadGenerator = ({ territories = [] }) => {
 
                     <Button
                         onClick={handleSearch}
-                        disabled={!selectedTerritory || !businessType || loading}
+                        disabled={(!selectedTerritory || (!businessType && !customKeyword.trim())) || loading}
                         variant="primary"
                         className="w-full"
                     >
@@ -188,11 +375,35 @@ const TerritoryLeadGenerator = ({ territories = [] }) => {
                         <h2 className="text-xl font-black text-gray-800 uppercase tracking-tight">
                             Search Results
                         </h2>
-                        {results.length > 0 && (
-                            <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-black">
-                                {results.length} Found
-                            </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {results.length > 0 && (
+                                <>
+                                    <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-black">
+                                        {results.length} Found
+                                    </span>
+                                    <span className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-black">
+                                        {selectedLeads.size} Added
+                                    </span>
+                                    <Button
+                                        onClick={handleBulkAdd}
+                                        variant="primary"
+                                        className="text-xs"
+                                        disabled={results.length === selectedLeads.size}
+                                    >
+                                        <Check size={12} className="mr-1" />
+                                        Add All
+                                    </Button>
+                                    <Button
+                                        onClick={handleClearResults}
+                                        variant="secondary"
+                                        className="text-xs"
+                                    >
+                                        <X size={12} className="mr-1" />
+                                        Clear
+                                    </Button>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     {loading && (
@@ -212,29 +423,53 @@ const TerritoryLeadGenerator = ({ territories = [] }) => {
 
                     {!loading && results.length > 0 && (
                         <div className="space-y-3 max-h-[600px] overflow-y-auto">
-                            {results.map((place, idx) => (
-                                <div
-                                    key={idx}
-                                    className="bg-white border-2 border-gray-100 rounded-2xl p-4 hover:border-indigo-200 hover:shadow-md transition-all"
-                                >
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex-1">
-                                            <h3 className="font-black text-gray-800 text-lg mb-1">
-                                                {place.name}
-                                            </h3>
-                                            <p className="text-xs text-gray-500 font-bold flex items-center gap-1">
-                                                <MapPin size={12} />
-                                                {place.vicinity || place.formatted_address}
-                                            </p>
-                                        </div>
-                                        {place.rating && (
-                                            <div className="bg-yellow-50 px-2 py-1 rounded-lg">
-                                                <p className="text-xs font-black text-yellow-700">
-                                                    ⭐ {place.rating}
+                            {results.map((place, idx) => {
+                                const isAdded = selectedLeads.has(place.place_id);
+                                const isAdding = addingToCompanies.has(place.place_id);
+                                
+                                return (
+                                    <div
+                                        key={idx}
+                                        className={`bg-white border-2 rounded-2xl p-4 hover:shadow-md transition-all ${
+                                            isAdded 
+                                                ? 'border-green-300 bg-green-50' 
+                                                : 'border-gray-100 hover:border-indigo-200'
+                                        }`}
+                                    >
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="font-black text-gray-800 text-lg">
+                                                        {place.name}
+                                                    </h3>
+                                                    {isAdded && (
+                                                        <span className="bg-green-500 text-white px-2 py-0.5 rounded-full text-[9px] font-black flex items-center gap-1">
+                                                            <Check size={10} /> ADDED
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-500 font-bold flex items-center gap-1 mt-1">
+                                                    <MapPin size={12} />
+                                                    {place.vicinity || place.formatted_address}
                                                 </p>
                                             </div>
-                                        )}
-                                    </div>
+                                            <div className="flex items-center gap-2">
+                                                {place.rating && (
+                                                    <div className="bg-yellow-50 px-2 py-1 rounded-lg">
+                                                        <p className="text-xs font-black text-yellow-700">
+                                                            ⭐ {place.rating}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                <Button
+                                                    onClick={() => handleDeleteResult(place.place_id)}
+                                                    variant="secondary"
+                                                    className="!p-1.5 text-red-500 hover:bg-red-50"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </Button>
+                                            </div>
+                                        </div>
 
                                     <div className="grid grid-cols-2 gap-3 text-xs">
                                         {place.formatted_phone_number && (
@@ -301,13 +536,30 @@ const TerritoryLeadGenerator = ({ territories = [] }) => {
                                         <Button
                                             variant="primary"
                                             className="text-xs flex-1"
+                                            onClick={() => handleAddToCompanies(place)}
+                                            disabled={isAdded || isAdding}
                                         >
-                                            <Building size={12} className="mr-1" />
-                                            Add to CRM
+                                            {isAdding ? (
+                                                <>
+                                                    <Loader size={12} className="mr-1 animate-spin" />
+                                                    Adding...
+                                                </>
+                                            ) : isAdded ? (
+                                                <>
+                                                    <Check size={12} className="mr-1" />
+                                                    Added to CRM
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Building size={12} className="mr-1" />
+                                                    Add to CRM
+                                                </>
+                                            )}
                                         </Button>
                                     </div>
                                 </div>
-                            ))}
+                            );
+                            })}
                         </div>
                     )}
                 </Card>
