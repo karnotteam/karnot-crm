@@ -7,7 +7,7 @@ Edit, Trash2, Plus, User, Mail, Building, Navigation, CheckCircle, Clock, X
 } from ‘lucide-react’;
 import { Card, Button, Input, Textarea } from ‘../data/constants.jsx’;
 
-// — Haversine Distance Calculator —
+// Haversine Distance Calculator
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
 const R = 6371; // Earth’s radius in kilometers
 const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -20,38 +20,28 @@ const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 return R * c; // Distance in kilometers
 };
 
-// — Territory Badge Component —
+// Territory Badge Component
 const TerritoryBadge = ({ territory, isSelected, onClick, stats }) => {
-const statusColor = territory.agentId ? ‘green’ : ‘orange’;
+return (
+<div
+onClick={onClick}
+className={`cursor-pointer p-4 rounded-2xl border-2 transition-all hover:shadow-lg ${ isSelected  ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-300'  : 'border-gray-200 bg-white hover:border-indigo-300' }`}
+>
+<div className="flex justify-between items-start mb-3">
+<div>
+<h4 className="font-black text-lg text-gray-800 uppercase tracking-tight">
+{territory.name}
+</h4>
+<p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
+{territory.province || ‘Territory’}
+</p>
+</div>
+<span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase ${ territory.agentId  ? 'bg-green-100 text-green-700'  : 'bg-orange-100 text-orange-700' }`}>
+{territory.agentId ? ‘Assigned’ : ‘Open’}
+</span>
+</div>
 
 ```
-return (
-    <div
-        onClick={onClick}
-        className={`cursor-pointer p-4 rounded-2xl border-2 transition-all hover:shadow-lg ${
-            isSelected 
-                ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-300' 
-                : 'border-gray-200 bg-white hover:border-indigo-300'
-        }`}
-    >
-        <div className="flex justify-between items-start mb-3">
-            <div>
-                <h4 className="font-black text-lg text-gray-800 uppercase tracking-tight">
-                    {territory.name}
-                </h4>
-                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
-                    {territory.province || 'Territory'}
-                </p>
-            </div>
-            <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase ${
-                territory.agentId 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-orange-100 text-orange-700'
-            }`}>
-                {territory.agentId ? 'Assigned' : 'Open'}
-            </span>
-        </div>
-
         {territory.agentId && territory.agentName && (
             <div className="flex items-center gap-2 mb-2 text-sm">
                 <User size={14} className="text-indigo-600" />
@@ -79,7 +69,7 @@ return (
 
 };
 
-// — Agent Assignment Modal —
+// Agent Assignment Modal
 const AgentModal = ({ territory, agents = [], onClose, onSave, companies = [], appointments = [] }) => {
 const [selectedAgentId, setSelectedAgentId] = useState(territory?.agentId || ‘’);
 const [commission, setCommission] = useState(territory?.commission || 15);
@@ -115,7 +105,7 @@ const upcomingAppointments = useMemo(() => {
             new Date(apt.appointmentDate) >= new Date()
         )
         .sort((a, b) => new Date(a.appointmentDate) - new Date(b.appointmentDate))
-        .slice(0, 5); // Show next 5 appointments
+        .slice(0, 5);
 }, [appointments, companiesInTerritory]);
 
 return (
@@ -131,7 +121,6 @@ return (
             </div>
 
             <div className="p-6 space-y-4">
-                {/* Agent Selection */}
                 <div>
                     <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
                         Select Agent/Partner
@@ -150,7 +139,6 @@ return (
                     </select>
                 </div>
 
-                {/* Agent Details Preview */}
                 {selectedAgent && (
                     <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-200">
                         <div className="grid grid-cols-2 gap-3 text-sm">
@@ -180,7 +168,6 @@ return (
                     </div>
                 )}
 
-                {/* Commission Rate */}
                 <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100">
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-[10px] font-black uppercase text-gray-500">Commission Rate</span>
@@ -201,7 +188,6 @@ return (
                     </div>
                 </div>
 
-                {/* Exclusivity Radius */}
                 <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100">
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-[10px] font-black uppercase text-gray-500">Exclusivity Zone</span>
@@ -222,7 +208,6 @@ return (
                     </div>
                 </div>
 
-                {/* Territory Notes */}
                 <Textarea
                     label="Territory Notes"
                     value={notes}
@@ -231,7 +216,6 @@ return (
                     placeholder="Special conditions, key accounts, market intel..."
                 />
 
-                {/* Upcoming Appointments in Territory (NEW) */}
                 {upcomingAppointments.length > 0 && (
                     <div className="bg-blue-50 p-4 rounded-2xl border border-blue-200">
                         <p className="text-[10px] font-black uppercase text-blue-700 mb-3">
@@ -279,7 +263,7 @@ return (
 
 };
 
-// — Create Territory Modal —
+// Create Territory Modal
 const TerritoryCreateModal = ({ onClose, onSave, existingTerritories = [] }) => {
 const [name, setName] = useState(’’);
 const [province, setProvince] = useState(’’);
@@ -396,15 +380,14 @@ return (
 
 };
 
-// — Main Territory Management Component —
+// Main Territory Management Component
 const TerritoryManagement = ({ territories = [], agents = [], companies = [], user, appointments = [] }) => {
 const [selectedTerritory, setSelectedTerritory] = useState(null);
 const [showAgentModal, setShowAgentModal] = useState(false);
 const [showCreateModal, setShowCreateModal] = useState(false);
-const [viewMode, setViewMode] = useState(‘grid’); // grid or map
+const [viewMode, setViewMode] = useState(‘grid’);
 
 ```
-// Calculate stats for each territory
 const territoryStats = useMemo(() => {
     const stats = {};
     territories.forEach(territory => {
@@ -457,7 +440,6 @@ const totalCompaniesInTerritories = Object.values(territoryStats).reduce((sum, s
 
 return (
     <div className="w-full space-y-6">
-        {/* Modals */}
         {showAgentModal && selectedTerritory && (
             <AgentModal
                 territory={selectedTerritory}
@@ -480,7 +462,6 @@ return (
             />
         )}
 
-        {/* Header Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
                 <MapPin className="text-indigo-600 mb-2" size={24} />
@@ -504,7 +485,6 @@ return (
             </Card>
         </div>
 
-        {/* Action Bar */}
         <div className="flex justify-between items-center">
             <h2 className="text-2xl font-black text-gray-800 uppercase tracking-tighter">
                 Territory Management
@@ -515,7 +495,6 @@ return (
             </Button>
         </div>
 
-        {/* Territory Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {territories.map(territory => (
                 <TerritoryBadge
