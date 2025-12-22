@@ -245,7 +245,7 @@ const ProximitySearch = ({ companies, onSelectCompany, onClose }) => {
     );
 };
 
-// --- 2. Company Modal Component (COMPLETE WITH ALL FEATURES) ---
+// --- 2. Company Modal Component ---
 const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote, existingCompanies = [] }) => {
     const [activeTab, setActiveTab] = useState('ACTIVITY');
     const [companyName, setCompanyName] = useState(companyToEdit?.companyName || '');
@@ -253,7 +253,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
     const [industry, setIndustry] = useState(companyToEdit?.industry || '');
     const [address, setAddress] = useState(companyToEdit?.address || '');
     
-    // GPS FIELDS (NEW FEATURE)
+    // GPS FIELDS
     const [latitude, setLatitude] = useState(companyToEdit?.latitude || '');
     const [longitude, setLongitude] = useState(companyToEdit?.longitude || '');
     
@@ -270,7 +270,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
     const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedQuoteId, setSelectedQuoteId] = useState('');
 
-    // DEDUPLICATION LOGIC (NEW FEATURE)
+    // DEDUPLICATION LOGIC
     const isDuplicate = useMemo(() => {
         if (companyToEdit) return false; // Don't check duplicates when editing
         return existingCompanies.some(c => 
@@ -278,13 +278,13 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
         );
     }, [companyName, existingCompanies, companyToEdit]);
 
-    // QUOTE HANDSHAKE LOGIC (PRESERVED)
+    // QUOTE HANDSHAKE LOGIC
     const targetName = (companyName || '').toLowerCase().trim();
     const relevantQuotes = (quotes || []).filter(q => 
         (q.customer?.name || '').toLowerCase().includes(targetName)
     );
 
-    // ADD INTERACTION WITH QUOTE LINKING (PRESERVED)
+    // ADD INTERACTION WITH QUOTE LINKING
     const handleAddInteraction = () => {
         if (!newLogOutcome) return;
         let linkedQuote = null;
@@ -305,7 +305,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
         setSelectedQuoteId('');
     };
 
-    // MAP INTEGRATION (NEW FEATURE)
+    // MAP INTEGRATION
     const openInGoogleMaps = () => {
         if (latitude && longitude) {
             window.open(`https://www.google.com/maps?q=${latitude},${longitude}`, '_blank');
@@ -409,7 +409,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                             </div>
                         </div>
                         
-                        {/* STATUS TOGGLES (ALL FOUR PRESERVED) */}
+                        {/* STATUS TOGGLES */}
                         <div className="grid grid-cols-2 gap-2 p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
                             <Checkbox 
                                 label="Verified" 
@@ -490,7 +490,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                                         </select>
                                     </div>
                                     
-                                    {/* QUOTE LINKING DROPDOWN (PRESERVED FEATURE) */}
+                                    {/* QUOTE LINKING DROPDOWN */}
                                     {relevantQuotes.length > 0 && (
                                         <select 
                                             value={selectedQuoteId} 
@@ -520,7 +520,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                                     </div>
                                 </div>
                                 
-                                {/* INTERACTION LOG WITH QUOTE LINKS (PRESERVED) */}
+                                {/* INTERACTION LOG WITH QUOTE LINKS */}
                                 {interactions.map(log => (
                                     <div key={log.id} className="bg-white p-4 rounded-2xl border shadow-sm group relative">
                                         <div className="flex justify-between items-center mb-1">
@@ -534,7 +534,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], onOpenQuote
                                         </div>
                                         <p className="text-sm text-gray-700 font-bold">{log.outcome}</p>
                                         
-                                        {/* LINKED QUOTE BUTTON (PRESERVED FEATURE) */}
+                                        {/* LINKED QUOTE BUTTON */}
                                         {log.linkedQuote && (
                                             <button 
                                                 type="button"
@@ -647,7 +647,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
             (q.customer?.name || '').toLowerCase().includes(compName?.toLowerCase().trim())
         );
 
-    // BULK EXPORT (PRESERVED FEATURE)
+    // BULK EXPORT
     const handleBulkExport = () => {
         const selected = activeCompanies.filter(c => selectedIds.has(c.id));
         const csv = Papa.unparse(selected.map(c => ({
@@ -670,7 +670,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
         document.body.removeChild(link);
     };
 
-    // BULK EMAIL (PRESERVED FEATURE)
+    // BULK EMAIL
     const handleBulkEmail = () => {
         const emails = activeCompanies
             .filter(c => selectedIds.has(c.id) && c.website)
@@ -678,7 +678,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
         alert(`BCC Email function ready for ${emails.length} companies.`);
     };
 
-    // BULK DELETE (PRESERVED FEATURE)
+    // BULK DELETE
     const handleBulkDelete = async () => {
         if (!confirm(`Move ${selectedIds.size} accounts to Trash?`)) return;
         const batch = writeBatch(db);
@@ -689,12 +689,12 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
         setSelectedIds(new Set());
     };
 
-    // CSV IMPORT WITH DEDUPLICATION (ENHANCED FEATURE)
+    // --- ENHANCED CSV IMPORT WITH DEDUPLICATION ---
     const handleFileChange = (e) => {
         const file = e.target.files[0];
         if (!file) return;
         setIsImporting(true);
-        
+
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
@@ -703,41 +703,67 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                 let addedCount = 0;
                 let skippedCount = 0;
                 
+                // Create lookup maps for fast checking
+                const normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+                const existingNames = new Set(activeCompanies.map(c => normalize(c.companyName)));
+                const existingLocs = new Set(activeCompanies
+                    .filter(c => c.latitude && c.longitude)
+                    .map(c => `${parseFloat(c.latitude).toFixed(4)},${parseFloat(c.longitude).toFixed(4)}`)
+                );
+
                 results.data.forEach(row => {
                     const name = row.Company || row.CompanyName;
+                    const lat = row.Latitude ? parseFloat(row.Latitude) : null;
+                    const lng = row.Longitude ? parseFloat(row.Longitude) : null;
+
                     if (!name) return;
-                    
-                    // DEDUPLICATION CHECK
-                    const exists = activeCompanies.some(c => 
-                        c.companyName.toLowerCase().trim() === name.toLowerCase().trim()
-                    );
-                    
-                    if (!exists) {
+
+                    // CHECK DUPLICATES (Name OR Location)
+                    const cleanName = normalize(name);
+                    const cleanLoc = (lat && lng) ? `${lat.toFixed(4)},${lng.toFixed(4)}` : null;
+
+                    const isNameDuplicate = existingNames.has(cleanName);
+                    const isLocDuplicate = cleanLoc ? existingLocs.has(cleanLoc) : false;
+
+                    if (!isNameDuplicate && !isLocDuplicate) {
                         const ref = doc(collection(db, "users", user.uid, "companies"));
                         batch.set(ref, {
-                            companyName: name,
+                            companyName: name, 
                             industry: row.Industry || '',
                             address: row.Address || '',
                             website: row.Website || '',
                             latitude: row.Latitude || '',
                             longitude: row.Longitude || '',
                             tier: row.Tier || 'STANDARD',
-                            isCustomer: false,
-                            isTarget: false,
-                            isVerified: false,
+                            isCustomer: row.IsCustomer === 'Yes' || row.IsCustomer === 'TRUE', 
+                            isTarget: row.IsTarget === 'Yes' || row.IsTarget === 'TRUE',
+                            isVerified: row.IsVerified === 'Yes' || row.IsVerified === 'TRUE',
                             isEmailed: false,
                             interactions: [],
                             createdAt: serverTimestamp()
                         });
+                        
+                        // Add to temp sets to prevent self-duplicates in the same file
+                        existingNames.add(cleanName);
+                        if (cleanLoc) existingLocs.add(cleanLoc);
+                        
                         addedCount++;
                     } else {
                         skippedCount++;
+                        console.log(`Skipped duplicate: ${name}`);
                     }
                 });
                 
-                await batch.commit();
+                if (addedCount > 0) await batch.commit();
+                
                 setIsImporting(false);
-                alert(`Import Complete!\nAdded: ${addedCount}\nSkipped (duplicates): ${skippedCount}`);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                alert(`Import Complete!\n✅ Added: ${addedCount}\n⛔ Skipped (duplicates): ${skippedCount}`);
+            },
+            error: (error) => {
+                console.error("CSV Error:", error);
+                setIsImporting(false);
+                alert("Error reading CSV file.");
             }
         });
     };
@@ -932,7 +958,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                                     View History
                                 </Button>
                                 
-                                {/* MAP BUTTON (NEW FEATURE - only if GPS exists) */}
+                                {/* MAP BUTTON (only if GPS exists) */}
                                 {c.latitude && c.longitude && (
                                     <button 
                                         onClick={() => window.open(
@@ -971,7 +997,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                 ))}
             </div>
 
-            {/* BULK ACTION BAR (PRESERVED FEATURE) */}
+            {/* BULK ACTION BAR */}
             {selectedIds.size > 0 && (
                 <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-in fade-in slide-in-from-bottom-4">
                     <span className="font-bold text-sm">{selectedIds.size} Selected</span>
