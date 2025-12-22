@@ -36,7 +36,7 @@ import AppointmentScheduler from './pages/AppointmentScheduler.jsx';
 
 // --- Service & Operations Modules ---
 import InstallEstimator from './pages/InstallEstimator.jsx';
-import ServiceInvoice from './pages/ServiceInvoice.jsx'; // Non-BOI Activity Module
+import ServiceInvoice from './pages/ServiceInvoice.jsx';
 
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
@@ -63,101 +63,209 @@ import BIRBookPrep from './data/BIRBookPrep.jsx';
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
-    Users, Settings, Calculator, Plus, Landmark, Clock, BookOpen, Briefcase, Truck, Activity,
-    MapPin, Calendar, UserCheck, Wrench
+    Users, Settings, Calculator, Plus, Landmark, ChevronDown,
+    MapPin, Wrench, Briefcase, FileText
 } from 'lucide-react'; 
 
 // ==========================================
-// 5. MAIN NAVIGATION HEADER
+// 5. DROPDOWN MENU COMPONENT
 // ==========================================
-const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, userRole }) => ( 
-    <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
-        <div className="container mx-auto px-4 py-3 flex flex-col lg:flex-row justify-between items-center gap-4">
+const DropdownMenu = ({ label, icon: Icon, items, activeView, setActiveView, variant = 'secondary' }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const isActive = items.some(item => item.view === activeView);
+
+    return (
+        <div className="relative" onMouseLeave={() => setIsOpen(false)}>
+            <Button 
+                onClick={() => setIsOpen(!isOpen)}
+                onMouseEnter={() => setIsOpen(true)}
+                variant={isActive ? 'primary' : variant}
+                className={`font-bold uppercase text-[10px] tracking-widest h-9 ${variant === 'orange' ? 'border-orange-200 text-orange-700 bg-orange-50' : ''}`}
+            >
+                <Icon className="mr-1.5" size={14} /> {label} <ChevronDown size={12} className="ml-1"/>
+            </Button>
             
-            {/* BRANDING */}
-            <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setActiveView('dashboard')}>
-                <img src={KARNOT_LOGO_BASE_64} alt="Karnot Logo" style={{height: '45px'}}/>
-                <div>
-                    <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tighter leading-none">Karnot <span className="text-orange-600">CRM</span></h1>
-                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">Pro Enterprise Edition</p>
+            {isOpen && (
+                <div className="absolute top-full left-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl min-w-[200px] z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    {items.map((item, idx) => (
+                        <button
+                            key={idx}
+                            onClick={() => {
+                                setActiveView(item.view);
+                                setIsOpen(false);
+                            }}
+                            className={`w-full text-left px-4 py-3 text-xs font-bold uppercase tracking-wide transition-colors flex items-center gap-2 ${
+                                activeView === item.view 
+                                    ? 'bg-orange-50 text-orange-700 border-l-4 border-orange-500' 
+                                    : 'text-gray-600 hover:bg-gray-50'
+                            }`}
+                        >
+                            {item.icon && <item.icon size={14} />}
+                            {item.label}
+                            {item.badge && (
+                                <span className="ml-auto bg-orange-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">
+                                    {item.badge}
+                                </span>
+                            )}
+                        </button>
+                    ))}
                 </div>
-            </div>
-
-            {/* NAVIGATION BAR */}
-            <nav className="flex flex-wrap gap-2 justify-center lg:justify-end items-center">
-                
-                {/* --- GROUP A: CORE BUSINESS --- */}
-                <Button onClick={() => setActiveView('dashboard')} variant={activeView === 'dashboard' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest h-9">
-                    <BarChart2 className="mr-1.5" size={14} /> Dashboard
-                </Button>
-                
-                <Button onClick={() => setActiveView('funnel')} variant={activeView === 'funnel' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest h-9">
-                    <HardHat className="mr-1.5" size={14} /> Funnel
-                </Button>
-                
-                <Button onClick={() => setActiveView('installEstimator')} variant={activeView === 'installEstimator' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest text-teal-700 border-teal-200 bg-teal-50 hover:bg-teal-100 h-9">
-                    <Wrench className="mr-1.5" size={14} /> Install & QC
-                </Button>
-                
-                <div className="h-8 w-px bg-gray-200 mx-1 hidden lg:block"></div>
-
-                {/* --- GROUP B: CRM & DIRECTORY --- */}
-                <Button onClick={() => setActiveView('companies')} variant={activeView === 'companies' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest h-9">
-                    <Building className="mr-1.5" size={14} /> Companies
-                </Button>
-                <Button onClick={() => setActiveView('contacts')} variant={activeView === 'contacts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest h-9">
-                    <Users className="mr-1.5" size={14} /> Contacts
-                </Button>
-                <Button onClick={() => setActiveView('suppliers')} variant={activeView === 'suppliers' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest h-9">
-                    <Truck className="mr-1.5" size={14} /> Suppliers
-                </Button>
-                
-                <div className="h-8 w-px bg-gray-200 mx-1 hidden lg:block"></div>
-
-                {/* --- GROUP C: FIELD OPERATIONS --- */}
-                <Button onClick={() => setActiveView('territories')} variant={activeView === 'territories' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 h-9">
-                    <MapPin className="mr-1.5" size={14} /> Territories
-                </Button>
-                <Button onClick={() => setActiveView('agents')} variant={activeView === 'agents' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 h-9">
-                    <UserCheck className="mr-1.5" size={14} /> Agents
-                </Button>
-                <Button onClick={() => setActiveView('appointments')} variant={activeView === 'appointments' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 h-9">
-                    <Calendar className="mr-1.5" size={14} /> Call Centre
-                </Button>
-                
-                <div className="h-8 w-px bg-gray-200 mx-1 hidden lg:block"></div>
-                
-                {/* --- GROUP D: TOOLS & FINANCE --- */}
-                <Button onClick={() => setActiveView('calculatorsHub')} variant={['calculatorsHub', 'heatPumpCalc', 'warmRoomCalc'].includes(activeView) ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest h-9">
-                    <Calculator className="mr-1.5" size={14} /> Calculators
-                </Button>
-
-                {userRole === 'ADMIN' && (
-                    <Button onClick={() => setActiveView('accounts')} variant={activeView === 'accounts' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700 h-9">
-                        <Landmark className="mr-1.5" size={14} /> Accounts
-                    </Button>
-                )}
-
-                <div className="h-8 w-px bg-gray-200 mx-2 hidden lg:block"></div>
-
-                {/* --- GROUP E: ACTIONS --- */}
-                <Button onClick={onNewQuote} variant="primary" className="font-black uppercase text-[10px] tracking-widest shadow-lg shadow-orange-100 bg-orange-600 hover:bg-orange-700 h-9">
-                    <Plus className="mr-1.5" size={14} /> New Quote
-                </Button>
-                
-                <Button onClick={() => setActiveView('list')} variant={activeView === 'list' ? 'primary' : 'secondary'} className="font-bold uppercase text-[10px] tracking-widest h-9">
-                    <List className="mr-1.5" size={14} /> Quotes ({quoteCount})
-                </Button>
-                
-                <Button onClick={() => setActiveView('admin')} variant={activeView === 'admin' ? 'primary' : 'secondary'} className="!p-2 h-9 w-9"><Settings size={16} /></Button>
-                <Button onClick={onLogout} variant="secondary" className="!p-2 text-red-500 hover:bg-red-50 border-red-100 h-9 w-9"><LogOut size={16} /></Button>
-            </nav>
+            )}
         </div>
-    </header>
-);
+    );
+};
 
 // ==========================================
-// 6. MAIN APPLICATION COMPONENT
+// 6. MAIN NAVIGATION HEADER
+// ==========================================
+const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, userRole }) => {
+    // Sales & CRM Menu
+    const salesMenu = [
+        { view: 'funnel', label: 'Sales Funnel', icon: HardHat },
+        { view: 'list', label: 'Quotes List', icon: List, badge: quoteCount },
+        { view: 'companies', label: 'Companies', icon: Building },
+        { view: 'contacts', label: 'Contacts', icon: Users },
+        { view: 'suppliers', label: 'Suppliers', icon: Briefcase }
+    ];
+
+    // Field Operations Menu
+    const fieldOpsMenu = [
+        { view: 'territories', label: 'Territories', icon: MapPin },
+        { view: 'agents', label: 'Agents', icon: Users },
+        { view: 'appointments', label: 'Call Centre', icon: FileText }
+    ];
+
+    // Operations Menu
+    const operationsMenu = [
+        { view: 'installEstimator', label: 'Install & QC', icon: Wrench },
+        { view: 'serviceInvoice', label: 'Service Invoice', icon: FileText }
+    ];
+
+    // Calculators Menu
+    const calculatorsMenu = [
+        { view: 'calculatorsHub', label: 'Calculator Hub', icon: Calculator },
+        { view: 'heatPumpCalc', label: 'Heat Pump ROI', icon: Calculator },
+        { view: 'warmRoomCalc', label: 'Warm Room', icon: Calculator }
+    ];
+
+    return (
+        <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
+            <div className="container mx-auto px-4 py-3">
+                
+                {/* TOP ROW: BRANDING + PRIMARY ACTIONS */}
+                <div className="flex justify-between items-center gap-4 mb-3">
+                    {/* BRANDING */}
+                    <div className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setActiveView('dashboard')}>
+                        <img src={KARNOT_LOGO_BASE_64} alt="Karnot Logo" style={{height: '40px'}}/>
+                        <div>
+                            <h1 className="text-xl font-black text-gray-800 uppercase tracking-tighter leading-none">
+                                Karnot <span className="text-orange-600">CRM</span>
+                            </h1>
+                            <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none">
+                                Pro Enterprise Edition
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* PRIMARY ACTIONS */}
+                    <div className="flex items-center gap-2">
+                        <Button 
+                            onClick={onNewQuote} 
+                            variant="primary" 
+                            className="font-black uppercase text-[10px] tracking-widest shadow-lg shadow-orange-100 bg-orange-600 hover:bg-orange-700 h-9 px-6"
+                        >
+                            <Plus className="mr-1.5" size={14} /> New Quote
+                        </Button>
+                        
+                        <Button 
+                            onClick={() => setActiveView('admin')} 
+                            variant={activeView === 'admin' ? 'primary' : 'secondary'} 
+                            className="!p-2 h-9 w-9"
+                        >
+                            <Settings size={16} />
+                        </Button>
+                        
+                        <Button 
+                            onClick={onLogout} 
+                            variant="secondary" 
+                            className="!p-2 text-red-500 hover:bg-red-50 border-red-100 h-9 w-9"
+                        >
+                            <LogOut size={16} />
+                        </Button>
+                    </div>
+                </div>
+
+                {/* BOTTOM ROW: NAVIGATION MENU */}
+                <nav className="flex flex-wrap gap-2 items-center border-t border-gray-100 pt-3">
+                    
+                    {/* Dashboard */}
+                    <Button 
+                        onClick={() => setActiveView('dashboard')} 
+                        variant={activeView === 'dashboard' ? 'primary' : 'secondary'} 
+                        className="font-bold uppercase text-[10px] tracking-widest h-9"
+                    >
+                        <BarChart2 className="mr-1.5" size={14} /> Dashboard
+                    </Button>
+
+                    <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+
+                    {/* Sales & CRM Dropdown */}
+                    <DropdownMenu 
+                        label="Sales & CRM" 
+                        icon={Building} 
+                        items={salesMenu}
+                        activeView={activeView}
+                        setActiveView={setActiveView}
+                    />
+
+                    {/* Field Operations Dropdown */}
+                    <DropdownMenu 
+                        label="Field Ops" 
+                        icon={MapPin} 
+                        items={fieldOpsMenu}
+                        activeView={activeView}
+                        setActiveView={setActiveView}
+                    />
+
+                    {/* Operations Dropdown */}
+                    <DropdownMenu 
+                        label="Operations" 
+                        icon={Wrench} 
+                        items={operationsMenu}
+                        activeView={activeView}
+                        setActiveView={setActiveView}
+                    />
+
+                    {/* Calculators Dropdown */}
+                    <DropdownMenu 
+                        label="Calculators" 
+                        icon={Calculator} 
+                        items={calculatorsMenu}
+                        activeView={activeView}
+                        setActiveView={setActiveView}
+                    />
+
+                    {/* Accounts (Admin Only) */}
+                    {userRole === 'ADMIN' && (
+                        <>
+                            <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
+                            <Button 
+                                onClick={() => setActiveView('accounts')} 
+                                variant={activeView === 'accounts' ? 'primary' : 'secondary'}
+                                className="font-bold uppercase text-[10px] tracking-widest border-orange-200 text-orange-700 bg-orange-50 h-9"
+                            >
+                                <Landmark className="mr-1.5" size={14} /> Accounts
+                            </Button>
+                        </>
+                    )}
+                </nav>
+            </div>
+        </header>
+    );
+};
+
+// ==========================================
+// 7. MAIN APPLICATION COMPONENT
 // ==========================================
 export default function App() {
     // --- Application State ---
@@ -177,7 +285,7 @@ export default function App() {
     // --- Finance Data ---
     const [ledgerEntries, setLedgerEntries] = useState([]); 
     const [manpowerLogs, setManpowerLogs] = useState([]);
-    const [serviceInvoices, setServiceInvoices] = useState([]); // Non-BOI Revenue
+    const [serviceInvoices, setServiceInvoices] = useState([]);
     
     // --- Territory Management Data ---
     const [territories, setTerritories] = useState([]);
@@ -219,61 +327,51 @@ export default function App() {
         if (user) {
             setLoadingData(true); 
             
-            // 1. QUOTES (BOI Activity)
             const unsubQuotes = onSnapshot(
                 query(collection(db, "users", user.uid, "quotes"), orderBy("lastModified", "desc")), 
                 (snap) => setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 2. OPPORTUNITIES
             const unsubOpps = onSnapshot(
                 query(collection(db, "users", user.uid, "opportunities"), orderBy("createdAt", "desc")), 
                 (snap) => setOpportunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 3. COMPANIES
             const unsubCompanies = onSnapshot(
                 query(collection(db, "users", user.uid, "companies"), orderBy("companyName", "asc")), 
                 (snap) => setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 4. CONTACTS
             const unsubContacts = onSnapshot(
                 query(collection(db, "users", user.uid, "contacts"), orderBy("lastName", "asc")), 
                 (snap) => setContacts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 5. LEDGER
             const unsubLedger = onSnapshot(
                 query(collection(db, "users", user.uid, "ledger"), orderBy("date", "desc")), 
                 (snap) => setLedgerEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 6. MANPOWER
             const unsubManpower = onSnapshot(
                 query(collection(db, "users", user.uid, "manpower_logs")), 
                 (snap) => setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 7. SERVICE INVOICES (Non-BOI Activity)
             const unsubServices = onSnapshot(
                 query(collection(db, "users", user.uid, "service_invoices"), orderBy("createdAt", "desc")), 
                 (snap) => setServiceInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 8. TERRITORIES
             const unsubTerritories = onSnapshot(
                 query(collection(db, "users", user.uid, "territories"), orderBy("name", "asc")), 
                 (snap) => setTerritories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 9. AGENTS
             const unsubAgents = onSnapshot(
                 query(collection(db, "users", user.uid, "agents"), orderBy("name", "asc")), 
                 (snap) => setAgents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 10. APPOINTMENTS
             const unsubAppointments = onSnapshot(
                 query(collection(db, "users", user.uid, "appointments"), orderBy("appointmentDate", "asc")), 
                 (snap) => {
@@ -387,10 +485,8 @@ export default function App() {
             />
             <main className="container mx-auto p-4 md:p-8">
                 
-                {/* 1. DASHBOARD (HOME) */}
                 {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
                 
-                {/* 2. SALES FUNNEL */}
                 {activeView === 'funnel' && (
                     <FunnelPage 
                         opportunities={opportunities} 
@@ -404,7 +500,6 @@ export default function App() {
                     />
                 )}
                 
-                {/* 3. OPPORTUNITY DETAIL */}
                 {activeView === 'opportunityDetail' && (
                     <OpportunityDetailPage 
                         opportunity={selectedOpportunity} 
@@ -420,7 +515,6 @@ export default function App() {
                     />
                 )}
 
-                {/* 4. INSTALLATION & QC ESTIMATOR */}
                 {activeView === 'installEstimator' && (
                     <InstallEstimator 
                         quotes={quotes} 
@@ -428,7 +522,6 @@ export default function App() {
                     />
                 )}
                 
-                {/* 5. SERVICE INVOICE (NON-BOI ACTIVITY) */}
                 {activeView === 'serviceInvoice' && (
                     <ServiceInvoice 
                         companies={companies}
@@ -436,7 +529,6 @@ export default function App() {
                     />
                 )}
                 
-                {/* 6. DIRECTORY: COMPANIES */}
                 {activeView === 'companies' && (
                     <CompaniesPage 
                         companies={companies} 
@@ -448,7 +540,6 @@ export default function App() {
                     />
                 )}
                 
-                {/* 7. DIRECTORY: CONTACTS */}
                 {activeView === 'contacts' && (
                     <ContactsPage 
                         contacts={contacts} 
@@ -457,10 +548,8 @@ export default function App() {
                     />
                 )}
                 
-                {/* 8. DIRECTORY: SUPPLIERS */}
                 {activeView === 'suppliers' && <SupplierManager user={user} />}
                 
-                {/* 9. TERRITORY MANAGEMENT */}
                 {activeView === 'territories' && (
                     <TerritoryManagement 
                         territories={territories} 
@@ -471,7 +560,6 @@ export default function App() {
                     />
                 )}
                 
-                {/* 10. AGENT MANAGEMENT */}
                 {activeView === 'agents' && (
                     <AgentManagement 
                         agents={agents} 
@@ -481,7 +569,6 @@ export default function App() {
                     />
                 )}
                 
-                {/* 11. CALL CENTRE / APPOINTMENTS */}
                 {activeView === 'appointments' && (
                     <AppointmentScheduler 
                         appointments={appointments} 
@@ -491,7 +578,6 @@ export default function App() {
                     />
                 )}
                 
-                {/* 12. QUOTE CALCULATOR (BOI ACTIVITY) */}
                 {activeView === 'calculator' && (
                     <QuoteCalculator 
                         onSaveQuote={handleSaveQuote} 
@@ -504,7 +590,6 @@ export default function App() {
                     />
                 )}
                 
-                {/* 13. QUOTES LIST */}
                 {activeView === 'list' && (
                     <QuotesListPage 
                         quotes={quotes} 
@@ -515,7 +600,6 @@ export default function App() {
                     />
                 )}
 
-                {/* 14. TECHNICAL CALCULATORS */}
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 
                 {activeView === 'heatPumpCalc' && (
@@ -527,13 +611,10 @@ export default function App() {
                 
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 
-                {/* 15. ADMIN SETTINGS */}
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
-                {/* 16. ACCOUNTS HUB (FINANCE) */}
                 {activeView === 'accounts' && (
                     <div className="space-y-6 pb-20">
-                        {/* Finance Sub-Navigation */}
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
                             <div>
                                 <h1 className="text-3xl font-black text-gray-800 tracking-tight uppercase leading-none mb-1">Accounts Hub</h1>
@@ -541,22 +622,21 @@ export default function App() {
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}><Landmark size={14} className="mr-1" /> Disbursements</Button>
-                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Clock size={14} className="mr-1" /> Manpower</Button>
+                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Wrench size={14} className="mr-1" /> Manpower</Button>
                                 <Button onClick={() => setSubView('services')} variant={subView === 'services' ? 'primary' : 'secondary'} className="border-orange-200 text-orange-700 bg-orange-50">
                                     <Wrench size={14} className="mr-1" /> Service Invoices
                                 </Button>
                                 <Button onClick={() => setSubView('projectOps')} variant={subView === 'projectOps' ? 'primary' : 'secondary'}><Briefcase size={14} className="mr-1" /> Project ROI</Button>
-                                <Button onClick={() => setSubView('birBooks')} variant={subView === 'birBooks' ? 'primary' : 'secondary'} className="border-orange-500 text-orange-700"><BookOpen size={14} className="mr-1" /> BIR Books</Button>
+                                <Button onClick={() => setSubView('birBooks')} variant={subView === 'birBooks' ? 'primary' : 'secondary'} className="border-orange-500 text-orange-700"><FileText size={14} className="mr-1" /> BIR Books</Button>
                                 <Button onClick={() => setSubView('bankRecon')} variant={subView === 'bankRecon' ? 'primary' : 'secondary'} className="border-purple-200 text-purple-700">
                                     <Landmark size={14} className="mr-1" /> Bank Recon
                                 </Button>
                                 <Button onClick={() => setSubView('management')} variant={subView === 'management' ? 'primary' : 'secondary'} className="border-indigo-200 text-indigo-700 bg-indigo-50">
-                                    <Activity size={14} className="mr-1" /> Mgmt. Accounts
+                                    <BarChart2 size={14} className="mr-1" /> Mgmt. Accounts
                                 </Button>
                             </div>
                         </div>
 
-                        {/* Finance Views */}
                         {subView === 'ledger' && (
                             <FinancialEntryLogger 
                                 companies={companies} 
@@ -567,7 +647,7 @@ export default function App() {
                         
                         {subView === 'manpower' && (
                             <ManpowerLogger 
-                                quotes={quotes} // [CRITICAL FIX]: Changed from 'companies' to 'quotes'
+                                quotes={quotes}
                             />
                         )}
                         
