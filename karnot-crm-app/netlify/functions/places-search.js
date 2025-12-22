@@ -8,13 +8,13 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        const { latitude, longitude, radius, type } = JSON.parse(event.body);
+        const { latitude, longitude, radius, keyword } = JSON.parse(event.body);
 
         // Validate inputs
-        if (!latitude || !longitude || !radius || !type) {
+        if (!latitude || !longitude || !radius || !keyword) {
             return {
                 statusCode: 400,
-                body: JSON.stringify({ error: 'Missing required parameters' })
+                body: JSON.stringify({ error: 'Missing required parameters: latitude, longitude, radius, keyword' })
             };
         }
 
@@ -28,8 +28,8 @@ exports.handler = async (event, context) => {
             };
         }
 
-        // Call Google Places API - Nearby Search
-        const placesUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${radius}&type=${type}&key=${apiKey}`;
+        // Call Google Places API - Nearby Search with keyword
+        const placesUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=${radius}&keyword=${encodeURIComponent(keyword)}&key=${apiKey}`;
         
         const response = await fetch(placesUrl);
         const data = await response.json();
