@@ -213,7 +213,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
                 {/* BOTTOM ROW: NAVIGATION MENU */}
                 <nav className="flex flex-wrap gap-2 items-center border-t border-gray-100 pt-3">
-                    
                     {/* Dashboard */}
                     <Button 
                         onClick={() => setActiveView('dashboard')} 
@@ -322,23 +321,28 @@ export default function App() {
             }, 4000);
 
             // HELPER: Safe Subscription
-            // If a collection doesn't exist, it returns empty array instead of crashing
             const subscribe = (collectionName, setter, orderByField = 'createdAt') => {
-                return onSnapshot(
-                    query(collection(db, "users", user.uid, collectionName), orderBy(orderByField, 'desc')),
-                    (snap) => setter(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                    (err) => {
-                        console.warn(`Collection '${collectionName}' missing or error:`, err.code);
-                        setter([]); // Set empty array so app doesn't break
-                    }
-                );
+                try {
+                    return onSnapshot(
+                        query(collection(db, "users", user.uid, collectionName), orderBy(orderByField, 'desc')),
+                        (snap) => setter(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                        (err) => {
+                            console.warn(`Collection '${collectionName}' missing or error:`, err.code);
+                            setter([]); 
+                        }
+                    );
+                } catch (e) {
+                    console.warn(`Failed to subscribe to ${collectionName}`, e);
+                    setter([]);
+                    return () => {};
+                }
             };
 
             // 1. Core CRM
             const unsubQuotes = subscribe('quotes', setQuotes, 'lastModified');
             const unsubOpps = subscribe('opportunities', setOpportunities);
-            const unsubCompanies = subscribe('companies', setCompanies, 'companyName'); // Note: Sort is different
-            const unsubContacts = subscribe('contacts', setContacts, 'lastName'); // Note: Sort is different
+            const unsubCompanies = subscribe('companies', setCompanies, 'companyName');
+            const unsubContacts = subscribe('contacts', setContacts, 'lastName');
 
             // 2. Finance
             const unsubLedger = subscribe('ledger', setLedgerEntries, 'date');
@@ -350,13 +354,13 @@ export default function App() {
             const unsubTerritories = subscribe('territories', setTerritories, 'name');
             const unsubAgents = subscribe('agents', setAgents, 'name');
             
-            // 4. Appointments (Manual because we want to clear loading here)
+            // 4. Appointments (Clears Loading)
             const unsubAppointments = onSnapshot(
                 query(collection(db, "users", user.uid, "appointments"), orderBy("appointmentDate", "asc")), 
                 (snap) => {
                     setAppointments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     setLoadingData(false); // Success!
-                    clearTimeout(safetyTimer); // Kill the safety timer
+                    clearTimeout(safetyTimer); // Cancel safety timer
                 },
                 (err) => {
                     console.warn("Appointments Error:", err);
@@ -473,8 +477,19 @@ export default function App() {
             />
             <main className="container mx-auto p-4 md:p-8">
                 
-                {/* 1. DASHBOARD */}
-                {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
+                {/* 1. DASHBOARD - CRITICAL FIX APPLIED HERE */}
+                {activeView === 'dashboard' && (
+                    <DashboardPage 
+                        quotes={quotes} 
+                        user={user}
+                        ledgerEntries={ledgerEntries}
+                        serviceInvoices={serviceInvoices}
+                        appointments={appointments}
+                        agents={agents}
+                        serviceContracts={serviceContracts}
+                        companies={companies}
+                    />
+                )}
                 
                 {/* 2. SALES FUNNEL */}
                 {activeView === 'funnel' && (
