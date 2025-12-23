@@ -13,6 +13,7 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
     const [currency, setCurrency] = useState('PHP'); // PHP, GBP, USD
     const [equityEntries, setEquityEntries] = useState([]);
     const [assetEntries, setAssetEntries] = useState([]);
+    const [manpowerLogs, setManpowerLogs] = useState([]); // NEW: Added Manpower State
     
     // Form States
     const [newCapital, setNewCapital] = useState({ partner: '', amount: '', type: 'CASH' });
@@ -65,7 +66,7 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
         }
     };
 
-    // --- 1. FETCH EQUITY & ASSETS ---
+    // --- 1. FETCH DATA (Equity, Assets, Manpower) ---
     useEffect(() => {
         if (!user) return;
         
@@ -77,13 +78,19 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
             setAssetEntries(snap.docs.map(d => ({ id: d.id, ...d.data() })));
         });
 
-        return () => { unsubEquity(); unsubAssets(); };
+        // NEW: Fetch Manpower Logs for Direct Labor Cost
+        const unsubManpower = onSnapshot(query(collection(db, "users", user.uid, "manpower_logs")), (snap) => {
+            setManpowerLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+
+        return () => { unsubEquity(); unsubAssets(); unsubManpower(); };
     }, [user]);
 
-    // --- 2. CALCULATE P&L (Real-Time with BOI/Non-BOI Split) ---
+    // --- 2. CALCULATE P&L (Enhanced Logic) ---
     const profitLoss = useMemo(() => {
         const rate = 58.5; // PHP per USD
         
+        // REVENUE
         // BOI ACTIVITY: Revenue from Quote Calculator (all quotes have boiActivity: true)
         const boiRevenue = quotes
             .filter(q => ['WON', 'INVOICED', 'PAID'].includes(q.status) && q.boiActivity !== false)
@@ -98,15 +105,33 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
         
         const totalRevenue = boiRevenue + nonBoiRevenue;
 
-        // COGS (Direct Project Expenses)
-        const cogs = ledgerEntries
-            .filter(e => ['Cost of Goods Sold', 'Project Materials', 'Direct Materials'].includes(e.category))
+        // --- EXPENSE CLASSIFICATION ENGINE ---
+        
+        // 1. Direct Labor (From Manpower Logs)
+        const directLabor = manpowerLogs.reduce((sum, log) => sum + (Number(log.totalCost) || 0), 0);
+
+        // 2. Direct Materials & Project Costs (From Ledger)
+        // Logic: If it has a Project ID OR matches specific COGS categories, it is Direct Cost.
+        const directMaterials = ledgerEntries
+            .filter(e => {
+                const cat = (e.category || '').toLowerCase();
+                const subCat = (e.subCategory || '').toLowerCase();
+                // Check if explicitly linked to a project
+                if (e.projectId && e.projectId.trim() !== '') return true;
+                // Check categories
+                return [
+                    'cost of goods sold', 'project materials', 'direct materials', 
+                    'equipment', 'import duties', 'freight', 'customs'
+                ].some(k => cat.includes(k) || subCat.includes(k));
+            })
             .reduce((sum, e) => sum + Number(e.amountPHP || 0), 0);
 
-        // OpEx (Overhead)
-        const opex = ledgerEntries
-            .filter(e => !['Cost of Goods Sold', 'Project Materials', 'Direct Materials'].includes(e.category))
-            .reduce((sum, e) => sum + Number(e.amountPHP || 0), 0);
+        const cogs = directLabor + directMaterials;
+
+        // 3. Operating Expenses (Everything else in Ledger)
+        // Logic: Ledger total minus what we identified as Direct Materials
+        const totalLedgerSpend = ledgerEntries.reduce((sum, e) => sum + Number(e.amountPHP || 0), 0);
+        const opex = totalLedgerSpend - directMaterials; // Note: Ledger doesn't contain Manpower usually, so we don't subtract Labor
 
         // Budget Variance
         const budgetRevenue = BUDGET_2026_JAN.revenue.total * rate;
@@ -122,6 +147,8 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
             nonBoiPercentage: totalRevenue > 0 ? (nonBoiRevenue / totalRevenue) * 100 : 0,
             
             // Standard P&L
+            directLabor,
+            directMaterials,
             cogs,
             grossProfit: totalRevenue - cogs,
             opex,
@@ -138,7 +165,7 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
             opexVariance: opex - budgetOpEx,
             netIncomeVariance: (totalRevenue - cogs - opex) - (budgetRevenue - budgetCOGS - budgetOpEx)
         };
-    }, [quotes, ledgerEntries]);
+    }, [quotes, ledgerEntries, manpowerLogs]);
 
     // --- 3. CALCULATE BALANCE SHEET ---
     const balanceSheet = useMemo(() => {
@@ -343,8 +370,12 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                                 <span className="font-black text-gray-800">{formatMoney(profitLoss.revenue)}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-gray-500 font-medium">Cost of Goods Sold (COGS)</span>
-                                <span className="font-bold text-red-400">({formatMoney(profitLoss.cogs)})</span>
+                                <span className="text-gray-500 font-medium">Direct Labor (Manpower)</span>
+                                <span className="font-bold text-red-400">({formatMoney(profitLoss.directLabor)})</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-gray-500 font-medium">Direct Materials & Projects</span>
+                                <span className="font-bold text-red-400">({formatMoney(profitLoss.directMaterials)})</span>
                             </div>
                             <div className="border-t border-gray-100 my-2 pt-2 flex justify-between">
                                 <span className="text-gray-600 font-bold">Gross Profit</span>
@@ -359,7 +390,7 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                                 </span>
                             </div>
                             <div className="flex justify-between mt-4">
-                                <span className="text-gray-500 font-medium">Operating Expenses</span>
+                                <span className="text-gray-500 font-medium">Operating Expenses (Overhead)</span>
                                 <span className="font-bold text-red-400">({formatMoney(profitLoss.opex)})</span>
                             </div>
                             <div className="mt-4 p-4 bg-indigo-50 rounded-xl border border-indigo-100">
@@ -405,15 +436,6 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                                     <p className="text-[10px] text-gray-400">Avg. expenses per month</p>
                                 </div>
                                 <span className="font-black text-red-600">{formatMoney(forecast.monthlyBurn)}</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-orange-50 rounded-lg text-orange-500"><Target size={16}/></div>
-                                <div className="flex-1">
-                                    <p className="text-xs font-bold text-gray-600">Budgeted Monthly Burn</p>
-                                    <p className="text-[10px] text-gray-400">Per financial plan</p>
-                                </div>
-                                <span className="font-black text-orange-600">{formatMoney(forecast.budgetedBurn)}</span>
                             </div>
                             
                             <div className="flex items-center gap-3">
@@ -630,7 +652,7 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                                 </thead>
                                 <tbody>
                                     <tr className="border-b border-gray-50">
-                                        <td className="py-3 font-medium text-gray-700">Cost of Goods Sold</td>
+                                        <td className="py-3 font-medium text-gray-700">Cost of Goods Sold (Direct Cost)</td>
                                         <td className="text-right font-bold text-gray-600">{formatMoney(profitLoss.budgetCOGS)}</td>
                                         <td className="text-right font-black text-gray-800">{formatMoney(profitLoss.cogs)}</td>
                                         <td className="text-right">
@@ -831,8 +853,12 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                             <h3 className="font-bold text-gray-800 uppercase text-xs mb-3 border-b border-gray-300 pb-1">II. COST OF SALES</h3>
                             <div className="pl-4 space-y-2 text-sm">
                                 <div className="flex justify-between">
-                                    <span className="text-gray-700">Direct Materials & Equipment</span>
-                                    <span className="font-mono">({formatMoney(profitLoss.cogs)})</span>
+                                    <span className="text-gray-700">Direct Materials & Projects</span>
+                                    <span className="font-mono">({formatMoney(profitLoss.directMaterials)})</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-700">Direct Labor (Manpower)</span>
+                                    <span className="font-mono">({formatMoney(profitLoss.directLabor)})</span>
                                 </div>
                                 <div className="flex justify-between border-t border-gray-200 pt-2 font-bold">
                                     <span className="text-gray-800">GROSS PROFIT</span>
@@ -846,12 +872,8 @@ const ManagementAccounts = ({ quotes = [], ledgerEntries = [], opportunities = [
                             <h3 className="font-bold text-gray-800 uppercase text-xs mb-3 border-b border-gray-300 pb-1">III. OPERATING EXPENSES</h3>
                             <div className="pl-4 space-y-2 text-sm">
                                 <div className="flex justify-between">
-                                    <span className="text-gray-700">Personnel Costs</span>
-                                    <span className="font-mono">({formatMoney(profitLoss.opex * 0.6)})</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-gray-700">Administrative & General Expenses</span>
-                                    <span className="font-mono">({formatMoney(profitLoss.opex * 0.4)})</span>
+                                    <span className="text-gray-700">Personnel & Admin Costs</span>
+                                    <span className="font-mono">({formatMoney(profitLoss.opex)})</span>
                                 </div>
                                 <div className="flex justify-between border-t border-gray-200 pt-2 font-bold">
                                     <span className="text-gray-800">TOTAL OPERATING EXPENSES</span>
