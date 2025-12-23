@@ -511,8 +511,18 @@ export default function App() {
             />
             <main className="container mx-auto p-4 md:p-8">
                 
-                {/* 1. DASHBOARD */}
-                {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
+                {activeView === 'dashboard' && (
+    <DashboardPage 
+        quotes={quotes} 
+        user={user}
+        ledgerEntries={ledgerEntries}
+        serviceInvoices={serviceInvoices}
+        appointments={appointments}
+        agents={agents}
+        serviceContracts={serviceContracts}
+        companies={companies}
+    />
+)}
                 
                 {/* 2. SALES FUNNEL */}
                 {activeView === 'funnel' && (
