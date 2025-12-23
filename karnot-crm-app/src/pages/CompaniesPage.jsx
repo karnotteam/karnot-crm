@@ -1,12 +1,12 @@
-import React, { useState, useRef, useMemo } from 'react'; 
-import { db } from '../firebase'; 
+import React, { useState, useRef, useMemo } from 'react';
+import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, writeBatch } from "firebase/firestore";
-import Papa from 'papaparse'; 
-import { 
-    Plus, X, Edit, Trash2, Building, Upload, Search, 
-    CheckSquare, FileText, UserCheck, Mail, PlusCircle, 
+import Papa from 'papaparse';
+import {
+    Plus, X, Edit, Trash2, Building, Upload, Search,
+    CheckSquare, FileText, UserCheck, Mail, PlusCircle,
     ExternalLink, Download, Send, Handshake, Map as MapIcon, Copy,
-    Navigation, Target, Globe, User, Phone, Zap // <--- Added Zap for ESCO
+    Navigation, Target, Globe, User, Phone, Zap
 } from 'lucide-react';
 import { Card, Button, Input, Textarea, Checkbox, PRICING_TIERS } from '../data/constants.jsx';
 
@@ -23,7 +23,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // Earth's radius in kilometers
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
+    const a =
         Math.sin(dLat / 2) * Math.sin(dLat / 2) +
         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
@@ -35,11 +35,11 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) => {
     const percentage = total > 0 ? Math.round((count / total) * 100) : 0;
     return (
-        <div 
-            onClick={onClick} 
+        <div
+            onClick={onClick}
             className={`cursor-pointer flex-1 min-w-[200px] p-3 rounded-xl border transition-all duration-200 flex items-center justify-between gap-3 ${
-                active 
-                    ? `bg-${color}-100 border-${color}-500 ring-2 ring-${color}-400` 
+                active
+                    ? `bg-${color}-100 border-${color}-500 ring-2 ring-${color}-400`
                     : 'bg-white border-gray-200 hover:border-orange-300 hover:shadow-md'
             }`}
         >
@@ -92,7 +92,7 @@ const ProximitySearch = ({ companies, onSelectCompany, onClose }) => {
 
         const lat = parseFloat(currentLat);
         const lon = parseFloat(currentLon);
-        
+
         const companiesWithGPS = companies.filter(c => c.latitude && c.longitude);
         const results = companiesWithGPS.map(c => ({
             ...c,
@@ -124,9 +124,9 @@ const ProximitySearch = ({ companies, onSelectCompany, onClose }) => {
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                         <div className="flex justify-between items-center">
                             <span className="text-[10px] font-black uppercase text-slate-500">Your Current Location</span>
-                            <Button 
-                                onClick={getCurrentLocation} 
-                                variant="secondary" 
+                            <Button
+                                onClick={getCurrentLocation}
+                                variant="secondary"
                                 disabled={isLocating}
                                 className="!py-1.5 !px-3 text-xs"
                             >
@@ -135,15 +135,15 @@ const ProximitySearch = ({ companies, onSelectCompany, onClose }) => {
                             </Button>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                            <Input 
-                                placeholder="Latitude" 
-                                value={currentLat} 
+                            <Input
+                                placeholder="Latitude"
+                                value={currentLat}
                                 onChange={e => setCurrentLat(e.target.value)}
                                 className="bg-white"
                             />
-                            <Input 
-                                placeholder="Longitude" 
-                                value={currentLon} 
+                            <Input
+                                placeholder="Longitude"
+                                value={currentLon}
                                 onChange={e => setCurrentLon(e.target.value)}
                                 className="bg-white"
                             />
@@ -156,12 +156,12 @@ const ProximitySearch = ({ companies, onSelectCompany, onClose }) => {
                             <span className="text-[10px] font-black uppercase text-slate-500">Search Radius</span>
                             <span className="text-2xl font-black text-orange-600">{radiusKm} km</span>
                         </div>
-                        <input 
-                            type="range" 
-                            min="5" 
-                            max="200" 
+                        <input
+                            type="range"
+                            min="5"
+                            max="200"
                             step="5"
-                            value={radiusKm} 
+                            value={radiusKm}
                             onChange={e => setRadiusKm(parseInt(e.target.value))}
                             className="w-full h-2 bg-orange-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
                         />
@@ -186,7 +186,7 @@ const ProximitySearch = ({ companies, onSelectCompany, onClose }) => {
                         </h3>
                         <div className="space-y-3">
                             {nearbyResults.map(company => (
-                                <div 
+                                <div
                                     key={company.id}
                                     onClick={() => onSelectCompany(company)}
                                     className="bg-white p-4 rounded-2xl border border-gray-200 hover:border-indigo-400 cursor-pointer transition-all group"
@@ -207,16 +207,16 @@ const ProximitySearch = ({ companies, onSelectCompany, onClose }) => {
                                             <p className="text-[9px] text-gray-400 font-bold uppercase">Away</p>
                                         </div>
                                     </div>
-                                    
+
                                     {company.address && (
                                         <p className="text-xs text-gray-500 font-bold mb-2">{company.address}</p>
                                     )}
-                                    
+
                                     <div className="flex gap-2 pt-2 border-t">
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                window.open(`https://www.google.com/maps?q=${company.latitude},${company.longitude}`, '_blank');
+                                                window.open(`http://googleusercontent.com/maps.google.com/maps?daddr=${company.latitude},${company.longitude}`, '_blank');
                                             }}
                                             className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
                                         >
@@ -253,6 +253,109 @@ const ProximitySearch = ({ companies, onSelectCompany, onClose }) => {
     );
 };
 
+// --- 1C. Duplicate Resolver Modal (NEW ADDITION) ---
+const DuplicateResolver = ({ companies, onClose, onResolve }) => {
+    const [duplicates, setDuplicates] = useState([]);
+
+    // Run scan on mount
+    useMemo(() => {
+        const lookup = {};
+        const dupeGroups = [];
+
+        companies.forEach(c => {
+            // Normalize: lowercase, remove special chars to find hidden dupes
+            const key = c.companyName.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+            if (!lookup[key]) lookup[key] = [];
+            lookup[key].push(c);
+        });
+
+        Object.values(lookup).forEach(group => {
+            if (group.length > 1) {
+                // Sort by creation date (keep oldest usually)
+                group.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+                dupeGroups.push(group);
+            }
+        });
+
+        setDuplicates(dupeGroups);
+    }, [companies]);
+
+    const handleResolveGroup = (keepId, group) => {
+        // IDs to delete are everyone in the group EXCEPT the keepId
+        const idsToDelete = group.filter(c => c.id !== keepId).map(c => c.id);
+        onResolve(idsToDelete);
+        
+        // Remove this group from UI
+        setDuplicates(prev => prev.filter(g => !g.some(c => c.id === keepId)));
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <Card className="w-full max-w-3xl max-h-[85vh] flex flex-col bg-white rounded-3xl overflow-hidden shadow-2xl">
+                <div className="bg-orange-100 p-6 border-b border-orange-200">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-orange-200 rounded-lg text-orange-700">
+                                <Copy size={24} />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-black uppercase text-orange-800">Duplicate Cleaner</h2>
+                                <p className="text-xs font-bold text-orange-600">
+                                    Found {duplicates.length} sets of potential duplicates
+                                </p>
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="p-2 hover:bg-orange-200 rounded-full text-orange-700">
+                            <X size={24} />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
+                    {duplicates.length === 0 && (
+                        <div className="text-center py-12 text-gray-400">
+                            <CheckSquare size={48} className="mx-auto mb-3 text-green-400" />
+                            <p className="font-black text-lg text-gray-600">No Duplicates Found!</p>
+                            <p className="text-sm">Your directory looks clean.</p>
+                        </div>
+                    )}
+
+                    {duplicates.map((group, idx) => (
+                        <div key={idx} className="bg-white border rounded-2xl p-4 shadow-sm">
+                            <h3 className="font-black text-gray-700 mb-3 border-b pb-2">
+                                Group: "{group[0].companyName}"
+                            </h3>
+                            <div className="space-y-2">
+                                {group.map(c => (
+                                    <div key={c.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                                        <div>
+                                            <p className="font-bold text-sm text-gray-800">{c.companyName}</p>
+                                            <p className="text-[10px] text-gray-500">
+                                                ID: {c.id.substr(0, 6)}... • {c.industry || 'No Industry'} • {c.address ? 'Has Address' : 'No Address'}
+                                            </p>
+                                        </div>
+                                        <Button 
+                                            onClick={() => handleResolveGroup(c.id, group)}
+                                            variant="secondary"
+                                            className="text-[10px] !py-1 bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
+                                        >
+                                            <CheckSquare size={14} className="mr-1"/>
+                                            Keep This One
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-[10px] text-gray-400 text-center mt-2 italic">
+                                Selecting "Keep This One" will delete the others in this group.
+                            </p>
+                        </div>
+                    ))}
+                </div>
+            </Card>
+        </div>
+    );
+};
+
 // --- 2. Company Modal Component ---
 const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = [], onOpenQuote, existingCompanies = [] }) => {
     const [activeTab, setActiveTab] = useState('ACTIVITY');
@@ -260,11 +363,11 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
     const [website, setWebsite] = useState(companyToEdit?.website || '');
     const [industry, setIndustry] = useState(companyToEdit?.industry || '');
     const [address, setAddress] = useState(companyToEdit?.address || '');
-    
+
     // GPS FIELDS
     const [latitude, setLatitude] = useState(companyToEdit?.latitude || '');
     const [longitude, setLongitude] = useState(companyToEdit?.longitude || '');
-    
+
     const [tier, setTier] = useState(companyToEdit?.tier || 'STANDARD');
     const [isVerified, setIsVerified] = useState(companyToEdit?.isVerified || false);
     const [isTarget, setIsTarget] = useState(companyToEdit?.isTarget || false);
@@ -272,7 +375,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
     const [isCustomer, setIsCustomer] = useState(companyToEdit?.isCustomer || false);
     const [notes, setNotes] = useState(companyToEdit?.notes || '');
     const [interactions, setInteractions] = useState(companyToEdit?.interactions || []);
-    
+
     const [newLogType, setNewLogType] = useState('Call');
     const [newLogOutcome, setNewLogOutcome] = useState('');
     const [newLogDate, setNewLogDate] = useState(new Date().toISOString().split('T')[0]);
@@ -281,23 +384,23 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
     // DEDUPLICATION LOGIC
     const isDuplicate = useMemo(() => {
         if (companyToEdit) return false; // Don't check duplicates when editing
-        return existingCompanies.some(c => 
+        return existingCompanies.some(c =>
             c.companyName.toLowerCase().trim() === companyName.toLowerCase().trim()
         );
     }, [companyName, existingCompanies, companyToEdit]);
 
     // QUOTE HANDSHAKE LOGIC
     const targetName = (companyName || '').toLowerCase().trim();
-    const relevantQuotes = (quotes || []).filter(q => 
+    const relevantQuotes = (quotes || []).filter(q =>
         (q.customer?.name || '').toLowerCase().includes(targetName)
     );
 
     // --- CONTACTS LINKING LOGIC ---
     const relatedContacts = useMemo(() => {
         if (!contacts || !companyToEdit) return [];
-        return contacts.filter(c => 
+        return contacts.filter(c =>
             // Match by ID (exact) or Name (fuzzy/fallback)
-            c.companyId === companyToEdit.id || 
+            c.companyId === companyToEdit.id ||
             (c.companyName && c.companyName.toLowerCase().trim() === targetName)
         );
     }, [contacts, companyToEdit, targetName]);
@@ -309,14 +412,14 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
         if (selectedQuoteId) {
             linkedQuote = relevantQuotes.find(rq => rq.id === selectedQuoteId);
         }
-        const newInteraction = { 
-            id: Date.now(), 
-            date: newLogDate, 
-            type: newLogType, 
-            outcome: newLogOutcome, 
-            linkedQuote 
+        const newInteraction = {
+            id: Date.now(),
+            date: newLogDate,
+            type: newLogType,
+            outcome: newLogOutcome,
+            linkedQuote
         };
-        setInteractions([newInteraction, ...interactions].sort((a, b) => 
+        setInteractions([newInteraction, ...interactions].sort((a, b) =>
             new Date(b.date) - new Date(a.date)
         ));
         setNewLogOutcome('');
@@ -326,22 +429,22 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
     // MAP INTEGRATION
     const openInGoogleMaps = () => {
         if (latitude && longitude) {
-            window.open(`https://www.google.com/maps?q=${latitude},${longitude}`, '_blank');
+            window.open(`http://googleusercontent.com/maps.google.com/maps?daddr=${latitude},${longitude}`, '_blank');
         } else if (address) {
-            window.open(`https://www.google.com/maps?q=${encodeURIComponent(address)}`, '_blank');
+            window.open(`http://googleusercontent.com/maps.google.com/maps?daddr=${encodeURIComponent(address)}`, '_blank');
         }
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
             <Card className="w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col md:flex-row shadow-2xl bg-white rounded-3xl p-0">
-                
+
                 {/* LEFT PANEL - Data Entry */}
                 <div className="flex-1 p-8 overflow-y-auto border-r border-gray-100 space-y-6">
                     <h2 className="text-3xl font-black text-gray-800 uppercase tracking-tighter">
                         {companyToEdit ? 'Edit Account' : 'New Account'}
                     </h2>
-                    
+
                     {/* DEDUPLICATION WARNING */}
                     {isDuplicate && (
                         <div className="bg-red-50 border border-red-200 p-3 rounded-xl flex items-center gap-3 text-red-600 animate-pulse">
@@ -351,20 +454,20 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                     )}
 
                     <div className="space-y-4">
-                        <Input 
-                            label="Company Name" 
-                            value={companyName} 
-                            onChange={e => setCompanyName(e.target.value)} 
+                        <Input
+                            label="Company Name"
+                            value={companyName}
+                            onChange={e => setCompanyName(e.target.value)}
                         />
-                        
+
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">
                                     Tier
                                 </label>
-                                <select 
-                                    value={tier} 
-                                    onChange={e => setTier(e.target.value)} 
+                                <select
+                                    value={tier}
+                                    onChange={e => setTier(e.target.value)}
                                     className="w-full p-2.5 border border-gray-300 rounded-xl bg-white font-black uppercase text-xs"
                                 >
                                     {Object.entries(PRICING_TIERS).map(([key, t]) => (
@@ -374,25 +477,25 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                     ))}
                                 </select>
                             </div>
-                            <Input 
-                                label="Industry" 
-                                value={industry} 
-                                onChange={e => setIndustry(e.target.value)} 
+                            <Input
+                                label="Industry"
+                                value={industry}
+                                onChange={e => setIndustry(e.target.value)}
                             />
                         </div>
-                        
+
                         {/* WEBSITE FIELD WITH OPEN BUTTON */}
                         <div className="flex items-end gap-2">
                             <div className="flex-1">
-                                <Input 
-                                    label="Website" 
-                                    value={website} 
-                                    onChange={e => setWebsite(e.target.value)} 
+                                <Input
+                                    label="Website"
+                                    value={website}
+                                    onChange={e => setWebsite(e.target.value)}
                                 />
                             </div>
                             {website && (
-                                <Button 
-                                    onClick={() => openWebsite(website)} 
+                                <Button
+                                    onClick={() => openWebsite(website)}
                                     variant="secondary"
                                     className="h-[46px] w-[46px] !p-0 flex items-center justify-center bg-blue-50 text-blue-600 border-blue-200"
                                     title="Open Website"
@@ -401,23 +504,23 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                 </Button>
                             )}
                         </div>
-                        
+
                         {/* ADDRESS & GPS SECTION */}
                         <div className="space-y-2">
-                            <Textarea 
-                                label="Address" 
-                                value={address} 
-                                onChange={e => setAddress(e.target.value)} 
-                                rows="2" 
+                            <Textarea
+                                label="Address"
+                                value={address}
+                                onChange={e => setAddress(e.target.value)}
+                                rows="2"
                             />
-                            
+
                             {/* GPS COORDINATES BOX */}
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
                                 <div className="flex justify-between items-center text-[10px] font-black text-slate-500 uppercase">
                                     <span>GPS Site Location</span>
                                     {(latitude || longitude || address) && (
-                                        <button 
-                                            onClick={openInGoogleMaps} 
+                                        <button
+                                            onClick={openInGoogleMaps}
                                             type="button"
                                             className="text-blue-600 hover:underline flex items-center gap-1"
                                         >
@@ -426,51 +529,51 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                     )}
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <Input 
-                                        placeholder="Latitude" 
-                                        value={latitude} 
-                                        onChange={e => setLatitude(e.target.value)} 
-                                        className="bg-white" 
+                                    <Input
+                                        placeholder="Latitude"
+                                        value={latitude}
+                                        onChange={e => setLatitude(e.target.value)}
+                                        className="bg-white"
                                     />
-                                    <Input 
-                                        placeholder="Longitude" 
-                                        value={longitude} 
-                                        onChange={e => setLongitude(e.target.value)} 
-                                        className="bg-white" 
+                                    <Input
+                                        placeholder="Longitude"
+                                        value={longitude}
+                                        onChange={e => setLongitude(e.target.value)}
+                                        className="bg-white"
                                     />
                                 </div>
                             </div>
                         </div>
-                        
+
                         {/* STATUS TOGGLES */}
                         <div className="grid grid-cols-2 gap-2 p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
-                            <Checkbox 
-                                label="Verified" 
-                                checked={isVerified} 
-                                onChange={e => setIsVerified(e.target.checked)} 
+                            <Checkbox
+                                label="Verified"
+                                checked={isVerified}
+                                onChange={e => setIsVerified(e.target.checked)}
                             />
-                            <Checkbox 
-                                label="Intro Emailed" 
-                                checked={isEmailed} 
-                                onChange={e => setIsEmailed(e.target.checked)} 
+                            <Checkbox
+                                label="Intro Emailed"
+                                checked={isEmailed}
+                                onChange={e => setIsEmailed(e.target.checked)}
                             />
-                            <Checkbox 
-                                label="Target Account" 
-                                checked={isTarget} 
-                                onChange={e => setIsTarget(e.target.checked)} 
+                            <Checkbox
+                                label="Target Account"
+                                checked={isTarget}
+                                onChange={e => setIsTarget(e.target.checked)}
                             />
-                            <Checkbox 
-                                label={<span className="text-teal-700 font-bold">Existing Customer</span>} 
-                                checked={isCustomer} 
-                                onChange={e => setIsCustomer(e.target.checked)} 
+                            <Checkbox
+                                label={<span className="text-teal-700 font-bold">Existing Customer</span>}
+                                checked={isCustomer}
+                                onChange={e => setIsCustomer(e.target.checked)}
                             />
                         </div>
-                        
-                        <Textarea 
-                            label="Internal Notes" 
-                            value={notes} 
-                            onChange={e => setNotes(e.target.value)} 
-                            rows="3" 
+
+                        <Textarea
+                            label="Internal Notes"
+                            value={notes}
+                            onChange={e => setNotes(e.target.value)}
+                            rows="3"
                         />
                     </div>
                 </div>
@@ -478,54 +581,54 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                 {/* RIGHT PANEL - Activity & Quotes */}
                 <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden">
                     <div className="flex border-b bg-white">
-                        <button 
-                            onClick={() => setActiveTab('ACTIVITY')} 
+                        <button
+                            onClick={() => setActiveTab('ACTIVITY')}
                             className={`flex-1 py-5 text-[10px] font-black uppercase tracking-widest transition-all ${
-                                activeTab === 'ACTIVITY' 
-                                    ? 'text-orange-600 border-b-4 border-orange-600' 
+                                activeTab === 'ACTIVITY'
+                                    ? 'text-orange-600 border-b-4 border-orange-600'
                                     : 'text-gray-400'
                             }`}
                         >
                             Activity
                         </button>
-                        <button 
-                            onClick={() => setActiveTab('DATA')} 
+                        <button
+                            onClick={() => setActiveTab('DATA')}
                             className={`flex-1 py-5 text-[10px] font-black uppercase tracking-widest transition-all ${
-                                activeTab === 'DATA' 
-                                    ? 'text-blue-600 border-b-4 border-blue-600' 
+                                activeTab === 'DATA'
+                                    ? 'text-blue-600 border-b-4 border-blue-600'
                                     : 'text-gray-400'
                             }`}
                         >
                             Quotes ({relevantQuotes.length})
                         </button>
                         {/* NEW PEOPLE TAB */}
-                        <button 
-                            onClick={() => setActiveTab('PEOPLE')} 
+                        <button
+                            onClick={() => setActiveTab('PEOPLE')}
                             className={`flex-1 py-5 text-[10px] font-black uppercase tracking-widest transition-all ${
-                                activeTab === 'PEOPLE' 
-                                    ? 'text-teal-600 border-b-4 border-teal-600' 
+                                activeTab === 'PEOPLE'
+                                    ? 'text-teal-600 border-b-4 border-teal-600'
                                     : 'text-gray-400'
                             }`}
                         >
                             People ({relatedContacts.length})
                         </button>
                     </div>
-                    
+
                     <div className="flex-1 overflow-y-auto p-6">
                         {activeTab === 'ACTIVITY' && (
                             <div className="space-y-4">
                                 {/* ADD NEW INTERACTION FORM */}
                                 <div className="bg-white p-4 rounded-2xl border shadow-sm space-y-3">
                                     <div className="flex gap-2">
-                                        <Input 
-                                            type="date" 
-                                            value={newLogDate} 
-                                            onChange={e => setNewLogDate(e.target.value)} 
-                                            className="text-xs" 
+                                        <Input
+                                            type="date"
+                                            value={newLogDate}
+                                            onChange={e => setNewLogDate(e.target.value)}
+                                            className="text-xs"
                                         />
-                                        <select 
-                                            value={newLogType} 
-                                            onChange={e => setNewLogType(e.target.value)} 
+                                        <select
+                                            value={newLogType}
+                                            onChange={e => setNewLogType(e.target.value)}
                                             className="text-xs border rounded-xl p-2 flex-1 font-black uppercase bg-gray-50"
                                         >
                                             <option value="Call">Call</option>
@@ -533,12 +636,12 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                             <option value="Email">Email</option>
                                         </select>
                                     </div>
-                                    
+
                                     {/* QUOTE LINKING DROPDOWN */}
                                     {relevantQuotes.length > 0 && (
-                                        <select 
-                                            value={selectedQuoteId} 
-                                            onChange={e => setSelectedQuoteId(e.target.value)} 
+                                        <select
+                                            value={selectedQuoteId}
+                                            onChange={e => setSelectedQuoteId(e.target.value)}
                                             className="w-full text-[10px] border p-2 rounded-xl font-bold uppercase bg-white"
                                         >
                                             <option value="">Attach Quote Link (Optional)</option>
@@ -549,27 +652,27 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                             ))}
                                         </select>
                                     )}
-                                    
+
                                     <div className="flex gap-2">
-                                        <input 
-                                            type="text" 
-                                            value={newLogOutcome} 
-                                            onChange={e => setNewLogOutcome(e.target.value)} 
-                                            placeholder="Summary..." 
-                                            className="flex-1 text-sm p-2.5 border rounded-xl" 
+                                        <input
+                                            type="text"
+                                            value={newLogOutcome}
+                                            onChange={e => setNewLogOutcome(e.target.value)}
+                                            placeholder="Summary..."
+                                            className="flex-1 text-sm p-2.5 border rounded-xl"
                                         />
                                         <Button onClick={handleAddInteraction} variant="primary">
                                             <PlusCircle size={20}/>
                                         </Button>
                                     </div>
                                 </div>
-                                
+
                                 {/* INTERACTION LOG WITH QUOTE LINKS */}
                                 {interactions.map(log => (
                                     <div key={log.id} className="bg-white p-4 rounded-2xl border shadow-sm group relative">
                                         <div className="flex justify-between items-center mb-1">
                                             <span className={`text-[9px] font-black px-2 py-0.5 rounded-full text-white uppercase tracking-widest ${
-                                                log.type === 'Visit' ? 'bg-green-500' : 
+                                                log.type === 'Visit' ? 'bg-green-500' :
                                                 log.type === 'Email' ? 'bg-purple-500' : 'bg-blue-500'
                                             }`}>
                                                 {log.type}
@@ -577,12 +680,12 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                             <span className="text-[10px] text-gray-400 font-bold">{log.date}</span>
                                         </div>
                                         <p className="text-sm text-gray-700 font-bold">{log.outcome}</p>
-                                        
+
                                         {/* LINKED QUOTE BUTTON */}
                                         {log.linkedQuote && (
-                                            <button 
+                                            <button
                                                 type="button"
-                                                onClick={() => onOpenQuote(log.linkedQuote)} 
+                                                onClick={() => onOpenQuote(log.linkedQuote)}
                                                 className="mt-2 flex items-center gap-1.5 text-blue-600 bg-blue-50 p-1.5 rounded-lg border border-blue-100 hover:bg-blue-100 transition-all"
                                             >
                                                 <FileText size={12}/>
@@ -592,9 +695,9 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                                 <ExternalLink size={10}/>
                                             </button>
                                         )}
-                                        
-                                        <button 
-                                            onClick={() => setInteractions(interactions.filter(i => i.id !== log.id))} 
+
+                                        <button
+                                            onClick={() => setInteractions(interactions.filter(i => i.id !== log.id))}
                                             className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                         >
                                             <Trash2 size={12}/>
@@ -613,9 +716,9 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                                     </p>
                                 ) : (
                                     relevantQuotes.map(q => (
-                                        <div 
-                                            key={q.id} 
-                                            onClick={() => onOpenQuote(q)} 
+                                        <div
+                                            key={q.id}
+                                            onClick={() => onOpenQuote(q)}
                                             className="flex justify-between items-center p-4 border rounded-2xl bg-white hover:border-orange-500 cursor-pointer group transition-all"
                                         >
                                             <span className="font-black text-xs text-gray-800">{q.id}</span>
@@ -664,18 +767,18 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
                             </div>
                         )}
                     </div>
-                    
+
                     {/* MODAL FOOTER */}
                     <div className="p-6 bg-white border-t flex justify-end gap-3">
                         <Button onClick={onClose} variant="secondary">Cancel</Button>
-                        <Button 
-                            onClick={() => onSave({ 
-                                companyName, website, industry, address, 
+                        <Button
+                            onClick={() => onSave({
+                                companyName, website, industry, address,
                                 latitude, longitude, // GPS fields
-                                tier, isVerified, isTarget, isEmailed, isCustomer, 
-                                notes, interactions 
-                            })} 
-                            variant="primary" 
+                                tier, isVerified, isTarget, isEmailed, isCustomer,
+                                notes, interactions
+                            })}
+                            variant="primary"
                             disabled={isDuplicate && !companyToEdit}
                         >
                             Save Changes
@@ -690,6 +793,7 @@ const CompanyModal = ({ onClose, onSave, companyToEdit, quotes = [], contacts = 
 // --- 3. Main Page Component ---
 const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpenQuote }) => {
     const [showModal, setShowModal] = useState(false);
+    const [showDedupModal, setShowDedupModal] = useState(false); // NEW STATE FOR DUPE FINDER
     const [editingCompany, setEditingCompany] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [activeFilter, setActiveFilter] = useState('ALL');
@@ -698,8 +802,8 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
     const [showProximitySearch, setShowProximitySearch] = useState(false);
     const fileInputRef = useRef(null);
 
-    const activeCompanies = useMemo(() => 
-        (companies || []).filter(c => !c.isDeleted), 
+    const activeCompanies = useMemo(() =>
+        (companies || []).filter(c => !c.isDeleted),
         [companies]
     );
 
@@ -713,9 +817,9 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
 
     const filtered = useMemo(() => {
         const term = searchTerm.toLowerCase();
-        let list = activeCompanies.filter(c => 
-            c.companyName.toLowerCase().includes(term) || 
-            (c.industry || '').toLowerCase().includes(term) || 
+        let list = activeCompanies.filter(c =>
+            c.companyName.toLowerCase().includes(term) ||
+            (c.industry || '').toLowerCase().includes(term) ||
             (c.notes || '').toLowerCase().includes(term)
         );
         if (activeFilter === 'TARGETS') list = list.filter(c => c.isTarget);
@@ -725,8 +829,8 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
         return list;
     }, [activeCompanies, searchTerm, activeFilter]);
 
-    const checkHasQuotes = (compName) => 
-        quotes.some(q => 
+    const checkHasQuotes = (compName) =>
+        quotes.some(q =>
             (q.customer?.name || '').toLowerCase().includes(compName?.toLowerCase().trim())
         );
 
@@ -765,7 +869,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
     const handleBulkDelete = async () => {
         if (!confirm(`Move ${selectedIds.size} accounts to Trash?`)) return;
         const batch = writeBatch(db);
-        selectedIds.forEach(id => 
+        selectedIds.forEach(id =>
             batch.update(doc(db, "users", user.uid, "companies", id), { isDeleted: true })
         );
         await batch.commit();
@@ -785,7 +889,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                 const batch = writeBatch(db);
                 let addedCount = 0;
                 let skippedCount = 0;
-                
+
                 // Create lookup maps for fast checking
                 const normalize = (str) => str ? str.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
                 const existingNames = new Set(activeCompanies.map(c => normalize(c.companyName)));
@@ -811,34 +915,34 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                     if (!isNameDuplicate && !isLocDuplicate) {
                         const ref = doc(collection(db, "users", user.uid, "companies"));
                         batch.set(ref, {
-                            companyName: name, 
+                            companyName: name,
                             industry: row.Industry || '',
                             address: row.Address || '',
                             website: row.Website || '',
                             latitude: row.Latitude || '',
                             longitude: row.Longitude || '',
                             tier: row.Tier || 'STANDARD',
-                            isCustomer: row.IsCustomer === 'Yes' || row.IsCustomer === 'TRUE', 
+                            isCustomer: row.IsCustomer === 'Yes' || row.IsCustomer === 'TRUE',
                             isTarget: row.IsTarget === 'Yes' || row.IsTarget === 'TRUE',
                             isVerified: row.IsVerified === 'Yes' || row.IsVerified === 'TRUE',
                             isEmailed: false,
                             interactions: [],
                             createdAt: serverTimestamp()
                         });
-                        
+
                         // Add to temp sets to prevent self-duplicates in the same file
                         existingNames.add(cleanName);
                         if (cleanLoc) existingLocs.add(cleanLoc);
-                        
+
                         addedCount++;
                     } else {
                         skippedCount++;
                         console.log(`Skipped duplicate: ${name}`);
                     }
                 });
-                
+
                 if (addedCount > 0) await batch.commit();
-                
+
                 setIsImporting(false);
                 if (fileInputRef.current) fileInputRef.current.value = '';
                 alert(`Import Complete!\n✅ Added: ${addedCount}\n⛔ Skipped (duplicates): ${skippedCount}`);
@@ -859,33 +963,45 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
 
     const handleSave = async (data) => {
         if (!user) return;
-        
+
         if (editingCompany) {
             await updateDoc(
-                doc(db, "users", user.uid, "companies", editingCompany.id), 
+                doc(db, "users", user.uid, "companies", editingCompany.id),
                 { ...data, lastModified: serverTimestamp() }
             );
         } else {
             await addDoc(
-                collection(db, "users", user.uid, "companies"), 
+                collection(db, "users", user.uid, "companies"),
                 { ...data, createdAt: serverTimestamp() }
             );
         }
-        
+
         setShowModal(false);
         setEditingCompany(null);
+    };
+
+    // --- NEW: HANDLE DUPLICATE RESOLUTION ---
+    const handleResolveDuplicates = async (idsToDelete) => {
+        if (!user || idsToDelete.length === 0) return;
+
+        const batch = writeBatch(db);
+        idsToDelete.forEach(id => {
+            batch.update(doc(db, "users", user.uid, "companies", id), { isDeleted: true });
+        });
+
+        await batch.commit();
     };
 
     return (
         <div className="w-full space-y-6">
             {/* COMPANY MODAL */}
             {showModal && (
-                <CompanyModal 
-                    onClose={() => { setShowModal(false); setEditingCompany(null); }} 
-                    onSave={handleSave} 
-                    companyToEdit={editingCompany} 
-                    quotes={quotes} 
-                    contacts={contacts} 
+                <CompanyModal
+                    onClose={() => { setShowModal(false); setEditingCompany(null); }}
+                    onSave={handleSave}
+                    companyToEdit={editingCompany}
+                    quotes={quotes}
+                    contacts={contacts}
                     onOpenQuote={onOpenQuote}
                     existingCompanies={activeCompanies}
                 />
@@ -903,45 +1019,53 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                     onClose={() => setShowProximitySearch(false)}
                 />
             )}
-            
+
+            {/* DUPLICATE RESOLVER MODAL (NEW) */}
+            {showDedupModal && (
+                <DuplicateResolver
+                    companies={activeCompanies}
+                    onClose={() => setShowDedupModal(false)}
+                    onResolve={handleResolveDuplicates}
+                />
+            )}
+
             {/* STAT BADGES */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatBadge 
-                    icon={Building} 
-                    label="Total Directory" 
-                    count={stats.total} 
-                    total={stats.total} 
-                    color="gray" 
-                    active={activeFilter === 'ALL'} 
-                    onClick={() => setActiveFilter('ALL')} 
+                <StatBadge
+                    icon={Building}
+                    label="Total Directory"
+                    count={stats.total}
+                    total={stats.total}
+                    color="gray"
+                    active={activeFilter === 'ALL'}
+                    onClick={() => setActiveFilter('ALL')}
                 />
-                <StatBadge 
-                    icon={Handshake} 
-                    label="Existing Customers" 
-                    count={stats.customers} 
-                    total={stats.total} 
-                    color="teal" 
-                    active={activeFilter === 'CUSTOMERS'} 
-                    onClick={() => setActiveFilter('CUSTOMERS')} 
+                <StatBadge
+                    icon={Handshake}
+                    label="Existing Customers"
+                    count={stats.customers}
+                    total={stats.total}
+                    color="teal"
+                    active={activeFilter === 'CUSTOMERS'}
+                    onClick={() => setActiveFilter('CUSTOMERS')}
                 />
-                <StatBadge 
-                    icon={CheckSquare} 
-                    label="Targets" 
-                    count={stats.targets} 
-                    total={stats.total} 
-                    color="purple" 
-                    active={activeFilter === 'TARGETS'} 
-                    onClick={() => setActiveFilter('TARGETS')} 
+                <StatBadge
+                    icon={CheckSquare}
+                    label="Targets"
+                    count={stats.targets}
+                    total={stats.total}
+                    color="purple"
+                    active={activeFilter === 'TARGETS'}
+                    onClick={() => setActiveFilter('TARGETS')}
                 />
-                {/* --- NEW ESCO STAT BADGE --- */}
-                <StatBadge 
-                    icon={Zap} 
-                    label="ESCO Projects" 
-                    count={stats.esco} 
-                    total={stats.total} 
-                    color="yellow" 
-                    active={activeFilter === 'ESCO'} 
-                    onClick={() => setActiveFilter('ESCO')} 
+                <StatBadge
+                    icon={Zap}
+                    label="ESCO Projects"
+                    count={stats.esco}
+                    total={stats.total}
+                    color="yellow"
+                    active={activeFilter === 'ESCO'}
+                    onClick={() => setActiveFilter('ESCO')}
                 />
             </div>
 
@@ -949,36 +1073,46 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
             <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <h2 className="text-2xl font-black text-gray-800 uppercase tracking-tighter">
                     Directory ({filtered.length})
-                    <button 
+                    <button
                         onClick={() => setSelectedIds(
-                            selectedIds.size === filtered.length 
-                                ? new Set() 
+                            selectedIds.size === filtered.length
+                                ? new Set()
                                 : new Set(filtered.map(c => c.id))
-                        )} 
+                        )}
                         className="text-xs font-bold text-orange-600 underline ml-2"
                     >
                         {selectedIds.size === filtered.length ? 'Deselect' : 'Select'} All
                     </button>
                 </h2>
                 <div className="flex gap-2 w-full md:w-auto flex-wrap">
-                    <Button 
-                        onClick={() => setShowProximitySearch(true)} 
+                    {/* NEW: CLEAN DUPLICATES BUTTON */}
+                    <Button
+                        onClick={() => setShowDedupModal(true)}
+                        variant="secondary"
+                        className="bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
+                    >
+                        <Copy size={16} className="mr-1"/>
+                        Clean Dups
+                    </Button>
+
+                    <Button
+                        onClick={() => setShowProximitySearch(true)}
                         variant="secondary"
                         className="bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100"
                     >
-                        <Navigation size={16} className="mr-1"/> 
+                        <Navigation size={16} className="mr-1"/>
                         Nearby
                     </Button>
-                    <Button 
-                        onClick={() => fileInputRef.current.click()} 
-                        variant="secondary" 
+                    <Button
+                        onClick={() => fileInputRef.current.click()}
+                        variant="secondary"
                         disabled={isImporting}
                     >
-                        <Upload size={16} className="mr-1"/> 
+                        <Upload size={16} className="mr-1"/>
                         {isImporting ? 'Importing...' : 'Import CSV'}
                     </Button>
-                    <Button 
-                        onClick={() => { setEditingCompany(null); setShowModal(true); }} 
+                    <Button
+                        onClick={() => { setEditingCompany(null); setShowModal(true); }}
                         variant="primary"
                     >
                         <Plus size={16} className="mr-1"/> New Account
@@ -986,21 +1120,21 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                 </div>
             </div>
 
-            <input 
-                type="file" 
-                ref={fileInputRef} 
-                onChange={handleFileChange} 
-                accept=".csv" 
-                className="hidden" 
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept=".csv"
+                className="hidden"
             />
 
             {/* SEARCH */}
             <div className="relative">
-                <Input 
-                    placeholder="Search accounts, sector, or notes..." 
-                    value={searchTerm} 
-                    onChange={e => setSearchTerm(e.target.value)} 
-                    className="pl-10" 
+                <Input
+                    placeholder="Search accounts, sector, or notes..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="pl-10"
                 />
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             </div>
@@ -1008,22 +1142,22 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
             {/* COMPANY CARDS GRID */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filtered.map(c => (
-                    <Card 
-                        key={c.id} 
+                    <Card
+                        key={c.id}
                         className={`p-5 rounded-2xl border-gray-100 hover:border-orange-400 transition-all bg-white relative ${
                             selectedIds.has(c.id) ? 'ring-2 ring-orange-500 border-orange-500 bg-orange-50' : ''
                         }`}
                     >
                         {/* CHECKBOX */}
                         <div className="absolute top-4 left-4 z-10">
-                            <input 
-                                type="checkbox" 
-                                checked={selectedIds.has(c.id)} 
-                                onChange={() => toggleSelection(c.id)} 
-                                className="w-5 h-5 text-orange-600 rounded border-gray-300 focus:ring-orange-500 cursor-pointer" 
+                            <input
+                                type="checkbox"
+                                checked={selectedIds.has(c.id)}
+                                onChange={() => toggleSelection(c.id)}
+                                className="w-5 h-5 text-orange-600 rounded border-gray-300 focus:ring-orange-500 cursor-pointer"
                             />
                         </div>
-                        
+
                         <div className="pl-8">
                             <div className="flex justify-between items-start mb-4">
                                 <div>
@@ -1034,28 +1168,27 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                                         {c.industry || 'Account'}
                                     </p>
                                 </div>
-                                <button 
-                                    onClick={() => { setEditingCompany(c); setShowModal(true); }} 
+                                <button
+                                    onClick={() => { setEditingCompany(c); setShowModal(true); }}
                                     className="p-2 text-gray-300 hover:text-indigo-600"
                                 >
                                     <Edit size={16}/>
                                 </button>
                             </div>
-                            
+
                             {/* ACTION BUTTONS */}
                             <div className="flex gap-2 mb-4">
-                                <Button 
-                                    onClick={() => { setEditingCompany(c); setShowModal(true); }} 
-                                    variant="secondary" 
+                                <Button
+                                    onClick={() => { setEditingCompany(c); setShowModal(true); }}
+                                    variant="secondary"
                                     className="flex-1 !py-2 text-[9px] font-black uppercase tracking-widest"
                                 >
                                     View History
                                 </Button>
-                                
-                                {/* NEW: WEBSITE BUTTON ON CARD */}
+
                                 {c.website && (
-                                    <button 
-                                        onClick={() => openWebsite(c.website)} 
+                                    <button
+                                        onClick={() => openWebsite(c.website)}
                                         className="px-3 border border-gray-200 rounded-xl hover:bg-blue-50 hover:border-blue-300 text-blue-600 transition-all"
                                         title="Visit Website"
                                     >
@@ -1063,13 +1196,12 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                                     </button>
                                 )}
 
-                                {/* MAP BUTTON (only if GPS exists) */}
                                 {c.latitude && c.longitude && (
-                                    <button 
+                                    <button
                                         onClick={() => window.open(
-                                            `https://www.google.com/maps?q=${c.latitude},${c.longitude}`, 
+                                            `http://googleusercontent.com/maps.google.com/maps?daddr=${c.latitude},${c.longitude}`,
                                             '_blank'
-                                        )} 
+                                        )}
                                         className="px-3 border border-gray-200 rounded-xl hover:bg-orange-50 hover:border-orange-300 text-orange-600 transition-all"
                                         title="Open in Google Maps"
                                     >
@@ -1078,7 +1210,7 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
                                 )}
                             </div>
                         </div>
-                        
+
                         {/* STATUS INDICATORS */}
                         <div className="pt-3 border-t grid grid-cols-4 gap-1 text-[8px] text-gray-500 text-center font-black">
                             <div className={`p-1 rounded uppercase ${c.isCustomer ? 'bg-teal-50 text-teal-700' : ''}`}>
@@ -1106,29 +1238,29 @@ const CompaniesPage = ({ companies = [], user, quotes = [], contacts = [], onOpe
             {selectedIds.size > 0 && (
                 <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-in fade-in slide-in-from-bottom-4">
                     <span className="font-bold text-sm">{selectedIds.size} Selected</span>
-                    <button 
-                        onClick={handleBulkEmail} 
+                    <button
+                        onClick={handleBulkEmail}
                         className="flex items-center gap-2 hover:text-orange-400 transition-colors"
                     >
                         <Send size={18} />
                         <span className="text-sm font-bold">Email</span>
                     </button>
-                    <button 
-                        onClick={handleBulkExport} 
+                    <button
+                        onClick={handleBulkExport}
                         className="flex items-center gap-2 hover:text-green-400 transition-colors"
                     >
                         <Download size={18} />
                         <span className="text-sm font-bold">Export</span>
                     </button>
-                    <button 
-                        onClick={handleBulkDelete} 
+                    <button
+                        onClick={handleBulkDelete}
                         className="flex items-center gap-2 hover:text-red-400 transition-colors"
                     >
                         <Trash2 size={18} />
                         <span className="text-sm font-bold">Delete</span>
                     </button>
-                    <button 
-                        onClick={() => setSelectedIds(new Set())} 
+                    <button
+                        onClick={() => setSelectedIds(new Set())}
                         className="ml-2 text-gray-400 hover:text-white"
                     >
                         <X size={18}/>
