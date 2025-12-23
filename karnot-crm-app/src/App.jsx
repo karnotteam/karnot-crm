@@ -49,7 +49,7 @@ import AssetsPage from './pages/AssetsPage.jsx';
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
 import ManagementAccounts from './pages/ManagementAccounts.jsx';
-import PayrollManager from './pages/PayrollManager.jsx'; // Corrected Path
+import PayrollManager from './pages/PayrollManager.jsx'; 
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -302,6 +302,7 @@ export default function App() {
     const [ledgerEntries, setLedgerEntries] = useState([]); 
     const [manpowerLogs, setManpowerLogs] = useState([]);
     const [serviceInvoices, setServiceInvoices] = useState([]);
+    const [serviceContracts, setServiceContracts] = useState([]); // NEW
     
     // --- Territory Management Data ---
     const [territories, setTerritories] = useState([]);
@@ -337,7 +338,7 @@ export default function App() {
     }, []);
 
     // ------------------------------------------
-    // REAL-TIME DATA STREAM (THE CRITICAL DATA PIPELINE)
+    // REAL-TIME DATA STREAM
     // ------------------------------------------
     useEffect(() => {
         if (user) {
@@ -384,32 +385,42 @@ export default function App() {
                 query(collection(db, "users", user.uid, "service_invoices"), orderBy("createdAt", "desc")), 
                 (snap) => setServiceInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
+
+            // 8. Service Contracts (NEW)
+            const unsubContracts = onSnapshot(
+                query(collection(db, "users", user.uid, "service_contracts"), orderBy("createdAt", "desc")),
+                (snap) => setServiceContracts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (error) => {
+                    console.warn("Service contracts collection not initialized yet:", error.code);
+                    setServiceContracts([]);
+                }
+            );
             
-            // 8. Territories
+            // 9. Territories
             const unsubTerritories = onSnapshot(
                 query(collection(db, "users", user.uid, "territories"), orderBy("name", "asc")), 
                 (snap) => setTerritories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 9. Agents
+            // 10. Agents
             const unsubAgents = onSnapshot(
                 query(collection(db, "users", user.uid, "agents"), orderBy("name", "asc")), 
                 (snap) => setAgents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
-            // 10. Appointments
+            // 11. Appointments
             const unsubAppointments = onSnapshot(
                 query(collection(db, "users", user.uid, "appointments"), orderBy("appointmentDate", "asc")), 
                 (snap) => {
                     setAppointments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                    setLoadingData(false); // Only unset loading after the last critical fetch
+                    setLoadingData(false);
                 }
             );
             
             return () => { 
                 unsubQuotes(); unsubOpps(); unsubCompanies(); unsubContacts(); 
-                unsubLedger(); unsubManpower(); unsubServices(); unsubTerritories(); 
-                unsubAgents(); unsubAppointments();
+                unsubLedger(); unsubManpower(); unsubServices(); unsubContracts();
+                unsubTerritories(); unsubAgents(); unsubAppointments();
             };
         } else {
             setLoadingData(false);
@@ -544,7 +555,7 @@ export default function App() {
                     />
                 )}
 
-                {/* 4. OPERATIONS MODULES (NEW) */}
+                {/* 4. OPERATIONS MODULES */}
                 {activeView === 'installEstimator' && (
                     <InstallEstimator quotes={quotes} user={user} />
                 )}
