@@ -1,625 +1,423 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-    Wrench, Truck, Users, Save, FileText, Calculator, 
-    HardHat, ArrowRight, DollarSign, Plus, X, Zap
+    FileText, Plus, Trash2, Edit, Save, Printer, 
+    CheckCircle, AlertCircle, Calendar, User, MapPin, 
+    Search, ArrowLeft, DollarSign, Briefcase
 } from 'lucide-react';
-import { Card, Button, Input, Textarea, Section } from '../data/constants.jsx';
+import { Card, Button, Input, Textarea } from '../data/constants.jsx';
 import { db } from '../firebase';
-import { collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { 
+    collection, addDoc, query, orderBy, onSnapshot, 
+    doc, updateDoc, deleteDoc, serverTimestamp 
+} from "firebase/firestore";
 
 const ServiceInvoice = ({ companies = [], user }) => {
-    const [serviceInvoices, setServiceInvoices] = useState([]);
-    const [activeTab, setActiveTab] = useState('new'); // 'new' or 'list'
+    const [invoices, setInvoices] = useState([]);
+    const [view, setView] = useState('list'); // 'list' or 'form'
     const [loading, setLoading] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
 
-    // --- SERVICE INVOICE STATE ---
-    const [invoice, setInvoice] = useState({
-        // Customer Info
-        customerName: '',
-        customerAddress: '',
-        customerContact: '',
-        
-        // Invoice Details
-        invoiceNumber: '',
-        invoiceDate: new Date().toISOString().split('T')[0],
-        
-        // Service Type
-        serviceType: 'MAINTENANCE', // MAINTENANCE, REPAIR, INSTALLATION, CONSULTATION
-        
-        // Line Items
-        lineItems: [],
-        
-        // Status
-        status: 'DRAFT' // DRAFT, INVOICED, PAID
-    });
+    // --- FORM STATE ---
+    const initialFormState = {
+        invoiceNumber: `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        status: 'DRAFT', // DRAFT, SENT, PAID, OVERDUE
+        dateIssued: new Date().toISOString().split('T')[0],
+        dateDue: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
+        clientId: '',
+        clientName: '',
+        clientAddress: '',
+        clientEmail: '',
+        notes: 'Thank you for your business. Please make checks payable to Karnot Energy Solutions.',
+        items: [
+            { id: 1, description: 'Service Call - General Maintenance', quantity: 1, rate: 2500 }
+        ],
+        subtotal: 2500,
+        tax: 300,
+        total: 2800
+    };
 
-    // Single line item form
-    const [newLineItem, setNewLineItem] = useState({
-        description: '',
-        quantity: 1,
-        unitPrice: 0,
-        unit: 'SERVICE'
-    });
+    const [formData, setFormData] = useState(initialFormState);
 
-    // --- LOAD SERVICE INVOICES ---
+    // --- 1. DATA LISTENER ---
     useEffect(() => {
         if (!user) return;
-        
-        const q = query(
-            collection(db, "users", user.uid, "service_invoices"), 
-            orderBy("createdAt", "desc")
-        );
-        
-        const unsub = onSnapshot(q, (snap) => {
-            setServiceInvoices(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const q = query(collection(db, "users", user.uid, "service_invoices"), orderBy("dateIssued", "desc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            setInvoices(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
-        
-        return () => unsub();
+        return () => unsubscribe();
     }, [user]);
 
-    // --- AUTO-GENERATE INVOICE NUMBER ---
+    // --- 2. CALCULATIONS ---
     useEffect(() => {
-        if (serviceInvoices.length > 0) {
-            const lastNum = parseInt(serviceInvoices[0].invoiceNumber?.replace('SI-', '') || '3000');
-            setInvoice(prev => ({ ...prev, invoiceNumber: `SI-${lastNum + 1}` }));
-        } else {
-            setInvoice(prev => ({ ...prev, invoiceNumber: 'SI-3001' }));
-        }
-    }, [serviceInvoices]);
+        const sub = formData.items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.rate)), 0);
+        const tx = sub * 0.12; // 12% VAT
+        const tot = sub + tx;
+        setFormData(prev => ({ ...prev, subtotal: sub, tax: tx, total: tot }));
+    }, [formData.items]);
 
-    // --- CALCULATIONS ---
-    const totals = useMemo(() => {
-        const subtotal = invoice.lineItems.reduce((sum, item) => {
-            return sum + (item.quantity * item.unitPrice);
-        }, 0);
-        
-        const vat = subtotal * 0.12; // 12% VAT for Non-BOI
-        const total = subtotal + vat;
-        
-        return { subtotal, vat, total };
-    }, [invoice.lineItems]);
-
-    // --- HANDLERS ---
-    const handleAddLineItem = () => {
-        if (!newLineItem.description || newLineItem.unitPrice <= 0) {
-            return alert("Please enter description and unit price");
-        }
-        
-        setInvoice({
-            ...invoice,
-            lineItems: [...invoice.lineItems, { ...newLineItem, id: Date.now() }]
-        });
-        
-        setNewLineItem({
-            description: '',
-            quantity: 1,
-            unitPrice: 0,
-            unit: 'SERVICE'
-        });
-    };
-
-    const handleRemoveLineItem = (id) => {
-        setInvoice({
-            ...invoice,
-            lineItems: invoice.lineItems.filter(item => item.id !== id)
-        });
-    };
-
-    const handleSelectCompany = (e) => {
-        const companyId = e.target.value;
-        const company = companies.find(c => c.id === companyId);
+    // --- 3. HANDLERS ---
+    const handleClientSelect = (e) => {
+        const selectedId = e.target.value;
+        const company = companies.find(c => c.id === selectedId);
         if (company) {
-            setInvoice({
-                ...invoice,
-                customerName: company.companyName,
-                customerAddress: company.address || '',
-                customerContact: company.email || company.phone || ''
-            });
+            setFormData(prev => ({
+                ...prev,
+                clientId: company.id,
+                clientName: company.companyName,
+                clientAddress: company.address || '',
+                clientEmail: company.email || '' // Assuming email exists in company
+            }));
         }
     };
 
-    const handleSaveInvoice = async () => {
-        if (!invoice.customerName || invoice.lineItems.length === 0) {
-            return alert("Please add customer details and at least one line item");
-        }
-        
+    const handleAddItem = () => {
+        setFormData(prev => ({
+            ...prev,
+            items: [...prev.items, { id: Date.now(), description: '', quantity: 1, rate: 0 }]
+        }));
+    };
+
+    const handleRemoveItem = (itemId) => {
+        setFormData(prev => ({
+            ...prev,
+            items: prev.items.filter(i => i.id !== itemId)
+        }));
+    };
+
+    const handleItemChange = (itemId, field, value) => {
+        setFormData(prev => ({
+            ...prev,
+            items: prev.items.map(i => i.id === itemId ? { ...i, [field]: value } : i)
+        }));
+    };
+
+    const handleSave = async () => {
+        if (!user) return;
         setLoading(true);
         try {
-            const invoiceData = {
-                ...invoice,
-                subtotal: totals.subtotal,
-                vat: totals.vat,
-                total: totals.total,
-                boiActivity: false, // NON-BOI ACTIVITY
-                createdAt: serverTimestamp(),
-                lastModified: serverTimestamp()
-            };
-            
-            if (invoice.id) {
-                // Update existing
-                await updateDoc(doc(db, "users", user.uid, "service_invoices", invoice.id), invoiceData);
+            if (formData.id) {
+                // Update
+                await updateDoc(doc(db, "users", user.uid, "service_invoices", formData.id), {
+                    ...formData,
+                    lastModified: serverTimestamp()
+                });
             } else {
-                // Create new
-                await addDoc(collection(db, "users", user.uid, "service_invoices"), invoiceData);
+                // Create
+                await addDoc(collection(db, "users", user.uid, "service_invoices"), {
+                    ...formData,
+                    createdAt: serverTimestamp()
+                });
             }
-            
-            alert("Service Invoice Saved!");
-            resetForm();
-            setActiveTab('list');
+            setView('list');
+            setFormData(initialFormState);
         } catch (error) {
-            console.error(error);
-            alert("Error saving invoice");
-        } finally {
-            setLoading(false);
+            console.error("Error saving invoice:", error);
+            alert("Failed to save invoice.");
+        }
+        setLoading(false);
+    };
+
+    const handleDelete = async (id) => {
+        if (window.confirm("Are you sure you want to permanently delete this invoice?")) {
+            try {
+                await deleteDoc(doc(db, "users", user.uid, "service_invoices", id));
+            } catch (error) {
+                console.error("Error deleting:", error);
+                alert("Failed to delete.");
+            }
         }
     };
 
-    const resetForm = () => {
-        setInvoice({
-            customerName: '',
-            customerAddress: '',
-            customerContact: '',
-            invoiceNumber: `SI-${parseInt(invoice.invoiceNumber.replace('SI-', '')) + 1}`,
-            invoiceDate: new Date().toISOString().split('T')[0],
-            serviceType: 'MAINTENANCE',
-            lineItems: [],
-            status: 'DRAFT'
-        });
+    const handleEdit = (invoice) => {
+        setFormData(invoice);
+        setView('form');
     };
 
-    const handleEditInvoice = (inv) => {
-        setInvoice(inv);
-        setActiveTab('new');
-    };
+    const formatMoney = (amount) => `₱${Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
-    const handleUpdateStatus = async (invId, newStatus) => {
-        try {
-            await updateDoc(doc(db, "users", user.uid, "service_invoices", invId), {
-                status: newStatus,
-                lastModified: serverTimestamp()
-            });
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-    // --- GENERATE PDF ---
-    const generateInvoicePDF = (inv = invoice) => {
-        const logoURL = "https://img1.wsimg.com/isteam/ip/cb1de239-c2b8-4674-b57d-5ae86a72feb1/Asset%2010%404x.png/:/rs=w:400,cg:true,m";
-        
-        const html = `
-        <html>
-        <head>
-            <title>Service Invoice - ${inv.invoiceNumber}</title>
-            <style>
-                body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
-                .header { display: flex; justify-content: space-between; border-bottom: 3px solid #f59e0b; padding-bottom: 20px; margin-bottom: 30px; }
-                .invoice-title { color: #f59e0b; font-size: 28px; font-weight: bold; text-transform: uppercase; }
-                .section { margin-bottom: 20px; }
-                .label { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; }
-                .value { font-size: 14px; margin-top: 3px; }
-                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th { text-align: left; background: #fef3c7; padding: 12px; font-size: 11px; border-bottom: 2px solid #fbbf24; }
-                td { border-bottom: 1px solid #eee; padding: 12px; font-size: 13px; }
-                .totals { float: right; width: 350px; margin-top: 30px; }
-                .totals-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
-                .total-final { background: #fef3c7; padding: 15px; margin-top: 10px; border-radius: 8px; font-size: 18px; font-weight: bold; }
-                .non-boi-badge { background: #dc2626; color: white; padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: bold; display: inline-block; }
-                .footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 11px; color: #666; }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <div>
-                    <img src="${logoURL}" width="140" />
-                    <p style="font-size:11px; margin-top:10px; line-height: 1.6;">
-                        <strong>Karnot Energy Solutions Inc.</strong><br>
-                        Mapandan, Pangasinan<br>
-                        TIN: [Your TIN]
-                    </p>
-                </div>
-                <div style="text-align:right;">
-                    <div class="invoice-title">Service Invoice</div>
-                    <p style="margin-top: 5px;"><span class="non-boi-badge">NON-BOI ACTIVITY</span></p>
-                    <p style="margin-top: 15px; font-size: 13px;">
-                        <strong>Invoice No:</strong> ${inv.invoiceNumber}<br>
-                        <strong>Date:</strong> ${new Date(inv.invoiceDate).toLocaleDateString()}<br>
-                        <strong>Service Type:</strong> ${inv.serviceType}
-                    </p>
-                </div>
-            </div>
-
-            <div class="section">
-                <div class="label">Bill To:</div>
-                <div class="value">
-                    <strong>${inv.customerName}</strong><br>
-                    ${inv.customerAddress}<br>
-                    ${inv.customerContact}
-                </div>
-            </div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>Description</th>
-                        <th style="text-align:center; width: 100px;">Quantity</th>
-                        <th style="text-align:right; width: 120px;">Unit Price</th>
-                        <th style="text-align:right; width: 120px;">Amount (PHP)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${inv.lineItems.map(item => `
-                        <tr>
-                            <td>${item.description}</td>
-                            <td style="text-align:center;">${item.quantity} ${item.unit}</td>
-                            <td style="text-align:right;">${item.unitPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                            <td style="text-align:right; font-weight: bold;">${(item.quantity * item.unitPrice).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-
-            <div class="totals">
-                <div class="totals-row">
-                    <span>Subtotal:</span>
-                    <span>₱${(inv.subtotal || totals.subtotal).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                </div>
-                <div class="totals-row" style="color: #dc2626;">
-                    <span>VAT (12%):</span>
-                    <span>₱${(inv.vat || totals.vat).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                </div>
-                <div class="total-final">
-                    <div style="display: flex; justify-content: space-between;">
-                        <span>TOTAL AMOUNT DUE:</span>
-                        <span style="color: #f59e0b;">₱${(inv.total || totals.total).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                    </div>
-                </div>
-            </div>
-
-            <div style="clear: both;"></div>
-
-            <div class="footer">
-                <p><strong>Payment Terms:</strong> Net 30 days from invoice date</p>
-                <p><strong>Bank Details:</strong> [Your Bank Account Details]</p>
-                <p style="margin-top: 20px; font-size: 10px; color: #999;">
-                    <strong>Tax Notice:</strong> This invoice covers Non-BOI registered activities and is subject to regular 12% VAT and 25% corporate income tax.
-                </p>
-            </div>
-
-            <div style="margin-top: 60px; display: flex; justify-content: space-between;">
-                <div style="width: 45%;">
-                    <div class="label">Prepared By:</div>
-                    <div style="margin-top:40px; border-top: 1px solid #ccc; padding-top: 5px;">Authorized Signature</div>
-                </div>
-                <div style="width: 45%;">
-                    <div class="label">Received By:</div>
-                    <div style="margin-top:40px; border-top: 1px solid #ccc; padding-top: 5px;">Customer Signature over Printed Name</div>
-                </div>
-            </div>
-        </body>
-        </html>
-        `;
-
-        const win = window.open("", "Print", "width=800,height=900");
-        win.document.write(html);
-        win.document.close();
-    };
-
-    const formatMoney = (val) => `₱${Number(val).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-
+    // --- RENDER ---
     return (
-        <div className="max-w-7xl mx-auto pb-20 space-y-8">
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row justify-between items-center bg-white p-8 rounded-[40px] shadow-sm border border-gray-100">
-                <div className="flex items-center gap-4">
-                    <div className="p-4 bg-orange-100 text-orange-600 rounded-3xl">
-                        <Wrench size={32} />
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-black text-gray-800 uppercase tracking-tighter">Service Invoicing</h1>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Non-BOI Activities • Regular HVAC Services</p>
-                    </div>
+        <div className="min-h-screen bg-gray-50 pb-20">
+            {/* Header */}
+            <div className="bg-white border-b border-gray-200 px-8 py-5 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+                <div>
+                    <h1 className="text-2xl font-black text-gray-800 uppercase tracking-tight">Service Invoices</h1>
+                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Billing & Receivables</p>
                 </div>
-                
-                <div className="flex gap-2 bg-gray-50 p-1 rounded-xl border border-gray-200 mt-4 md:mt-0">
-                    <button 
-                        onClick={() => setActiveTab('new')}
-                        className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
-                            activeTab === 'new' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-400'
-                        }`}
-                    >
-                        <Plus size={14} className="inline mr-1"/> New Invoice
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('list')}
-                        className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${
-                            activeTab === 'list' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-400'
-                        }`}
-                    >
-                        <FileText size={14} className="inline mr-1"/> Invoice List ({serviceInvoices.length})
-                    </button>
+                <div className="flex gap-3">
+                    {view === 'form' && (
+                        <Button onClick={() => setView('list')} variant="secondary">
+                            <ArrowLeft size={16} className="mr-2"/> Cancel
+                        </Button>
+                    )}
+                    {view === 'list' && (
+                        <Button onClick={() => { setFormData(initialFormState); setView('form'); }} variant="primary" className="bg-orange-600 border-orange-600">
+                            <Plus size={16} className="mr-2"/> New Invoice
+                        </Button>
+                    )}
                 </div>
             </div>
 
-            {/* TAB CONTENT */}
-            {activeTab === 'new' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* LEFT: INVOICE FORM */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* CUSTOMER DETAILS */}
-                        <Card className="p-6">
-                            <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 flex items-center gap-2">
-                                <Users size={14}/> Customer Details
-                            </h3>
-                            
-                            <div className="mb-4">
-                                <label className="text-xs font-bold text-gray-500">Quick Select from Companies</label>
-                                <select 
-                                    onChange={handleSelectCompany}
-                                    className="w-full mt-1 p-3 border border-gray-200 rounded-lg font-bold text-sm"
-                                >
-                                    <option value="">-- Select Existing Company --</option>
-                                    {companies.map(c => (
-                                        <option key={c.id} value={c.id}>{c.companyName}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <Input 
-                                    label="Customer Name" 
-                                    value={invoice.customerName}
-                                    onChange={e => setInvoice({...invoice, customerName: e.target.value})}
-                                    placeholder="Company or Individual"
-                                />
-                                <Input 
-                                    label="Contact Info" 
-                                    value={invoice.customerContact}
-                                    onChange={e => setInvoice({...invoice, customerContact: e.target.value})}
-                                    placeholder="Email or Phone"
+            <div className="p-8 max-w-6xl mx-auto">
+                {/* VIEW: LIST */}
+                {view === 'list' && (
+                    <Card className="border-0 shadow-lg overflow-hidden">
+                        <div className="p-4 border-b border-gray-100 bg-gray-50 flex gap-4">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Search by client or invoice #..." 
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
                                 />
                             </div>
-                            
-                            <Textarea 
-                                label="Address"
-                                rows="2"
-                                value={invoice.customerAddress}
-                                onChange={e => setInvoice({...invoice, customerAddress: e.target.value})}
-                                placeholder="Customer address..."
-                            />
-                        </Card>
-
-                        {/* LINE ITEMS */}
-                        <Card className="p-6">
-                            <h3 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-4 flex items-center gap-2">
-                                <Calculator size={14}/> Service Line Items
-                            </h3>
-
-                            {/* Add Line Item Form */}
-                            <div className="bg-gray-50 p-4 rounded-xl mb-4 grid grid-cols-12 gap-3">
-                                <div className="col-span-5">
-                                    <Input 
-                                        label="Description"
-                                        value={newLineItem.description}
-                                        onChange={e => setNewLineItem({...newLineItem, description: e.target.value})}
-                                        placeholder="e.g., Aircon Cleaning Service"
-                                    />
-                                </div>
-                                <div className="col-span-2">
-                                    <Input 
-                                        label="Qty"
-                                        type="number"
-                                        value={newLineItem.quantity}
-                                        onChange={e => setNewLineItem({...newLineItem, quantity: e.target.value})}
-                                    />
-                                </div>
-                                <div className="col-span-2">
-                                    <Input 
-                                        label="Unit"
-                                        value={newLineItem.unit}
-                                        onChange={e => setNewLineItem({...newLineItem, unit: e.target.value})}
-                                        placeholder="SERVICE"
-                                    />
-                                </div>
-                                <div className="col-span-2">
-                                    <Input 
-                                        label="Unit Price"
-                                        type="number"
-                                        value={newLineItem.unitPrice}
-                                        onChange={e => setNewLineItem({...newLineItem, unitPrice: e.target.value})}
-                                    />
-                                </div>
-                                <div className="col-span-1 flex items-end">
-                                    <Button onClick={handleAddLineItem} size="sm" className="w-full bg-orange-600 hover:bg-orange-700">
-                                        <Plus size={16}/>
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* Line Items Table */}
-                            <div className="space-y-2">
-                                {invoice.lineItems.length === 0 && (
-                                    <p className="text-center text-gray-400 text-sm py-8 italic">No line items added yet</p>
-                                )}
-                                {invoice.lineItems.map(item => (
-                                    <div key={item.id} className="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg">
-                                        <div className="flex-1">
-                                            <p className="font-bold text-sm">{item.description}</p>
-                                            <p className="text-xs text-gray-500">{item.quantity} {item.unit} × {formatMoney(item.unitPrice)}</p>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="font-black text-gray-800">{formatMoney(item.quantity * item.unitPrice)}</span>
-                                            <button 
-                                                onClick={() => handleRemoveLineItem(item.id)}
-                                                className="p-1 hover:bg-red-50 text-red-500 rounded"
-                                            >
-                                                <X size={16}/>
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </Card>
-                    </div>
-
-                    {/* RIGHT: SUMMARY */}
-                    <div className="space-y-6">
-                        <Card className="p-6 bg-gradient-to-br from-orange-50 to-white border-2 border-orange-200">
-                            <h3 className="text-xs font-black uppercase tracking-widest text-orange-600 mb-4">Invoice Details</h3>
-                            
-                            <Input 
-                                label="Invoice Number"
-                                value={invoice.invoiceNumber}
-                                onChange={e => setInvoice({...invoice, invoiceNumber: e.target.value})}
-                                className="font-black"
-                            />
-                            
-                            <Input 
-                                label="Invoice Date"
-                                type="date"
-                                value={invoice.invoiceDate}
-                                onChange={e => setInvoice({...invoice, invoiceDate: e.target.value})}
-                                className="mt-3"
-                            />
-
-                            <div className="mt-3">
-                                <label className="text-xs font-bold text-gray-500">Service Type</label>
-                                <select 
-                                    value={invoice.serviceType}
-                                    onChange={e => setInvoice({...invoice, serviceType: e.target.value})}
-                                    className="w-full mt-1 p-3 border border-gray-200 rounded-lg font-bold"
-                                >
-                                    <option value="MAINTENANCE">Maintenance</option>
-                                    <option value="REPAIR">Repair</option>
-                                    <option value="INSTALLATION">Installation</option>
-                                    <option value="CONSULTATION">Consultation</option>
-                                </select>
-                            </div>
-                        </Card>
-
-                        <Card className="p-6 bg-slate-800 text-white">
-                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-6">Amount Summary</h3>
-                            
-                            <div className="space-y-3 mb-6">
-                                <div className="flex justify-between text-sm">
-                                    <span className="opacity-70">Subtotal</span>
-                                    <span className="font-mono font-bold">{formatMoney(totals.subtotal)}</span>
-                                </div>
-                                <div className="flex justify-between text-sm pb-4 border-b border-slate-700">
-                                    <span className="opacity-70">VAT (12%)</span>
-                                    <span className="font-mono font-bold text-red-400">+ {formatMoney(totals.vat)}</span>
-                                </div>
-                                
-                                <div className="bg-slate-700/50 p-4 rounded-xl flex justify-between items-center">
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-orange-400">Total Amount</p>
-                                        <p className="text-[9px] text-slate-400 mt-0.5">Incl. 12% VAT</p>
-                                    </div>
-                                    <span className="text-2xl font-black">{formatMoney(totals.total)}</span>
-                                </div>
-                            </div>
-
-                            <div className="bg-red-900/30 border border-red-700 rounded-lg p-3 mb-6">
-                                <p className="text-xs font-bold text-red-300 flex items-center gap-2">
-                                    <Zap size={12}/> Non-BOI Activity
-                                </p>
-                                <p className="text-[10px] text-red-200 mt-1">
-                                    Subject to regular 12% VAT + 25% corporate tax
-                                </p>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Button 
-                                    onClick={() => generateInvoicePDF()}
-                                    variant="secondary" 
-                                    className="w-full py-3 font-black uppercase text-xs"
-                                >
-                                    <FileText size={14} className="mr-2"/> Preview PDF
-                                </Button>
-                                <Button 
-                                    onClick={handleSaveInvoice}
-                                    variant="primary" 
-                                    className="w-full py-3 font-black uppercase text-xs bg-orange-600 hover:bg-orange-700 border-none shadow-lg shadow-orange-200"
-                                    disabled={loading}
-                                >
-                                    <Save size={14} className="mr-2"/> {invoice.id ? 'Update' : 'Save'} Invoice
-                                </Button>
-                            </div>
-                        </Card>
-                    </div>
-                </div>
-            ) : (
-                /* INVOICE LIST */
-                <Card className="p-6">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b-2 border-gray-200 text-left">
-                                    <th className="py-3 px-2 text-xs font-black text-gray-500 uppercase">Invoice #</th>
-                                    <th className="py-3 px-2 text-xs font-black text-gray-500 uppercase">Date</th>
-                                    <th className="py-3 px-2 text-xs font-black text-gray-500 uppercase">Customer</th>
-                                    <th className="py-3 px-2 text-xs font-black text-gray-500 uppercase">Type</th>
-                                    <th className="py-3 px-2 text-xs font-black text-gray-500 uppercase text-right">Total</th>
-                                    <th className="py-3 px-2 text-xs font-black text-gray-500 uppercase text-center">Status</th>
-                                    <th className="py-3 px-2 text-xs font-black text-gray-500 uppercase text-center">Actions</th>
+                        </div>
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-100 text-gray-500 font-black uppercase text-xs">
+                                <tr>
+                                    <th className="p-4">Status</th>
+                                    <th className="p-4">Invoice #</th>
+                                    <th className="p-4">Date</th>
+                                    <th className="p-4">Client</th>
+                                    <th className="p-4 text-right">Amount</th>
+                                    <th className="p-4 text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
-                                {serviceInvoices.map(inv => (
-                                    <tr key={inv.id} className="hover:bg-gray-50">
-                                        <td className="py-3 px-2 font-bold">{inv.invoiceNumber}</td>
-                                        <td className="py-3 px-2 text-sm text-gray-600">{new Date(inv.invoiceDate).toLocaleDateString()}</td>
-                                        <td className="py-3 px-2 text-sm font-medium">{inv.customerName}</td>
-                                        <td className="py-3 px-2 text-xs text-gray-500">{inv.serviceType}</td>
-                                        <td className="py-3 px-2 text-right font-mono font-bold">{formatMoney(inv.total)}</td>
-                                        <td className="py-3 px-2 text-center">
-                                            <select 
-                                                value={inv.status}
-                                                onChange={(e) => handleUpdateStatus(inv.id, e.target.value)}
-                                                className={`text-xs font-bold px-3 py-1 rounded-full border-0 ${
-                                                    inv.status === 'PAID' ? 'bg-green-100 text-green-700' :
-                                                    inv.status === 'INVOICED' ? 'bg-blue-100 text-blue-700' :
-                                                    'bg-gray-100 text-gray-700'
-                                                }`}
-                                            >
-                                                <option value="DRAFT">DRAFT</option>
-                                                <option value="INVOICED">INVOICED</option>
-                                                <option value="PAID">PAID</option>
-                                            </select>
+                                {invoices.filter(i => 
+                                    i.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                    i.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+                                ).map(inv => (
+                                    <tr key={inv.id} className="hover:bg-orange-50 transition-colors">
+                                        <td className="p-4">
+                                            <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${
+                                                inv.status === 'PAID' ? 'bg-green-100 text-green-700' :
+                                                inv.status === 'SENT' ? 'bg-blue-100 text-blue-700' :
+                                                inv.status === 'OVERDUE' ? 'bg-red-100 text-red-700' :
+                                                'bg-gray-200 text-gray-600'
+                                            }`}>
+                                                {inv.status}
+                                            </span>
                                         </td>
-                                        <td className="py-3 px-2 text-center">
-                                            <div className="flex gap-2 justify-center">
-                                                <Button 
-                                                    onClick={() => handleEditInvoice(inv)}
-                                                    size="sm" 
-                                                    variant="secondary"
-                                                    className="text-xs"
-                                                >
-                                                    Edit
-                                                </Button>
-                                                <Button 
-                                                    onClick={() => generateInvoicePDF(inv)}
-                                                    size="sm" 
-                                                    className="bg-orange-600 hover:bg-orange-700 text-xs"
-                                                >
-                                                    PDF
-                                                </Button>
+                                        <td className="p-4 font-mono font-bold text-gray-700">{inv.invoiceNumber}</td>
+                                        <td className="p-4 text-gray-500">{new Date(inv.dateIssued).toLocaleDateString()}</td>
+                                        <td className="p-4 font-bold text-gray-800">{inv.clientName}</td>
+                                        <td className="p-4 text-right font-black text-gray-800">{formatMoney(inv.total)}</td>
+                                        <td className="p-4 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button onClick={() => handleEdit(inv)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                    <Edit size={16}/>
+                                                </button>
+                                                <button onClick={() => handleDelete(inv.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                                                    <Trash2 size={16}/>
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
                                 ))}
-                                {serviceInvoices.length === 0 && (
+                                {invoices.length === 0 && (
                                     <tr>
-                                        <td colSpan="7" className="py-12 text-center text-gray-400 italic">
-                                            No service invoices created yet
-                                        </td>
+                                        <td colSpan="6" className="p-12 text-center text-gray-400">No invoices found.</td>
                                     </tr>
                                 )}
                             </tbody>
                         </table>
+                    </Card>
+                )}
+
+                {/* VIEW: FORM */}
+                {view === 'form' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* LEFT: FORM INPUTS */}
+                        <div className="lg:col-span-2 space-y-6">
+                            <Card className="p-8 border-t-4 border-orange-500 shadow-xl">
+                                {/* Header */}
+                                <div className="flex justify-between items-start mb-8">
+                                    <div>
+                                        <h2 className="text-3xl font-black text-gray-800 uppercase">Invoice</h2>
+                                        <div className="mt-2 text-xs text-gray-500 font-bold uppercase tracking-widest">
+                                            Karnot Energy Solutions Inc.
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <label className="block text-[10px] font-black uppercase text-gray-400">Invoice Number</label>
+                                        <input 
+                                            type="text" 
+                                            value={formData.invoiceNumber}
+                                            onChange={e => setFormData({...formData, invoiceNumber: e.target.value})}
+                                            className="text-right font-mono font-bold text-xl border-none bg-transparent focus:ring-0 p-0 w-full"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Details Grid */}
+                                <div className="grid grid-cols-2 gap-8 mb-8">
+                                    <div className="space-y-4">
+                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                            <label className="block text-[10px] font-black uppercase text-gray-400 mb-2">Bill To</label>
+                                            <select 
+                                                className="w-full p-2 mb-2 text-sm border rounded bg-white"
+                                                value={formData.clientId}
+                                                onChange={handleClientSelect}
+                                            >
+                                                <option value="">-- Select Client --</option>
+                                                {companies.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
+                                            </select>
+                                            <Input 
+                                                value={formData.clientName} 
+                                                onChange={e => setFormData({...formData, clientName: e.target.value})} 
+                                                placeholder="Client Name" 
+                                                className="mb-2 bg-white"
+                                            />
+                                            <Textarea 
+                                                value={formData.clientAddress} 
+                                                onChange={e => setFormData({...formData, clientAddress: e.target.value})} 
+                                                placeholder="Address" 
+                                                rows={3} 
+                                                className="bg-white text-xs"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <Input 
+                                                type="date" 
+                                                label="Date Issued" 
+                                                value={formData.dateIssued} 
+                                                onChange={e => setFormData({...formData, dateIssued: e.target.value})} 
+                                            />
+                                            <Input 
+                                                type="date" 
+                                                label="Due Date" 
+                                                value={formData.dateDue} 
+                                                onChange={e => setFormData({...formData, dateDue: e.target.value})} 
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-gray-400 mb-1">Status</label>
+                                            <select 
+                                                value={formData.status}
+                                                onChange={e => setFormData({...formData, status: e.target.value})}
+                                                className="w-full p-2 border rounded text-sm font-bold bg-gray-50"
+                                            >
+                                                <option value="DRAFT">Draft</option>
+                                                <option value="SENT">Sent</option>
+                                                <option value="PAID">Paid</option>
+                                                <option value="OVERDUE">Overdue</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Line Items */}
+                                <div className="mb-8">
+                                    <table className="w-full text-sm mb-4">
+                                        <thead className="border-b border-gray-200 text-left text-xs font-black text-gray-400 uppercase">
+                                            <tr>
+                                                <th className="py-2">Description</th>
+                                                <th className="py-2 w-20 text-center">Qty</th>
+                                                <th className="py-2 w-32 text-right">Rate</th>
+                                                <th className="py-2 w-32 text-right">Amount</th>
+                                                <th className="py-2 w-10"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {formData.items.map((item, index) => (
+                                                <tr key={item.id}>
+                                                    <td className="py-2">
+                                                        <input 
+                                                            className="w-full p-2 border border-gray-200 rounded"
+                                                            value={item.description}
+                                                            onChange={e => handleItemChange(item.id, 'description', e.target.value)}
+                                                            placeholder="Item description"
+                                                        />
+                                                    </td>
+                                                    <td className="py-2">
+                                                        <input 
+                                                            type="number"
+                                                            className="w-full p-2 border border-gray-200 rounded text-center"
+                                                            value={item.quantity}
+                                                            onChange={e => handleItemChange(item.id, 'quantity', e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="py-2">
+                                                        <input 
+                                                            type="number"
+                                                            className="w-full p-2 border border-gray-200 rounded text-right"
+                                                            value={item.rate}
+                                                            onChange={e => handleItemChange(item.id, 'rate', e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="py-2 text-right font-bold text-gray-700">
+                                                        {formatMoney(item.quantity * item.rate)}
+                                                    </td>
+                                                    <td className="py-2 text-center">
+                                                        <button onClick={() => handleRemoveItem(item.id)} className="text-gray-300 hover:text-red-500">
+                                                            <Trash2 size={14}/>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    <Button onClick={handleAddItem} variant="secondary" size="sm" className="w-full border-dashed border-gray-300">
+                                        <Plus size={14} className="mr-2"/> Add Line Item
+                                    </Button>
+                                </div>
+
+                                {/* Totals & Notes */}
+                                <div className="grid grid-cols-2 gap-8 border-t border-gray-200 pt-6">
+                                    <div>
+                                        <label className="block text-[10px] font-black uppercase text-gray-400 mb-2">Notes / Terms</label>
+                                        <textarea 
+                                            className="w-full p-3 bg-yellow-50 border border-yellow-100 rounded-lg text-xs text-yellow-800"
+                                            rows={4}
+                                            value={formData.notes}
+                                            onChange={e => setFormData({...formData, notes: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="space-y-2 text-right">
+                                        <div className="flex justify-between text-gray-500 text-sm">
+                                            <span>Subtotal</span>
+                                            <span>{formatMoney(formData.subtotal)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-gray-500 text-sm">
+                                            <span>VAT (12%)</span>
+                                            <span>{formatMoney(formData.tax)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-2xl font-black text-gray-800 border-t border-gray-200 pt-2 mt-2">
+                                            <span>Total</span>
+                                            <span>{formatMoney(formData.total)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Card>
+                        </div>
+
+                        {/* RIGHT: ACTIONS */}
+                        <div className="space-y-4">
+                            <Card className="p-6 bg-slate-900 text-white border-0">
+                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4">Actions</h3>
+                                <Button onClick={handleSave} className="w-full mb-3 bg-orange-600 hover:bg-orange-700 text-white border-0 py-3 font-bold">
+                                    <Save size={16} className="mr-2"/> {loading ? 'Saving...' : 'Save Invoice'}
+                                </Button>
+                                <Button onClick={() => window.print()} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700">
+                                    <Printer size={16} className="mr-2"/> Print / PDF
+                                </Button>
+                            </Card>
+                            
+                            {formData.id && (
+                                <Button onClick={() => handleDelete(formData.id)} className="w-full border-red-200 text-red-600 hover:bg-red-50">
+                                    <Trash2 size={16} className="mr-2"/> Delete Invoice
+                                </Button>
+                            )}
+                        </div>
                     </div>
-                </Card>
-            )}
+                )}
+            </div>
         </div>
     );
 };
