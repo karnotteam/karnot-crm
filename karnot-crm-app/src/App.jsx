@@ -44,6 +44,7 @@ import ServiceInvoice from './pages/ServiceInvoice.jsx';
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
 import ManagementAccounts from './pages/ManagementAccounts.jsx';
+import PayrollManager from './pages/PayrollManager.jsx'; // <--- UPDATED PATH (Now in /pages)
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -51,7 +52,6 @@ import ManagementAccounts from './pages/ManagementAccounts.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
-import PayrollManager from './components/PayrollManager.jsx'; // <--- NEW IMPORT
 
 // ==========================================
 // 3. DATA & ACCOUNTING MODULES
