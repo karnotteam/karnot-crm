@@ -18,6 +18,7 @@ import {
 // ==========================================
 // 1. PAGE IMPORTS
 // ==========================================
+// --- Core CRM ---
 import LoginPage from './pages/LoginPage.jsx';
 import FunnelPage from './pages/FunnelPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
@@ -48,7 +49,7 @@ import AssetsPage from './pages/AssetsPage.jsx';
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
 import ManagementAccounts from './pages/ManagementAccounts.jsx';
-import PayrollManager from './pages/PayrollManager.jsx'; // <--- NEW IMPORT
+import PayrollManager from './pages/PayrollManager.jsx'; // Corrected Path
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -72,7 +73,7 @@ import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx';
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
-    MapPin, Wrench, Briefcase, FileText, Target, Package, UserCheck 
+    MapPin, Wrench, Briefcase, FileText, Target, Package, UserCheck, Calendar as CalendarIcon
 } from 'lucide-react'; 
 
 // ==========================================
@@ -146,12 +147,12 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'pezaZones', label: 'PEZA Zones', icon: HardHat, badge: 'NEW' }
     ];
 
-    // Operations Menu
+    // Operations Menu (Recurring Revenue)
     const operationsMenu = [
         { view: 'assets', label: 'Asset Registry', icon: Package, badge: 'NEW' },
         { view: 'serviceContracts', label: 'Service Contracts', icon: FileText },
-        { view: 'maintenanceCalendar', label: 'Calendar', icon: HardHat },
-        { view: 'technicianView', label: 'Technician View', icon: Wrench, badge: 'MOBILE' },
+        { view: 'maintenanceCalendar', label: 'Ops Calendar', icon: CalendarIcon },
+        { view: 'technicianView', label: 'Technician App', icon: Wrench, badge: 'MOBILE' },
         { view: 'installEstimator', label: 'Install & QC', icon: Wrench },
         { view: 'serviceInvoice', label: 'Service Invoice', icon: FileText }
     ];
@@ -336,62 +337,72 @@ export default function App() {
     }, []);
 
     // ------------------------------------------
-    // REAL-TIME DATA STREAM
+    // REAL-TIME DATA STREAM (THE CRITICAL DATA PIPELINE)
     // ------------------------------------------
     useEffect(() => {
         if (user) {
             setLoadingData(true); 
             
+            // 1. Quotes
             const unsubQuotes = onSnapshot(
                 query(collection(db, "users", user.uid, "quotes"), orderBy("lastModified", "desc")), 
                 (snap) => setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
+            // 2. Opportunities
             const unsubOpps = onSnapshot(
                 query(collection(db, "users", user.uid, "opportunities"), orderBy("createdAt", "desc")), 
                 (snap) => setOpportunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
+            // 3. Companies
             const unsubCompanies = onSnapshot(
                 query(collection(db, "users", user.uid, "companies"), orderBy("companyName", "asc")), 
                 (snap) => setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
+            // 4. Contacts
             const unsubContacts = onSnapshot(
                 query(collection(db, "users", user.uid, "contacts"), orderBy("lastName", "asc")), 
                 (snap) => setContacts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
+            // 5. Ledger
             const unsubLedger = onSnapshot(
                 query(collection(db, "users", user.uid, "ledger"), orderBy("date", "desc")), 
                 (snap) => setLedgerEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
+            // 6. Manpower Logs
             const unsubManpower = onSnapshot(
                 query(collection(db, "users", user.uid, "manpower_logs")), 
                 (snap) => setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
+            // 7. Service Invoices
             const unsubServices = onSnapshot(
                 query(collection(db, "users", user.uid, "service_invoices"), orderBy("createdAt", "desc")), 
                 (snap) => setServiceInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
+            // 8. Territories
             const unsubTerritories = onSnapshot(
                 query(collection(db, "users", user.uid, "territories"), orderBy("name", "asc")), 
                 (snap) => setTerritories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
+            // 9. Agents
             const unsubAgents = onSnapshot(
                 query(collection(db, "users", user.uid, "agents"), orderBy("name", "asc")), 
                 (snap) => setAgents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
             );
             
+            // 10. Appointments
             const unsubAppointments = onSnapshot(
                 query(collection(db, "users", user.uid, "appointments"), orderBy("appointmentDate", "asc")), 
                 (snap) => {
                     setAppointments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                    setLoadingData(false);
+                    setLoadingData(false); // Only unset loading after the last critical fetch
                 }
             );
             
@@ -500,8 +511,10 @@ export default function App() {
             />
             <main className="container mx-auto p-4 md:p-8">
                 
+                {/* 1. DASHBOARD */}
                 {activeView === 'dashboard' && <DashboardPage quotes={quotes} user={user} />}
                 
+                {/* 2. SALES FUNNEL */}
                 {activeView === 'funnel' && (
                     <FunnelPage 
                         opportunities={opportunities} 
@@ -515,6 +528,7 @@ export default function App() {
                     />
                 )}
                 
+                {/* 3. OPPORTUNITY DETAIL */}
                 {activeView === 'opportunityDetail' && (
                     <OpportunityDetailPage 
                         opportunity={selectedOpportunity} 
@@ -530,48 +544,32 @@ export default function App() {
                     />
                 )}
 
+                {/* 4. OPERATIONS MODULES (NEW) */}
                 {activeView === 'installEstimator' && (
-                    <InstallEstimator 
-                        quotes={quotes} 
-                        user={user} 
-                    />
+                    <InstallEstimator quotes={quotes} user={user} />
                 )}
                 
                 {activeView === 'serviceInvoice' && (
-                    <ServiceInvoice 
-                        companies={companies}
-                        user={user}
-                    />
+                    <ServiceInvoice companies={companies} user={user} />
                 )}
                 
                 {activeView === 'assets' && (
-                    <AssetsPage 
-                        companies={companies}
-                        user={user}
-                    />
+                    <AssetsPage companies={companies} user={user} />
                 )}
                 
                 {activeView === 'serviceContracts' && (
-                    <ServiceContractsPage 
-                        companies={companies}
-                        user={user}
-                    />
+                    <ServiceContractsPage companies={companies} user={user} />
                 )}
                 
                 {activeView === 'maintenanceCalendar' && (
-                    <MaintenanceCalendar 
-                        companies={companies}
-                        user={user}
-                    />
+                    <MaintenanceCalendar companies={companies} user={user} />
                 )}
                 
                 {activeView === 'technicianView' && (
-                    <TechnicianMobileView 
-                        companies={companies}
-                        user={user}
-                    />
+                    <TechnicianMobileView companies={companies} user={user} />
                 )}
                 
+                {/* 5. DATA MANAGEMENT */}
                 {activeView === 'companies' && (
                     <CompaniesPage 
                         companies={companies} 
@@ -584,15 +582,12 @@ export default function App() {
                 )}
                 
                 {activeView === 'contacts' && (
-                    <ContactsPage 
-                        contacts={contacts} 
-                        companies={companies} 
-                        user={user} 
-                    />
+                    <ContactsPage contacts={contacts} companies={companies} user={user} />
                 )}
                 
                 {activeView === 'suppliers' && <SupplierManager user={user} />}
                 
+                {/* 6. FIELD & TERRITORY */}
                 {activeView === 'territories' && (
                     <TerritoryManagement 
                         territories={territories} 
@@ -604,47 +599,20 @@ export default function App() {
                 )}
                 
                 {activeView === 'agents' && (
-                    <AgentManagement 
-                        agents={agents} 
-                        territories={territories} 
-                        user={user} 
-                        quotes={quotes} 
-                    />
+                    <AgentManagement agents={agents} territories={territories} user={user} quotes={quotes} />
                 )}
                 
                 {activeView === 'appointments' && (
-                    <AppointmentScheduler 
-                        appointments={appointments} 
-                        companies={companies} 
-                        agents={agents} 
-                        user={user} 
-                    />
+                    <AppointmentScheduler appointments={appointments} companies={companies} agents={agents} user={user} />
                 )}
                 
-                {/* TERRITORY LEAD GENERATOR */}
-                {activeView === 'leadGenerator' && (
-                    <TerritoryLeadGenerator 
-                        territories={territories}
-                        user={user}
-                    />
-                )}
+                {activeView === 'leadGenerator' && <TerritoryLeadGenerator territories={territories} user={user} />}
                 
-                {/* BOI PROJECT LEADS */}
-                {activeView === 'boiLeads' && (
-                    <BOIProjectLeads 
-                        territories={territories}
-                        user={user}
-                    />
-                )}
+                {activeView === 'boiLeads' && <BOIProjectLeads territories={territories} user={user} />}
                 
-                {/* PEZA ECONOMIC ZONES */}
-                {activeView === 'pezaZones' && (
-                    <PEZAZones 
-                        territories={territories}
-                        user={user}
-                    />
-                )}
+                {activeView === 'pezaZones' && <PEZAZones territories={territories} user={user} />}
                 
+                {/* 7. QUOTING */}
                 {activeView === 'calculator' && (
                     <QuoteCalculator 
                         onSaveQuote={handleSaveQuote} 
@@ -667,6 +635,7 @@ export default function App() {
                     />
                 )}
 
+                {/* 8. CALCULATORS */}
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 
                 {activeView === 'heatPumpCalc' && (
@@ -681,27 +650,25 @@ export default function App() {
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
                 {/* ======================= */}
-                {/* ACCOUNTS HUB (ADMIN)    */}
+                {/* 9. ACCOUNTS HUB (ADMIN) */}
                 {/* ======================= */}
                 {activeView === 'accounts' && (
                     <div className="space-y-6 pb-20">
+                        {/* ACCOUNTS HEADER */}
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
                             <div>
                                 <h1 className="text-3xl font-black text-gray-800 tracking-tight uppercase leading-none mb-1">Accounts Hub</h1>
                                 <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">FYE: Dec 31 | BOI-SIPP Registered Enterprise</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                {/* LEDGER */}
                                 <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}><Landmark size={14} className="mr-1" /> Disbursements</Button>
                                 
-                                {/* PAYROLL (NEW) */}
+                                {/* PAYROLL MODULE LINK */}
                                 <Button onClick={() => setSubView('payroll')} variant={subView === 'payroll' ? 'primary' : 'secondary'} className="border-purple-200 text-purple-700 bg-purple-50">
                                     <UserCheck size={14} className="mr-1" /> Payroll & Tax
                                 </Button>
 
-                                {/* MANPOWER (Kept for Project Costing) */}
                                 <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Wrench size={14} className="mr-1" /> Manpower (Project)</Button>
-                                
                                 <Button onClick={() => setSubView('services')} variant={subView === 'services' ? 'primary' : 'secondary'} className="border-orange-200 text-orange-700 bg-orange-50">
                                     <Wrench size={14} className="mr-1" /> Service Invoices
                                 </Button>
@@ -716,6 +683,7 @@ export default function App() {
                             </div>
                         </div>
 
+                        {/* SUB-VIEWS */}
                         {subView === 'ledger' && (
                             <FinancialEntryLogger 
                                 companies={companies} 
@@ -724,24 +692,16 @@ export default function App() {
                             />
                         )}
                         
-                        {/* NEW PAYROLL VIEW */}
                         {subView === 'payroll' && (
-                            <PayrollManager 
-                                user={user} 
-                            />
+                            <PayrollManager user={user} />
                         )}
                         
                         {subView === 'manpower' && (
-                            <ManpowerLogger 
-                                quotes={quotes}
-                            />
+                            <ManpowerLogger quotes={quotes} />
                         )}
                         
                         {subView === 'services' && (
-                            <ServiceInvoice 
-                                companies={companies}
-                                user={user}
-                            />
+                            <ServiceInvoice companies={companies} user={user} />
                         )}
                         
                         {subView === 'projectOps' && (
