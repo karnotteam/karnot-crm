@@ -516,10 +516,10 @@ export default function App() {
         quotes={quotes} 
         user={user}
         ledgerEntries={ledgerEntries}
-        serviceInvoices={serviceInvoices}
+        serviceInvoices={ServiceInvoices}
         appointments={appointments}
         agents={agents}
-        serviceContracts={serviceContracts}
+        serviceContracts={ServiceContracts}
         companies={companies}
     />
 )}
