@@ -49,7 +49,7 @@ import AssetsPage from './pages/AssetsPage.jsx';
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
 import ManagementAccounts from './pages/ManagementAccounts.jsx';
-import PayrollManager from './pages/PayrollManager.jsx'; 
+import PayrollManager from './pages/PayrollManager.jsx';
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -213,7 +213,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
                 {/* BOTTOM ROW: NAVIGATION MENU */}
                 <nav className="flex flex-wrap gap-2 items-center border-t border-gray-100 pt-3">
-                    
                     {/* Dashboard */}
                     <Button 
                         onClick={() => setActiveView('dashboard')} 
@@ -225,41 +224,11 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
                     <div className="h-6 w-px bg-gray-200 mx-1 hidden sm:block"></div>
 
-                    {/* Sales & CRM Dropdown */}
-                    <DropdownMenu 
-                        label="Sales & CRM" 
-                        icon={Building} 
-                        items={salesMenu}
-                        activeView={activeView}
-                        setActiveView={setActiveView}
-                    />
-
-                    {/* Field Operations Dropdown */}
-                    <DropdownMenu 
-                        label="Field Ops" 
-                        icon={MapPin} 
-                        items={fieldOpsMenu}
-                        activeView={activeView}
-                        setActiveView={setActiveView}
-                    />
-
-                    {/* Operations Dropdown */}
-                    <DropdownMenu 
-                        label="Operations" 
-                        icon={Wrench} 
-                        items={operationsMenu}
-                        activeView={activeView}
-                        setActiveView={setActiveView}
-                    />
-
-                    {/* Calculators Dropdown */}
-                    <DropdownMenu 
-                        label="Calculators" 
-                        icon={Calculator} 
-                        items={calculatorsMenu}
-                        activeView={activeView}
-                        setActiveView={setActiveView}
-                    />
+                    {/* MENUS */}
+                    <DropdownMenu label="Sales & CRM" icon={Building} items={salesMenu} activeView={activeView} setActiveView={setActiveView} />
+                    <DropdownMenu label="Field Ops" icon={MapPin} items={fieldOpsMenu} activeView={activeView} setActiveView={setActiveView} />
+                    <DropdownMenu label="Operations" icon={Wrench} items={operationsMenu} activeView={activeView} setActiveView={setActiveView} />
+                    <DropdownMenu label="Calculators" icon={Calculator} items={calculatorsMenu} activeView={activeView} setActiveView={setActiveView} />
 
                     {/* Accounts (Admin Only) */}
                     {userRole === 'ADMIN' && (
@@ -338,86 +307,108 @@ export default function App() {
     }, []);
 
     // ------------------------------------------
-    // REAL-TIME DATA STREAM
+    // REAL-TIME DATA STREAM (ROBUST VERSION)
     // ------------------------------------------
     useEffect(() => {
         if (user) {
+            console.log("Starting Data Sync...");
             setLoadingData(true); 
             
+            // Safety: Force loading to stop after 4 seconds even if a DB call hangs
+            const safetyTimer = setTimeout(() => {
+                setLoadingData(false);
+                console.log("Safety Timer: Forced Loading Stop");
+            }, 4000);
+
+            // HELPER: Error Handler wrapper
+            const handleErr = (name, err) => console.warn(`Error fetching ${name}:`, err);
+
             // 1. Quotes
             const unsubQuotes = onSnapshot(
                 query(collection(db, "users", user.uid, "quotes"), orderBy("lastModified", "desc")), 
-                (snap) => setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+                (snap) => setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => handleErr("Quotes", err)
             );
             
             // 2. Opportunities
             const unsubOpps = onSnapshot(
                 query(collection(db, "users", user.uid, "opportunities"), orderBy("createdAt", "desc")), 
-                (snap) => setOpportunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+                (snap) => setOpportunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => handleErr("Opportunities", err)
             );
             
             // 3. Companies
             const unsubCompanies = onSnapshot(
                 query(collection(db, "users", user.uid, "companies"), orderBy("companyName", "asc")), 
-                (snap) => setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+                (snap) => setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => handleErr("Companies", err)
             );
             
             // 4. Contacts
             const unsubContacts = onSnapshot(
                 query(collection(db, "users", user.uid, "contacts"), orderBy("lastName", "asc")), 
-                (snap) => setContacts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+                (snap) => setContacts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => handleErr("Contacts", err)
             );
             
             // 5. Ledger
             const unsubLedger = onSnapshot(
                 query(collection(db, "users", user.uid, "ledger"), orderBy("date", "desc")), 
-                (snap) => setLedgerEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+                (snap) => setLedgerEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => handleErr("Ledger", err)
             );
             
-            // 6. Manpower Logs
+            // 6. Manpower
             const unsubManpower = onSnapshot(
                 query(collection(db, "users", user.uid, "manpower_logs")), 
-                (snap) => setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+                (snap) => setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => handleErr("Manpower", err)
             );
             
             // 7. Service Invoices
             const unsubServices = onSnapshot(
                 query(collection(db, "users", user.uid, "service_invoices"), orderBy("createdAt", "desc")), 
-                (snap) => setServiceInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+                (snap) => setServiceInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => handleErr("Service Invoices", err)
             );
 
-            // 8. Service Contracts (NEW)
+            // 8. Service Contracts (NEW - Might be empty initially)
             const unsubContracts = onSnapshot(
-                query(collection(db, "users", user.uid, "service_contracts"), orderBy("createdAt", "desc")),
+                query(collection(db, "users", user.uid, "service_contracts")),
                 (snap) => setServiceContracts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (error) => {
-                    console.warn("Service contracts collection not initialized yet:", error.code);
-                    setServiceContracts([]);
-                }
+                (err) => handleErr("Service Contracts", err)
             );
             
             // 9. Territories
             const unsubTerritories = onSnapshot(
                 query(collection(db, "users", user.uid, "territories"), orderBy("name", "asc")), 
-                (snap) => setTerritories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+                (snap) => setTerritories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => handleErr("Territories", err)
             );
             
             // 10. Agents
             const unsubAgents = onSnapshot(
                 query(collection(db, "users", user.uid, "agents"), orderBy("name", "asc")), 
-                (snap) => setAgents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+                (snap) => setAgents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => handleErr("Agents", err)
             );
             
-            // 11. Appointments
+            // 11. Appointments (Last one clears loading)
             const unsubAppointments = onSnapshot(
                 query(collection(db, "users", user.uid, "appointments"), orderBy("appointmentDate", "asc")), 
                 (snap) => {
                     setAppointments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                    setLoadingData(false);
+                    setLoadingData(false); // Success!
+                    clearTimeout(safetyTimer); // Cancel safety timer
+                },
+                (err) => {
+                    handleErr("Appointments", err);
+                    setLoadingData(false); // Clear loading even on error
                 }
             );
             
             return () => { 
+                clearTimeout(safetyTimer);
                 unsubQuotes(); unsubOpps(); unsubCompanies(); unsubContacts(); 
                 unsubLedger(); unsubManpower(); unsubServices(); unsubContracts();
                 unsubTerritories(); unsubAgents(); unsubAppointments();
@@ -503,6 +494,7 @@ export default function App() {
             <div className="text-center">
                 <img src={KARNOT_LOGO_BASE_64} className="h-12 mx-auto mb-4 animate-spin" alt="Loading"/>
                 <p className="font-black uppercase text-orange-600 animate-pulse tracking-[0.2em]">Loading Karnot Systems...</p>
+                <p className="text-[10px] text-gray-400 mt-2">Syncing Databases...</p>
             </div>
         </div>
     );
