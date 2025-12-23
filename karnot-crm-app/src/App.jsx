@@ -308,67 +308,106 @@ export default function App() {
     }, []);
 
     // ------------------------------------------
-    // REAL-TIME DATA STREAM (BULLETPROOF VERSION)
+    // REAL-TIME DATA STREAM (ROBUST + SORTED)
     // ------------------------------------------
     useEffect(() => {
         if (user) {
             setLoadingData(true); 
             console.log("🚀 Starting Data Synchronization...");
             
-            // SAFETY TIMER: Force stop loading after 4 seconds
-            // This prevents the "Infinite Spin" if a collection is missing
+            // Safety Timer: Stops spinning after 4s even if DB hangs
             const safetyTimer = setTimeout(() => {
                 console.log("⚠️ Safety Timer Triggered: Forcing App Load");
                 setLoadingData(false);
             }, 4000);
 
-            // HELPER: Safe Subscription
-            // If a collection doesn't exist, it returns empty array instead of crashing
-            const subscribe = (collectionName, setter, orderByField = 'createdAt') => {
-                try {
-                    return onSnapshot(
-                        query(collection(db, "users", user.uid, collectionName), orderBy(orderByField, 'desc')),
-                        (snap) => setter(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                        (err) => {
-                            console.warn(`Collection '${collectionName}' missing or error:`, err.code);
-                            setter([]); // Set empty array so app doesn't break
-                        }
-                    );
-                } catch (e) {
-                    console.warn(`Failed to subscribe to ${collectionName}`, e);
-                    setter([]);
-                    return () => {};
-                }
-            };
-
-            // 1. Core CRM
-            const unsubQuotes = subscribe('quotes', setQuotes, 'lastModified');
-            const unsubOpps = subscribe('opportunities', setOpportunities);
-            const unsubCompanies = subscribe('companies', setCompanies, 'companyName'); // Note: Sort is different
-            const unsubContacts = subscribe('contacts', setContacts, 'lastName'); // Note: Sort is different
-
-            // 2. Finance
-            const unsubLedger = subscribe('ledger', setLedgerEntries, 'date');
-            const unsubManpower = subscribe('manpower_logs', setManpowerLogs, 'date');
-            const unsubServices = subscribe('service_invoices', setServiceInvoices);
-            const unsubContracts = subscribe('service_contracts', setServiceContracts); // NEW
-
-            // 3. Field Ops
-            const unsubTerritories = subscribe('territories', setTerritories, 'name');
-            const unsubAgents = subscribe('agents', setAgents, 'name');
+            // 1. QUOTES (Desc)
+            const unsubQuotes = onSnapshot(
+                query(collection(db, "users", user.uid, "quotes"), orderBy("lastModified", "desc")), 
+                (snap) => setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => console.warn("Quotes Error:", err)
+            );
             
-            // 4. Appointments (Manual because we want to clear loading here)
+            // 2. OPPORTUNITIES (Desc)
+            const unsubOpps = onSnapshot(
+                query(collection(db, "users", user.uid, "opportunities"), orderBy("createdAt", "desc")), 
+                (snap) => setOpportunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => console.warn("Opps Error:", err)
+            );
+            
+            // 3. COMPANIES (Ascending A-Z)
+            const unsubCompanies = onSnapshot(
+                query(collection(db, "users", user.uid, "companies"), orderBy("companyName", "asc")), 
+                (snap) => setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => console.warn("Companies Error:", err)
+            );
+            
+            // 4. CONTACTS (Ascending A-Z)
+            const unsubContacts = onSnapshot(
+                query(collection(db, "users", user.uid, "contacts"), orderBy("lastName", "asc")), 
+                (snap) => setContacts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => console.warn("Contacts Error:", err)
+            );
+            
+            // 5. LEDGER (Desc)
+            const unsubLedger = onSnapshot(
+                query(collection(db, "users", user.uid, "ledger"), orderBy("date", "desc")), 
+                (snap) => setLedgerEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => console.warn("Ledger Error:", err)
+            );
+            
+            // 6. MANPOWER (Desc)
+            const unsubManpower = onSnapshot(
+                query(collection(db, "users", user.uid, "manpower_logs"), orderBy("date", "desc")), 
+                (snap) => setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => console.warn("Manpower Error:", err)
+            );
+            
+            // 7. SERVICE INVOICES (Desc)
+            const unsubServices = onSnapshot(
+                query(collection(db, "users", user.uid, "service_invoices"), orderBy("createdAt", "desc")), 
+                (snap) => setServiceInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => console.warn("Service Invoices Error:", err)
+            );
+
+            // 8. SERVICE CONTRACTS (Desc)
+            // Note: Fallback to empty if collection missing
+            const unsubContracts = onSnapshot(
+                query(collection(db, "users", user.uid, "service_contracts"), orderBy("createdAt", "desc")),
+                (snap) => setServiceContracts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => {
+                    console.warn("Contracts Error (Likely new collection):", err.code);
+                    setServiceContracts([]);
+                }
+            );
+            
+            // 9. TERRITORIES (Ascending A-Z)
+            const unsubTerritories = onSnapshot(
+                query(collection(db, "users", user.uid, "territories"), orderBy("name", "asc")), 
+                (snap) => setTerritories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => console.warn("Territories Error:", err)
+            );
+            
+            // 10. AGENTS (Ascending A-Z)
+            const unsubAgents = onSnapshot(
+                query(collection(db, "users", user.uid, "agents"), orderBy("name", "asc")), 
+                (snap) => setAgents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                (err) => console.warn("Agents Error:", err)
+            );
+            
+            // 11. APPOINTMENTS (Ascending Date)
             const unsubAppointments = onSnapshot(
                 query(collection(db, "users", user.uid, "appointments"), orderBy("appointmentDate", "asc")), 
                 (snap) => {
                     setAppointments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                    setLoadingData(false); // Success!
-                    clearTimeout(safetyTimer); // Cancel safety timer
+                    // STOP LOADING SPINNER HERE
+                    setLoadingData(false); 
+                    clearTimeout(safetyTimer);
                 },
                 (err) => {
                     console.warn("Appointments Error:", err);
                     setAppointments([]);
-                    setLoadingData(false); // Clear loading anyway
+                    setLoadingData(false); // Stop loading even on error
                     clearTimeout(safetyTimer);
                 }
             );
