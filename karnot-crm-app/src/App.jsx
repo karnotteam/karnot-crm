@@ -51,6 +51,7 @@ import ManagementAccounts from './pages/ManagementAccounts.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
+import PayrollManager from './components/PayrollManager.jsx'; // <--- NEW IMPORT
 
 // ==========================================
 // 3. DATA & ACCOUNTING MODULES
@@ -67,7 +68,7 @@ import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx';
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
-    MapPin, Wrench, Briefcase, FileText, Target
+    MapPin, Wrench, Briefcase, FileText, Target, UserCheck 
 } from 'lucide-react'; 
 
 // ==========================================
@@ -643,6 +644,9 @@ export default function App() {
                 
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
+                {/* ======================= */}
+                {/* ACCOUNTS HUB (ADMIN)    */}
+                {/* ======================= */}
                 {activeView === 'accounts' && (
                     <div className="space-y-6 pb-20">
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
@@ -651,8 +655,17 @@ export default function App() {
                                 <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">FYE: Dec 31 | BOI-SIPP Registered Enterprise</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
+                                {/* LEDGER */}
                                 <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}><Landmark size={14} className="mr-1" /> Disbursements</Button>
-                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Wrench size={14} className="mr-1" /> Manpower</Button>
+                                
+                                {/* PAYROLL (NEW) */}
+                                <Button onClick={() => setSubView('payroll')} variant={subView === 'payroll' ? 'primary' : 'secondary'} className="border-purple-200 text-purple-700 bg-purple-50">
+                                    <UserCheck size={14} className="mr-1" /> Payroll & Tax
+                                </Button>
+
+                                {/* MANPOWER (Kept for Project Costing) */}
+                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Wrench size={14} className="mr-1" /> Manpower (Project)</Button>
+                                
                                 <Button onClick={() => setSubView('services')} variant={subView === 'services' ? 'primary' : 'secondary'} className="border-orange-200 text-orange-700 bg-orange-50">
                                     <Wrench size={14} className="mr-1" /> Service Invoices
                                 </Button>
@@ -672,6 +685,13 @@ export default function App() {
                                 companies={companies} 
                                 quotes={quotes} 
                                 opportunities={opportunities}
+                            />
+                        )}
+                        
+                        {/* NEW PAYROLL VIEW */}
+                        {subView === 'payroll' && (
+                            <PayrollManager 
+                                user={user} 
                             />
                         )}
                         
