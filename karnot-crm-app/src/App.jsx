@@ -48,6 +48,7 @@ import AssetsPage from './pages/AssetsPage.jsx';
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
 import ManagementAccounts from './pages/ManagementAccounts.jsx';
+import PayrollManager from './pages/PayrollManager.jsx'; // <--- NEW PAYROLL MODULE
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -71,7 +72,7 @@ import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx';
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
-    MapPin, Wrench, Briefcase, FileText, Target, Package
+    MapPin, Wrench, Briefcase, FileText, Target, Package, UserCheck
 } from 'lucide-react'; 
 
 // ==========================================
@@ -679,6 +680,9 @@ export default function App() {
                 
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
+                {/* ======================= */}
+                {/* ACCOUNTS HUB (ADMIN)    */}
+                {/* ======================= */}
                 {activeView === 'accounts' && (
                     <div className="space-y-6 pb-20">
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
@@ -688,7 +692,13 @@ export default function App() {
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}><Landmark size={14} className="mr-1" /> Disbursements</Button>
-                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Wrench size={14} className="mr-1" /> Manpower</Button>
+                                
+                                {/* NEW PAYROLL BUTTON */}
+                                <Button onClick={() => setSubView('payroll')} variant={subView === 'payroll' ? 'primary' : 'secondary'} className="border-purple-200 text-purple-700 bg-purple-50">
+                                    <UserCheck size={14} className="mr-1" /> Payroll & Tax
+                                </Button>
+
+                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Wrench size={14} className="mr-1" /> Manpower (Project)</Button>
                                 <Button onClick={() => setSubView('services')} variant={subView === 'services' ? 'primary' : 'secondary'} className="border-orange-200 text-orange-700 bg-orange-50">
                                     <Wrench size={14} className="mr-1" /> Service Invoices
                                 </Button>
@@ -708,6 +718,13 @@ export default function App() {
                                 companies={companies} 
                                 quotes={quotes} 
                                 opportunities={opportunities}
+                            />
+                        )}
+                        
+                        {/* NEW PAYROLL VIEW */}
+                        {subView === 'payroll' && (
+                            <PayrollManager 
+                                user={user} 
                             />
                         )}
                         
