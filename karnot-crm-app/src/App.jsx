@@ -49,7 +49,7 @@ import AssetsPage from './pages/AssetsPage.jsx';
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
 import ManagementAccounts from './pages/ManagementAccounts.jsx';
-import PayrollManager from './pages/PayrollManager.jsx';
+import PayrollManager from './pages/PayrollManager.jsx'; 
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -213,6 +213,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
                 {/* BOTTOM ROW: NAVIGATION MENU */}
                 <nav className="flex flex-wrap gap-2 items-center border-t border-gray-100 pt-3">
+                    
                     {/* Dashboard */}
                     <Button 
                         onClick={() => setActiveView('dashboard')} 
@@ -307,103 +308,61 @@ export default function App() {
     }, []);
 
     // ------------------------------------------
-    // REAL-TIME DATA STREAM (ROBUST VERSION)
+    // REAL-TIME DATA STREAM (BULLETPROOF VERSION)
     // ------------------------------------------
     useEffect(() => {
         if (user) {
-            console.log("Starting Data Sync...");
             setLoadingData(true); 
             
-            // Safety: Force loading to stop after 4 seconds even if a DB call hangs
+            // SAFETY TIMER: Force stop loading after 4 seconds
+            // This prevents the "Infinite Spin" if a collection is missing
             const safetyTimer = setTimeout(() => {
+                console.log("⚠️ Safety Timer Triggered: Forcing App Load");
                 setLoadingData(false);
-                console.log("Safety Timer: Forced Loading Stop");
             }, 4000);
 
-            // HELPER: Error Handler wrapper
-            const handleErr = (name, err) => console.warn(`Error fetching ${name}:`, err);
+            // HELPER: Safe Subscription
+            // If a collection doesn't exist, it returns empty array instead of crashing
+            const subscribe = (collectionName, setter, orderByField = 'createdAt') => {
+                return onSnapshot(
+                    query(collection(db, "users", user.uid, collectionName), orderBy(orderByField, 'desc')),
+                    (snap) => setter(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
+                    (err) => {
+                        console.warn(`Collection '${collectionName}' missing or error:`, err.code);
+                        setter([]); // Set empty array so app doesn't break
+                    }
+                );
+            };
 
-            // 1. Quotes
-            const unsubQuotes = onSnapshot(
-                query(collection(db, "users", user.uid, "quotes"), orderBy("lastModified", "desc")), 
-                (snap) => setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => handleErr("Quotes", err)
-            );
-            
-            // 2. Opportunities
-            const unsubOpps = onSnapshot(
-                query(collection(db, "users", user.uid, "opportunities"), orderBy("createdAt", "desc")), 
-                (snap) => setOpportunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => handleErr("Opportunities", err)
-            );
-            
-            // 3. Companies
-            const unsubCompanies = onSnapshot(
-                query(collection(db, "users", user.uid, "companies"), orderBy("companyName", "asc")), 
-                (snap) => setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => handleErr("Companies", err)
-            );
-            
-            // 4. Contacts
-            const unsubContacts = onSnapshot(
-                query(collection(db, "users", user.uid, "contacts"), orderBy("lastName", "asc")), 
-                (snap) => setContacts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => handleErr("Contacts", err)
-            );
-            
-            // 5. Ledger
-            const unsubLedger = onSnapshot(
-                query(collection(db, "users", user.uid, "ledger"), orderBy("date", "desc")), 
-                (snap) => setLedgerEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => handleErr("Ledger", err)
-            );
-            
-            // 6. Manpower
-            const unsubManpower = onSnapshot(
-                query(collection(db, "users", user.uid, "manpower_logs")), 
-                (snap) => setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => handleErr("Manpower", err)
-            );
-            
-            // 7. Service Invoices
-            const unsubServices = onSnapshot(
-                query(collection(db, "users", user.uid, "service_invoices"), orderBy("createdAt", "desc")), 
-                (snap) => setServiceInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => handleErr("Service Invoices", err)
-            );
+            // 1. Core CRM
+            const unsubQuotes = subscribe('quotes', setQuotes, 'lastModified');
+            const unsubOpps = subscribe('opportunities', setOpportunities);
+            const unsubCompanies = subscribe('companies', setCompanies, 'companyName'); // Note: Sort is different
+            const unsubContacts = subscribe('contacts', setContacts, 'lastName'); // Note: Sort is different
 
-            // 8. Service Contracts (NEW - Might be empty initially)
-            const unsubContracts = onSnapshot(
-                query(collection(db, "users", user.uid, "service_contracts")),
-                (snap) => setServiceContracts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => handleErr("Service Contracts", err)
-            );
+            // 2. Finance
+            const unsubLedger = subscribe('ledger', setLedgerEntries, 'date');
+            const unsubManpower = subscribe('manpower_logs', setManpowerLogs, 'date');
+            const unsubServices = subscribe('service_invoices', setServiceInvoices);
+            const unsubContracts = subscribe('service_contracts', setServiceContracts); // NEW
+
+            // 3. Field Ops
+            const unsubTerritories = subscribe('territories', setTerritories, 'name');
+            const unsubAgents = subscribe('agents', setAgents, 'name');
             
-            // 9. Territories
-            const unsubTerritories = onSnapshot(
-                query(collection(db, "users", user.uid, "territories"), orderBy("name", "asc")), 
-                (snap) => setTerritories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => handleErr("Territories", err)
-            );
-            
-            // 10. Agents
-            const unsubAgents = onSnapshot(
-                query(collection(db, "users", user.uid, "agents"), orderBy("name", "asc")), 
-                (snap) => setAgents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => handleErr("Agents", err)
-            );
-            
-            // 11. Appointments (Last one clears loading)
+            // 4. Appointments (Manual because we want to clear loading here)
             const unsubAppointments = onSnapshot(
                 query(collection(db, "users", user.uid, "appointments"), orderBy("appointmentDate", "asc")), 
                 (snap) => {
                     setAppointments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
                     setLoadingData(false); // Success!
-                    clearTimeout(safetyTimer); // Cancel safety timer
+                    clearTimeout(safetyTimer); // Kill the safety timer
                 },
                 (err) => {
-                    handleErr("Appointments", err);
-                    setLoadingData(false); // Clear loading even on error
+                    console.warn("Appointments Error:", err);
+                    setAppointments([]);
+                    setLoadingData(false); // Clear loading anyway
+                    clearTimeout(safetyTimer);
                 }
             );
             
