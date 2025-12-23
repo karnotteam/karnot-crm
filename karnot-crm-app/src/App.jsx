@@ -40,11 +40,14 @@ import PEZAZones from './pages/PEZAZones.jsx';
 // --- Service & Operations Modules ---
 import InstallEstimator from './pages/InstallEstimator.jsx';
 import ServiceInvoice from './pages/ServiceInvoice.jsx';
+import ServiceContractsPage from './pages/ServiceContractsPage.jsx';
+import MaintenanceCalendar from './pages/MaintenanceCalendar.jsx';
+import TechnicianMobileView from './pages/TechnicianMobileView.jsx';
+import AssetsPage from './pages/AssetsPage.jsx';
 
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
 import ManagementAccounts from './pages/ManagementAccounts.jsx';
-import PayrollManager from './pages/PayrollManager.jsx'; // <--- UPDATED PATH (Now in /pages)
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -68,7 +71,7 @@ import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx';
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
-    MapPin, Wrench, Briefcase, FileText, Target, UserCheck 
+    MapPin, Wrench, Briefcase, FileText, Target, Package
 } from 'lucide-react'; 
 
 // ==========================================
@@ -144,6 +147,10 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
     // Operations Menu
     const operationsMenu = [
+        { view: 'assets', label: 'Asset Registry', icon: Package, badge: 'NEW' },
+        { view: 'serviceContracts', label: 'Service Contracts', icon: FileText },
+        { view: 'maintenanceCalendar', label: 'Calendar', icon: HardHat },
+        { view: 'technicianView', label: 'Technician View', icon: Wrench, badge: 'MOBILE' },
         { view: 'installEstimator', label: 'Install & QC', icon: Wrench },
         { view: 'serviceInvoice', label: 'Service Invoice', icon: FileText }
     ];
@@ -536,6 +543,34 @@ export default function App() {
                     />
                 )}
                 
+                {activeView === 'assets' && (
+                    <AssetsPage 
+                        companies={companies}
+                        user={user}
+                    />
+                )}
+                
+                {activeView === 'serviceContracts' && (
+                    <ServiceContractsPage 
+                        companies={companies}
+                        user={user}
+                    />
+                )}
+                
+                {activeView === 'maintenanceCalendar' && (
+                    <MaintenanceCalendar 
+                        companies={companies}
+                        user={user}
+                    />
+                )}
+                
+                {activeView === 'technicianView' && (
+                    <TechnicianMobileView 
+                        companies={companies}
+                        user={user}
+                    />
+                )}
+                
                 {activeView === 'companies' && (
                     <CompaniesPage 
                         companies={companies} 
@@ -644,9 +679,6 @@ export default function App() {
                 
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
-                {/* ======================= */}
-                {/* ACCOUNTS HUB (ADMIN)    */}
-                {/* ======================= */}
                 {activeView === 'accounts' && (
                     <div className="space-y-6 pb-20">
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center border-b pb-6 gap-4">
@@ -655,17 +687,8 @@ export default function App() {
                                 <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest">FYE: Dec 31 | BOI-SIPP Registered Enterprise</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
-                                {/* LEDGER */}
                                 <Button onClick={() => setSubView('ledger')} variant={subView === 'ledger' ? 'primary' : 'secondary'}><Landmark size={14} className="mr-1" /> Disbursements</Button>
-                                
-                                {/* PAYROLL (NEW) */}
-                                <Button onClick={() => setSubView('payroll')} variant={subView === 'payroll' ? 'primary' : 'secondary'} className="border-purple-200 text-purple-700 bg-purple-50">
-                                    <UserCheck size={14} className="mr-1" /> Payroll & Tax
-                                </Button>
-
-                                {/* MANPOWER (Kept for Project Costing) */}
-                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Wrench size={14} className="mr-1" /> Manpower (Project)</Button>
-                                
+                                <Button onClick={() => setSubView('manpower')} variant={subView === 'manpower' ? 'primary' : 'secondary'}><Wrench size={14} className="mr-1" /> Manpower</Button>
                                 <Button onClick={() => setSubView('services')} variant={subView === 'services' ? 'primary' : 'secondary'} className="border-orange-200 text-orange-700 bg-orange-50">
                                     <Wrench size={14} className="mr-1" /> Service Invoices
                                 </Button>
@@ -685,13 +708,6 @@ export default function App() {
                                 companies={companies} 
                                 quotes={quotes} 
                                 opportunities={opportunities}
-                            />
-                        )}
-                        
-                        {/* NEW PAYROLL VIEW */}
-                        {subView === 'payroll' && (
-                            <PayrollManager 
-                                user={user} 
                             />
                         )}
                         
