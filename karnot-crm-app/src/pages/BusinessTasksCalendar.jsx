@@ -1,0 +1,900 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { db } from '../firebase';
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, writeBatch } from 'firebase/firestore';
+import {
+    CheckCircle, Clock, AlertTriangle, Plus, Edit, Trash2, Calendar,
+    FileText, Building, Landmark, Users, Filter, X, ChevronDown, ChevronUp, Copy, Trash
+} from 'lucide-react';
+import { Card, Button, Input, Textarea } from '../data/constants.jsx';
+
+// --- TASK CATEGORIES WITH ICONS & COLORS ---
+const TASK_CATEGORIES = {
+    'BIR': { 
+        label: 'BIR Filing', 
+        icon: FileText, 
+        color: 'text-red-600', 
+        bgColor: 'bg-red-50', 
+        borderColor: 'border-red-200' 
+    },
+    'DTI': { 
+        label: 'DTI Compliance', 
+        icon: Building, 
+        color: 'text-blue-600', 
+        bgColor: 'bg-blue-50', 
+        borderColor: 'border-blue-200' 
+    },
+    'BOI': { 
+        label: 'BOI Reporting', 
+        icon: Landmark, 
+        color: 'text-orange-600', 
+        bgColor: 'bg-orange-50', 
+        borderColor: 'border-orange-200' 
+    },
+    'SEC': { 
+        label: 'SEC Compliance', 
+        icon: Building, 
+        color: 'text-purple-600', 
+        bgColor: 'bg-purple-50', 
+        borderColor: 'border-purple-200' 
+    },
+    'SSS': { 
+        label: 'SSS/PhilHealth/Pag-IBIG', 
+        icon: Users, 
+        color: 'text-green-600', 
+        bgColor: 'bg-green-50', 
+        borderColor: 'border-green-200' 
+    },
+    'AUDIT': { 
+        label: 'Audit & Review', 
+        icon: FileText, 
+        color: 'text-indigo-600', 
+        bgColor: 'bg-indigo-50', 
+        borderColor: 'border-indigo-200' 
+    },
+    'LEGAL': { 
+        label: 'Legal & Contracts', 
+        icon: FileText, 
+        color: 'text-gray-600', 
+        bgColor: 'bg-gray-50', 
+        borderColor: 'border-gray-200' 
+    },
+    'OTHER': { 
+        label: 'Other Business Tasks', 
+        icon: Clock, 
+        color: 'text-cyan-600', 
+        bgColor: 'bg-cyan-50', 
+        borderColor: 'border-cyan-200' 
+    }
+};
+
+// --- RECURRING PATTERNS ---
+const RECURRING_PATTERNS = [
+    { value: 'none', label: 'One-time Task' },
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'quarterly', label: 'Quarterly' },
+    { value: 'annually', label: 'Annually' }
+];
+
+// --- DUPLICATE DETECTOR MODAL ---
+const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) => {
+    const [selectedDuplicates, setSelectedDuplicates] = useState([]);
+
+    // Find duplicates based on title + dueDate + category
+    const duplicateGroups = useMemo(() => {
+        const groups = {};
+        
+        tasks.forEach(task => {
+            const key = `${task.title.toLowerCase().trim()}_${task.dueDate}_${task.category}`;
+            if (!groups[key]) {
+                groups[key] = [];
+            }
+            groups[key].push(task);
+        });
+
+        // Only keep groups with duplicates (more than 1 task)
+        const duplicates = Object.entries(groups)
+            .filter(([_, taskGroup]) => taskGroup.length > 1)
+            .map(([key, taskGroup]) => ({
+                key,
+                tasks: taskGroup.sort((a, b) => {
+                    // Sort by creation date if available, oldest first
+                    const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+                    const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+                    return dateA - dateB;
+                })
+            }));
+
+        return duplicates;
+    }, [tasks]);
+
+    const handleToggleAll = () => {
+        if (selectedDuplicates.length === duplicateGroups.length) {
+            setSelectedDuplicates([]);
+        } else {
+            setSelectedDuplicates(duplicateGroups.map(g => g.key));
+        }
+    };
+
+    const handleDeleteSelected = async () => {
+        const selectedGroups = duplicateGroups.filter(g => selectedDuplicates.includes(g.key));
+        const tasksToDelete = [];
+
+        selectedGroups.forEach(group => {
+            // Keep the oldest (first) task, delete the rest
+            const duplicatesToDelete = group.tasks.slice(1);
+            tasksToDelete.push(...duplicatesToDelete);
+        });
+
+        if (tasksToDelete.length === 0) {
+            alert('No duplicates selected');
+            return;
+        }
+
+        if (!window.confirm(`Delete ${tasksToDelete.length} duplicate task${tasksToDelete.length !== 1 ? 's' : ''}?`)) {
+            return;
+        }
+
+        // Use batch delete for efficiency
+        const batch = writeBatch(db);
+        tasksToDelete.forEach(task => {
+            const taskRef = doc(db, "users", user.uid, "business_tasks", task.id);
+            batch.delete(taskRef);
+        });
+
+        await batch.commit();
+        alert(`✅ Deleted ${tasksToDelete.length} duplicate task${tasksToDelete.length !== 1 ? 's' : ''}!`);
+        onClose();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+                <div className="p-6 border-b flex justify-between items-center bg-orange-50">
+                    <div>
+                        <h2 className="text-2xl font-black text-gray-800 uppercase tracking-tight flex items-center gap-2">
+                            <Copy size={24} className="text-orange-600" />
+                            Duplicate Task Detector
+                        </h2>
+                        <p className="text-sm text-gray-600 mt-1">
+                            Found {duplicateGroups.length} duplicate group{duplicateGroups.length !== 1 ? 's' : ''}
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <X size={24} />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6">
+                    {duplicateGroups.length === 0 ? (
+                        <div className="text-center py-12">
+                            <CheckCircle className="mx-auto text-green-500 mb-4" size={64} />
+                            <h3 className="text-xl font-bold text-gray-700 mb-2">No Duplicates Found!</h3>
+                            <p className="text-gray-500">Your task list is clean.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {/* Select All */}
+                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedDuplicates.length === duplicateGroups.length}
+                                        onChange={handleToggleAll}
+                                        className="w-4 h-4"
+                                    />
+                                    <span className="font-bold text-sm">
+                                        Select All ({duplicateGroups.length} groups)
+                                    </span>
+                                </label>
+                                <span className="text-xs text-gray-500">
+                                    Keeps oldest, deletes newer duplicates
+                                </span>
+                            </div>
+
+                            {/* Duplicate Groups */}
+                            {duplicateGroups.map(group => (
+                                <Card key={group.key} className="border-l-4 border-orange-500">
+                                    <div className="p-4">
+                                        <label className="flex items-start gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedDuplicates.includes(group.key)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedDuplicates([...selectedDuplicates, group.key]);
+                                                    } else {
+                                                        setSelectedDuplicates(selectedDuplicates.filter(k => k !== group.key));
+                                                    }
+                                                }}
+                                                className="w-4 h-4 mt-1"
+                                            />
+                                            
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <h4 className="font-bold text-gray-800">{group.tasks[0].title}</h4>
+                                                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold">
+                                                        {group.tasks.length} duplicates
+                                                    </span>
+                                                </div>
+                                                
+                                                <div className="space-y-2 ml-4">
+                                                    {group.tasks.map((task, idx) => (
+                                                        <div 
+                                                            key={task.id}
+                                                            className={`text-sm p-2 rounded border ${
+                                                                idx === 0 
+                                                                    ? 'bg-green-50 border-green-200' 
+                                                                    : 'bg-red-50 border-red-200'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <span className={`font-bold ${
+                                                                    idx === 0 ? 'text-green-700' : 'text-red-700'
+                                                                }`}>
+                                                                    {idx === 0 ? '✓ KEEP' : '✗ DELETE'}
+                                                                </span>
+                                                                <div className="text-xs text-gray-600">
+                                                                    <span className="mr-3">📅 Due: {new Date(task.dueDate).toLocaleDateString()}</span>
+                                                                    <span>
+                                                                        Created: {task.createdAt?.toDate 
+                                                                            ? task.createdAt.toDate().toLocaleDateString() 
+                                                                            : 'Unknown'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {duplicateGroups.length > 0 && (
+                    <div className="p-6 border-t bg-gray-50 flex gap-3">
+                        <Button
+                            onClick={handleDeleteSelected}
+                            variant="primary"
+                            className="flex-1 bg-red-600 hover:bg-red-700"
+                            disabled={selectedDuplicates.length === 0}
+                        >
+                            <Trash size={16} className="mr-2" />
+                            Delete {selectedDuplicates.reduce((sum, key) => {
+                                const group = duplicateGroups.find(g => g.key === key);
+                                return sum + (group ? group.tasks.length - 1 : 0);
+                            }, 0)} Duplicate{selectedDuplicates.reduce((sum, key) => {
+                                const group = duplicateGroups.find(g => g.key === key);
+                                return sum + (group ? group.tasks.length - 1 : 0);
+                            }, 0) !== 1 ? 's' : ''}
+                        </Button>
+                        <Button onClick={onClose} variant="secondary">
+                            Close
+                        </Button>
+                    </div>
+                )}
+            </Card>
+        </div>
+    );
+};
+
+// --- TASK STATUS BADGE ---
+const StatusBadge = ({ status, dueDate }) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
+    const daysUntilDue = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+
+    if (status === 'COMPLETED') {
+        return (
+            <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-green-100 text-green-700">
+                ✓ Completed
+            </span>
+        );
+    }
+
+    if (daysUntilDue < 0) {
+        return (
+            <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-red-100 text-red-700 animate-pulse">
+                ⚠ Overdue
+            </span>
+        );
+    }
+
+    if (daysUntilDue <= 7) {
+        return (
+            <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-orange-100 text-orange-700">
+                ⏰ Due Soon
+            </span>
+        );
+    }
+
+    return (
+        <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-blue-100 text-blue-700">
+            📅 Upcoming
+        </span>
+    );
+};
+
+// --- TASK MODAL ---
+const TaskModal = ({ task, onClose, onSave, user }) => {
+    const [title, setTitle] = useState(task?.title || '');
+    const [description, setDescription] = useState(task?.description || '');
+    const [category, setCategory] = useState(task?.category || 'OTHER');
+    const [dueDate, setDueDate] = useState(task?.dueDate || '');
+    const [priority, setPriority] = useState(task?.priority || 'MEDIUM');
+    const [recurring, setRecurring] = useState(task?.recurring || 'none');
+    const [status, setStatus] = useState(task?.status || 'PENDING');
+
+    const handleSave = async () => {
+        if (!title || !dueDate) {
+            alert('Please fill in title and due date');
+            return;
+        }
+
+        const taskData = {
+            title,
+            description,
+            category,
+            dueDate,
+            priority,
+            recurring,
+            status,
+            updatedAt: serverTimestamp()
+        };
+
+        if (task) {
+            // Update existing
+            await updateDoc(doc(db, "users", user.uid, "business_tasks", task.id), taskData);
+        } else {
+            // Create new
+            await addDoc(collection(db, "users", user.uid, "business_tasks"), {
+                ...taskData,
+                createdAt: serverTimestamp()
+            });
+        }
+
+        onSave();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+                <div className="p-6 space-y-4">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-2xl font-black text-gray-800 uppercase tracking-tight">
+                            {task ? 'Edit Task' : 'New Business Task'}
+                        </h2>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                            <X size={24} />
+                        </button>
+                    </div>
+
+                    {/* Title */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Task Title *
+                        </label>
+                        <Input
+                            placeholder="e.g., Submit Q4 BIR 2550M"
+                            value={title}
+                            onChange={e => setTitle(e.target.value)}
+                        />
+                    </div>
+
+                    {/* Category & Priority */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Category *
+                            </label>
+                            <select
+                                value={category}
+                                onChange={e => setCategory(e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
+                            >
+                                {Object.entries(TASK_CATEGORIES).map(([key, cat]) => (
+                                    <option key={key} value={key}>{cat.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Priority
+                            </label>
+                            <select
+                                value={priority}
+                                onChange={e => setPriority(e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
+                            >
+                                <option value="LOW">Low Priority</option>
+                                <option value="MEDIUM">Medium Priority</option>
+                                <option value="HIGH">High Priority</option>
+                                <option value="CRITICAL">Critical</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Due Date & Recurring */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Due Date *
+                            </label>
+                            <input
+                                type="date"
+                                value={dueDate}
+                                onChange={e => setDueDate(e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Recurring
+                            </label>
+                            <select
+                                value={recurring}
+                                onChange={e => setRecurring(e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
+                            >
+                                {RECURRING_PATTERNS.map(p => (
+                                    <option key={p.value} value={p.value}>{p.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Status (only show when editing) */}
+                    {task && (
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Status
+                            </label>
+                            <select
+                                value={status}
+                                onChange={e => setStatus(e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
+                            >
+                                <option value="PENDING">Pending</option>
+                                <option value="IN_PROGRESS">In Progress</option>
+                                <option value="COMPLETED">Completed</option>
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Description */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Description / Notes
+                        </label>
+                        <Textarea
+                            placeholder="Additional details, requirements, documents needed..."
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            rows={4}
+                        />
+                    </div>
+
+                    {/* Recurring Info */}
+                    {recurring !== 'none' && (
+                        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <p className="text-xs text-blue-700 font-bold">
+                                ℹ️ This task will recur {recurring}. After completion, a new instance will be created automatically.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-2 pt-4 border-t">
+                        <Button onClick={handleSave} variant="primary" className="flex-1">
+                            {task ? 'Update Task' : 'Create Task'}
+                        </Button>
+                        <Button onClick={onClose} variant="secondary">
+                            Cancel
+                        </Button>
+                    </div>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+// --- MAIN COMPONENT ---
+const BusinessTasksCalendar = ({ user }) => {
+    const [tasks, setTasks] = useState([]);
+    const [showModal, setShowModal] = useState(false);
+    const [showDuplicateDetector, setShowDuplicateDetector] = useState(false);
+    const [editingTask, setEditingTask] = useState(null);
+    const [filterCategory, setFilterCategory] = useState('ALL');
+    const [filterStatus, setFilterStatus] = useState('ACTIVE');
+    const [expandedCategory, setExpandedCategory] = useState(null);
+
+    // Load tasks from Firebase
+    useEffect(() => {
+        if (!user) return;
+
+        const unsubscribe = onSnapshot(
+            query(collection(db, "users", user.uid, "business_tasks"), orderBy("dueDate", "asc")),
+            (snap) => {
+                setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            },
+            (error) => {
+                console.warn("Business tasks collection not initialized:", error.code);
+                setTasks([]);
+            }
+        );
+
+        return () => unsubscribe();
+    }, [user]);
+
+    // Filter tasks
+    const filteredTasks = useMemo(() => {
+        return tasks.filter(task => {
+            if (filterCategory !== 'ALL' && task.category !== filterCategory) return false;
+            if (filterStatus === 'ACTIVE' && task.status === 'COMPLETED') return false;
+            if (filterStatus === 'COMPLETED' && task.status !== 'COMPLETED') return false;
+            return true;
+        });
+    }, [tasks, filterCategory, filterStatus]);
+
+    // Group tasks by category
+    const tasksByCategory = useMemo(() => {
+        const grouped = {};
+        filteredTasks.forEach(task => {
+            if (!grouped[task.category]) {
+                grouped[task.category] = [];
+            }
+            grouped[task.category].push(task);
+        });
+        return grouped;
+    }, [filteredTasks]);
+
+    // Quick stats
+    const stats = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const overdue = tasks.filter(t => 
+            t.status !== 'COMPLETED' && new Date(t.dueDate) < today
+        ).length;
+
+        const dueSoon = tasks.filter(t => {
+            if (t.status === 'COMPLETED') return false;
+            const due = new Date(t.dueDate);
+            const daysUntil = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+            return daysUntil >= 0 && daysUntil <= 7;
+        }).length;
+
+        const completed = tasks.filter(t => t.status === 'COMPLETED').length;
+        const pending = tasks.filter(t => t.status !== 'COMPLETED').length;
+
+        return { overdue, dueSoon, completed, pending };
+    }, [tasks]);
+
+    const handleDelete = async (taskId) => {
+        if (window.confirm('Delete this task?')) {
+            await deleteDoc(doc(db, "users", user.uid, "business_tasks", taskId));
+        }
+    };
+
+    const handleToggleComplete = async (task) => {
+        const newStatus = task.status === 'COMPLETED' ? 'PENDING' : 'COMPLETED';
+        await updateDoc(doc(db, "users", user.uid, "business_tasks", task.id), {
+            status: newStatus,
+            completedAt: newStatus === 'COMPLETED' ? serverTimestamp() : null
+        });
+
+        if (newStatus === 'COMPLETED' && task.recurring !== 'none') {
+            const nextDueDate = calculateNextDueDate(task.dueDate, task.recurring);
+            await addDoc(collection(db, "users", user.uid, "business_tasks"), {
+                title: task.title,
+                description: task.description,
+                category: task.category,
+                dueDate: nextDueDate,
+                priority: task.priority,
+                recurring: task.recurring,
+                status: 'PENDING',
+                createdAt: serverTimestamp()
+            });
+        }
+    };
+
+    const calculateNextDueDate = (currentDue, pattern) => {
+        const date = new Date(currentDue);
+        
+        switch (pattern) {
+            case 'monthly':
+                date.setMonth(date.getMonth() + 1);
+                break;
+            case 'quarterly':
+                date.setMonth(date.getMonth() + 3);
+                break;
+            case 'annually':
+                date.setFullYear(date.getFullYear() + 1);
+                break;
+        }
+
+        return date.toISOString().split('T')[0];
+    };
+
+    return (
+        <div className="space-y-6 pb-10">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h2 className="text-3xl font-black text-gray-800 uppercase tracking-tight">
+                        Business Tasks & Compliance Calendar
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-1">
+                        Track BIR, DTI, BOI, SEC deadlines and business tasks
+                    </p>
+                </div>
+
+                <div className="flex gap-2">
+                    <Button
+                        onClick={() => setShowDuplicateDetector(true)}
+                        variant="secondary"
+                        className="border-orange-200 text-orange-700 bg-orange-50"
+                    >
+                        <Copy size={16} className="mr-1" /> Find Duplicates
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            setEditingTask(null);
+                            setShowModal(true);
+                        }}
+                        variant="primary"
+                        className="bg-orange-600 hover:bg-orange-700"
+                    >
+                        <Plus size={16} className="mr-1" /> New Task
+                    </Button>
+                </div>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className="p-4 border-l-4 border-red-500">
+                    <div className="flex items-center gap-3">
+                        <AlertTriangle className="text-red-500" size={24} />
+                        <div>
+                            <p className="text-2xl font-black text-gray-800">{stats.overdue}</p>
+                            <p className="text-xs text-gray-500 uppercase font-bold">Overdue</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="p-4 border-l-4 border-orange-500">
+                    <div className="flex items-center gap-3">
+                        <Clock className="text-orange-500" size={24} />
+                        <div>
+                            <p className="text-2xl font-black text-gray-800">{stats.dueSoon}</p>
+                            <p className="text-xs text-gray-500 uppercase font-bold">Due This Week</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="p-4 border-l-4 border-blue-500">
+                    <div className="flex items-center gap-3">
+                        <Calendar className="text-blue-500" size={24} />
+                        <div>
+                            <p className="text-2xl font-black text-gray-800">{stats.pending}</p>
+                            <p className="text-xs text-gray-500 uppercase font-bold">Pending Tasks</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="p-4 border-l-4 border-green-500">
+                    <div className="flex items-center gap-3">
+                        <CheckCircle className="text-green-500" size={24} />
+                        <div>
+                            <p className="text-2xl font-black text-gray-800">{stats.completed}</p>
+                            <p className="text-xs text-gray-500 uppercase font-bold">Completed</p>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Filters */}
+            <Card className="p-4">
+                <div className="flex flex-wrap gap-3 items-center">
+                    <Filter size={16} className="text-gray-400" />
+                    <span className="text-xs font-bold text-gray-500 uppercase">Filters:</span>
+
+                    <select
+                        value={filterCategory}
+                        onChange={e => setFilterCategory(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold"
+                    >
+                        <option value="ALL">All Categories</option>
+                        {Object.entries(TASK_CATEGORIES).map(([key, cat]) => (
+                            <option key={key} value={key}>{cat.label}</option>
+                        ))}
+                    </select>
+
+                    <select
+                        value={filterStatus}
+                        onChange={e => setFilterStatus(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold"
+                    >
+                        <option value="ACTIVE">Active Tasks</option>
+                        <option value="COMPLETED">Completed Tasks</option>
+                        <option value="ALL">All Tasks</option>
+                    </select>
+
+                    <span className="ml-auto text-xs text-gray-400">
+                        {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
+                    </span>
+                </div>
+            </Card>
+
+            {/* Tasks Grouped by Category */}
+            <div className="space-y-4">
+                {Object.entries(tasksByCategory).map(([categoryKey, categoryTasks]) => {
+                    const catInfo = TASK_CATEGORIES[categoryKey];
+                    const CategoryIcon = catInfo.icon;
+                    const isExpanded = expandedCategory === categoryKey;
+
+                    return (
+                        <Card key={categoryKey} className={`overflow-hidden ${catInfo.borderColor} border-l-4`}>
+                            <div
+                                className={`p-4 ${catInfo.bgColor} cursor-pointer hover:opacity-80 transition-opacity`}
+                                onClick={() => setExpandedCategory(isExpanded ? null : categoryKey)}
+                            >
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-3">
+                                        <CategoryIcon className={catInfo.color} size={20} />
+                                        <div>
+                                            <h3 className="font-black text-gray-800 uppercase text-sm">
+                                                {catInfo.label}
+                                            </h3>
+                                            <p className="text-xs text-gray-500">
+                                                {categoryTasks.length} task{categoryTasks.length !== 1 ? 's' : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                </div>
+                            </div>
+
+                            {isExpanded && (
+                                <div className="divide-y divide-gray-100">
+                                    {categoryTasks.map(task => (
+                                        <div key={task.id} className="p-4 hover:bg-gray-50 transition-colors">
+                                            <div className="flex items-start gap-3">
+                                                <button
+                                                    onClick={() => handleToggleComplete(task)}
+                                                    className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                                        task.status === 'COMPLETED'
+                                                            ? 'bg-green-500 border-green-500'
+                                                            : 'border-gray-300 hover:border-green-500'
+                                                    }`}
+                                                >
+                                                    {task.status === 'COMPLETED' && (
+                                                        <CheckCircle size={14} className="text-white" />
+                                                    )}
+                                                </button>
+
+                                                <div className="flex-1">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div>
+                                                            <h4 className={`font-bold text-gray-800 ${
+                                                                task.status === 'COMPLETED' ? 'line-through opacity-50' : ''
+                                                            }`}>
+                                                                {task.title}
+                                                            </h4>
+                                                            {task.description && (
+                                                                <p className="text-sm text-gray-600 mt-1">
+                                                                    {task.description}
+                                                                </p>
+                                                            )}
+                                                            <div className="flex flex-wrap gap-2 mt-2 items-center">
+                                                                <StatusBadge status={task.status} dueDate={task.dueDate} />
+                                                                <span className="text-xs text-gray-500">
+                                                                    📅 Due: {new Date(task.dueDate).toLocaleDateString('en-US', { 
+                                                                        month: 'short', 
+                                                                        day: 'numeric', 
+                                                                        year: 'numeric' 
+                                                                    })}
+                                                                </span>
+                                                                {task.priority === 'HIGH' || task.priority === 'CRITICAL' ? (
+                                                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                                                        task.priority === 'CRITICAL' 
+                                                                            ? 'bg-red-100 text-red-700' 
+                                                                            : 'bg-orange-100 text-orange-700'
+                                                                    }`}>
+                                                                        {task.priority}
+                                                                    </span>
+                                                                ) : null}
+                                                                {task.recurring !== 'none' && (
+                                                                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                                                                        🔄 {task.recurring}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex gap-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingTask(task);
+                                                                    setShowModal(true);
+                                                                }}
+                                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            >
+                                                                <Edit size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDelete(task.id)}
+                                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </Card>
+                    );
+                })}
+            </div>
+
+            {/* Empty State */}
+            {filteredTasks.length === 0 && (
+                <Card className="p-12 text-center">
+                    <Calendar className="mx-auto text-gray-300 mb-4" size={64} />
+                    <h3 className="text-xl font-bold text-gray-600 mb-2">No Tasks Found</h3>
+                    <p className="text-gray-500 mb-4">
+                        {filterStatus === 'COMPLETED' 
+                            ? "No completed tasks yet" 
+                            : "Start by creating your first business task"}
+                    </p>
+                    <Button
+                        onClick={() => {
+                            setEditingTask(null);
+                            setShowModal(true);
+                        }}
+                        variant="primary"
+                    >
+                        <Plus size={16} className="mr-1" /> Create First Task
+                    </Button>
+                </Card>
+            )}
+
+            {/* Modals */}
+            {showModal && (
+                <TaskModal
+                    task={editingTask}
+                    onClose={() => {
+                        setShowModal(false);
+                        setEditingTask(null);
+                    }}
+                    onSave={() => {
+                        setShowModal(false);
+                        setEditingTask(null);
+                    }}
+                    user={user}
+                />
+            )}
+
+            {showDuplicateDetector && (
+                <DuplicateDetectorModal
+                    tasks={tasks}
+                    onClose={() => setShowDuplicateDetector(false)}
+                    user={user}
+                />
+            )}
+        </div>
+    );
+};
+
+export default BusinessTasksCalendar;
