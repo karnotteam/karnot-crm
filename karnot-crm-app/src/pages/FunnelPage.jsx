@@ -162,12 +162,15 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
 
     // Replace template variables
     const fillTemplate = (text) => {
+        const value = Number(opportunity.estimatedValue) || 0;
+        const savings = Math.round(value * 0.3);
+        
         return text
-            .replace(/{{company}}/g, opportunity.customerName || '[Company]')
-            .replace(/{{contact}}/g, opportunity.contactName || '[Contact]')
-            .replace(/{{project}}/g, opportunity.project || '[Project]')
-            .replace(/{{value}}/g, (opportunity.estimatedValue || 0).toLocaleString())
-            .replace(/{{savings}}/g, Math.round((opportunity.estimatedValue || 0) * 0.3).toLocaleString())
+            .replace(/{{company}}/g, opportunity.customerName || '[Company Name]')
+            .replace(/{{contact}}/g, opportunity.contactName || '[Contact Name]')
+            .replace(/{{project}}/g, opportunity.project || '[Project Name]')
+            .replace(/{{value}}/g, value.toLocaleString())
+            .replace(/{{savings}}/g, savings.toLocaleString())
             .replace(/{{payback}}/g, '18-24')
             .replace(/{{roi}}/g, '35')
             .replace(/{{timeline}}/g, '8-12');
