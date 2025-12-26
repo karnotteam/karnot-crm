@@ -48,58 +48,12 @@ Email: [Your Email]`
     follow_up: {
         name: 'Follow-Up After Demo',
         subject: 'Following Up: {{company}} Heat Pump Project',
-        body: `Dear {{contact}},
-
-Thank you for taking the time to meet with us regarding the {{project}} project.
-
-As discussed, our R290 heat pump system can deliver:
-• Estimated annual savings: ${{savings}}
-• Payback period: {{payback}} months
-• Reduced carbon footprint
-• Compliance with latest environmental regulations
-
-I've attached our formal proposal for your review.
-
-Would you like to schedule a follow-up call to discuss any questions?
-
-Looking forward to working with {{company}}.
-
-Best regards,
-Stuart Cox
-CEO, Karnot Energy Solutions Inc.`
+        body: 'Dear {{contact}},\n\nThank you for taking the time to meet with us regarding the {{project}} project.\n\nAs discussed, our R290 heat pump system can deliver:\n• Estimated annual savings: {{savings}}\n• Payback period: {{payback}} months\n• Reduced carbon footprint\n• Compliance with latest environmental regulations\n\nI\'ve attached our formal proposal for your review.\n\nWould you like to schedule a follow-up call to discuss any questions?\n\nLooking forward to working with {{company}}.\n\nBest regards,\nStuart Cox\nCEO, Karnot Energy Solutions Inc.'
     },
     proposal_sent: {
         name: 'Proposal Sent',
         subject: 'Proposal: {{project}} - Karnot Energy Solutions',
-        body: `Dear {{contact}},
-
-Please find attached our detailed proposal for the {{project}} at {{company}}.
-
-Proposal Summary:
-• Total Investment: ${{value}}
-• Estimated ROI: {{roi}}%
-• Implementation Timeline: {{timeline}} weeks
-• Warranty: 5 years comprehensive
-
-Our proposal includes:
-✓ Complete system design
-✓ Professional installation
-✓ Commissioning and training
-✓ Maintenance contract options
-
-The proposal is valid for 60 days. We're happy to discuss any adjustments or answer questions.
-
-Next Steps:
-1. Review the proposal
-2. Schedule a technical Q&A session
-3. Site survey (if needed)
-4. Final approval and contract signing
-
-I'll follow up with you next week to discuss your thoughts.
-
-Best regards,
-Stuart Cox
-CEO, Karnot Energy Solutions Inc.`
+        body: 'Dear {{contact}},\n\nPlease find attached our detailed proposal for the {{project}} at {{company}}.\n\nProposal Summary:\n• Total Investment: {{value}}\n• Estimated ROI: {{roi}}%\n• Implementation Timeline: {{timeline}} weeks\n• Warranty: 5 years comprehensive\n\nOur proposal includes:\n✓ Complete system design\n✓ Professional installation\n✓ Commissioning and training\n✓ Maintenance contract options\n\nThe proposal is valid for 60 days. We\'re happy to discuss any adjustments or answer questions.\n\nNext Steps:\n1. Review the proposal\n2. Schedule a technical Q&A session\n3. Site survey (if needed)\n4. Final approval and contract signing\n\nI\'ll follow up with you next week to discuss your thoughts.\n\nBest regards,\nStuart Cox\nCEO, Karnot Energy Solutions Inc.'
     },
     negotiation: {
         name: 'Negotiation Phase',
@@ -169,8 +123,8 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
             .replace(/{{company}}/g, opportunity.customerName || '[Company Name]')
             .replace(/{{contact}}/g, opportunity.contactName || '[Contact Name]')
             .replace(/{{project}}/g, opportunity.project || '[Project Name]')
-            .replace(/{{value}}/g, value.toLocaleString())
-            .replace(/{{savings}}/g, savings.toLocaleString())
+            .replace(/{{value}}/g, '$' + value.toLocaleString())
+            .replace(/{{savings}}/g, '$' + savings.toLocaleString())
             .replace(/{{payback}}/g, '18-24')
             .replace(/{{roi}}/g, '35')
             .replace(/{{timeline}}/g, '8-12');
