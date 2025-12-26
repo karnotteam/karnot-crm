@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase'; 
 import { collection, addDoc, serverTimestamp, doc, setDoc, deleteDoc, getDocs } from "firebase/firestore";
-import { Plus, X, Edit, Trash2, FileText, DollarSign, Building, ChevronLeft, ChevronRight, Calendar, Clock } from 'lucide-react';
-import { Card, Button, Input, Textarea } from '../data/constants.jsx'; 
+import { Plus, X, Edit, Trash2, FileText, DollarSign, Building, ChevronLeft, ChevronRight, Calendar, Mail, FileSpreadsheet, Copy } from 'lucide-react';
+import { Card, Button, Input, Textarea } from '../data/constants.jsx';
+import { CompanySearchSelector, DuplicateCompanyCleaner } from '../components/CompanySearchSelector.jsx';
+import { ExportButton } from '../utils/ExcelExport.jsx';
 
 const STAGE_ORDER = [
     'Lead',
@@ -14,8 +16,295 @@ const STAGE_ORDER = [
     'Closed-Lost'
 ];
 
-// --- OpportunityCard Component with Company History & Appointments ---
-const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThisOpp, companyData, upcomingAppointments }) => {
+// ==========================================
+// EMAIL TEMPLATES
+// ==========================================
+const EMAIL_TEMPLATES = {
+    initial_contact: {
+        name: 'Initial Contact',
+        subject: 'Clean Energy Solution for {{company}}',
+        body: `Dear {{contact}},
+
+Thank you for your interest in Karnot Energy Solutions' natural refrigerant heat pump systems.
+
+We specialize in PFAS-free, environmentally-friendly heating and cooling solutions using CO₂ and R290 technology for commercial and industrial applications.
+
+Our systems offer:
+• 48% cost advantage over traditional systems
+• Proven technology with international certifications
+• BOI-SIPP registered supplier
+• Full installation and maintenance support
+
+I'd like to schedule a brief call to discuss how our technology can benefit {{company}}.
+
+Are you available for a 15-minute call this week?
+
+Best regards,
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.
+Phone: [Your Phone]
+Email: [Your Email]`
+    },
+    follow_up: {
+        name: 'Follow-Up After Demo',
+        subject: 'Following Up: {{company}} Heat Pump Project',
+        body: `Dear {{contact}},
+
+Thank you for taking the time to meet with us regarding the {{project}} project.
+
+As discussed, our R290 heat pump system can deliver:
+• Estimated annual savings: ${{savings}}
+• Payback period: {{payback}} months
+• Reduced carbon footprint
+• Compliance with latest environmental regulations
+
+I've attached our formal proposal for your review.
+
+Would you like to schedule a follow-up call to discuss any questions?
+
+Looking forward to working with {{company}}.
+
+Best regards,
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.`
+    },
+    proposal_sent: {
+        name: 'Proposal Sent',
+        subject: 'Proposal: {{project}} - Karnot Energy Solutions',
+        body: `Dear {{contact}},
+
+Please find attached our detailed proposal for the {{project}} at {{company}}.
+
+Proposal Summary:
+• Total Investment: ${{value}}
+• Estimated ROI: {{roi}}%
+• Implementation Timeline: {{timeline}} weeks
+• Warranty: 5 years comprehensive
+
+Our proposal includes:
+✓ Complete system design
+✓ Professional installation
+✓ Commissioning and training
+✓ Maintenance contract options
+
+The proposal is valid for 60 days. We're happy to discuss any adjustments or answer questions.
+
+Next Steps:
+1. Review the proposal
+2. Schedule a technical Q&A session
+3. Site survey (if needed)
+4. Final approval and contract signing
+
+I'll follow up with you next week to discuss your thoughts.
+
+Best regards,
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.`
+    },
+    negotiation: {
+        name: 'Negotiation Phase',
+        subject: 'Re: {{project}} - Addressing Your Questions',
+        body: `Dear {{contact}},
+
+Thank you for your questions regarding the {{project}} proposal.
+
+I'd like to address your key concerns:
+
+[Address specific concerns here]
+
+We value our partnership with {{company}} and want to ensure this project meets all your requirements.
+
+I'm available this week for a call to discuss any adjustments to the proposal.
+
+Please let me know a convenient time.
+
+Best regards,
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.`
+    },
+    won: {
+        name: 'Project Won - Welcome',
+        subject: 'Welcome to Karnot Energy Solutions!',
+        body: `Dear {{contact}},
+
+Congratulations! We're thrilled to begin working with {{company}} on the {{project}}.
+
+Next Steps:
+1. Contract signing (this week)
+2. Deposit payment and scheduling
+3. Pre-installation site survey
+4. Equipment delivery and installation
+5. Commissioning and training
+
+Your dedicated project team:
+• Project Manager: [Name]
+• Lead Technician: [Name]
+• Support Contact: [Email/Phone]
+
+We'll keep you updated at every stage of the project.
+
+Thank you for choosing Karnot Energy Solutions. We're committed to delivering exceptional results.
+
+Best regards,
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.`
+    }
+};
+
+// ==========================================
+// EMAIL TEMPLATE MODAL
+// ==========================================
+const EmailTemplateModal = ({ opportunity, onClose }) => {
+    const [selectedTemplate, setSelectedTemplate] = useState('initial_contact');
+    const [subject, setSubject] = useState('');
+    const [body, setBody] = useState('');
+    const [copied, setCopied] = useState(false);
+
+    // Replace template variables
+    const fillTemplate = (text) => {
+        return text
+            .replace(/{{company}}/g, opportunity.customerName || '[Company]')
+            .replace(/{{contact}}/g, opportunity.contactName || '[Contact]')
+            .replace(/{{project}}/g, opportunity.project || '[Project]')
+            .replace(/{{value}}/g, (opportunity.estimatedValue || 0).toLocaleString())
+            .replace(/{{savings}}/g, Math.round((opportunity.estimatedValue || 0) * 0.3).toLocaleString())
+            .replace(/{{payback}}/g, '18-24')
+            .replace(/{{roi}}/g, '35')
+            .replace(/{{timeline}}/g, '8-12');
+    };
+
+    useEffect(() => {
+        const template = EMAIL_TEMPLATES[selectedTemplate];
+        setSubject(fillTemplate(template.subject));
+        setBody(fillTemplate(template.body));
+    }, [selectedTemplate, opportunity]);
+
+    const handleCopy = () => {
+        const fullEmail = `To: ${opportunity.contactEmail || ''}\nSubject: ${subject}\n\n${body}`;
+        navigator.clipboard.writeText(fullEmail);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleOpenEmail = () => {
+        const mailtoLink = `mailto:${opportunity.contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.open(mailtoLink, '_blank');
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="p-6 border-b bg-orange-50">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h2 className="text-2xl font-black text-gray-800 uppercase">
+                                Email Templates
+                            </h2>
+                            <p className="text-sm text-gray-600 mt-1">
+                                {opportunity.customerName} - {opportunity.project}
+                            </p>
+                        </div>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                            <X size={24} />
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                    {/* Template Selector */}
+                    <div>
+                        <label className="text-xs font-black uppercase text-gray-400 mb-2 block">
+                            Select Template
+                        </label>
+                        <select
+                            value={selectedTemplate}
+                            onChange={(e) => setSelectedTemplate(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                        >
+                            {Object.entries(EMAIL_TEMPLATES).map(([key, template]) => (
+                                <option key={key} value={key}>{template.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Recipient */}
+                    <div>
+                        <label className="text-xs font-black uppercase text-gray-400 mb-2 block">
+                            To
+                        </label>
+                        <Input value={opportunity.contactEmail || ''} readOnly />
+                    </div>
+
+                    {/* Subject */}
+                    <div>
+                        <label className="text-xs font-black uppercase text-gray-400 mb-2 block">
+                            Subject
+                        </label>
+                        <Input 
+                            value={subject} 
+                            onChange={(e) => setSubject(e.target.value)}
+                        />
+                    </div>
+
+                    {/* Body */}
+                    <div>
+                        <label className="text-xs font-black uppercase text-gray-400 mb-2 block">
+                            Message Body
+                        </label>
+                        <Textarea
+                            value={body}
+                            onChange={(e) => setBody(e.target.value)}
+                            rows={16}
+                            className="font-mono text-sm"
+                        />
+                    </div>
+
+                    {/* Template Variables Info */}
+                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <p className="text-xs text-blue-700 font-bold mb-2">
+                            📝 Template Variables (auto-filled):
+                        </p>
+                        <div className="text-xs text-blue-600 space-y-1">
+                            <p>• <code>{"{{company}}"}</code> = {opportunity.customerName}</p>
+                            <p>• <code>{"{{contact}}"}</code> = {opportunity.contactName}</p>
+                            <p>• <code>{"{{project}}"}</code> = {opportunity.project}</p>
+                            <p>• <code>{"{{value}}"}</code> = ${(opportunity.estimatedValue || 0).toLocaleString()}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Actions */}
+                <div className="p-6 border-t bg-gray-50 flex gap-3">
+                    <Button
+                        onClick={handleOpenEmail}
+                        variant="primary"
+                        className="flex-1 bg-orange-600 hover:bg-orange-700"
+                        disabled={!opportunity.contactEmail}
+                    >
+                        <Mail size={16} className="mr-2" />
+                        Open in Email Client
+                    </Button>
+                    <Button
+                        onClick={handleCopy}
+                        variant="secondary"
+                        className="flex-1"
+                    >
+                        <Copy size={16} className="mr-2" />
+                        {copied ? 'Copied!' : 'Copy to Clipboard'}
+                    </Button>
+                    <Button onClick={onClose} variant="secondary">
+                        Close
+                    </Button>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+// ==========================================
+// OPPORTUNITY CARD COMPONENT
+// ==========================================
+const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, onEmail, quotesForThisOpp, companyData, upcomingAppointments }) => {
     const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
     const nextStage = STAGE_ORDER[currentStageIndex + 1];
     const previousStage = STAGE_ORDER[currentStageIndex - 1];
@@ -32,7 +321,6 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
         }
     };
 
-    // Calculate company stats
     const companyQuoteCount = companyData?.quoteCount || 0;
     const companyTotalValue = companyData?.totalValue || 0;
     const companyLastQuoteDate = companyData?.lastQuoteDate || null;
@@ -45,8 +333,15 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
                     {opp.customerName}
                 </h4>
                 <div className="flex gap-1">
-                    <Button onClick={() => onEdit(opp)} variant="secondary" className="p-1 h-auto w-auto"><Edit size={14}/></Button>
-                    <Button onClick={() => onDelete(opp.id)} variant="danger" className="p-1 h-auto w-auto"><Trash2 size={14}/></Button>
+                    <Button onClick={() => onEmail(opp)} variant="secondary" className="p-1 h-auto w-auto" title="Email Template">
+                        <Mail size={14}/>
+                    </Button>
+                    <Button onClick={() => onEdit(opp)} variant="secondary" className="p-1 h-auto w-auto">
+                        <Edit size={14}/>
+                    </Button>
+                    <Button onClick={() => onDelete(opp.id)} variant="danger" className="p-1 h-auto w-auto">
+                        <Trash2 size={14}/>
+                    </Button>
                 </div>
             </div>
             <p className="text-sm text-gray-600 mb-2">{opp.project}</p>
@@ -69,7 +364,7 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
                 </div>
             )}
 
-            {/* Next Appointment Alert (NEW) */}
+            {/* Next Appointment Alert */}
             {nextAppointment && (
                 <div className="mt-2 flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-200">
                     <Calendar size={12} />
@@ -110,7 +405,6 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
                         </div>
                     )}
 
-                    {/* Appointment Count (NEW) */}
                     {upcomingAppointments && upcomingAppointments.length > 0 && (
                         <div className="flex items-center justify-between text-xs">
                             <span className="text-gray-500">Scheduled Visits:</span>
@@ -151,8 +445,9 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, quotesForThi
     );
 };
 
-
-// --- New Opportunity Modal ---
+// ==========================================
+// NEW OPPORTUNITY MODAL
+// ==========================================
 const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, contacts }) => {
     const isEditMode = Boolean(opportunityToEdit);
     
@@ -163,19 +458,17 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
     const [probability, setProbability] = useState(10);
     const [contactEmail, setContactEmail] = useState('');
 
-    // FIXED: Filter contacts by matching companyName instead of companyId
+    // Filter contacts by matching companyName
     const availableContacts = useMemo(() => {
         if (!companyId) return [];
         const selectedCompany = companies.find(c => c.id === companyId);
         if (!selectedCompany) return [];
         
-        // Match contacts to company by companyName
         return contacts.filter(contact => contact.companyName === selectedCompany.companyName);
     }, [companyId, companies, contacts]);
 
     useEffect(() => {
         if (isEditMode) {
-            // EDIT MODE: Pre-fill all fields from the opportunity
             const company = companies.find(c => c.companyName === opportunityToEdit.customerName);
             const foundCompanyId = company ? company.id : '';
             
@@ -184,7 +477,6 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
             setEstimatedValue(opportunityToEdit.estimatedValue || 0);
             setProbability(opportunityToEdit.probability || 10);
             
-            // Find the matching contact
             if (foundCompanyId) {
                 const relatedContacts = contacts.filter(c => c.companyName === company.companyName);
                 const contact = relatedContacts.find(c => 
@@ -199,16 +491,13 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
                     setContactEmail(opportunityToEdit.contactEmail || '');
                 }
             }
-
         } else {
-            // NEW MODE: Set defaults
             const defaultCompanyId = companies.length > 0 ? companies[0].id : '';
             setCompanyId(defaultCompanyId);
             setProject('');
             setEstimatedValue(0);
             setProbability(10);
             
-            // Auto-select first contact of that company
             if (defaultCompanyId) {
                 const defaultCompany = companies.find(c => c.id === defaultCompanyId);
                 const defaultContacts = contacts.filter(c => c.companyName === defaultCompany.companyName);
@@ -223,12 +512,11 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
         }
     }, [opportunityToEdit, isEditMode, companies, contacts]);
 
-    const handleCompanyChange = (e) => {
-        const newCompanyId = e.target.value;
-        setCompanyId(newCompanyId);
+    const handleCompanySelect = (selectedCompanyId) => {
+        setCompanyId(selectedCompanyId);
 
         // Auto-select the first contact from this new company
-        const newCompany = companies.find(c => c.id === newCompanyId);
+        const newCompany = companies.find(c => c.id === selectedCompanyId);
         if (newCompany) {
             const newContacts = contacts.filter(c => c.companyName === newCompany.companyName);
             if (newContacts.length > 0) {
@@ -245,7 +533,6 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
         const newContactId = e.target.value;
         setContactId(newContactId);
         
-        // Auto-fill the email
         const contact = contacts.find(c => c.id === newContactId);
         if (contact) {
             setContactEmail(contact.email);
@@ -295,25 +582,15 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
                 </div>
                 <div className="space-y-4">
                     
-                    {/* Company Dropdown */}
+                    {/* Company Selector with Search */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
-                        <select
-                            value={companyId}
-                            onChange={handleCompanyChange}
-                            className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm"
-                            required
-                        >
-                            {!companies || companies.length === 0 ? (
-                                <option value="">Please add a company first</option>
-                            ) : (
-                                companies.map(company => (
-                                    <option key={company.id} value={company.id}>
-                                        {company.companyName}
-                                    </option>
-                                ))
-                            )}
-                        </select>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Company *</label>
+                        <CompanySearchSelector
+                            companies={companies}
+                            selectedCompanyId={companyId}
+                            onSelect={handleCompanySelect}
+                            placeholder="Search companies..."
+                        />
                     </div>
 
                     <Input 
@@ -382,12 +659,17 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
     );
 };
 
-// --- MAIN FUNNEL PAGE COMPONENT ---
+// ==========================================
+// MAIN FUNNEL PAGE COMPONENT
+// ==========================================
 const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointments = [] }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingOpportunity, setEditingOpportunity] = useState(null);
     const [quotes, setQuotes] = useState([]);
     const [loadingQuotes, setLoadingQuotes] = useState(true);
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [emailOpportunity, setEmailOpportunity] = useState(null);
+    const [showDuplicateCleaner, setShowDuplicateCleaner] = useState(false);
     
     const STAGES = STAGE_ORDER;
 
@@ -415,12 +697,10 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
         fetchQuotes();
     }, [user]);
 
-    // Helper function to get quotes for a specific opportunity
     const getQuotesForOpportunity = (opportunityId) => {
         return quotes.filter(quote => quote.opportunityId === opportunityId);
     };
 
-    // Calculate company history data
     const getCompanyData = (companyName) => {
         const companyQuotes = quotes.filter(q => q.customerName === companyName || q.customer?.name === companyName);
         
@@ -439,7 +719,6 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
         };
     };
 
-    // Get upcoming appointments for a company (NEW)
     const getUpcomingAppointments = (companyName) => {
         if (!appointments || appointments.length === 0) return [];
         
@@ -523,6 +802,11 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
         setEditingOpportunity(null);
     };
 
+    const handleOpenEmailModal = (opp) => {
+        setEmailOpportunity(opp);
+        setShowEmailModal(true);
+    };
+
     const handleUpdateOpportunityStage = async (oppId, newStage) => {
         if (!user || !user.uid) {
             alert("Error: User not logged in.");
@@ -579,8 +863,25 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
         return opportunities.filter(opp => opp.stage === stage);
     };
 
+    // Prepare export data
+    const exportData = useMemo(() => {
+        if (!opportunities) return [];
+        
+        return opportunities.map(opp => ({
+            customerName: opp.customerName,
+            project: opp.project,
+            stage: opp.stage,
+            estimatedValue: opp.estimatedValue || 0,
+            probability: opp.probability || 0,
+            contactName: opp.contactName,
+            contactEmail: opp.contactEmail,
+            createdAt: opp.createdAt?.toDate ? opp.createdAt.toDate().toLocaleDateString() : ''
+        }));
+    }, [opportunities]);
+
     return (
         <div className="w-full">
+            {/* Modals */}
             {showModal && (
                 <NewOpportunityModal 
                     onSave={handleSave} 
@@ -590,18 +891,68 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
                     contacts={contacts} 
                 />
             )}
+
+            {showEmailModal && emailOpportunity && (
+                <EmailTemplateModal
+                    opportunity={emailOpportunity}
+                    onClose={() => {
+                        setShowEmailModal(false);
+                        setEmailOpportunity(null);
+                    }}
+                />
+            )}
+
+            {showDuplicateCleaner && (
+                <DuplicateCompanyCleaner
+                    companies={companies}
+                    user={user}
+                    onClose={() => setShowDuplicateCleaner(false)}
+                />
+            )}
             
-            <div className="flex justify-between items-center mb-6">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <h1 className="text-3xl font-bold text-gray-800">Sales Funnel</h1>
-                <Button onClick={handleOpenNewModal} variant="primary">
-                    <Plus className="mr-2" size={16} /> New Opportunity
-                </Button>
+                
+                <div className="flex flex-wrap gap-2">
+                    {/* Clean Duplicates Button */}
+                    <Button
+                        onClick={() => setShowDuplicateCleaner(true)}
+                        variant="secondary"
+                        className="border-orange-200 text-orange-700 bg-orange-50"
+                    >
+                        <Copy size={16} className="mr-1" /> Clean Duplicates
+                    </Button>
+
+                    {/* Export Button */}
+                    <ExportButton
+                        data={exportData}
+                        filename={`Karnot_Sales_Funnel_${new Date().toISOString().split('T')[0]}.csv`}
+                        columns={[
+                            { key: 'customerName', label: 'Company' },
+                            { key: 'project', label: 'Project' },
+                            { key: 'stage', label: 'Stage' },
+                            { key: 'estimatedValue', label: 'Value ($)' },
+                            { key: 'probability', label: 'Probability (%)' },
+                            { key: 'contactName', label: 'Contact' },
+                            { key: 'contactEmail', label: 'Email' },
+                            { key: 'createdAt', label: 'Date Created' }
+                        ]}
+                        label="Export"
+                    />
+
+                    {/* New Opportunity Button */}
+                    <Button onClick={handleOpenNewModal} variant="primary">
+                        <Plus className="mr-2" size={16} /> New Opportunity
+                    </Button>
+                </div>
             </div>
 
             {loadingQuotes && (
                 <div className="text-center text-gray-500 mb-4">Loading quotes...</div>
             )}
 
+            {/* Pipeline Columns */}
             <div className="flex gap-4 overflow-x-auto pb-4" style={{minHeight: '60vh'}}>
                 {STAGES.map(stage => {
                     const stageOpps = getOppsByStage(stage);
@@ -628,6 +979,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
                                             onDelete={handleDeleteOpportunity}
                                             onEdit={handleOpenEditModal}
                                             onOpen={onOpen}
+                                            onEmail={handleOpenEmailModal}
                                             quotesForThisOpp={getQuotesForOpportunity(opp.id)}
                                             companyData={getCompanyData(opp.customerName)}
                                             upcomingAppointments={getUpcomingAppointments(opp.customerName)}
