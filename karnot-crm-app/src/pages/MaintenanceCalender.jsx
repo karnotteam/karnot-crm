@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { Button } from '../data/constants';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Filter, MapPin, Users, Wrench, TrendingUp, X } from 'lucide-react';
 
@@ -72,8 +72,9 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
     const [maintenanceEvents, setMaintenanceEvents] = useState([]);
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [showNewEvent, setShowNewEvent] = useState(false);
-    const [filterType, setFilterType] = useState('ALL'); // ALL, OPERATION, STRATEGY, CONSTRAINT
-    const [viewMode, setViewMode] = useState('month'); // month, week, day
+    const [filterType, setFilterType] = useState('ALL');
+    const [viewMode, setViewMode] = useState('month');
+    const [seeding, setSeeding] = useState(false);
 
     // Load all calendar events
     useEffect(() => {
@@ -95,31 +96,88 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
         };
     }, []);
 
-    // Seed holidays and strategic events (run once)
+    // FIXED: Seed holidays and strategic events (with duplicate checking)
     const seedInitialEvents = async () => {
+        if (seeding) return;
+        
+        setSeeding(true);
         try {
-            // Seed holidays
+            let addedCount = 0;
+            let skippedCount = 0;
+
+            // Check and seed holidays
             for (const holiday of PHILIPPINE_HOLIDAYS_2026) {
-                await addDoc(collection(db, 'calendar_events'), {
-                    ...holiday,
-                    start: `${holiday.date}T00:00:00`,
-                    end: `${holiday.date}T23:59:59`,
-                    allDay: true,
-                    priority: "Medium"
-                });
+                // Check if holiday already exists
+                const existingQuery = query(
+                    collection(db, 'calendar_events'),
+                    where('title', '==', holiday.title),
+                    where('type', '==', 'CONSTRAINT')
+                );
+                const existingDocs = await getDocs(existingQuery);
+
+                if (existingDocs.empty) {
+                    await addDoc(collection(db, 'calendar_events'), {
+                        ...holiday,
+                        start: `${holiday.date}T00:00:00`,
+                        end: `${holiday.date}T23:59:59`,
+                        allDay: true,
+                        priority: "Medium"
+                    });
+                    addedCount++;
+                } else {
+                    skippedCount++;
+                }
             }
 
-            // Seed strategic events
+            // Check and seed strategic events
             for (const event of STRATEGIC_EVENTS_2026) {
-                await addDoc(collection(db, 'calendar_events'), {
-                    ...event,
-                    allDay: false
-                });
+                // Check if event already exists
+                const existingQuery = query(
+                    collection(db, 'calendar_events'),
+                    where('title', '==', event.title),
+                    where('type', '==', 'STRATEGY')
+                );
+                const existingDocs = await getDocs(existingQuery);
+
+                if (existingDocs.empty) {
+                    await addDoc(collection(db, 'calendar_events'), {
+                        ...event,
+                        allDay: false
+                    });
+                    addedCount++;
+                } else {
+                    skippedCount++;
+                }
             }
 
-            alert('Calendar seeded with 2026 events!');
+            alert(`Calendar Seeding Complete!\n\nAdded: ${addedCount} events\nSkipped: ${skippedCount} duplicates`);
         } catch (error) {
             console.error('Error seeding events:', error);
+            alert('Error seeding events. Check console.');
+        } finally {
+            setSeeding(false);
+        }
+    };
+
+    // ADDED: Clear all calendar events
+    const clearAllEvents = async () => {
+        if (!window.confirm('Are you sure you want to delete ALL calendar events? This cannot be undone!')) {
+            return;
+        }
+
+        try {
+            const eventsSnapshot = await getDocs(collection(db, 'calendar_events'));
+            let deleteCount = 0;
+
+            for (const docSnap of eventsSnapshot.docs) {
+                await deleteDoc(doc(db, 'calendar_events', docSnap.id));
+                deleteCount++;
+            }
+
+            alert(`Deleted ${deleteCount} calendar events.`);
+        } catch (error) {
+            console.error('Error clearing events:', error);
+            alert('Error clearing events. Check console.');
         }
     };
 
@@ -151,7 +209,7 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
         }
 
         // Next month's days
-        const remainingDays = 42 - days.length; // 6 rows × 7 days
+        const remainingDays = 42 - days.length;
         for (let i = 1; i <= remainingDays; i++) {
             days.push({
                 date: new Date(year, month + 1, i),
@@ -395,12 +453,32 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
                 </div>
             )}
 
-            {/* Seed Events Button (Development Only - Remove in Production) */}
-            <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
-                <p className="text-xs font-bold text-yellow-800 uppercase mb-2">Development Tool</p>
-                <Button onClick={seedInitialEvents} variant="secondary" className="text-xs">
-                    Seed 2026 Events (Holidays + Trade Shows)
-                </Button>
+            {/* FIXED: Calendar Management Tools */}
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <p className="text-xs font-bold text-blue-800 uppercase mb-3">Calendar Management</p>
+                <div className="flex gap-2 flex-wrap">
+                    <Button 
+                        onClick={seedInitialEvents} 
+                        variant="primary" 
+                        className="text-xs"
+                        disabled={seeding}
+                    >
+                        {seeding ? 'Seeding...' : 'Seed 2026 Events'}
+                    </Button>
+                    <Button 
+                        onClick={clearAllEvents} 
+                        variant="secondary" 
+                        className="text-xs text-red-600 border-red-200 hover:bg-red-50"
+                    >
+                        Clear All Events
+                    </Button>
+                    <div className="text-xs text-gray-600 self-center ml-2">
+                        Total events: {calendarEvents.length}
+                    </div>
+                </div>
+                <p className="text-xs text-gray-600 mt-2">
+                    ℹ️ Seed button will skip existing events to prevent duplicates
+                </p>
             </div>
         </div>
     );
