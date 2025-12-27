@@ -8,7 +8,7 @@ import { Card, Button, Input } from '../data/constants.jsx';
 import { db } from '../firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { ExportButton } from '../utils/ExcelExport.jsx';
-import EmailTemplateModal from './EmailTemplateModal';
+import EmailTemplateModal from '../components/EmailTemplateModal';
 
 // ============================================================================
 // STATIC DATA - VIP TARGETS & SEARCH CONFIGURATIONS
