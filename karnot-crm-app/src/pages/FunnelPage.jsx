@@ -17,93 +17,135 @@ const STAGE_ORDER = [
 ];
 
 // ==========================================
-// HTML EMAIL TEMPLATES (Professional Edition)
+// EMAIL TEMPLATES
 // ==========================================
 const EMAIL_TEMPLATES = {
     initial_contact: {
         name: 'Initial Contact',
         subject: 'Clean Energy Solution for {{company}}',
-        isHtml: true,
-        getHtml: (data) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background-color:#f5f5f5"><table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:20px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background-color:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1)"><tr><td style="background:linear-gradient(135deg,#ff6b35 0%,#ff8c61 100%);padding:30px 40px;text-align:center"><img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/karnot-logo.png" alt="Karnot" style="height:50px;margin-bottom:10px"/><div style="color:#fff;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase">Low Carbon Heat Pumps</div></td></tr><tr><td style="padding:40px"><h2 style="color:#2c3e50;font-size:24px;font-weight:700;margin:0 0 20px 0">Clean Energy Solution for ${data.company}</h2><p style="color:#34495e;font-size:16px;line-height:1.6;margin:0 0 20px 0">Dear ${data.contact},</p><p style="color:#34495e;font-size:16px;line-height:1.6;margin:0 0 25px 0">Thank you for your interest in Karnot Energy Solutions' natural refrigerant heat pump systems.</p><div style="text-align:center;margin:30px 0"><img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/heat-pump-18kw.png" alt="Heat Pump" style="max-width:100%;height:auto;border-radius:8px"/></div><p style="color:#34495e;font-size:16px;line-height:1.6;margin:0 0 20px 0">We specialize in PFAS-free, environmentally-friendly heating and cooling solutions using CO₂ and R290 technology.</p><table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8f9fa;border-left:4px solid #ff6b35;border-radius:4px;margin:25px 0"><tr><td style="padding:20px 25px"><div style="color:#2c3e50;font-weight:700;font-size:14px;margin-bottom:12px;text-transform:uppercase">Our Systems Offer:</div><div style="color:#34495e;font-size:15px;line-height:1.8">✓ 48% cost advantage<br/>✓ International certifications<br/>✓ BOI-SIPP registered<br/>✓ Full support</div></td></tr></table><table cellpadding="0" cellspacing="0" style="margin:30px 0"><tr><td align="center" style="background:linear-gradient(135deg,#ff6b35 0%,#ff8c61 100%);border-radius:6px;padding:14px 32px"><a href="mailto:stuart.cox@karnot.com?subject=Meeting - ${data.company}" style="color:#fff;text-decoration:none;font-weight:600;font-size:16px;display:block">Schedule a Call</a></td></tr></table></td></tr><tr><td style="padding:0 40px 40px 40px;border-top:2px solid #f0f0f0"><div style="margin-top:30px"><div style="color:#2c3e50;font-size:18px;font-weight:700;margin-bottom:4px">Stuart Cox</div><div style="color:#7f8c8d;font-size:14px;margin-bottom:15px">CEO, Karnot Energy Solutions Inc.</div><div style="color:#34495e;font-size:14px">📧 stuart.cox@karnot.com<br/>📱 +63 960 289 2001</div></div></td></tr><tr><td style="background-color:#2c3e50;padding:25px;text-align:center;color:#ecf0f1;font-size:11px">Low Carbon Technology Centre<br/>Pangasinan, Philippines 2429</td></tr></table></td></tr></table></body></html>`
+        body: `Dear {{contact}},
+
+Thank you for your interest in Karnot Energy Solutions' natural refrigerant heat pump systems.
+
+We specialize in PFAS-free, environmentally-friendly heating and cooling solutions using CO₂ and R290 technology for commercial and industrial applications.
+
+Our systems offer:
+• 48% cost advantage over traditional systems
+• Proven technology with international certifications
+• BOI-SIPP registered supplier
+• Full installation and maintenance support
+
+I'd like to schedule a brief call to discuss how our technology can benefit {{company}}.
+
+Are you available for a 15-minute call this week?
+
+Best regards,
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.
+Phone: [Your Phone]
+Email: [Your Email]`
     },
     follow_up: {
         name: 'Follow-Up After Demo',
         subject: 'Following Up: {{company}} Heat Pump Project',
-        isHtml: true,
-        getHtml: (data) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background-color:#f5f5f5"><table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:20px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background-color:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.1)"><tr><td style="background:linear-gradient(135deg,#ff6b35 0%,#ff8c61 100%);padding:30px 40px;text-align:center"><img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/karnot-logo.png" alt="Karnot" style="height:50px"/></td></tr><tr><td style="padding:40px"><h2 style="color:#2c3e50;font-size:24px;font-weight:700;margin:0 0 20px 0">${data.project} - Next Steps</h2><p style="color:#34495e;font-size:16px;line-height:1.6;margin:0 0 20px 0">Dear ${data.contact},</p><p style="color:#34495e;font-size:16px;line-height:1.6;margin:0 0 25px 0">Thank you for meeting with us regarding <strong>${data.project}</strong>.</p><div style="text-align:center;margin:30px 0"><img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/heat-pump-9kw.png" alt="Heat Pump" style="max-width:100%;height:auto;border-radius:8px"/></div><table width="100%" cellpadding="0" cellspacing="0" style="background:#f8f9fa;border-radius:8px;margin:30px 0"><tr><td style="padding:30px"><div style="color:#2c3e50;font-weight:700;font-size:16px;margin-bottom:20px;text-align:center">Our R290 System Delivers:</div><table width="100%"><tr><td style="color:#34495e;font-size:15px;padding:8px 0">💰 <strong>Annual Savings:</strong></td><td align="right" style="color:#27ae60;font-size:18px;font-weight:700">${data.savings}</td></tr><tr><td style="color:#34495e;font-size:15px;padding:8px 0">⏱️ <strong>Payback:</strong></td><td align="right" style="color:#3498db;font-size:18px;font-weight:700">${data.payback} months</td></tr></table></td></tr></table><table cellpadding="0" cellspacing="0" style="margin:30px 0"><tr><td align="center" style="background:linear-gradient(135deg,#ff6b35 0%,#ff8c61 100%);border-radius:6px;padding:14px 32px"><a href="mailto:stuart.cox@karnot.com?subject=Follow-up - ${data.company}" style="color:#fff;text-decoration:none;font-weight:600;font-size:16px;display:block">Schedule Follow-Up</a></td></tr></table></td></tr><tr><td style="padding:20px 40px;background:#f8f9fa"><div style="color:#2c3e50;font-weight:700">Stuart Cox, CEO</div><div style="color:#7f8c8d;font-size:14px">stuart.cox@karnot.com | +63 960 289 2001</div></td></tr></table></td></tr></table></body></html>`
+        body: 'Dear {{contact}},\n\nThank you for taking the time to meet with us regarding the {{project}} project.\n\nAs discussed, our R290 heat pump system can deliver:\n• Estimated annual savings: {{savings}}\n• Payback period: {{payback}} months\n• Reduced carbon footprint\n• Compliance with latest environmental regulations\n\nI\'ve attached our formal proposal for your review.\n\nWould you like to schedule a follow-up call to discuss any questions?\n\nLooking forward to working with {{company}}.\n\nBest regards,\nStuart Cox\nCEO, Karnot Energy Solutions Inc.'
     },
     proposal_sent: {
         name: 'Proposal Sent',
         subject: 'Proposal: {{project}} - Karnot Energy Solutions',
-        isHtml: true,
-        getHtml: (data) => `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head><body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;background-color:#f5f5f5"><table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f5f5;padding:20px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background-color:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)"><tr><td style="background:linear-gradient(135deg,#2c3e50 0%,#34495e 100%);padding:30px 40px;text-align:center"><img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/karnot-logo.png" alt="Karnot" style="height:50px;margin-bottom:10px"/><div style="color:#fff;font-size:14px;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-top:15px">Formal Proposal</div></td></tr><tr><td style="padding:40px"><h2 style="color:#2c3e50;font-size:24px;font-weight:700;margin:0 0 20px 0">${data.project}</h2><p style="color:#34495e;font-size:16px;line-height:1.6;margin:0 0 25px 0">Dear ${data.contact},<br/><br/>Please find attached our detailed proposal for <strong>${data.project}</strong> at ${data.company}.</p><table width="100%" cellpadding="0" cellspacing="0" style="background:linear-gradient(135deg,#fff5f0 0%,#ffe8dd 100%);border:2px solid #ff6b35;border-radius:8px;margin:30px 0"><tr><td style="padding:25px"><div style="color:#ff6b35;font-weight:700;font-size:16px;margin-bottom:20px;text-align:center;text-transform:uppercase">📋 Proposal Summary</div><table width="100%"><tr style="border-bottom:1px solid #ffd4c0"><td style="color:#2c3e50;font-size:15px;padding:12px 0">Total Investment:</td><td align="right" style="color:#ff6b35;font-size:20px;font-weight:700;padding:12px 0">${data.value}</td></tr><tr style="border-bottom:1px solid #ffd4c0"><td style="color:#2c3e50;font-size:15px;padding:12px 0">Estimated ROI:</td><td align="right" style="color:#27ae60;font-size:20px;font-weight:700;padding:12px 0">${data.roi}%</td></tr><tr><td style="color:#2c3e50;font-size:15px;padding:12px 0">Timeline:</td><td align="right" style="color:#3498db;font-size:18px;font-weight:700;padding:12px 0">${data.timeline} weeks</td></tr></table></td></tr></table><table cellpadding="0" cellspacing="0" style="margin:30px auto"><tr><td align="center" style="background:linear-gradient(135deg,#27ae60 0%,#2ecc71 100%);border-radius:6px;padding:14px 32px"><a href="mailto:stuart.cox@karnot.com?subject=Proposal - ${data.company}" style="color:#fff;text-decoration:none;font-weight:600;font-size:16px;display:block">Discuss Proposal</a></td></tr></table></td></tr><tr><td style="background-color:#2c3e50;padding:25px;text-align:center;color:#ecf0f1;font-size:12px">Stuart Cox, CEO | stuart.cox@karnot.com | +63 960 289 2001</td></tr></table></td></tr></table></body></html>`
+        body: 'Dear {{contact}},\n\nPlease find attached our detailed proposal for the {{project}} at {{company}}.\n\nProposal Summary:\n• Total Investment: {{value}}\n• Estimated ROI: {{roi}}%\n• Implementation Timeline: {{timeline}} weeks\n• Warranty: 5 years comprehensive\n\nOur proposal includes:\n✓ Complete system design\n✓ Professional installation\n✓ Commissioning and training\n✓ Maintenance contract options\n\nThe proposal is valid for 60 days. We\'re happy to discuss any adjustments or answer questions.\n\nNext Steps:\n1. Review the proposal\n2. Schedule a technical Q&A session\n3. Site survey (if needed)\n4. Final approval and contract signing\n\nI\'ll follow up with you next week to discuss your thoughts.\n\nBest regards,\nStuart Cox\nCEO, Karnot Energy Solutions Inc.'
     },
     negotiation: {
         name: 'Negotiation Phase',
         subject: 'Re: {{project}} - Addressing Your Questions',
-        isHtml: true,
-        getHtml: (data) => `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f5f5f5"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:20px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)"><tr><td style="background:linear-gradient(135deg,#3498db 0%,#5dade2 100%);padding:30px 40px;text-align:center"><img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/karnot-logo.png" alt="Karnot" style="height:50px"/></td></tr><tr><td style="padding:40px"><h2 style="color:#2c3e50;font-size:24px;font-weight:700;margin:0 0 20px 0">Re: ${data.project}</h2><p style="color:#34495e;font-size:16px;line-height:1.6;margin:0 0 25px 0">Dear ${data.contact},<br/><br/>Thank you for your questions regarding <strong>${data.project}</strong>.<br/><br/>We value our partnership with ${data.company} and want to ensure this project meets all your requirements.</p><table cellpadding="0" cellspacing="0" style="margin:30px auto"><tr><td align="center" style="background:linear-gradient(135deg,#3498db 0%,#5dade2 100%);border-radius:6px;padding:14px 32px"><a href="mailto:stuart.cox@karnot.com?subject=Questions - ${data.company}" style="color:#fff;text-decoration:none;font-weight:600;font-size:16px;display:block">Let's Discuss</a></td></tr></table></td></tr><tr><td style="padding:20px 40px;background:#f8f9fa"><div style="color:#2c3e50;font-weight:700">Stuart Cox, CEO</div><div style="color:#7f8c8d;font-size:14px">stuart.cox@karnot.com | +63 960 289 2001</div></td></tr></table></td></tr></table></body></html>`
+        body: `Dear {{contact}},
+
+Thank you for your questions regarding the {{project}} proposal.
+
+I'd like to address your key concerns:
+
+[Address specific concerns here]
+
+We value our partnership with {{company}} and want to ensure this project meets all your requirements.
+
+I'm available this week for a call to discuss any adjustments to the proposal.
+
+Please let me know a convenient time.
+
+Best regards,
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.`
     },
     won: {
         name: 'Project Won - Welcome',
         subject: 'Welcome to Karnot Energy Solutions!',
-        isHtml: true,
-        getHtml: (data) => `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;font-family:Arial,sans-serif;background:#f5f5f5"><table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:20px 0"><tr><td align="center"><table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)"><tr><td style="background:linear-gradient(135deg,#27ae60 0%,#2ecc71 100%);padding:40px;text-align:center"><img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/karnot-logo.png" alt="Karnot" style="height:50px;margin-bottom:15px"/><div style="color:#fff;font-size:28px;font-weight:700;margin-top:20px">🎉 Welcome to Karnot!</div><div style="color:#d5f4e6;font-size:14px;margin-top:10px">We're thrilled to partner with ${data.company}</div></td></tr><tr><td style="padding:40px"><p style="color:#34495e;font-size:18px;line-height:1.6;font-weight:600;margin:0 0 25px 0">Dear ${data.contact},<br/><br/>Congratulations! We're thrilled to begin working with ${data.company} on <span style="color:#27ae60">${data.project}</span>.</p><div style="text-align:center;margin:30px 0"><img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/heat-pump-18kw.png" alt="Heat Pump" style="max-width:100%;height:auto;border-radius:8px"/></div><table cellpadding="0" cellspacing="0" style="margin:30px auto"><tr><td align="center" style="background:linear-gradient(135deg,#27ae60 0%,#2ecc71 100%);border-radius:6px;padding:14px 32px"><a href="mailto:stuart.cox@karnot.com?subject=Kickoff - ${data.company}" style="color:#fff;text-decoration:none;font-weight:600;font-size:16px;display:block">Contact Your Team</a></td></tr></table></td></tr><tr><td style="background-color:#27ae60;padding:25px;text-align:center;color:#fff;font-size:12px">Stuart Cox, CEO | stuart.cox@karnot.com | +63 960 289 2001</td></tr></table></td></tr></table></body></html>`
+        body: `Dear {{contact}},
+
+Congratulations! We're thrilled to begin working with {{company}} on the {{project}}.
+
+Next Steps:
+1. Contract signing (this week)
+2. Deposit payment and scheduling
+3. Pre-installation site survey
+4. Equipment delivery and installation
+5. Commissioning and training
+
+Your dedicated project team:
+• Project Manager: [Name]
+• Lead Technician: [Name]
+• Support Contact: [Email/Phone]
+
+We'll keep you updated at every stage of the project.
+
+Thank you for choosing Karnot Energy Solutions. We're committed to delivering exceptional results.
+
+Best regards,
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.`
     }
 };
 
 // ==========================================
-// EMAIL TEMPLATE MODAL (UPDATED FOR HTML)
+// EMAIL TEMPLATE MODAL
 // ==========================================
 const EmailTemplateModal = ({ opportunity, onClose }) => {
     const [selectedTemplate, setSelectedTemplate] = useState('initial_contact');
     const [subject, setSubject] = useState('');
-    const [emailHtml, setEmailHtml] = useState('');
+    const [body, setBody] = useState('');
     const [copied, setCopied] = useState(false);
 
-    // Fill template data
-    const fillTemplate = () => {
+    // Replace template variables
+    const fillTemplate = (text) => {
         const value = Number(opportunity.estimatedValue) || 0;
         const savings = Math.round(value * 0.3);
         
-        const data = {
-            company: opportunity.customerName || '[Company Name]',
-            contact: opportunity.contactName || '[Contact Name]',
-            project: opportunity.project || '[Project Name]',
-            value: '$' + value.toLocaleString(),
-            savings: '$' + savings.toLocaleString(),
-            payback: '18-24',
-            roi: '35',
-            timeline: '8-12'
-        };
-        
-        return data;
+        return text
+            .replace(/{{company}}/g, opportunity.customerName || '[Company Name]')
+            .replace(/{{contact}}/g, opportunity.contactName || '[Contact Name]')
+            .replace(/{{project}}/g, opportunity.project || '[Project Name]')
+            .replace(/{{value}}/g, '$' + value.toLocaleString())
+            .replace(/{{savings}}/g, '$' + savings.toLocaleString())
+            .replace(/{{payback}}/g, '18-24')
+            .replace(/{{roi}}/g, '35')
+            .replace(/{{timeline}}/g, '8-12');
     };
 
     useEffect(() => {
         const template = EMAIL_TEMPLATES[selectedTemplate];
-        const data = fillTemplate();
-        
-        setSubject(template.subject
-            .replace(/{{company}}/g, data.company)
-            .replace(/{{project}}/g, data.project)
-        );
-        
-        if (template.isHtml && template.getHtml) {
-            setEmailHtml(template.getHtml(data));
-        }
+        setSubject(fillTemplate(template.subject));
+        setBody(fillTemplate(template.body));
     }, [selectedTemplate, opportunity]);
 
     const handleCopy = () => {
-        navigator.clipboard.writeText(emailHtml);
+        const fullEmail = `To: ${opportunity.contactEmail || ''}\nSubject: ${subject}\n\n${body}`;
+        navigator.clipboard.writeText(fullEmail);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
     const handleOpenEmail = () => {
-        // For HTML emails, we just copy to clipboard since mailto doesn't support HTML well
-        handleCopy();
-        alert('HTML email copied! Open Outlook and paste with Cmd+V');
+        const mailtoLink = `mailto:${opportunity.contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.open(mailtoLink, '_blank');
     };
 
     return (
@@ -113,7 +155,7 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                     <div className="flex justify-between items-center">
                         <div>
                             <h2 className="text-2xl font-black text-gray-800 uppercase">
-                                📧 HTML Email Templates
+                                Email Templates
                             </h2>
                             <p className="text-sm text-gray-600 mt-1">
                                 {opportunity.customerName} - {opportunity.project}
@@ -142,10 +184,18 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                         </select>
                     </div>
 
+                    {/* Recipient */}
+                    <div>
+                        <label className="text-xs font-black uppercase text-gray-400 mb-2 block">
+                            To
+                        </label>
+                        <Input value={opportunity.contactEmail || ''} readOnly />
+                    </div>
+
                     {/* Subject */}
                     <div>
                         <label className="text-xs font-black uppercase text-gray-400 mb-2 block">
-                            Subject Line
+                            Subject
                         </label>
                         <Input 
                             value={subject} 
@@ -153,28 +203,29 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                         />
                     </div>
 
-                    {/* HTML Preview */}
+                    {/* Body */}
                     <div>
                         <label className="text-xs font-black uppercase text-gray-400 mb-2 block">
-                            Email Preview (HTML)
+                            Message Body
                         </label>
-                        <div 
-                            className="border-2 border-gray-200 rounded-lg p-4 bg-white overflow-auto"
-                            style={{maxHeight: '400px'}}
-                            dangerouslySetInnerHTML={{__html: emailHtml}}
+                        <Textarea
+                            value={body}
+                            onChange={(e) => setBody(e.target.value)}
+                            rows={16}
+                            className="font-mono text-sm"
                         />
                     </div>
 
-                    {/* Info Box */}
+                    {/* Template Variables Info */}
                     <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <p className="text-xs text-blue-700 font-bold mb-2">
-                            💡 How to Use:
+                            📝 Template Variables (auto-filled):
                         </p>
                         <div className="text-xs text-blue-600 space-y-1">
-                            <p>1. Click "Copy HTML Email" below</p>
-                            <p>2. Open Outlook 365 → New Email</p>
-                            <p>3. Press <strong>Cmd+V</strong> to paste</p>
-                            <p>4. All formatting & images will appear perfectly!</p>
+                            <p>• <code>{"{{company}}"}</code> = {opportunity.customerName}</p>
+                            <p>• <code>{"{{contact}}"}</code> = {opportunity.contactName}</p>
+                            <p>• <code>{"{{project}}"}</code> = {opportunity.project}</p>
+                            <p>• <code>{"{{value}}"}</code> = ${(opportunity.estimatedValue || 0).toLocaleString()}</p>
                         </div>
                     </div>
                 </div>
@@ -182,20 +233,21 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                 {/* Actions */}
                 <div className="p-6 border-t bg-gray-50 flex gap-3">
                     <Button
-                        onClick={handleCopy}
+                        onClick={handleOpenEmail}
                         variant="primary"
                         className="flex-1 bg-orange-600 hover:bg-orange-700"
+                        disabled={!opportunity.contactEmail}
                     >
-                        <Copy size={16} className="mr-2" />
-                        {copied ? '✓ Copied!' : 'Copy HTML Email'}
+                        <Mail size={16} className="mr-2" />
+                        Open in Email Client
                     </Button>
                     <Button
-                        onClick={handleOpenEmail}
+                        onClick={handleCopy}
                         variant="secondary"
                         className="flex-1"
                     >
-                        <Mail size={16} className="mr-2" />
-                        Copy & Instructions
+                        <Copy size={16} className="mr-2" />
+                        {copied ? 'Copied!' : 'Copy to Clipboard'}
                     </Button>
                     <Button onClick={onClose} variant="secondary">
                         Close
@@ -206,9 +258,9 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
     );
 };
 
-// Rest of the beautiful FunnelPage code remains exactly the same...
-// (OpportunityCard, NewOpportunityModal, and main FunnelPage component)
-
+// ==========================================
+// OPPORTUNITY CARD COMPONENT
+// ==========================================
 const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, onEmail, quotesForThisOpp, companyData, upcomingAppointments }) => {
     const currentStageIndex = STAGE_ORDER.indexOf(opp.stage);
     const nextStage = STAGE_ORDER[currentStageIndex + 1];
@@ -350,12 +402,9 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, onEmail, quo
     );
 };
 
-// Continue with NewOpportunityModal and main FunnelPage (keeping all existing beautiful code)
-// [The rest of the code from the uploaded file...]
-
-export default FunnelPage;
-
-// NEW OPPORTUNITY MODAL (keeping your beautiful design)
+// ==========================================
+// NEW OPPORTUNITY MODAL
+// ==========================================
 const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, contacts }) => {
     const isEditMode = Boolean(opportunityToEdit);
     
@@ -366,6 +415,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
     const [probability, setProbability] = useState(10);
     const [contactEmail, setContactEmail] = useState('');
 
+    // Filter contacts by matching companyName
     const availableContacts = useMemo(() => {
         if (!companyId) return [];
         const selectedCompany = companies.find(c => c.id === companyId);
@@ -422,6 +472,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
     const handleCompanySelect = (selectedCompanyId) => {
         setCompanyId(selectedCompanyId);
 
+        // Auto-select the first contact from this new company
         const newCompany = companies.find(c => c.id === selectedCompanyId);
         if (newCompany) {
             const newContacts = contacts.filter(c => c.companyName === newCompany.companyName);
@@ -488,6 +539,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
                 </div>
                 <div className="space-y-4">
                     
+                    {/* Company Selector with Search */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Company *</label>
                         <CompanySearchSelector
@@ -521,6 +573,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
                     <hr className="my-2"/>
                     <h4 className="text-lg font-semibold text-gray-700">Primary Contact</h4>
                     
+                    {/* Smart Contact Dropdown */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Contact Name</label>
                         <select
@@ -542,6 +595,7 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
                         </select>
                     </div>
                     
+                    {/* Auto-filled Email */}
                     <Input 
                         label="Contact Email" 
                         type="email" 
@@ -562,7 +616,9 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
     );
 };
 
-// MAIN FUNNEL PAGE
+// ==========================================
+// MAIN FUNNEL PAGE COMPONENT
+// ==========================================
 const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointments = [] }) => { 
     const [showModal, setShowModal] = useState(false);
     const [editingOpportunity, setEditingOpportunity] = useState(null);
@@ -574,6 +630,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
     
     const STAGES = STAGE_ORDER;
 
+    // Fetch quotes from Firebase
     useEffect(() => {
         const fetchQuotes = async () => {
             if (!user || !user.uid) return;
@@ -586,6 +643,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
                     ...doc.data()
                 }));
                 setQuotes(quotesData);
+                console.log("Loaded quotes:", quotesData.length);
             } catch (error) {
                 console.error("Error fetching quotes:", error);
             } finally {
@@ -645,6 +703,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
                 notes: [] 
             };
             await addDoc(collection(db, "users", user.uid, "opportunities"), newOpp);
+            console.log("Opportunity saved!");
             handleCloseModal(); 
         } catch (e) {
             console.error("Error adding document: ", e);
@@ -669,6 +728,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
                 lastModified: serverTimestamp() 
             }, { merge: true }); 
             
+            console.log("Opportunity updated!");
             handleCloseModal(); 
         } catch (e) {
             console.error("Error updating document: ", e);
@@ -730,6 +790,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
                 probability: newProbability,
                 lastModified: serverTimestamp()
             }, { merge: true });
+            console.log(`Opportunity ${oppId} updated to ${newStage}`);
         } catch (error) {
             console.error("Error updating opportunity: ", error);
             alert("Failed to update lead stage.");
@@ -746,6 +807,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
             const oppRef = doc(db, "users", user.uid, "opportunities", oppId);
             try {
                 await deleteDoc(oppRef);
+                console.log(`Opportunity ${oppId} deleted`);
             } catch (error) {
                 console.error("Error deleting opportunity: ", error);
                 alert("Failed to delete lead.");
@@ -758,6 +820,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
         return opportunities.filter(opp => opp.stage === stage);
     };
 
+    // Prepare export data
     const exportData = useMemo(() => {
         if (!opportunities) return [];
         
@@ -775,6 +838,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
 
     return (
         <div className="w-full">
+            {/* Modals */}
             {showModal && (
                 <NewOpportunityModal 
                     onSave={handleSave} 
@@ -803,10 +867,12 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
                 />
             )}
             
+            {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <h1 className="text-3xl font-bold text-gray-800">Sales Funnel</h1>
                 
                 <div className="flex flex-wrap gap-2">
+                    {/* Clean Duplicates Button */}
                     <Button
                         onClick={() => setShowDuplicateCleaner(true)}
                         variant="secondary"
@@ -815,6 +881,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
                         <Copy size={16} className="mr-1" /> Clean Duplicates
                     </Button>
 
+                    {/* Export Button */}
                     <ExportButton
                         data={exportData}
                         filename={`Karnot_Sales_Funnel_${new Date().toISOString().split('T')[0]}.csv`}
@@ -831,6 +898,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
                         label="Export"
                     />
 
+                    {/* New Opportunity Button */}
                     <Button onClick={handleOpenNewModal} variant="primary">
                         <Plus className="mr-2" size={16} /> New Opportunity
                     </Button>
@@ -841,6 +909,7 @@ const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointm
                 <div className="text-center text-gray-500 mb-4">Loading quotes...</div>
             )}
 
+            {/* Pipeline Columns */}
             <div className="flex gap-4 overflow-x-auto pb-4" style={{minHeight: '60vh'}}>
                 {STAGES.map(stage => {
                     const stageOpps = getOppsByStage(stage);
