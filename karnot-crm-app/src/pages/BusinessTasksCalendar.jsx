@@ -3,12 +3,29 @@ import { db } from '../firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, writeBatch } from 'firebase/firestore';
 import {
     CheckCircle, Clock, AlertTriangle, Plus, Edit, Trash2, Calendar,
-    FileText, Building, Landmark, Users, Filter, X, ChevronDown, ChevronUp, Copy, Trash
+    FileText, Building, Landmark, Users, Filter, X, ChevronDown, ChevronUp, Copy, Trash,
+    Upload, FileJson, FileSpreadsheet // Added new icons here
 } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx';
 
 // --- TASK CATEGORIES WITH ICONS & COLORS ---
 const TASK_CATEGORIES = {
+    // --- NEW STRATEGY CATEGORIES ADDED HERE ---
+    'REGULATION': { 
+        label: 'Gov & Regulation (DOE/PELP)', 
+        icon: Landmark, 
+        color: 'text-red-700', 
+        bgColor: 'bg-red-50', 
+        borderColor: 'border-red-200' 
+    },
+    'STRATEGY': { 
+        label: 'Strategy & Networking', 
+        icon: Users, 
+        color: 'text-purple-700', 
+        bgColor: 'bg-purple-50', 
+        borderColor: 'border-purple-200' 
+    },
+    // --- END NEW CATEGORIES ---
     'BIR': { 
         label: 'BIR Filing', 
         icon: FileText, 
@@ -74,6 +91,152 @@ const RECURRING_PATTERNS = [
     { value: 'quarterly', label: 'Quarterly' },
     { value: 'annually', label: 'Annually' }
 ];
+
+// --- NEW STRATEGY IMPORT MODAL ---
+const StrategyImportModal = ({ onClose, user }) => {
+    const [importMode, setImportMode] = useState('JSON'); // 'JSON' or 'CSV'
+    const [inputText, setInputText] = useState('');
+    const [previewTasks, setPreviewTasks] = useState([]);
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    // Parse Input
+    useEffect(() => {
+        if (!inputText) {
+            setPreviewTasks([]);
+            return;
+        }
+
+        try {
+            if (importMode === 'JSON') {
+                const parsed = JSON.parse(inputText);
+                if (Array.isArray(parsed)) {
+                    setPreviewTasks(parsed);
+                }
+            } else {
+                // Simple CSV Parser (Title, DueDate, Category, Description)
+                const rows = inputText.split('\n').filter(r => r.trim());
+                const tasks = rows.map(row => {
+                    const [title, dueDate, category, description] = row.split(',').map(s => s.trim());
+                    return { title, dueDate, category: category || 'OTHER', description: description || '' };
+                });
+                setPreviewTasks(tasks);
+            }
+        } catch (e) {
+            console.error("Parse error", e);
+        }
+    }, [inputText, importMode]);
+
+    const handleImport = async () => {
+        setIsProcessing(true);
+        const batch = writeBatch(db);
+        
+        previewTasks.forEach(task => {
+            const docRef = doc(collection(db, "users", user.uid, "business_tasks"));
+            // Safe fallback for category if the AI suggests something invalid
+            const safeCategory = (task.category && TASK_CATEGORIES[task.category]) ? task.category : 'STRATEGY';
+
+            batch.set(docRef, {
+                title: task.title || 'Untitled Strategy Task',
+                description: task.description || 'Imported via Strategy Tool',
+                category: safeCategory,
+                dueDate: task.dueDate || new Date().toISOString().split('T')[0],
+                priority: task.priority || 'MEDIUM',
+                recurring: 'none',
+                status: 'PENDING',
+                createdAt: serverTimestamp()
+            });
+        });
+
+        await batch.commit();
+        setIsProcessing(false);
+        onClose();
+        alert(`✅ Successfully imported ${previewTasks.length} strategic tasks!`);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+            <Card className="w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
+                <div className="p-6 border-b bg-purple-50 flex justify-between items-center">
+                    <div>
+                        <h2 className="text-xl font-black text-purple-900 uppercase flex items-center gap-2">
+                            <Upload size={24} /> Strategy & Compliance Import
+                        </h2>
+                        <p className="text-sm text-purple-700 mt-1">
+                            Paste AI suggestions or CSV data to bulk-create tasks.
+                        </p>
+                    </div>
+                    <button onClick={onClose}><X size={24} className="text-purple-400" /></button>
+                </div>
+
+                <div className="p-4 bg-gray-50 flex gap-2 border-b">
+                    <button 
+                        onClick={() => setImportMode('JSON')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold ${importMode === 'JSON' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 border'}`}
+                    >
+                        <FileJson size={16} /> Paste AI JSON
+                    </button>
+                    <button 
+                        onClick={() => setImportMode('CSV')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold ${importMode === 'CSV' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 border'}`}
+                    >
+                        <FileSpreadsheet size={16} /> Paste CSV
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Input Area */}
+                    <div className="flex flex-col h-full">
+                        <label className="text-xs font-bold uppercase text-gray-500 mb-2">
+                            {importMode === 'JSON' ? 'Paste JSON from Gemini' : 'Paste CSV (Title, Date, Category, Desc)'}
+                        </label>
+                        <textarea
+                            className="flex-1 w-full p-4 border rounded-xl font-mono text-xs bg-slate-900 text-green-400"
+                            placeholder={importMode === 'JSON' ? '[ { "title": "Check PELP", ... } ]' : 'Task Title, 2025-01-01, STRATEGY, Details...'}
+                            value={inputText}
+                            onChange={(e) => setInputText(e.target.value)}
+                        />
+                    </div>
+
+                    {/* Preview Area */}
+                    <div className="bg-gray-100 rounded-xl p-4 overflow-y-auto h-64 md:h-auto border">
+                        <h3 className="font-bold text-gray-700 mb-3 flex justify-between">
+                            <span>Preview ({previewTasks.length} Tasks)</span>
+                            {previewTasks.length > 0 && <span className="text-green-600 text-xs">Ready to import</span>}
+                        </h3>
+                        <div className="space-y-2">
+                            {previewTasks.map((t, i) => (
+                                <div key={i} className="bg-white p-2 rounded border shadow-sm text-xs">
+                                    <div className="font-bold text-gray-800">{t.title}</div>
+                                    <div className="flex gap-2 text-gray-500 mt-1">
+                                        <span className="bg-gray-100 px-1 rounded">{t.dueDate}</span>
+                                        <span className="bg-purple-100 text-purple-700 px-1 rounded">{t.category}</span>
+                                    </div>
+                                </div>
+                            ))}
+                            {previewTasks.length === 0 && (
+                                <div className="text-gray-400 text-center mt-10 italic">
+                                    Waiting for data...
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-4 border-t bg-white flex justify-end gap-3">
+                    <Button onClick={onClose} variant="secondary">Cancel</Button>
+                    <Button 
+                        onClick={handleImport} 
+                        variant="primary" 
+                        className="bg-purple-600 hover:bg-purple-700"
+                        disabled={previewTasks.length === 0 || isProcessing}
+                    >
+                        {isProcessing ? 'Importing...' : `Import ${previewTasks.length} Tasks`}
+                    </Button>
+                </div>
+            </Card>
+        </div>
+    );
+};
 
 // --- DUPLICATE DETECTOR MODAL ---
 const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) => {
@@ -510,6 +673,7 @@ const BusinessTasksCalendar = ({ user }) => {
     const [tasks, setTasks] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [showDuplicateDetector, setShowDuplicateDetector] = useState(false);
+    const [showStrategyModal, setShowStrategyModal] = useState(false); // New state
     const [editingTask, setEditingTask] = useState(null);
     const [filterCategory, setFilterCategory] = useState('ALL');
     const [filterStatus, setFilterStatus] = useState('ACTIVE');
@@ -547,10 +711,13 @@ const BusinessTasksCalendar = ({ user }) => {
     const tasksByCategory = useMemo(() => {
         const grouped = {};
         filteredTasks.forEach(task => {
-            if (!grouped[task.category]) {
-                grouped[task.category] = [];
+            // Safety check in case a task has a legacy category not in the new map
+            const safeCategory = TASK_CATEGORIES[task.category] ? task.category : 'OTHER';
+            
+            if (!grouped[safeCategory]) {
+                grouped[safeCategory] = [];
             }
-            grouped[task.category].push(task);
+            grouped[safeCategory].push(task);
         });
         return grouped;
     }, [filteredTasks]);
@@ -632,11 +799,17 @@ const BusinessTasksCalendar = ({ user }) => {
                         Business Tasks & Compliance Calendar
                     </h2>
                     <p className="text-sm text-gray-500 mt-1">
-                        Track BIR, DTI, BOI, SEC deadlines and business tasks
+                        Track BIR, DTI, BOI, SEC, and Strategy deadlines
                     </p>
                 </div>
 
                 <div className="flex gap-2">
+                    <Button
+                        onClick={() => setShowStrategyModal(true)}
+                        className="bg-purple-600 hover:bg-purple-700 text-white"
+                    >
+                        <Upload size={16} className="mr-1" /> Import Strategy / AI
+                    </Button>
                     <Button
                         onClick={() => setShowDuplicateDetector(true)}
                         variant="secondary"
@@ -736,7 +909,7 @@ const BusinessTasksCalendar = ({ user }) => {
             {/* Tasks Grouped by Category */}
             <div className="space-y-4">
                 {Object.entries(tasksByCategory).map(([categoryKey, categoryTasks]) => {
-                    const catInfo = TASK_CATEGORIES[categoryKey];
+                    const catInfo = TASK_CATEGORIES[categoryKey] || TASK_CATEGORIES['OTHER'];
                     const CategoryIcon = catInfo.icon;
                     const isExpanded = expandedCategory === categoryKey;
 
@@ -890,6 +1063,13 @@ const BusinessTasksCalendar = ({ user }) => {
                 <DuplicateDetectorModal
                     tasks={tasks}
                     onClose={() => setShowDuplicateDetector(false)}
+                    user={user}
+                />
+            )}
+
+            {showStrategyModal && (
+                <StrategyImportModal
+                    onClose={() => setShowStrategyModal(false)}
                     user={user}
                 />
             )}
