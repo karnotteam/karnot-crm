@@ -63,6 +63,7 @@ import PayrollManager from './pages/PayrollManager.jsx';
 // --- NEW: Investment Modules ---
 import CEOInvestmentDashboard from './components/CEOInvestmentDashboard.jsx';
 import InvestorEmailManager from './components/InvestorEmailManager.jsx';
+import InvestorsPage from './pages/InvestorsPage.jsx';
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -185,7 +186,8 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
     // NEW: Investment Menu
     const investmentMenu = [
-        { view: 'investmentPipeline', label: 'Investor Pipeline', icon: TrendingUp, badge: '$250k' },
+        { view: 'investors', label: 'Investor Companies', icon: Building, badge: '43' },
+        { view: 'investmentPipeline', label: 'Pipeline View', icon: TrendingUp },
         { view: 'investmentTasks', label: 'Strategy & Tasks', icon: CheckCircle },
         { view: 'investmentEmails', label: 'Email Templates', icon: Mail }
     ];
@@ -726,6 +728,10 @@ export default function App() {
                 {/* ====================================== */}
                 {/* 6C. NEW: INVESTMENT MODULES            */}
                 {/* ====================================== */}
+                {activeView === 'investors' && (
+                    <InvestorsPage user={user} contacts={contacts} />
+                )}
+
                 {activeView === 'investmentPipeline' && (
                     <CEOInvestmentDashboard user={user} />
                 )}
