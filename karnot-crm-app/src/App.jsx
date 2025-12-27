@@ -86,11 +86,11 @@ import BIRBookPrep from './data/BIRBookPrep.jsx';
 // ==========================================
 import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { 
-    BarChart2, List, HardHat, LogOut, Building, 
+    BarChart2, List as ListIcon, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
     UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload, Sparkles,
-    DollarSign, Mail, TrendingUp // NEW: Investment icons
+    DollarSign, Mail, TrendingUp, Phone, Grid
 } from 'lucide-react'; 
 
 // ==========================================
@@ -148,7 +148,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
     // Sales & CRM Menu
     const salesMenu = [
         { view: 'funnel', label: 'Sales Funnel', icon: HardHat },
-        { view: 'list', label: 'Quotes List', icon: List, badge: quoteCount },
+        { view: 'list', label: 'Quotes List', icon: ListIcon, badge: quoteCount },
         { view: 'companies', label: 'Companies', icon: Building },
         { view: 'contacts', label: 'Contacts', icon: Users },
         { view: 'suppliers', label: 'Suppliers', icon: Briefcase }
