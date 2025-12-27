@@ -1,192 +1,129 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Copy, X, FileText, Send } from 'lucide-react';
+import { Mail, Copy, X, FileText, Send, TrendingUp, ShieldCheck, Cpu } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx';
 
 // ============================================================================
-// EMAIL TEMPLATES - Professional outreach templates for different scenarios
+// "COMPONENT-HEAVY" EMAIL TEMPLATES (High Trust)
 // ============================================================================
 
 const EMAIL_TEMPLATES = {
-    initial_contact: {
-        name: 'Initial Contact',
-        category: 'General',
-        subject: 'Clean Energy Solution for {{company}}',
-        body: `Dear {{contact}},
-
-Thank you for your interest in Karnot Energy Solutions' natural refrigerant heat pump systems.
-
-We specialize in PFAS-free, environmentally-friendly heating and cooling solutions using CO₂ and R290 technology for commercial and industrial applications.
-
-Our systems offer:
-• 48% cost advantage over traditional systems
-• Proven technology with international certifications
-• BOI-SIPP registered supplier
-• Full installation and maintenance support
-
-I'd like to schedule a brief call to discuss how our technology can benefit {{company}}.
-
-Are you available for a 15-minute call this week?
-
-Best regards,
-Stuart Cox
-CEO, Karnot Energy Solutions Inc.
-www.karnot.com.ph`
-    },
-    
-    cold_outreach_industrial: {
-        name: 'Cold Outreach (Industrial)',
-        category: 'B2B',
-        subject: 'Reducing Thermal Costs at {{company}}',
+    spec_sheet_smackdown: {
+        name: '🛠️ The "What\'s Inside" Pitch (Quality)',
+        category: 'Trust',
+        subject: 'Panasonic, Grundfos, Carel (Inside our R290 units)',
         body: `Hi {{contact}},
 
-I am reaching out regarding {{company}}'s industrial heating and cooling requirements.
+A lot of installers ask me: "It's cheaper, but is it built to last?"
 
-At Karnot, we help facilities reduce thermal energy costs by up to 50% using Industrial Heat Pumps (Waste Heat Recovery). 
+I don't hide what's inside our boxes. In fact, I brag about it.
 
-If you are currently running Chillers and Boilers separately, we can likely combine them into one efficient R290 system.
+Here is exactly what you get inside a Karnot iHEAT R290 Monobloc (£2,100 trade):
 
-Do you have 10 minutes next Tuesday to discuss a potential thermal audit?
+**The Guts (Tier 1 Components):**
+✅ **Compressor:** Panasonic R290 Inverter (A+++ Rated)
+✅ **Controller:** Full CAREL System (Inverter & PCB)
+✅ **Pump:** Grundfos (High Efficiency)
+✅ **Contactor:** Schneider Electric
+✅ **Safety:** Full ATEX-Rated Components (Compressor, Pump, EEV)
+
+**Built-In Extras (Stuff you usually buy separately):**
+* Vortex Water Flow Meter
+* Energy Consumption Meter (SG Ready)
+* Air Vent & Pressure Relief Valve included
+
+It’s European-spec engineering, built efficiently, sold direct.
+
+Why pay £4k for a badge when the components are the same?
+
+Cheers,
+
+Stuart
+Karnot Energy`
+    },
+
+    margin_fix: {
+        name: '💰 The "Margin Fix" (Direct)',
+        category: 'Sales',
+        subject: 'Stop paying the middleman tax',
+        body: `Hi {{contact}},
+
+I used to be a gas fitter, so I know the pain of seeing the merchant make more margin on the kit than I made on the install.
+
+I set up Karnot to fix that.
+
+We supply MCS-Certified R290 Heat Pumps directly to the trade. No wholesalers. No showrooms.
+
+**The math is simple:**
+* **Competitor 12kW R290:** ~£3,800 + VAT
+* **Karnot 12kW R290:** ~£2,100 + VAT
+
+It’s the same spec (Panasonic Compressor, Carel Controls). Same grant eligibility (£7,500 BUS). You just keep the extra £1,700.
+
+Mind if I send you the trade price list?
 
 Best,
-Stuart Cox
-Karnot Energy Solutions
-www.karnot.com.ph`
+
+Stuart
+Karnot Energy`
     },
-    
-    asean_partner_intro: {
-        name: 'ASEAN Partner Introduction',
-        category: 'Export',
-        subject: 'Partnership Opportunity - Natural Refrigerant Heat Pumps',
-        body: `Dear {{contact}},
 
-I hope this message finds you well.
+    r32_price_war: {
+        name: '🥊 The "Samsung Alternative" (R32)',
+        category: 'Sales',
+        subject: '12kW unit for under £2k?',
+        body: `{{contact}},
 
-I'm reaching out from Karnot Energy Solutions, a Philippines-based manufacturer of industrial heat pump systems using natural refrigerant technology (CO₂ and R290).
+If you are currently installing Samsung or LG R32 units, you are likely paying around £3,000 a pop.
 
-We're expanding our partner network in Southeast Asia and believe there may be synergies with {{company}}.
+We have a 12kW R32 Monobloc (The iHEAT Pro) landing next week.
+**Trade price: £1,950.**
 
-Our systems are:
-• PFAS-free and compliant with upcoming regional regulations
-• Designed for commercial and industrial applications
-• Suitable for both heating and cooling requirements
-• Manufactured at our BOI-registered facility in the Philippines
+It does the exact same job. It has the same warranty.
 
-Would you be open to a brief conversation about potential collaboration opportunities?
+Do you want to reserve one for your next project to test the difference?
 
-I'm available for a call next week if that suits your schedule.
+Cheers,
 
-Best regards,
-Stuart Cox
-CEO, Karnot Energy Solutions Inc.
-+63 917 XXX XXXX
-www.karnot.com.ph`
+Stuart`
     },
-    
-    uk_mcs_installer: {
-        name: 'UK MCS Installer Partnership',
-        category: 'Export',
-        subject: 'Natural Refrigerant Heat Pumps for UK Market',
-        body: `Dear {{contact}},
 
-I hope you're well.
-
-I'm writing from Karnot Energy Solutions regarding potential collaboration opportunities for the UK heat pump market.
-
-We manufacture natural refrigerant (CO₂/R290) heat pump systems and are looking to partner with established MCS-certified installers like {{company}}.
-
-Key points that may interest you:
-• PFAS-free systems ahead of regulatory phase-outs
-• Proven technology with European deployment experience
-• Competitive pricing from our Philippines manufacturing base
-• Support for BUS grant applications
-
-Would you have 20 minutes for an introductory call to explore partnership possibilities?
-
-Best regards,
-Stuart Cox
-CEO, Karnot Energy Solutions Inc.
-www.karnot.com.ph`
-    },
-    
-    follow_up: {
-        name: 'Follow-Up Email',
-        category: 'General',
-        subject: 'Following up - Heat Pump Discussion',
+    cooling_upsell: {
+        name: '❄️ The "Free Air Con" Pivot',
+        category: 'Upsell',
+        subject: 'How to sell Air Con (without the hassle)',
         body: `Hi {{contact}},
 
-I wanted to follow up on my previous message regarding Karnot's natural refrigerant heat pump solutions for {{company}}.
+Most installers disable the cooling mode on heat pumps because they don't want wet carpets from sweating radiators.
 
-I understand you're likely busy, but I believe a brief conversation could be mutually beneficial.
+We have a workaround that helps you win more quotes.
 
-Would you be available for a quick 15-minute call this week or next?
+**The Karnot "Full Climate" Pack:**
+1.  iHEAT R290 Heat Pump (Heating).
+2.  **3x iZONE Fan Coils** (Cooling for bedrooms).
 
-Please let me know a time that works for you.
+You can sell a "Whole House AC & Heating System" for the same price your competitor charges for a standard boiler swap.
 
-Best regards,
-Stuart Cox
-Karnot Energy Solutions
-www.karnot.com.ph`
-    },
-    
-    quote_follow_up: {
-        name: 'Quote Follow-Up',
-        category: 'Sales',
-        subject: 'Re: Your Heat Pump Quotation',
-        body: `Dear {{contact}},
+I have a PDF showing how to price this for a 3-bed semi. Want a copy?
 
-I hope this email finds you well.
+Best,
 
-I wanted to follow up on the quotation we provided for {{company}}'s heat pump project.
-
-Do you have any questions about the proposal? I'd be happy to schedule a call to discuss:
-• Technical specifications
-• Installation timeline
-• Financing options
-• ROI calculations
-
-Please let me know if you need any additional information.
-
-Best regards,
-Stuart Cox
-CEO, Karnot Energy Solutions Inc.
-www.karnot.com.ph`
+Stuart`
     }
 };
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-
 const EmailTemplateModal = ({ opportunity, onClose }) => {
-    const [selectedTemplate, setSelectedTemplate] = useState('initial_contact');
+    const [selectedTemplate, setSelectedTemplate] = useState('spec_sheet_smackdown');
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('');
     const [copied, setCopied] = useState(false);
 
-    // Replace template variables with actual data
+    // Replace template variables
     const fillTemplate = (text) => {
         if (!text) return '';
-        
-        const value = Number(opportunity?.estimatedValue) || 0;
-        const companyName = opportunity?.customerName || 
-                           opportunity?.companyName || 
-                           opportunity?.name || 
-                           '[Company Name]';
-        const contactName = opportunity?.contactName || 
-                           opportunity?.contact || 
-                           'Sir/Madam';
-        const projectName = opportunity?.project || 
-                           opportunity?.projectType || 
-                           'Energy Project';
-        
-        return text
-            .replace(/{{company}}/g, companyName)
-            .replace(/{{contact}}/g, contactName)
-            .replace(/{{project}}/g, projectName)
-            .replace(/{{value}}/g, '$' + value.toLocaleString());
+        const name = opportunity?.contactName || 'Mate'; 
+        return text.replace(/{{contact}}/g, name);
     };
 
-    // Update template when selection changes
     useEffect(() => {
         const template = EMAIL_TEMPLATES[selectedTemplate];
         if (template) {
@@ -195,7 +132,6 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
         }
     }, [selectedTemplate, opportunity]);
 
-    // Copy email to clipboard
     const handleCopy = () => {
         const fullEmail = `Subject: ${subject}\n\n${body}`;
         navigator.clipboard.writeText(fullEmail);
@@ -203,14 +139,13 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    // Open in default email client
     const handleOpenEmail = () => {
-        const email = opportunity?.contactEmail || opportunity?.email || '';
+        const email = opportunity?.contactEmail || '';
         const mailtoLink = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         window.open(mailtoLink, '_blank');
     };
 
-    // Group templates by category
+    // Group templates
     const templatesByCategory = Object.entries(EMAIL_TEMPLATES).reduce((acc, [key, template]) => {
         const category = template.category || 'General';
         if (!acc[category]) acc[category] = [];
@@ -220,107 +155,80 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-            <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col bg-white rounded-2xl shadow-2xl">
+            <Card className="w-full max-w-2xl flex flex-col bg-white shadow-2xl rounded-2xl overflow-hidden">
                 
                 {/* Header */}
-                <div className="p-6 border-b bg-gradient-to-r from-orange-500 to-orange-600 text-white flex justify-between items-center">
+                <div className="p-5 border-b bg-slate-900 text-white flex justify-between items-center">
                     <div>
-                        <h2 className="text-2xl font-black uppercase tracking-tight">
-                            Email Templates
+                        <h2 className="text-xl font-black uppercase flex items-center gap-2">
+                            <TrendingUp className="text-green-400" /> Direct Outreach
                         </h2>
-                        <p className="text-sm text-orange-100 font-bold mt-1">
-                            {opportunity?.customerName || opportunity?.companyName || opportunity?.name || 'Prospect'}
+                        <p className="text-xs text-slate-400 font-bold mt-1">
+                            Target: {opportunity?.customerName || 'New Prospect'}
                         </p>
                     </div>
-                    <button 
-                        onClick={onClose}
-                        className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-                    >
+                    <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors">
                         <X size={24} />
                     </button>
                 </div>
 
                 {/* Body */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                <div className="p-6 space-y-5 bg-gray-50 flex-1 overflow-y-auto">
                     
-                    {/* Template Selection */}
+                    {/* Template Selector */}
                     <div>
                         <label className="text-[10px] font-black uppercase text-gray-500 mb-2 block flex items-center gap-2">
-                            <FileText size={14} />
-                            Select Email Template
+                            <FileText size={14} /> Select Strategy
                         </label>
-                        <select
+                        <select 
                             value={selectedTemplate}
                             onChange={(e) => setSelectedTemplate(e.target.value)}
-                            className="w-full p-3 border-2 border-gray-200 rounded-xl bg-white font-bold text-sm focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                            className="w-full p-3 border-2 border-slate-200 rounded-xl font-bold text-slate-700 focus:border-green-500 focus:ring-0"
                         >
                             {Object.entries(templatesByCategory).map(([category, templates]) => (
                                 <optgroup key={category} label={category}>
-                                    {templates.map(template => (
-                                        <option key={template.key} value={template.key}>
-                                            {template.name}
-                                        </option>
+                                    {templates.map(t => (
+                                        <option key={t.key} value={t.key}>{t.name}</option>
                                     ))}
                                 </optgroup>
                             ))}
                         </select>
-                        <p className="text-xs text-gray-500 mt-2 italic">
-                            Templates automatically personalized with company/contact details
-                        </p>
                     </div>
 
-                    {/* Subject Line */}
-                    <div>
-                        <label className="text-[10px] font-black uppercase text-gray-500 mb-2 block">
-                            Subject Line
-                        </label>
+                    {/* Editor */}
+                    <div className="space-y-3">
                         <Input 
                             value={subject} 
                             onChange={(e) => setSubject(e.target.value)} 
-                            className="font-bold"
-                            placeholder="Email subject..."
+                            className="font-bold border-2 border-slate-200" 
+                            placeholder="Subject Line..."
                         />
-                    </div>
-
-                    {/* Email Body */}
-                    <div>
-                        <label className="text-[10px] font-black uppercase text-gray-500 mb-2 block">
-                            Email Body
-                        </label>
                         <Textarea 
                             value={body} 
                             onChange={(e) => setBody(e.target.value)} 
                             rows={14} 
-                            className="font-mono text-sm"
-                            placeholder="Email content..."
+                            className="font-mono text-sm border-2 border-slate-200 leading-relaxed" 
+                            placeholder="Email body..."
                         />
                     </div>
 
-                    {/* Info Box */}
-                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-                        <p className="text-xs text-blue-800 font-bold">
-                            💡 <strong>Pro Tip:</strong> Customize the template with specific details about the prospect's industry, location, or recent news for better response rates. Personal touches significantly improve engagement.
+                    {/* Component Trust Note */}
+                    <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg flex items-start gap-3">
+                        <Cpu className="text-orange-600 shrink-0 mt-0.5" size={16} />
+                        <p className="text-xs text-orange-800">
+                            <strong>Trust Builder:</strong> The "What's Inside" template lists the Tier 1 components (Panasonic, Grundfos, Carel). Use this when a prospect questions quality or compares you to "Cheap Chinese" brands.
                         </p>
                     </div>
                 </div>
 
-                {/* Footer Actions */}
-                <div className="p-6 border-t bg-gray-50 flex flex-col sm:flex-row gap-3">
-                    <Button
-                        onClick={handleCopy}
-                        variant="secondary"
-                        className="flex-1 flex items-center justify-center gap-2"
-                    >
-                        <Copy size={16} />
-                        {copied ? '✓ Copied!' : 'Copy to Clipboard'}
+                {/* Footer */}
+                <div className="p-5 border-t bg-white flex gap-3">
+                    <Button onClick={handleCopy} variant="secondary" className="flex-1 border-slate-200">
+                        <Copy size={16} className="mr-2" /> 
+                        {copied ? 'Copied!' : 'Copy Text'}
                     </Button>
-                    <Button
-                        onClick={handleOpenEmail}
-                        variant="primary"
-                        className="flex-1 flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700"
-                    >
-                        <Mail size={16} />
-                        Open Email Client
+                    <Button onClick={handleOpenEmail} variant="primary" className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-200">
+                        <Send size={16} className="mr-2" /> Open Mail App
                     </Button>
                 </div>
             </Card>
