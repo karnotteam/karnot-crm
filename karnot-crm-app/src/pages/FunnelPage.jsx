@@ -17,418 +17,178 @@ const STAGE_ORDER = [
 ];
 
 // ==========================================
-// HTML EMAIL TEMPLATES WITH WORKING IMAGE URLS
+// EMAIL TEMPLATES - OUTLOOK COMPATIBLE PLAIN TEXT
 // ==========================================
 const HTML_EMAIL_TEMPLATES = {
     initial_contact: {
         name: 'Initial Contact - Professional Introduction',
         subject: 'Clean Energy Solution for {{company}}',
-        getHtml: (data) => `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
-        <tr>
-            <td align="center">
-                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                    <tr>
-                        <td style="background: linear-gradient(135deg, #ff6b35 0%, #ff8c61 100%); padding: 30px 40px; text-align: center;">
-                            <img src="https://i.postimg.cc/XYgJQbfL/karnot-logo.png" alt="Karnot Energy Solutions" style="height: 50px; margin-bottom: 10px;" />
-                            <div style="color: #ffffff; font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;">
-                                Low Carbon Heat Pumps
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 40px;">
-                            <h2 style="color: #2c3e50; font-size: 24px; font-weight: 700; margin: 0 0 20px 0;">
-                                Clean Energy Solution for ${data.company}
-                            </h2>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                                Dear ${data.contact},
-                            </p>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
-                                Thank you for your interest in Karnot Energy Solutions' natural refrigerant heat pump systems.
-                            </p>
-                            <div style="text-align: center; margin: 30px 0;">
-                                <img src="https://i.postimg.cc/mrLFhg3h/heat-pump-18kw.png" alt="Karnot Heat Pump" style="max-width: 100%; height: auto; border-radius: 8px;" />
-                            </div>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                                We specialize in PFAS-free, environmentally-friendly heating and cooling solutions using CO₂ and R290 technology for commercial and industrial applications.
-                            </p>
-                            <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; border-left: 4px solid #ff6b35; border-radius: 4px; margin: 25px 0;">
-                                <tr>
-                                    <td style="padding: 20px 25px;">
-                                        <div style="color: #2c3e50; font-weight: 700; font-size: 14px; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px;">
-                                            Our Systems Offer:
-                                        </div>
-                                        <div style="color: #34495e; font-size: 15px; line-height: 1.8;">
-                                            ✓ 48% cost advantage over traditional systems<br/>
-                                            ✓ Proven technology with international certifications<br/>
-                                            ✓ BOI-SIPP registered supplier<br/>
-                                            ✓ Full installation and maintenance support
-                                        </div>
-                                    </td>
-                                </tr>
-                            </table>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 25px 0 30px 0;">
-                                I'd like to schedule a brief call to discuss how our technology can benefit ${data.company}.
-                            </p>
-                            <table cellpadding="0" cellspacing="0" style="margin: 30px 0;">
-                                <tr>
-                                    <td align="center" style="background: linear-gradient(135deg, #ff6b35 0%, #ff8c61 100%); border-radius: 6px; padding: 14px 32px;">
-                                        <a href="mailto:stuart.cox@karnot.com?subject=Meeting Request - ${data.company}" style="color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px; display: block;">
-                                            Schedule a Call
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 25px 0 0 0;">
-                                Are you available for a 15-minute call this week?
-                            </p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 0 40px 40px 40px; border-top: 2px solid #f0f0f0;">
-                            <table cellpadding="0" cellspacing="0" width="100%" style="margin-top: 30px;">
-                                <tr>
-                                    <td>
-                                        <div style="color: #2c3e50; font-size: 16px; font-weight: 700; margin-bottom: 8px;">
-                                            Kind Regards,
-                                        </div>
-                                        <div style="color: #2c3e50; font-size: 18px; font-weight: 700; margin-bottom: 4px;">
-                                            Stuart Cox
-                                        </div>
-                                        <div style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">
-                                            CEO, Karnot Energy Solutions Inc.
-                                        </div>
-                                        <div style="color: #34495e; font-size: 14px; line-height: 1.8;">
-                                            📧 <a href="mailto:stuart.cox@karnot.com" style="color: #ff6b35; text-decoration: none;">stuart.cox@karnot.com</a><br/>
-                                            📱 <a href="tel:+639602892001" style="color: #34495e; text-decoration: none;">+63 960 289 2001</a><br/>
-                                            🌐 <a href="https://karnot.com" style="color: #ff6b35; text-decoration: none;">www.karnot.com</a>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #2c3e50; padding: 25px 40px; text-align: center;">
-                            <div style="color: #ecf0f1; font-size: 12px; line-height: 1.6; margin-bottom: 10px;">
-                                <strong>Low Carbon Technology Centre</strong><br/>
-                                Cosmos Farm, Cosmos Street, Nilmobot Manpandan<br/>
-                                Pangasinan, Philippines 2429
-                            </div>
-                            <div style="color: #95a5a6; font-size: 11px; line-height: 1.5; margin-top: 15px; padding-top: 15px; border-top: 1px solid #34495e;">
-                                Confidentiality: This email and attachments are confidential and intended solely for the named addressee(s).
-                            </div>
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>`
+        getPlainText: (data) => `Dear ${data.contact},
+
+Thank you for your interest in Karnot Energy Solutions' natural refrigerant heat pump systems.
+
+We specialize in PFAS-free, environmentally-friendly heating and cooling solutions using CO₂ and R290 technology for commercial and industrial applications.
+
+OUR SYSTEMS OFFER:
+✓ 48% cost advantage over traditional systems
+✓ Proven technology with international certifications
+✓ BOI-SIPP registered supplier
+✓ Full installation and maintenance support
+
+I'd like to schedule a brief call to discuss how our technology can benefit ${data.company}.
+
+Are you available for a 15-minute call this week?
+
+Kind Regards,
+
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.
+📧 stuart.cox@karnot.com
+📱 +63 960 289 2001
+🌐 www.karnot.com
+
+--
+Low Carbon Technology Centre
+Cosmos Farm, Cosmos Street, Nilmobot Manpandan
+Pangasinan, Philippines 2429
+
+Confidentiality: This email and attachments are confidential and intended solely for the named addressee(s).`
     },
 
     follow_up: {
         name: 'Follow-Up After Demo',
         subject: 'Following Up: {{company}} Heat Pump Project',
-        getHtml: (data) => `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
-        <tr>
-            <td align="center">
-                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                    <tr>
-                        <td style="background: linear-gradient(135deg, #ff6b35 0%, #ff8c61 100%); padding: 30px 40px; text-align: center;">
-                            <img src="https://i.postimg.cc/XYgJQbfL/karnot-logo.png" alt="Karnot" style="height: 50px; margin-bottom: 10px;" />
-                            <div style="color: #ffffff; font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;">
-                                Low Carbon Heat Pumps
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 40px;">
-                            <h2 style="color: #2c3e50; font-size: 24px; font-weight: 700; margin: 0 0 20px 0;">
-                                ${data.project} - Next Steps
-                            </h2>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                                Dear ${data.contact},
-                            </p>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
-                                Thank you for taking the time to meet with us regarding the <strong>${data.project}</strong> project.
-                            </p>
-                            <div style="text-align: center; margin: 30px 0;">
-                                <img src="https://i.postimg.cc/YSRqwSF1/heat-pump-9kw.png" alt="Karnot R290 Heat Pump" style="max-width: 100%; height: auto; border-radius: 8px;" />
-                            </div>
-                            <table width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; margin: 30px 0;">
-                                <tr>
-                                    <td style="padding: 30px;">
-                                        <div style="color: #2c3e50; font-weight: 700; font-size: 16px; margin-bottom: 20px; text-align: center;">
-                                            Our R290 Heat Pump System Can Deliver:
-                                        </div>
-                                        <table width="100%" cellpadding="10" cellspacing="0">
-                                            <tr>
-                                                <td style="color: #34495e; font-size: 15px; padding: 8px 0;">
-                                                    💰 <strong>Estimated Annual Savings:</strong>
-                                                </td>
-                                                <td align="right" style="color: #27ae60; font-size: 18px; font-weight: 700; padding: 8px 0;">
-                                                    ${data.savings}
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td style="color: #34495e; font-size: 15px; padding: 8px 0;">
-                                                    ⏱️ <strong>Payback Period:</strong>
-                                                </td>
-                                                <td align="right" style="color: #3498db; font-size: 18px; font-weight: 700; padding: 8px 0;">
-                                                    ${data.payback} months
-                                                </td>
-                                            </tr>
-                                            <tr>
-                                                <td colspan="2" style="padding-top: 15px; border-top: 2px solid #dee2e6; color: #34495e; font-size: 14px; line-height: 1.8;">
-                                                    ✓ Reduced carbon footprint<br/>
-                                                    ✓ Compliance with latest environmental regulations
-                                                </td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                            </table>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 25px 0;">
-                                I've attached our formal proposal for your review.
-                            </p>
-                            <table cellpadding="0" cellspacing="0" style="margin: 30px 0;">
-                                <tr>
-                                    <td align="center" style="background: linear-gradient(135deg, #ff6b35 0%, #ff8c61 100%); border-radius: 6px; padding: 14px 32px;">
-                                        <a href="mailto:stuart.cox@karnot.com?subject=Follow-up - ${data.company}" style="color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px; display: block;">
-                                            Schedule Follow-Up Call
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 25px 0 0 0;">
-                                Looking forward to working with ${data.company}.
-                            </p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 0 40px 40px 40px; border-top: 2px solid #f0f0f0;">
-                            <table cellpadding="0" cellspacing="0" width="100%" style="margin-top: 30px;">
-                                <tr>
-                                    <td>
-                                        <div style="color: #2c3e50; font-size: 16px; font-weight: 700; margin-bottom: 8px;">Kind Regards,</div>
-                                        <div style="color: #2c3e50; font-size: 18px; font-weight: 700; margin-bottom: 4px;">Stuart Cox</div>
-                                        <div style="color: #7f8c8d; font-size: 14px; margin-bottom: 15px;">CEO, Karnot Energy Solutions Inc.</div>
-                                        <div style="color: #34495e; font-size: 14px; line-height: 1.8;">
-                                            📧 stuart.cox@karnot.com<br/>📱 +63 960 289 2001
-                                        </div>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #2c3e50; padding: 25px; text-align: center; color: #ecf0f1; font-size: 11px;">
-                            Confidentiality: This email and attachments are confidential.
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>`
+        getPlainText: (data) => `Dear ${data.contact},
+
+RE: ${data.project} - Next Steps
+
+Thank you for taking the time to meet with us regarding the ${data.project} project.
+
+OUR R290 HEAT PUMP SYSTEM CAN DELIVER:
+
+💰 Estimated Annual Savings: ${data.savings}
+⏱️ Payback Period: ${data.payback} months
+✓ Reduced carbon footprint
+✓ Compliance with latest environmental regulations
+
+I've attached our formal proposal for your review.
+
+Would you be available for a follow-up call this week to discuss any questions?
+
+Looking forward to working with ${data.company}.
+
+Kind Regards,
+
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.
+📧 stuart.cox@karnot.com
+📱 +63 960 289 2001
+
+Confidentiality: This email and attachments are confidential.`
     },
 
     proposal_sent: {
         name: 'Proposal Sent - Professional Quote',
         subject: 'Proposal: {{project}} - Karnot Energy Solutions',
-        getHtml: (data) => `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
-        <tr>
-            <td align="center">
-                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                    <tr>
-                        <td style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); padding: 30px 40px; text-align: center;">
-                            <img src="https://i.postimg.cc/XYgJQbfL/karnot-logo.png" alt="Karnot" style="height: 50px; margin-bottom: 10px;" />
-                            <div style="color: #ffffff; font-size: 14px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-top: 15px;">
-                                Formal Proposal
-                            </div>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 40px;">
-                            <h2 style="color: #2c3e50; font-size: 24px; font-weight: 700; margin: 0 0 20px 0;">
-                                ${data.project}
-                            </h2>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
-                                Dear ${data.contact},
-                            </p>
-                            <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
-                                Please find attached our detailed proposal for the <strong>${data.project}</strong> at ${data.company}.
-                            </p>
-                            <table width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #fff5f0 0%, #ffe8dd 100%); border: 2px solid #ff6b35; border-radius: 8px; margin: 30px 0;">
-                                <tr>
-                                    <td style="padding: 25px;">
-                                        <div style="color: #ff6b35; font-weight: 700; font-size: 16px; margin-bottom: 20px; text-align: center; text-transform: uppercase; letter-spacing: 1px;">
-                                            📋 Proposal Summary
-                                        </div>
-                                        <table width="100%" cellpadding="8" cellspacing="0" style="border-collapse: collapse;">
-                                            <tr style="border-bottom: 1px solid #ffd4c0;">
-                                                <td style="color: #2c3e50; font-size: 15px; padding: 12px 0;">Total Investment:</td>
-                                                <td align="right" style="color: #ff6b35; font-size: 20px; font-weight: 700; padding: 12px 0;">${data.value}</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #ffd4c0;">
-                                                <td style="color: #2c3e50; font-size: 15px; padding: 12px 0;">Estimated ROI:</td>
-                                                <td align="right" style="color: #27ae60; font-size: 20px; font-weight: 700; padding: 12px 0;">${data.roi}%</td>
-                                            </tr>
-                                            <tr style="border-bottom: 1px solid #ffd4c0;">
-                                                <td style="color: #2c3e50; font-size: 15px; padding: 12px 0;">Implementation Timeline:</td>
-                                                <td align="right" style="color: #3498db; font-size: 18px; font-weight: 700; padding: 12px 0;">${data.timeline} weeks</td>
-                                            </tr>
-                                            <tr>
-                                                <td style="color: #2c3e50; font-size: 15px; padding: 12px 0;">Warranty:</td>
-                                                <td align="right" style="color: #9b59b6; font-size: 16px; font-weight: 700; padding: 12px 0;">5 Years Comprehensive</td>
-                                            </tr>
-                                        </table>
-                                    </td>
-                                </tr>
-                            </table>
-                            <div style="background-color: #e8f5e9; border-left: 4px solid #27ae60; padding: 20px; border-radius: 4px; margin: 25px 0;">
-                                <div style="color: #27ae60; font-weight: 700; font-size: 15px; margin-bottom: 12px;">📌 Next Steps:</div>
-                                <div style="color: #2c3e50; font-size: 14px; line-height: 1.8;">
-                                    1. Review the proposal<br/>
-                                    2. Schedule a technical Q&A session<br/>
-                                    3. Site survey (if needed)<br/>
-                                    4. Final approval and contract signing
-                                </div>
-                            </div>
-                            <table cellpadding="0" cellspacing="0" style="margin: 30px auto;">
-                                <tr>
-                                    <td align="center" style="background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); border-radius: 6px; padding: 14px 32px;">
-                                        <a href="mailto:stuart.cox@karnot.com?subject=Proposal - ${data.company}" style="color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px; display: block;">
-                                            Discuss This Proposal
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="background-color: #2c3e50; padding: 25px; text-align: center; color: #ecf0f1; font-size: 12px;">
-                            Stuart Cox, CEO | stuart.cox@karnot.com | +63 960 289 2001
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
-</body>
-</html>`
+        getPlainText: (data) => `Dear ${data.contact},
+
+FORMAL PROPOSAL: ${data.project}
+
+Please find attached our detailed proposal for the ${data.project} at ${data.company}.
+
+📋 PROPOSAL SUMMARY:
+
+Total Investment: ${data.value}
+Estimated ROI: ${data.roi}%
+Implementation Timeline: ${data.timeline} weeks
+Warranty: 5 Years Comprehensive
+
+📌 NEXT STEPS:
+
+1. Review the proposal
+2. Schedule a technical Q&A session
+3. Site survey (if needed)
+4. Final approval and contract signing
+
+The proposal is valid for 60 days. I'm happy to discuss any questions or adjustments.
+
+I'll follow up with you early next week.
+
+Kind Regards,
+
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.
+📧 stuart.cox@karnot.com
+📱 +63 960 289 2001`
     },
 
     negotiation: {
         name: 'Negotiation Phase',
         subject: 'Re: {{project}} - Addressing Your Questions',
-        getHtml: (data) => `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
-        <tr><td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <tr><td style="background: linear-gradient(135deg, #3498db 0%, #5dade2 100%); padding: 30px 40px; text-align: center;">
-                    <img src="https://i.postimg.cc/XYgJQbfL/karnot-logo.png" alt="Karnot" style="height: 50px;" />
-                </td></tr>
-                <tr><td style="padding: 40px;">
-                    <h2 style="color: #2c3e50; font-size: 24px; font-weight: 700; margin: 0 0 20px 0;">Re: ${data.project}</h2>
-                    <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">Dear ${data.contact},</p>
-                    <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 25px 0;">
-                        Thank you for your questions regarding the <strong>${data.project}</strong> proposal.
-                    </p>
-                    <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 25px 0;">
-                        We value our partnership with ${data.company} and want to ensure this project meets all your requirements.
-                    </p>
-                    <table cellpadding="0" cellspacing="0" style="margin: 30px auto;">
-                        <tr><td align="center" style="background: linear-gradient(135deg, #3498db 0%, #5dade2 100%); border-radius: 6px; padding: 14px 32px;">
-                            <a href="mailto:stuart.cox@karnot.com?subject=Questions - ${data.company}" style="color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px; display: block;">Let's Discuss</a>
-                        </td></tr>
-                    </table>
-                </td></tr>
-                <tr><td style="padding: 20px 40px; background-color: #f8f9fa;">
-                    <div style="color: #2c3e50; font-weight: 700;">Stuart Cox, CEO</div>
-                    <div style="color: #7f8c8d; font-size: 14px;">stuart.cox@karnot.com | +63 960 289 2001</div>
-                </td></tr>
-            </table>
-        </td></tr>
-    </table>
-</body>
-</html>`
+        getPlainText: (data) => `Dear ${data.contact},
+
+RE: ${data.project}
+
+Thank you for your questions regarding the ${data.project} proposal.
+
+We value our partnership with ${data.company} and want to ensure this project meets all your requirements.
+
+I'm available this week for a call to discuss any adjustments to the proposal or address any concerns you may have.
+
+Please let me know a convenient time for a discussion.
+
+Kind Regards,
+
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.
+📧 stuart.cox@karnot.com
+📱 +63 960 289 2001`
     },
 
     won: {
         name: 'Project Won - Welcome!',
         subject: 'Welcome to Karnot Energy Solutions!',
-        getHtml: (data) => `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background-color: #f5f5f5;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 20px 0;">
-        <tr><td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <tr><td style="background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); padding: 40px; text-align: center;">
-                    <img src="https://i.postimg.cc/XYgJQbfL/karnot-logo.png" alt="Karnot" style="height: 50px; margin-bottom: 15px;" />
-                    <div style="color: #ffffff; font-size: 28px; font-weight: 700; margin-top: 20px;">🎉 Welcome to Karnot!</div>
-                    <div style="color: #d5f4e6; font-size: 14px; margin-top: 10px;">We're thrilled to partner with ${data.company}</div>
-                </td></tr>
-                <tr><td style="padding: 40px;">
-                    <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">Dear ${data.contact},</p>
-                    <p style="color: #34495e; font-size: 18px; line-height: 1.6; margin: 0 0 25px 0; font-weight: 600;">
-                        Congratulations! We're thrilled to begin working with ${data.company} on the <span style="color: #27ae60;">${data.project}</span>.
-                    </p>
-                    <div style="text-align: center; margin: 30px 0;">
-                        <img src="https://i.postimg.cc/mrLFhg3h/heat-pump-18kw.png" alt="Heat Pump System" style="max-width: 100%; height: auto; border-radius: 8px;" />
-                    </div>
-                    <table cellpadding="0" cellspacing="0" style="margin: 30px auto;">
-                        <tr><td align="center" style="background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); border-radius: 6px; padding: 14px 32px;">
-                            <a href="mailto:stuart.cox@karnot.com?subject=Project Kickoff - ${data.company}" style="color: #ffffff; text-decoration: none; font-weight: 600; font-size: 16px; display: block;">Contact Your Team</a>
-                        </td></tr>
-                    </table>
-                </td></tr>
-                <tr><td style="background-color: #27ae60; padding: 25px; text-align: center; color: #ffffff; font-size: 12px;">
-                    Stuart Cox, CEO | stuart.cox@karnot.com | +63 960 289 2001
-                </td></tr>
-            </table>
-        </td></tr>
-    </table>
-</body>
-</html>`
+        getPlainText: (data) => `Dear ${data.contact},
+
+🎉 WELCOME TO KARNOT ENERGY SOLUTIONS!
+
+Congratulations! We're thrilled to begin working with ${data.company} on the ${data.project}.
+
+NEXT STEPS:
+
+1. Contract signing (this week)
+2. Deposit payment and project scheduling
+3. Pre-installation site survey
+4. Equipment delivery and installation
+5. Commissioning and training
+
+YOUR DEDICATED PROJECT TEAM:
+
+We'll assign your dedicated project manager who will be your primary contact throughout the implementation.
+
+We'll keep you updated at every stage of the project.
+
+Thank you for choosing Karnot Energy Solutions. We're committed to delivering exceptional results for ${data.company}.
+
+Kind Regards,
+
+Stuart Cox
+CEO, Karnot Energy Solutions Inc.
+📧 stuart.cox@karnot.com
+📱 +63 960 289 2001
+
+--
+We're excited to partner with you on this clean energy journey!`
     }
 };
 
 // ==========================================
-// EMAIL TEMPLATE MODAL COMPONENT
+// EMAIL TEMPLATE MODAL COMPONENT - OUTLOOK COMPATIBLE
 // ==========================================
 const EmailTemplateModal = ({ opportunity, onClose }) => {
     const [selectedTemplate, setSelectedTemplate] = useState('initial_contact');
-    const [emailHtml, setEmailHtml] = useState('');
     const [emailSubject, setEmailSubject] = useState('');
+    const [emailBody, setEmailBody] = useState('');
     const [copied, setCopied] = useState(false);
 
     useEffect(() => {
@@ -448,7 +208,10 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                 timeline: '8-12'
             };
             
-            setEmailHtml(template.getHtml(data));
+            // Get plain text version for better Outlook compatibility
+            const plainText = template.getPlainText ? template.getPlainText(data) : template.getHtml(data);
+            
+            setEmailBody(plainText);
             setEmailSubject(template.subject
                 .replace(/{{company}}/g, data.company)
                 .replace(/{{project}}/g, data.project)
@@ -456,24 +219,26 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
         }
     }, [opportunity, selectedTemplate]);
 
-    const handleCopyHtml = () => {
-        navigator.clipboard.writeText(emailHtml);
+    const handleCopyEmail = () => {
+        const fullEmail = `Subject: ${emailSubject}\n\nTo: ${opportunity.contactEmail || ''}\n\n${emailBody}`;
+        navigator.clipboard.writeText(fullEmail);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const handleOpenInEmail = () => {
-        const mailtoLink = `mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent('Please view in HTML mode')}`;
-        window.open(mailtoLink);
+    const handleOpenInOutlook = () => {
+        // This works better with Outlook - opens with subject and recipient
+        const mailtoLink = `mailto:${opportunity.contactEmail || ''}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+        window.location.href = mailtoLink;
     };
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
             <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+                <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-orange-50">
                     <div>
-                        <h2 className="text-2xl font-black text-gray-800">Email Templates</h2>
-                        <p className="text-sm text-gray-500 mt-1">{opportunity.customerName} - {opportunity.project}</p>
+                        <h2 className="text-2xl font-black text-gray-800 uppercase">Email Templates</h2>
+                        <p className="text-sm text-gray-600 mt-1">{opportunity.customerName} - {opportunity.project}</p>
                     </div>
                     <Button onClick={onClose} variant="secondary" className="!p-2">
                         <X size={20} />
@@ -481,6 +246,14 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                 </div>
 
                 <div className="p-6 flex-1 overflow-y-auto">
+                    {/* Template Info */}
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-sm text-blue-800">
+                            <strong>📧 Outlook 365 Instructions:</strong> Click "Open in Outlook" to create a new email with this template, 
+                            or click "Copy to Clipboard" and paste into your email client.
+                        </p>
+                    </div>
+
                     <div className="mb-4">
                         <label className="block text-sm font-bold text-gray-700 mb-2">Select Template</label>
                         <select
@@ -495,7 +268,17 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                     </div>
 
                     <div className="mb-4">
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Subject Line</label>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">To:</label>
+                        <input
+                            type="text"
+                            value={opportunity.contactEmail || ''}
+                            readOnly
+                            className="w-full p-3 border-2 border-gray-200 rounded-lg bg-gray-50"
+                        />
+                    </div>
+
+                    <div className="mb-4">
+                        <label className="block text-sm font-bold text-gray-700 mb-2">Subject:</label>
                         <input
                             type="text"
                             value={emailSubject}
@@ -505,23 +288,27 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                     </div>
 
                     <div className="mb-4">
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Email Preview</label>
-                        <div 
-                            className="border-2 border-gray-200 rounded-lg p-4 bg-gray-50 overflow-auto"
-                            style={{maxHeight: '400px'}}
-                            dangerouslySetInnerHTML={{__html: emailHtml}}
+                        <label className="block text-sm font-bold text-gray-700 mb-2">Message Body:</label>
+                        <textarea
+                            value={emailBody}
+                            onChange={(e) => setEmailBody(e.target.value)}
+                            rows={16}
+                            className="w-full p-3 border-2 border-gray-200 rounded-lg font-mono text-sm"
                         />
                     </div>
                 </div>
 
-                <div className="p-6 border-t border-gray-200 flex gap-3">
-                    <Button onClick={handleCopyHtml} variant="primary" className="flex-1">
-                        <Copy size={16} className="mr-2" />
-                        {copied ? 'Copied!' : 'Copy HTML Email'}
-                    </Button>
-                    <Button onClick={handleOpenInEmail} variant="secondary" className="flex-1">
+                <div className="p-6 border-t border-gray-200 bg-gray-50 flex gap-3">
+                    <Button onClick={handleOpenInOutlook} variant="primary" className="flex-1 bg-orange-600 hover:bg-orange-700">
                         <Mail size={16} className="mr-2" />
-                        Open in Email Client
+                        Open in Outlook
+                    </Button>
+                    <Button onClick={handleCopyEmail} variant="secondary" className="flex-1">
+                        <Copy size={16} className="mr-2" />
+                        {copied ? 'Copied!' : 'Copy to Clipboard'}
+                    </Button>
+                    <Button onClick={onClose} variant="secondary">
+                        Close
                     </Button>
                 </div>
             </div>
