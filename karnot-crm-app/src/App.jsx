@@ -37,6 +37,7 @@ import AppointmentScheduler from './pages/AppointmentScheduler.jsx';
 import TerritoryLeadGenerator from './pages/TerritoryLeadGenerator.jsx';
 import BOIProjectLeads from './pages/BOIProjectLeads.jsx';
 import PEZAZones from './pages/PEZAZones.jsx';
+import SmartTextScraper from './pages/SmartTextScraper.jsx';
 
 // --- Export Operations ---
 import ASEANExportPage from './pages/ASEANExportPage.jsx';
@@ -82,7 +83,7 @@ import {
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
-    UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload
+    UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload, Sparkles
 } from 'lucide-react'; 
 
 // ==========================================
@@ -152,6 +153,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'agents', label: 'Agents', icon: Users },
         { view: 'appointments', label: 'Call Centre', icon: FileText },
         { view: 'leadGenerator', label: 'Lead Generator', icon: Target },
+        { view: 'smartScraper', label: 'Text Scraper', icon: Sparkles, badge: 'AI' },
         { view: 'boiLeads', label: 'BOI Projects', icon: Building, badge: 'NEW' },
         { view: 'pezaZones', label: 'PEZA Zones', icon: HardHat, badge: 'NEW' }
     ];
@@ -162,7 +164,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'ukExport', label: 'UK Operations', icon: Globe },
         { view: 'exportCompanies', label: 'Companies', icon: Building },
         { view: 'exportContacts', label: 'Contacts', icon: Users },
-        { view: 'escoImport', label: 'Import ESCOs', icon: Upload, badge: 'NEW' }
+        { view: 'escoImport', label: 'Import ESCOs', icon: Upload, badge: 'AI' }
     ];
 
     // Operations Menu (Recurring Revenue)
@@ -659,6 +661,8 @@ export default function App() {
                 )}
                 
                 {activeView === 'leadGenerator' && <TerritoryLeadGenerator territories={territories} user={user} />}
+                
+                {activeView === 'smartScraper' && <SmartTextScraper user={user} />}
                 
                 {activeView === 'boiLeads' && <BOIProjectLeads territories={territories} user={user} />}
                 
