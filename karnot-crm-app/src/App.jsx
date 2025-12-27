@@ -155,22 +155,15 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'pezaZones', label: 'PEZA Zones', icon: HardHat, badge: 'NEW' }
     ];
 
-    // Export Operations Menu (UPDATED)
-    const exportOpsMenu = [
-        { view: 'aseanExport', label: 'ASEAN Markets', icon: Globe, badge: 'BOI' },
-        { view: 'ukExport', label: 'UK Operations', icon: Globe },
-        { view: 'exportCompanies', label: 'Companies', icon: Building },
-        { view: 'exportContacts', label: 'Contacts', icon: Users }
-    ];
-
     // Operations Menu (Recurring Revenue)
    // In App.jsx
+// Export Operations Menu (UPDATED)
 const exportOpsMenu = [
     { view: 'aseanExport', label: 'ASEAN Markets', icon: Globe, badge: 'BOI' },
     { view: 'ukExport', label: 'UK Operations', icon: Globe },
     { view: 'exportCompanies', label: 'Companies', icon: Building },
     { view: 'exportContacts', label: 'Contacts', icon: Users },
-    { view: 'escoImport', label: 'Import ESCOs', icon: Upload, badge: 'NEW' }  // ADD THIS
+    { view: 'escoImport', label: 'Import ESCOs', icon: Upload, badge: 'NEW' }  // ADD THIS LINE
 ];
 
 // Add view handler
