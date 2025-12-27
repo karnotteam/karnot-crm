@@ -4,6 +4,8 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy,
 import { Building, Mail, Phone, Globe, Linkedin, Plus, Edit, Trash2, Search, Filter, DollarSign, MapPin, Users, FileText, Grid, List } from 'lucide-react';
 import { importInvestors } from '../utils/importInvestors';
 import InvestorFunnel from '../components/InvestorFunnel';
+// TEMPORARY TEST: 
+// import InvestorFunnel from '../components/InvestorFunnelTest';
 
 const InvestorsPage = ({ user, contacts }) => {
   const [investors, setInvestors] = useState([]);
@@ -428,6 +430,7 @@ const InvestorsPage = ({ user, contacts }) => {
         <DuplicatesModal
           duplicates={duplicates}
           onMerge={handleMergeDuplicates}
+          onDeleteAll={handleDeleteDuplicates}
           onClose={() => setShowDuplicates(false)}
         />
       )}
@@ -841,7 +844,7 @@ const InvestorModal = ({ investor, onSave, onCancel, regions, types, priorities 
 };
 
 // Duplicates Modal Component
-const DuplicatesModal = ({ duplicates, onMerge, onClose }) => {
+const DuplicatesModal = ({ duplicates, onMerge, onDeleteAll, onClose }) => {
   if (duplicates.length === 0) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -865,6 +868,16 @@ const DuplicatesModal = ({ duplicates, onMerge, onClose }) => {
 
   const totalDuplicates = duplicates.reduce((sum, group) => sum + (group.count - 1), 0);
 
+  // Delete all duplicates at once
+  const handleDeleteAllDuplicates = async () => {
+    // Collect all duplicates (keep first, delete rest from each group)
+    const allDuplicatesToDelete = duplicates.flatMap(group => group.investors.slice(1));
+    
+    if (window.confirm(`Delete ALL ${totalDuplicates} duplicate${totalDuplicates !== 1 ? 's' : ''}?\n\nThis will keep the oldest entry for each investor and permanently delete ${totalDuplicates} newer duplicate${totalDuplicates !== 1 ? 's' : ''}.\n\nThis action cannot be undone.`)) {
+      await onDeleteAll(allDuplicatesToDelete);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-lg p-6 max-w-4xl w-full my-8">
@@ -883,6 +896,24 @@ const DuplicatesModal = ({ duplicates, onMerge, onClose }) => {
           >
             ×
           </button>
+        </div>
+
+        {/* Bulk Actions */}
+        <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-red-800 text-lg">Quick Action</h3>
+              <p className="text-sm text-red-700 mt-1">
+                Delete all {totalDuplicates} duplicates at once (keeps oldest entry for each)
+              </p>
+            </div>
+            <button
+              onClick={handleDeleteAllDuplicates}
+              className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold uppercase text-sm tracking-wider flex items-center gap-2 whitespace-nowrap"
+            >
+              🗑️ Delete All {totalDuplicates} Duplicates
+            </button>
+          </div>
         </div>
 
         <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
