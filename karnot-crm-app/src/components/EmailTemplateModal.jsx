@@ -1,65 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Copy, X, FileText, Send, TrendingUp, ShieldCheck, Globe, Award } from 'lucide-react';
+import { Mail, Copy, X, FileText, Send, TrendingUp, ShieldCheck, Cpu, Award, Zap } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx';
 
 // ============================================================================
-// "NO FLUFF" DIRECT RESPONSE TEMPLATES (With 10k Unit Social Proof)
+// KARNOT UK: DIRECT RESPONSE TEMPLATES (Final Strategy Edition)
 // ============================================================================
 
 const EMAIL_TEMPLATES = {
-    europe_proof: {
-        name: '🇪🇺 The "10,000 Units" Pitch (Social Proof)',
-        category: 'Trust',
-        subject: 'We are new to the UK, but not to Europe',
-        body: `Hi {{contact}},
-
-A lot of installers ask me: "I haven't heard of Karnot. Am I the guinea pig?"
-
-The answer is no.
-
-While we are new to the UK trade market, our R290 platform is already a veteran.
-
-**The Stats:**
-* **10,000+ Units** currently running across Europe (Germany, Netherlands, Poland).
-* **3 Years** of winter field data.
-* **0% Duty** (We ship via our Philippines hub, not direct China).
-
-You are getting a machine that has already been stress-tested in climates colder than Manchester.
-
-We just cut out the middleman so you get it for **£2,100** instead of £4,000.
-
-Want to see the case studies?
-
-Cheers,
-
-Stuart
-Karnot Energy`
-    },
-
     spec_sheet_smackdown: {
-        name: '🛠️ The "What\'s Inside" Pitch (Quality)',
+        name: '🛠️ The "What\'s Inside" (Quality Proof)',
         category: 'Trust',
-        subject: 'Panasonic, Grundfos, Carel (Inside our R290 units)',
+        subject: 'Panasonic, Grundfos, Carel (Inside our £2k unit)',
         body: `Hi {{contact}},
 
-Installers often ask me: "It's half the price of a Vaillant, so what's the catch? Is it certified?"
+A lot of installers ask me: "It's half the price of a Vaillant, so is it cheap junk?"
 
-There is no catch. Just direct supply.
+I don't hide what's inside our boxes. I brag about it.
 
-Here is exactly what you get with a Karnot iHEAT R290 Monobloc (£2,100 trade):
+Here is exactly what you get inside a Karnot iHEAT R290 Monobloc (Trade: £2,100):
 
-**1. The "Paperwork" (Grant Ready):**
-✅ **MCS Certified:** Fully approved for the £7,500 BUS Grant.
-✅ **Keymark & TUV:** Safety certified.
-✅ **Proven:** 10,000+ units currently operating across Europe.
+**The "Guts" (Tier 1 Components):**
+✅ **Compressor:** Panasonic R290 "DC Inverter" (Dedicated Propane Design).
+✅ **Controller:** Full CAREL System (Italian Inverter Drive & PCB).
+✅ **Pump:** Grundfos UPM3 (The gold standard).
+✅ **Contactor:** Schneider Electric.
+✅ **Safety:** Explosion-Proof Internal Components.
 
-**2. The "Guts" (Tier 1 Components):**
-⚙️ **Compressor:** Panasonic R290 "DC Inverter" (Dedicated Propane Design).
-⚙️ **Controller:** Full CAREL System (Inverter Drive & PCB).
-⚙️ **Pump:** Grundfos UPM3 (The gold standard).
-⚙️ **Contactor:** Schneider Electric.
+It is European-spec engineering, built efficiently, sold direct.
 
-It is top-tier European-spec engineering, built efficiently, sold direct.
+Why pay £4,000 for a badge when the components are the same?
 
 Cheers,
 
@@ -68,29 +37,54 @@ Karnot Energy`
     },
 
     margin_fix: {
-        name: '💰 The "Margin Fix" (Direct)',
+        name: '💰 The "Cash Margin" Pitch',
         category: 'Sales',
-        subject: 'Stop paying the middleman tax',
+        subject: 'Stop paying the wholesaler\'s pension',
         body: `Hi {{contact}},
 
-I used to be a gas fitter, so I know the pain of seeing the merchant make more margin on the kit than I made on the install.
+I used to be a gas fitter. I know the pain of doing the hard work while the merchant makes the easy margin.
 
-I set up Karnot to fix that.
-
-We supply MCS-Certified R290 Heat Pumps directly to the trade. No wholesalers. No showrooms.
+I set up Karnot to fix that. We supply MCS-Certified R290 Heat Pumps direct to the trade.
 
 **The math is simple:**
-* **Competitor 12kW R290:** ~£3,800 + VAT
-* **Karnot 12kW R290:** ~£2,100 + VAT
+* **Competitor 12kW R290:** ~£3,800 + VAT (Wholesale)
+* **Karnot 12kW R290:** ~£2,100 + VAT (Direct)
 
-It’s the same spec (Panasonic/Carel). Same grant eligibility. You just keep the extra £1,700.
+**The Result:**
+You do the same install. You claim the same £7,500 BUS Grant. You keep an extra **£1,700 profit** in your back pocket.
 
-Mind if I send you the trade price list?
+Mind if I send you the spec sheet?
 
 Best,
 
 Stuart
-Karnot Energy`
+Ex-Gas Engineer & CEO, Karnot`
+    },
+
+    r32_price_war: {
+        name: '🥊 The "Samsung Killer" (R32)',
+        category: 'Sales',
+        subject: '12kW Heat Pump for under £2k?',
+        body: `Hi {{contact}},
+
+Quick question.
+
+If you are currently installing Samsung or LG R32 units, you are likely paying around £3,000 a pop.
+
+We have a **12kW R32 Monobloc** (The iHEAT Pro) landing next week.
+**Trade price: £1,950.**
+
+* Same Refrigerant (R32).
+* Same Power (12kW).
+* **£1,000+ Cheaper.**
+
+It matches the big brands spec-for-spec, but without the "brand tax."
+
+Do you want to reserve one for your next project to test the difference?
+
+Cheers,
+
+Stuart`
     },
 
     cooling_upsell: {
@@ -99,26 +93,52 @@ Karnot Energy`
         subject: 'How to sell Air Con (without the hassle)',
         body: `Hi {{contact}},
 
-Most installers disable the cooling mode on heat pumps because they don't want wet carpets from sweating radiators.
+Most heating guys lose work in the summer. Here is a trick to stay busy.
 
-We have a workaround that helps you win more quotes.
+Our heat pumps can cool, not just heat.
 
-**The Karnot "Full Climate" Pack:**
-1.  iHEAT R290 Heat Pump (Heating).
-2.  **3x iZONE Fan Coils** (Cooling for bedrooms).
+Instead of radiators in the bedrooms, fit our **iZONE Fan Coils**.
+* Cost to you: ~£150.
+* Value to customer: Full Air Conditioning.
 
-You can sell a "Whole House AC & Heating System" for the same price your competitor charges for a standard boiler swap.
+You can sell a "Whole House Climate System" for the same price your competitor charges for a standard boiler swap.
 
-I have a PDF showing how to price this for a 3-bed semi. Want a copy?
+You win the job. The customer gets cool bedrooms.
 
-Best,
+Want to see the bundle pricing?
+
+Cheers,
+
+Stuart`
+    },
+
+    logistics_trust: {
+        name: '🛡️ The "Safe Hands" (Logistics)',
+        category: 'Trust',
+        subject: 'Direct supply, but safe (Our QC Process)',
+        body: `Hi {{contact}},
+
+Buying direct can be scary. Will it arrive? Is the quality consistent?
+
+We don't ship "blind" from the factory. We route our stock through our own export hub in the **Philippines**.
+
+**Our QC Process:**
+1.  Manufacture (Tier 1 Factory).
+2.  **Staging & Testing (Philippines Hub).**
+3.  Ship to UK.
+
+Our team physically checks the units before they get on the boat to you. You get the factory price, but with proper oversight and English-speaking support.
+
+Safe. Simple. Cheap.
+
+Cheers,
 
 Stuart`
     }
 };
 
 const EmailTemplateModal = ({ opportunity, onClose }) => {
-    const [selectedTemplate, setSelectedTemplate] = useState('europe_proof');
+    const [selectedTemplate, setSelectedTemplate] = useState('spec_sheet_smackdown');
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('');
     const [copied, setCopied] = useState(false);
@@ -167,7 +187,7 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                 <div className="p-5 border-b bg-slate-900 text-white flex justify-between items-center">
                     <div>
                         <h2 className="text-xl font-black uppercase flex items-center gap-2">
-                            <TrendingUp className="text-green-400" /> Direct Outreach
+                            <TrendingUp className="text-green-400" /> Rapid Fire Emails
                         </h2>
                         <p className="text-xs text-slate-400 font-bold mt-1">
                             Target: {opportunity?.customerName || 'New Prospect'}
@@ -184,7 +204,7 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                     {/* Template Selector */}
                     <div>
                         <label className="text-[10px] font-black uppercase text-gray-500 mb-2 block flex items-center gap-2">
-                            <FileText size={14} /> Select Strategy
+                            <FileText size={14} /> Choose Your Angle
                         </label>
                         <select 
                             value={selectedTemplate}
@@ -218,11 +238,11 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                         />
                     </div>
 
-                    {/* Social Proof Note */}
+                    {/* Trust Note */}
                     <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-start gap-3">
-                        <Globe className="text-blue-600 shrink-0 mt-0.5" size={16} />
+                        <ShieldCheck className="text-blue-600 shrink-0 mt-0.5" size={16} />
                         <p className="text-xs text-blue-800">
-                            <strong>10,000 Unit Stat:</strong> This is your strongest trust signal. It moves the conversation from "Testing a new product" (Risky) to "Using a proven European standard" (Safe).
+                            <strong>Strategy:</strong> These templates use the "Sabri Suby" style: short sentences, high contrast (Option A vs Option B), and low friction. Don't sound corporate. Sound like a guy offering a deal.
                         </p>
                     </div>
                 </div>
