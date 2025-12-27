@@ -344,11 +344,14 @@ const InvestorsPage = ({ user, contacts }) => {
 
       {/* View Toggle: Grid or Funnel */}
       {viewMode === 'funnel' ? (
-        <InvestorFunnel 
-          investors={investors} 
-          onRefresh={loadInvestors} 
-          user={user} 
-        />
+        <>
+          {console.log('🔍 Funnel mode active, investors count:', investors.length)}
+          <InvestorFunnel 
+            investors={investors} 
+            onRefresh={loadInvestors} 
+            user={user} 
+          />
+        </>
       ) : (
         <>
           {/* Investors Grid */}
