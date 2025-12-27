@@ -43,6 +43,7 @@ import ASEANExportPage from './pages/ASEANExportPage.jsx';
 import UKExportPage from './pages/UKExportPage.jsx';
 import ExportCompaniesPage from './pages/ExportCompaniesPage.jsx';
 import ExportContactsPage from './pages/ExportContactsPage.jsx';
+import ESCOImportEnrichmentTool from './pages/ESCOImportEnrichmentTool.jsx';
 
 // --- Service & Operations Modules ---
 import InstallEstimator from './pages/InstallEstimator.jsx';
@@ -76,13 +77,12 @@ import BIRBookPrep from './data/BIRBookPrep.jsx';
 // ==========================================
 // 4. CONSTANTS & STYLING
 // ==========================================
-import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
-    UserCheck, Calendar as CalendarIcon, CheckCircle, Globe
-} from 'lucide-react'; 
+    UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload  // ADD Upload here
+} from 'lucide-react';
 
 // ==========================================
 // 5. DROPDOWN MENU COMPONENT
@@ -687,7 +687,9 @@ export default function App() {
                         user={user}
                     />
                 )}
-                
+                {activeView === 'escoImport' && (
+    <ESCOImportEnrichmentTool user={user} />
+)}
                 {/* 7. QUOTING */}
                 {activeView === 'calculator' && (
                     <QuoteCalculator 
