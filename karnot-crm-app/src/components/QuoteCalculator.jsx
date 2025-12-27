@@ -129,12 +129,11 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                 ...initialData.commercial 
             });
             setDocControl({ 
-                quoteNumber: nextQuoteNumber, 
-                revision: 'A', 
-                paymentTerms: '50% Down Payment upon Order Confirmation\n40% upon Delivery to Site\n10% upon Commissioning or 45 days after delivery (whichever comes sooner)', 
-                ...initialData.docControl, 
-                quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber 
-            });
+    revision: 'A', 
+    paymentTerms: '50% Down Payment upon Order Confirmation\n40% upon Delivery to Site\n10% upon Commissioning or 45 days after delivery (whichever comes sooner)', 
+    ...initialData.docControl, 
+    quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber 
+});
             setCosting({ 
                 forexRate: 58.50, 
                 transportCost: 0, 
