@@ -61,8 +61,8 @@ import ManagementAccounts from './pages/ManagementAccounts.jsx';
 import PayrollManager from './pages/PayrollManager.jsx'; 
 
 // --- NEW: Investment Modules ---
-import CEOInvestmentDashboard from './pages/CEOInvestmentDashboard.jsx';
-import InvestorEmailManager from './pages/InvestorEmailManager.jsx';
+import CEOInvestmentDashboard from './components/CEOInvestmentDashboard.jsx';
+import InvestorEmailManager from './components/InvestorEmailManager.jsx';
 
 // ==========================================
 // 2. COMPONENT IMPORTS
