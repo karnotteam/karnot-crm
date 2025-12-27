@@ -158,9 +158,13 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
     // Export Operations Menu (NEW)
     const exportOpsMenu = [
-        { view: 'aseanExport', label: 'ASEAN Markets', icon: Globe, badge: 'BOI' },
-        { view: 'ukExport', label: 'UK Operations', icon: Globe }
-    ];
+    // Export Operations Menu
+const exportOpsMenu = [
+    { view: 'aseanExport', label: 'ASEAN Markets', icon: Globe, badge: 'BOI' },
+    { view: 'ukExport', label: 'UK Operations', icon: Globe },
+    { view: 'exportCompanies', label: 'Companies', icon: Building },      // NEW
+    { view: 'exportContacts', label: 'Contacts', icon: Users }             // NEW
+];
 
     // Operations Menu (Recurring Revenue)
     const operationsMenu = [
@@ -504,6 +508,26 @@ export default function App() {
             .reduce((m, n) => Math.max(m, n), 0);
         return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
     }, [quotes]); 
+    
+    {/* EXPORT CRM PAGES (NEW) */}
+{activeView === 'exportCompanies' && (
+    <ExportCompaniesPage 
+        companies={companies}
+        contacts={contacts}
+        quotes={quotes}
+        user={user}
+        onOpenQuote={handleEditQuote}
+        appointments={appointments}
+    />
+)}
+
+{activeView === 'exportContacts' && (
+    <ExportContactsPage 
+        contacts={contacts}
+        companies={companies}
+        user={user}
+    />
+)}
 
     // ------------------------------------------
     // LOADING & AUTH STATES
