@@ -38,6 +38,10 @@ import TerritoryLeadGenerator from './pages/TerritoryLeadGenerator.jsx';
 import BOIProjectLeads from './pages/BOIProjectLeads.jsx';
 import PEZAZones from './pages/PEZAZones.jsx';
 
+// --- Export Operations (NEW) ---
+import ASEANExportPage from './pages/ASEANExportPage.jsx';
+import UKExportPage from './pages/UKExportPage.jsx';
+
 // --- Service & Operations Modules ---
 import InstallEstimator from './pages/InstallEstimator.jsx';
 import ServiceInvoice from './pages/ServiceInvoice.jsx';
@@ -45,7 +49,7 @@ import ServiceContractsPage from './pages/ServiceContractsPage.jsx';
 import MaintenanceCalendar from './pages/MaintenanceCalendar.jsx';
 import TechnicianMobileView from './pages/TechnicianMobileView.jsx';
 import AssetsPage from './pages/AssetsPage.jsx';
-import BusinessTasksCalendar from './pages/BusinessTasksCalendar.jsx'; // NEW
+import BusinessTasksCalendar from './pages/BusinessTasksCalendar.jsx';
 
 // --- Finance & Banking Modules ---
 import BankReconciliation from './pages/BankReconciliation.jsx'; 
@@ -75,7 +79,7 @@ import {
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
-    UserCheck, Calendar as CalendarIcon, CheckCircle  // NEW: CheckCircle for Business Tasks
+    UserCheck, Calendar as CalendarIcon, CheckCircle, Globe
 } from 'lucide-react'; 
 
 // ==========================================
@@ -149,12 +153,18 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'pezaZones', label: 'PEZA Zones', icon: HardHat, badge: 'NEW' }
     ];
 
+    // Export Operations Menu (NEW)
+    const exportOpsMenu = [
+        { view: 'aseanExport', label: 'ASEAN Markets', icon: Globe, badge: 'BOI' },
+        { view: 'ukExport', label: 'UK Operations', icon: Globe }
+    ];
+
     // Operations Menu (Recurring Revenue)
     const operationsMenu = [
         { view: 'assets', label: 'Asset Registry', icon: Package, badge: 'NEW' },
         { view: 'serviceContracts', label: 'Service Contracts', icon: FileText },
         { view: 'maintenanceCalendar', label: 'Ops Calendar', icon: CalendarIcon },
-        { view: 'businessTasks', label: 'Business Tasks', icon: CheckCircle, badge: 'NEW' }, // NEW
+        { view: 'businessTasks', label: 'Business Tasks', icon: CheckCircle, badge: 'NEW' },
         { view: 'technicianView', label: 'Technician App', icon: Wrench, badge: 'MOBILE' },
         { view: 'installEstimator', label: 'Install & QC', icon: Wrench },
         { view: 'serviceInvoice', label: 'Service Invoice', icon: FileText }
@@ -231,6 +241,14 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                     {/* MENUS */}
                     <DropdownMenu label="Sales & CRM" icon={Building} items={salesMenu} activeView={activeView} setActiveView={setActiveView} />
                     <DropdownMenu label="Field Ops" icon={MapPin} items={fieldOpsMenu} activeView={activeView} setActiveView={setActiveView} />
+                    <DropdownMenu 
+                        label="Export Ops" 
+                        icon={Globe} 
+                        items={exportOpsMenu} 
+                        activeView={activeView} 
+                        setActiveView={setActiveView}
+                        variant="orange"
+                    />
                     <DropdownMenu label="Operations" icon={Wrench} items={operationsMenu} activeView={activeView} setActiveView={setActiveView} />
                     <DropdownMenu label="Calculators" icon={Calculator} items={calculatorsMenu} activeView={activeView} setActiveView={setActiveView} />
 
@@ -592,7 +610,7 @@ export default function App() {
                     <TechnicianMobileView companies={companies} user={user} />
                 )}
 
-                {/* NEW: BUSINESS TASKS CALENDAR */}
+                {/* BUSINESS TASKS CALENDAR */}
                 {activeView === 'businessTasks' && (
                     <BusinessTasksCalendar user={user} />
                 )}
@@ -639,6 +657,15 @@ export default function App() {
                 {activeView === 'boiLeads' && <BOIProjectLeads territories={territories} user={user} />}
                 
                 {activeView === 'pezaZones' && <PEZAZones territories={territories} user={user} />}
+
+                {/* 6B. EXPORT OPERATIONS (NEW) */}
+                {activeView === 'aseanExport' && (
+                    <ASEANExportPage user={user} />
+                )}
+
+                {activeView === 'ukExport' && (
+                    <UKExportPage user={user} />
+                )}
                 
                 {/* 7. QUOTING */}
                 {activeView === 'calculator' && (
