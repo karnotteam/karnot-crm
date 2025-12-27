@@ -684,9 +684,9 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
         const nextAppointment = upcomingAppointments && upcomingAppointments.length > 0 ? upcomingAppointments[0] : null;
 
         return (
-            <Card className="p-4 mb-3 rounded-lg shadow border border-gray-200">
-                <div className="flex justify-between items-start">
-                    <h4 className="font-bold text-gray-800">
+            <Card className="p-4 mb-3 rounded-lg shadow border border-gray-200 bg-white">
+                <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-bold text-gray-800 text-base leading-tight">
                         {opp.customerName}
                     </h4>
                     <div className="flex gap-1">
@@ -709,10 +709,10 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
                 
                 {/* Opportunity Value & Probability */}
                 <div className="mt-3 flex justify-between items-center">
-                    <span className="text-lg font-semibold text-orange-600">
+                    <span className="text-lg font-bold text-orange-600">
                         ${(opp.estimatedValue || 0).toLocaleString()}
                     </span>
-                    <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                    <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
                         {opp.probability || 0}%
                     </span>
                 </div>
@@ -721,28 +721,26 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
                 {quotesForThisOpp && quotesForThisOpp.length > 0 && (
                     <div className="mt-2 flex items-center gap-2 text-xs text-green-700 bg-green-50 px-2 py-1 rounded">
                         <DollarSign size={12} />
-                        <span>{quotesForThisOpp.length} Quote{quotesForThisOpp.length > 1 ? 's' : ''} for this Opportunity</span>
+                        <span>{quotesForThisOpp.length} Quote{quotesForThisOpp.length > 1 ? 's' : ''}</span>
                     </div>
                 )}
 
                 {/* Next Appointment Alert */}
                 {nextAppointment && (
-                    <div className="mt-2 flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                    <div className="mt-2 flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-2 py-1 rounded">
                         <Calendar size={12} />
                         <span className="font-semibold">
-                            {nextAppointment.purpose} - {new Date(nextAppointment.appointmentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} @ {nextAppointment.appointmentTime}
+                            {new Date(nextAppointment.appointmentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} @ {nextAppointment.appointmentTime}
                         </span>
                     </div>
                 )}
 
                 {/* Company History Data */}
-                {companyData && (
+                {companyData && companyQuoteCount > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-200 space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-1 text-gray-600">
-                                <Building size={12} />
-                                <span>Company History</span>
-                            </div>
+                        <div className="flex items-center gap-1 text-xs text-gray-600 mb-1">
+                            <Building size={12} />
+                            <span className="font-semibold">Company History</span>
                         </div>
                         
                         <div className="flex items-center justify-between text-xs">
@@ -765,18 +763,11 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
                                 </span>
                             </div>
                         )}
-
-                        {upcomingAppointments && upcomingAppointments.length > 0 && (
-                            <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-500">Scheduled Visits:</span>
-                                <span className="font-semibold text-blue-600">{upcomingAppointments.length}</span>
-                            </div>
-                        )}
                     </div>
                 )}
                 
                 <Button onClick={() => onOpen(opp)} variant="secondary" className="w-full text-xs py-1 mt-3">
-                    <FileText size={14} className="mr-2"/> View Details / Notes
+                    <FileText size={14} className="mr-1"/> View Details / Notes
                 </Button>
 
                 {/* Move Backward and Forward buttons */}
@@ -868,14 +859,14 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-4">
                 {STAGE_ORDER.map(stage => (
-                    <div key={stage} className="min-h-[400px]">
-                        <div className={`p-3 rounded-t-lg font-black text-sm uppercase tracking-wide ${stageColors[stage]}`}>
+                    <div key={stage} className="min-h-[500px] min-w-[280px]">
+                        <div className={`p-4 rounded-t-lg font-black text-base uppercase tracking-wide ${stageColors[stage]}`}>
                             {stage}
-                            <span className="ml-2 text-xs">({enrichedOpportunitiesByStage[stage]?.length || 0})</span>
+                            <div className="text-sm font-bold mt-1">({enrichedOpportunitiesByStage[stage]?.length || 0})</div>
                         </div>
-                        <div className="p-2 bg-gray-50 rounded-b-lg min-h-[350px]">
+                        <div className="p-3 bg-gray-50 rounded-b-lg min-h-[450px]">
                             {(enrichedOpportunitiesByStage[stage] || []).map(opp => (
                                 <OpportunityCard 
                                     key={opp.id} 
