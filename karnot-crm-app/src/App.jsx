@@ -64,6 +64,7 @@ import PayrollManager from './pages/PayrollManager.jsx';
 import CEOInvestmentDashboard from './components/CEOInvestmentDashboard.jsx';
 import InvestorEmailManager from './components/InvestorEmailManager.jsx';
 import InvestorsPage from './pages/InvestorsPage.jsx';
+import CallCentre from './pages/CallCentre.jsx';
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -170,6 +171,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'ukExport', label: 'UK Operations', icon: Globe },
         { view: 'exportCompanies', label: 'Companies', icon: Building },
         { view: 'exportContacts', label: 'Contacts', icon: Users },
+        { view: 'exportCallCentre', label: 'Call Centre', icon: Phone },
         { view: 'escoImport', label: 'Import ESCOs', icon: Upload, badge: 'AI' }
     ];
 
@@ -187,6 +189,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
     // NEW: Investment Menu
     const investmentMenu = [
         { view: 'investors', label: 'Investor Companies', icon: Building, badge: '43' },
+        { view: 'investmentCallCentre', label: 'Call Centre', icon: Phone },
         { view: 'investmentPipeline', label: 'Pipeline View', icon: TrendingUp },
         { view: 'investmentTasks', label: 'Strategy & Tasks', icon: CheckCircle },
         { view: 'investmentEmails', label: 'Email Templates', icon: Mail }
@@ -721,6 +724,10 @@ export default function App() {
                     />
                 )}
 
+                {activeView === 'exportCallCentre' && (
+                    <CallCentre user={user} mode="export" />
+                )}
+
                 {activeView === 'escoImport' && (
                     <ESCOImportEnrichmentTool user={user} />
                 )}
@@ -730,6 +737,10 @@ export default function App() {
                 {/* ====================================== */}
                 {activeView === 'investors' && (
                     <InvestorsPage user={user} contacts={contacts} />
+                )}
+
+                {activeView === 'investmentCallCentre' && (
+                    <CallCentre user={user} mode="investor" />
                 )}
 
                 {activeView === 'investmentPipeline' && (
