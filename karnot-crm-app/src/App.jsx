@@ -60,6 +60,10 @@ import BankReconciliation from './pages/BankReconciliation.jsx';
 import ManagementAccounts from './pages/ManagementAccounts.jsx';
 import PayrollManager from './pages/PayrollManager.jsx'; 
 
+// --- NEW: Investment Modules ---
+import CEOInvestmentDashboard from './pages/CEOInvestmentDashboard.jsx';
+import InvestorEmailManager from './pages/InvestorEmailManager.jsx';
+
 // ==========================================
 // 2. COMPONENT IMPORTS
 // ==========================================
@@ -83,7 +87,8 @@ import {
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
-    UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload, Sparkles
+    UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload, Sparkles,
+    DollarSign, Mail, TrendingUp // NEW: Investment icons
 } from 'lucide-react'; 
 
 // ==========================================
@@ -99,7 +104,7 @@ const DropdownMenu = ({ label, icon: Icon, items, activeView, setActiveView, var
                 onClick={() => setIsOpen(!isOpen)}
                 onMouseEnter={() => setIsOpen(true)}
                 variant={isActive ? 'primary' : variant}
-                className={`font-bold uppercase text-[10px] tracking-widest h-9 ${variant === 'orange' ? 'border-orange-200 text-orange-700 bg-orange-50' : ''}`}
+                className={`font-bold uppercase text-[10px] tracking-widest h-9 ${variant === 'orange' ? 'border-orange-200 text-orange-700 bg-orange-50' : ''} ${variant === 'purple' ? 'border-purple-200 text-purple-700 bg-purple-50' : ''}`}
             >
                 <Icon className="mr-1.5" size={14} /> {label} <ChevronDown size={12} className="ml-1"/>
             </Button>
@@ -176,6 +181,13 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'technicianView', label: 'Technician App', icon: Wrench, badge: 'MOBILE' },
         { view: 'installEstimator', label: 'Install & QC', icon: Wrench },
         { view: 'serviceInvoice', label: 'Service Invoice', icon: FileText }
+    ];
+
+    // NEW: Investment Menu
+    const investmentMenu = [
+        { view: 'investmentPipeline', label: 'Investor Pipeline', icon: TrendingUp, badge: '$250k' },
+        { view: 'investmentTasks', label: 'Strategy & Tasks', icon: CheckCircle },
+        { view: 'investmentEmails', label: 'Email Templates', icon: Mail }
     ];
 
     // Calculators Menu
@@ -258,6 +270,17 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                         variant="orange"
                     />
                     <DropdownMenu label="Operations" icon={Wrench} items={operationsMenu} activeView={activeView} setActiveView={setActiveView} />
+                    
+                    {/* NEW: Investment Menu */}
+                    <DropdownMenu 
+                        label="Investment" 
+                        icon={DollarSign} 
+                        items={investmentMenu} 
+                        activeView={activeView} 
+                        setActiveView={setActiveView}
+                        variant="purple"
+                    />
+                    
                     <DropdownMenu label="Calculators" icon={Calculator} items={calculatorsMenu} activeView={activeView} setActiveView={setActiveView} />
 
                     {/* Accounts (Admin Only) */}
@@ -698,6 +721,21 @@ export default function App() {
 
                 {activeView === 'escoImport' && (
                     <ESCOImportEnrichmentTool user={user} />
+                )}
+
+                {/* ====================================== */}
+                {/* 6C. NEW: INVESTMENT MODULES            */}
+                {/* ====================================== */}
+                {activeView === 'investmentPipeline' && (
+                    <CEOInvestmentDashboard user={user} />
+                )}
+
+                {activeView === 'investmentTasks' && (
+                    <BusinessTasksCalendar user={user} />
+                )}
+
+                {activeView === 'investmentEmails' && (
+                    <InvestorEmailManager user={user} />
                 )}
                 
                 {/* 7. QUOTING */}
