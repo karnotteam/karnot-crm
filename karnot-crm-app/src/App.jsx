@@ -164,15 +164,19 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
     ];
 
     // Operations Menu (Recurring Revenue)
-    const operationsMenu = [
-        { view: 'assets', label: 'Asset Registry', icon: Package, badge: 'NEW' },
-        { view: 'serviceContracts', label: 'Service Contracts', icon: FileText },
-        { view: 'maintenanceCalendar', label: 'Ops Calendar', icon: CalendarIcon },
-        { view: 'businessTasks', label: 'Business Tasks', icon: CheckCircle, badge: 'NEW' },
-        { view: 'technicianView', label: 'Technician App', icon: Wrench, badge: 'MOBILE' },
-        { view: 'installEstimator', label: 'Install & QC', icon: Wrench },
-        { view: 'serviceInvoice', label: 'Service Invoice', icon: FileText }
-    ];
+   // In App.jsx
+const exportOpsMenu = [
+    { view: 'aseanExport', label: 'ASEAN Markets', icon: Globe, badge: 'BOI' },
+    { view: 'ukExport', label: 'UK Operations', icon: Globe },
+    { view: 'exportCompanies', label: 'Companies', icon: Building },
+    { view: 'exportContacts', label: 'Contacts', icon: Users },
+    { view: 'escoImport', label: 'Import ESCOs', icon: Upload, badge: 'NEW' }  // ADD THIS
+];
+
+// Add view handler
+{activeView === 'escoImport' && (
+    <ESCOImportEnrichmentTool user={user} />
+)}
 
     // Calculators Menu
     const calculatorsMenu = [
