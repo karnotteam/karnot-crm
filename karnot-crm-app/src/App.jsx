@@ -29,9 +29,6 @@ import ContactsPage from './pages/ContactsPage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
 import CalculatorsPage from './pages/CalculatorsPage.jsx'; 
 import SupplierManager from './pages/SupplierManager.jsx';
-// --- Export CRM Modules (NEW) ---
-import ExportCompaniesPage from './pages/ExportCompaniesPage.jsx';
-import ExportContactsPage from './pages/ExportContactsPage.jsx';
 
 // --- Territory & Field Sales Modules ---
 import TerritoryManagement from './pages/TerritoryManagement.jsx';
@@ -44,6 +41,8 @@ import PEZAZones from './pages/PEZAZones.jsx';
 // --- Export Operations (NEW) ---
 import ASEANExportPage from './pages/ASEANExportPage.jsx';
 import UKExportPage from './pages/UKExportPage.jsx';
+import ExportCompaniesPage from './pages/ExportCompaniesPage.jsx';
+import ExportContactsPage from './pages/ExportContactsPage.jsx';
 
 // --- Service & Operations Modules ---
 import InstallEstimator from './pages/InstallEstimator.jsx';
@@ -156,15 +155,13 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'pezaZones', label: 'PEZA Zones', icon: HardHat, badge: 'NEW' }
     ];
 
-    // Export Operations Menu (NEW)
+    // Export Operations Menu (UPDATED)
     const exportOpsMenu = [
-    // Export Operations Menu
-const exportOpsMenu = [
-    { view: 'aseanExport', label: 'ASEAN Markets', icon: Globe, badge: 'BOI' },
-    { view: 'ukExport', label: 'UK Operations', icon: Globe },
-    { view: 'exportCompanies', label: 'Companies', icon: Building },      // NEW
-    { view: 'exportContacts', label: 'Contacts', icon: Users }             // NEW
-];
+        { view: 'aseanExport', label: 'ASEAN Markets', icon: Globe, badge: 'BOI' },
+        { view: 'ukExport', label: 'UK Operations', icon: Globe },
+        { view: 'exportCompanies', label: 'Companies', icon: Building },
+        { view: 'exportContacts', label: 'Contacts', icon: Users }
+    ];
 
     // Operations Menu (Recurring Revenue)
     const operationsMenu = [
@@ -508,26 +505,6 @@ export default function App() {
             .reduce((m, n) => Math.max(m, n), 0);
         return lastQuoteNum > 0 ? lastQuoteNum + 1 : 2501;
     }, [quotes]); 
-    
-    {/* EXPORT CRM PAGES (NEW) */}
-{activeView === 'exportCompanies' && (
-    <ExportCompaniesPage 
-        companies={companies}
-        contacts={contacts}
-        quotes={quotes}
-        user={user}
-        onOpenQuote={handleEditQuote}
-        appointments={appointments}
-    />
-)}
-
-{activeView === 'exportContacts' && (
-    <ExportContactsPage 
-        contacts={contacts}
-        companies={companies}
-        user={user}
-    />
-)}
 
     // ------------------------------------------
     // LOADING & AUTH STATES
@@ -642,7 +619,7 @@ export default function App() {
                     <BusinessTasksCalendar user={user} />
                 )}
                 
-                {/* 5. DATA MANAGEMENT */}
+                {/* 5. DATA MANAGEMENT - PHILIPPINES */}
                 {activeView === 'companies' && (
                     <CompaniesPage 
                         companies={companies} 
@@ -685,13 +662,33 @@ export default function App() {
                 
                 {activeView === 'pezaZones' && <PEZAZones territories={territories} user={user} />}
 
-                {/* 6B. EXPORT OPERATIONS (NEW) */}
+                {/* 6B. EXPORT OPERATIONS */}
                 {activeView === 'aseanExport' && (
                     <ASEANExportPage user={user} />
                 )}
 
                 {activeView === 'ukExport' && (
                     <UKExportPage user={user} />
+                )}
+
+                {/* EXPORT CRM PAGES */}
+                {activeView === 'exportCompanies' && (
+                    <ExportCompaniesPage 
+                        companies={companies}
+                        contacts={contacts}
+                        quotes={quotes}
+                        user={user}
+                        onOpenQuote={handleEditQuote}
+                        appointments={appointments}
+                    />
+                )}
+
+                {activeView === 'exportContacts' && (
+                    <ExportContactsPage 
+                        contacts={contacts}
+                        companies={companies}
+                        user={user}
+                    />
                 )}
                 
                 {/* 7. QUOTING */}
