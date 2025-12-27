@@ -4,12 +4,13 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, order
 import {
     CheckCircle, Clock, AlertTriangle, Plus, Edit, Trash2, Calendar,
     FileText, Building, Landmark, Users, Filter, X, ChevronDown, ChevronUp, Copy, Trash,
-    Upload, FileJson, FileSpreadsheet, Search, XCircle // Added Search & XCircle here
+    Upload, FileJson, FileSpreadsheet // Added new icons here
 } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx';
 
 // --- TASK CATEGORIES WITH ICONS & COLORS ---
 const TASK_CATEGORIES = {
+    // --- NEW STRATEGY CATEGORIES ADDED HERE ---
     'REGULATION': { 
         label: 'Gov & Regulation (DOE/PELP)', 
         icon: Landmark, 
@@ -24,6 +25,7 @@ const TASK_CATEGORIES = {
         bgColor: 'bg-purple-50', 
         borderColor: 'border-purple-200' 
     },
+    // --- END NEW CATEGORIES ---
     'BIR': { 
         label: 'BIR Filing', 
         icon: FileText, 
@@ -90,18 +92,20 @@ const RECURRING_PATTERNS = [
     { value: 'annually', label: 'Annually' }
 ];
 
-// --- STRATEGY IMPORT MODAL ---
+// --- NEW STRATEGY IMPORT MODAL ---
 const StrategyImportModal = ({ onClose, user }) => {
-    const [importMode, setImportMode] = useState('JSON');
+    const [importMode, setImportMode] = useState('JSON'); // 'JSON' or 'CSV'
     const [inputText, setInputText] = useState('');
     const [previewTasks, setPreviewTasks] = useState([]);
     const [isProcessing, setIsProcessing] = useState(false);
 
+    // Parse Input
     useEffect(() => {
         if (!inputText) {
             setPreviewTasks([]);
             return;
         }
+
         try {
             if (importMode === 'JSON') {
                 const parsed = JSON.parse(inputText);
@@ -109,6 +113,7 @@ const StrategyImportModal = ({ onClose, user }) => {
                     setPreviewTasks(parsed);
                 }
             } else {
+                // Simple CSV Parser (Title, DueDate, Category, Description)
                 const rows = inputText.split('\n').filter(r => r.trim());
                 const tasks = rows.map(row => {
                     const [title, dueDate, category, description] = row.split(',').map(s => s.trim());
@@ -127,6 +132,7 @@ const StrategyImportModal = ({ onClose, user }) => {
         
         previewTasks.forEach(task => {
             const docRef = doc(collection(db, "users", user.uid, "business_tasks"));
+            // Safe fallback for category if the AI suggests something invalid
             const safeCategory = (task.category && TASK_CATEGORIES[task.category]) ? task.category : 'STRATEGY';
 
             batch.set(docRef, {
@@ -155,38 +161,77 @@ const StrategyImportModal = ({ onClose, user }) => {
                         <h2 className="text-xl font-black text-purple-900 uppercase flex items-center gap-2">
                             <Upload size={24} /> Strategy & Compliance Import
                         </h2>
-                        <p className="text-sm text-purple-700 mt-1">Paste AI suggestions or CSV data.</p>
+                        <p className="text-sm text-purple-700 mt-1">
+                            Paste AI suggestions or CSV data to bulk-create tasks.
+                        </p>
                     </div>
                     <button onClick={onClose}><X size={24} className="text-purple-400" /></button>
                 </div>
+
                 <div className="p-4 bg-gray-50 flex gap-2 border-b">
-                    <button onClick={() => setImportMode('JSON')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold ${importMode === 'JSON' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 border'}`}>
+                    <button 
+                        onClick={() => setImportMode('JSON')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold ${importMode === 'JSON' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 border'}`}
+                    >
                         <FileJson size={16} /> Paste AI JSON
                     </button>
-                    <button onClick={() => setImportMode('CSV')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold ${importMode === 'CSV' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 border'}`}>
+                    <button 
+                        onClick={() => setImportMode('CSV')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold ${importMode === 'CSV' ? 'bg-green-600 text-white' : 'bg-white text-gray-600 border'}`}
+                    >
                         <FileSpreadsheet size={16} /> Paste CSV
                     </button>
                 </div>
+
                 <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Input Area */}
                     <div className="flex flex-col h-full">
-                        <label className="text-xs font-bold uppercase text-gray-500 mb-2">{importMode === 'JSON' ? 'Paste JSON' : 'Paste CSV'}</label>
-                        <textarea className="flex-1 w-full p-4 border rounded-xl font-mono text-xs bg-slate-900 text-green-400" placeholder={importMode === 'JSON' ? '[ { "title": "Check PELP", ... } ]' : 'Title, Date, Category'} value={inputText} onChange={(e) => setInputText(e.target.value)} />
+                        <label className="text-xs font-bold uppercase text-gray-500 mb-2">
+                            {importMode === 'JSON' ? 'Paste JSON from Gemini' : 'Paste CSV (Title, Date, Category, Desc)'}
+                        </label>
+                        <textarea
+                            className="flex-1 w-full p-4 border rounded-xl font-mono text-xs bg-slate-900 text-green-400"
+                            placeholder={importMode === 'JSON' ? '[ { "title": "Check PELP", ... } ]' : 'Task Title, 2025-01-01, STRATEGY, Details...'}
+                            value={inputText}
+                            onChange={(e) => setInputText(e.target.value)}
+                        />
                     </div>
+
+                    {/* Preview Area */}
                     <div className="bg-gray-100 rounded-xl p-4 overflow-y-auto h-64 md:h-auto border">
-                        <h3 className="font-bold text-gray-700 mb-3 flex justify-between"><span>Preview ({previewTasks.length})</span></h3>
+                        <h3 className="font-bold text-gray-700 mb-3 flex justify-between">
+                            <span>Preview ({previewTasks.length} Tasks)</span>
+                            {previewTasks.length > 0 && <span className="text-green-600 text-xs">Ready to import</span>}
+                        </h3>
                         <div className="space-y-2">
                             {previewTasks.map((t, i) => (
                                 <div key={i} className="bg-white p-2 rounded border shadow-sm text-xs">
                                     <div className="font-bold text-gray-800">{t.title}</div>
-                                    <div className="flex gap-2 text-gray-500 mt-1"><span className="bg-gray-100 px-1 rounded">{t.dueDate}</span><span className="bg-purple-100 text-purple-700 px-1 rounded">{t.category}</span></div>
+                                    <div className="flex gap-2 text-gray-500 mt-1">
+                                        <span className="bg-gray-100 px-1 rounded">{t.dueDate}</span>
+                                        <span className="bg-purple-100 text-purple-700 px-1 rounded">{t.category}</span>
+                                    </div>
                                 </div>
                             ))}
+                            {previewTasks.length === 0 && (
+                                <div className="text-gray-400 text-center mt-10 italic">
+                                    Waiting for data...
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
+
                 <div className="p-4 border-t bg-white flex justify-end gap-3">
                     <Button onClick={onClose} variant="secondary">Cancel</Button>
-                    <Button onClick={handleImport} variant="primary" className="bg-purple-600 hover:bg-purple-700" disabled={previewTasks.length === 0 || isProcessing}>{isProcessing ? 'Importing...' : `Import ${previewTasks.length} Tasks`}</Button>
+                    <Button 
+                        onClick={handleImport} 
+                        variant="primary" 
+                        className="bg-purple-600 hover:bg-purple-700"
+                        disabled={previewTasks.length === 0 || isProcessing}
+                    >
+                        {isProcessing ? 'Importing...' : `Import ${previewTasks.length} Tasks`}
+                    </Button>
                 </div>
             </Card>
         </div>
@@ -196,22 +241,71 @@ const StrategyImportModal = ({ onClose, user }) => {
 // --- DUPLICATE DETECTOR MODAL ---
 const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) => {
     const [selectedDuplicates, setSelectedDuplicates] = useState([]);
+
+    // Find duplicates based on title + dueDate + category
     const duplicateGroups = useMemo(() => {
         const groups = {};
+        
         tasks.forEach(task => {
             const key = `${task.title.toLowerCase().trim()}_${task.dueDate}_${task.category}`;
-            if (!groups[key]) groups[key] = [];
+            if (!groups[key]) {
+                groups[key] = [];
+            }
             groups[key].push(task);
         });
-        return Object.entries(groups).filter(([_, g]) => g.length > 1).map(([key, g]) => ({ key, tasks: g }));
+
+        // Only keep groups with duplicates (more than 1 task)
+        const duplicates = Object.entries(groups)
+            .filter(([_, taskGroup]) => taskGroup.length > 1)
+            .map(([key, taskGroup]) => ({
+                key,
+                tasks: taskGroup.sort((a, b) => {
+                    // Sort by creation date if available, oldest first
+                    const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+                    const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+                    return dateA - dateB;
+                })
+            }));
+
+        return duplicates;
     }, [tasks]);
 
+    const handleToggleAll = () => {
+        if (selectedDuplicates.length === duplicateGroups.length) {
+            setSelectedDuplicates([]);
+        } else {
+            setSelectedDuplicates(duplicateGroups.map(g => g.key));
+        }
+    };
+
     const handleDeleteSelected = async () => {
-        const batch = writeBatch(db);
-        duplicateGroups.filter(g => selectedDuplicates.includes(g.key)).forEach(group => {
-            group.tasks.slice(1).forEach(task => batch.delete(doc(db, "users", user.uid, "business_tasks", task.id)));
+        const selectedGroups = duplicateGroups.filter(g => selectedDuplicates.includes(g.key));
+        const tasksToDelete = [];
+
+        selectedGroups.forEach(group => {
+            // Keep the oldest (first) task, delete the rest
+            const duplicatesToDelete = group.tasks.slice(1);
+            tasksToDelete.push(...duplicatesToDelete);
         });
+
+        if (tasksToDelete.length === 0) {
+            alert('No duplicates selected');
+            return;
+        }
+
+        if (!window.confirm(`Delete ${tasksToDelete.length} duplicate task${tasksToDelete.length !== 1 ? 's' : ''}?`)) {
+            return;
+        }
+
+        // Use batch delete for efficiency
+        const batch = writeBatch(db);
+        tasksToDelete.forEach(task => {
+            const taskRef = doc(db, "users", user.uid, "business_tasks", task.id);
+            batch.delete(taskRef);
+        });
+
         await batch.commit();
+        alert(`✅ Deleted ${tasksToDelete.length} duplicate task${tasksToDelete.length !== 1 ? 's' : ''}!`);
         onClose();
     };
 
@@ -219,33 +313,132 @@ const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) =>
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
             <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
                 <div className="p-6 border-b flex justify-between items-center bg-orange-50">
-                    <h2 className="text-2xl font-black text-gray-800 uppercase flex items-center gap-2"><Copy size={24} className="text-orange-600" /> Duplicate Detector</h2>
-                    <button onClick={onClose}><X size={24} className="text-gray-400" /></button>
+                    <div>
+                        <h2 className="text-2xl font-black text-gray-800 uppercase tracking-tight flex items-center gap-2">
+                            <Copy size={24} className="text-orange-600" />
+                            Duplicate Task Detector
+                        </h2>
+                        <p className="text-sm text-gray-600 mt-1">
+                            Found {duplicateGroups.length} duplicate group{duplicateGroups.length !== 1 ? 's' : ''}
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <X size={24} />
+                    </button>
                 </div>
+
                 <div className="flex-1 overflow-y-auto p-6">
-                    {duplicateGroups.length === 0 ? <div className="text-center py-12"><CheckCircle className="mx-auto text-green-500 mb-4" size={64} /><h3 className="text-xl font-bold text-gray-700">No Duplicates Found!</h3></div> : (
+                    {duplicateGroups.length === 0 ? (
+                        <div className="text-center py-12">
+                            <CheckCircle className="mx-auto text-green-500 mb-4" size={64} />
+                            <h3 className="text-xl font-bold text-gray-700 mb-2">No Duplicates Found!</h3>
+                            <p className="text-gray-500">Your task list is clean.</p>
+                        </div>
+                    ) : (
                         <div className="space-y-4">
+                            {/* Select All */}
+                            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedDuplicates.length === duplicateGroups.length}
+                                        onChange={handleToggleAll}
+                                        className="w-4 h-4"
+                                    />
+                                    <span className="font-bold text-sm">
+                                        Select All ({duplicateGroups.length} groups)
+                                    </span>
+                                </label>
+                                <span className="text-xs text-gray-500">
+                                    Keeps oldest, deletes newer duplicates
+                                </span>
+                            </div>
+
+                            {/* Duplicate Groups */}
                             {duplicateGroups.map(group => (
-                                <Card key={group.key} className="border-l-4 border-orange-500 p-4">
-                                    <label className="flex items-start gap-3 cursor-pointer">
-                                        <input type="checkbox" checked={selectedDuplicates.includes(group.key)} onChange={(e) => e.target.checked ? setSelectedDuplicates([...selectedDuplicates, group.key]) : setSelectedDuplicates(selectedDuplicates.filter(k => k !== group.key))} className="mt-1" />
-                                        <div className="flex-1">
-                                            <h4 className="font-bold text-gray-800 mb-2">{group.tasks[0].title} ({group.tasks.length} copies)</h4>
-                                            <div className="space-y-2 ml-4">
-                                                {group.tasks.map((task, idx) => (
-                                                    <div key={task.id} className={`text-sm p-2 rounded border ${idx === 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                                                        <div className="flex justify-between"><span className="font-bold">{idx === 0 ? '✓ KEEP' : '✗ DELETE'}</span><span>{task.createdAt?.toDate ? task.createdAt.toDate().toLocaleDateString() : ''}</span></div>
-                                                    </div>
-                                                ))}
+                                <Card key={group.key} className="border-l-4 border-orange-500">
+                                    <div className="p-4">
+                                        <label className="flex items-start gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedDuplicates.includes(group.key)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedDuplicates([...selectedDuplicates, group.key]);
+                                                    } else {
+                                                        setSelectedDuplicates(selectedDuplicates.filter(k => k !== group.key));
+                                                    }
+                                                }}
+                                                className="w-4 h-4 mt-1"
+                                            />
+                                            
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <h4 className="font-bold text-gray-800">{group.tasks[0].title}</h4>
+                                                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold">
+                                                        {group.tasks.length} duplicates
+                                                    </span>
+                                                </div>
+                                                
+                                                <div className="space-y-2 ml-4">
+                                                    {group.tasks.map((task, idx) => (
+                                                        <div 
+                                                            key={task.id}
+                                                            className={`text-sm p-2 rounded border ${
+                                                                idx === 0 
+                                                                    ? 'bg-green-50 border-green-200' 
+                                                                    : 'bg-red-50 border-red-200'
+                                                            }`}
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <span className={`font-bold ${
+                                                                    idx === 0 ? 'text-green-700' : 'text-red-700'
+                                                                }`}>
+                                                                    {idx === 0 ? '✓ KEEP' : '✗ DELETE'}
+                                                                </span>
+                                                                <div className="text-xs text-gray-600">
+                                                                    <span className="mr-3">📅 Due: {new Date(task.dueDate).toLocaleDateString()}</span>
+                                                                    <span>
+                                                                        Created: {task.createdAt?.toDate 
+                                                                            ? task.createdAt.toDate().toLocaleDateString() 
+                                                                            : 'Unknown'}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </label>
+                                        </label>
+                                    </div>
                                 </Card>
                             ))}
                         </div>
                     )}
                 </div>
-                {duplicateGroups.length > 0 && <div className="p-6 border-t bg-gray-50 flex gap-3"><Button onClick={handleDeleteSelected} className="flex-1 bg-red-600 hover:bg-red-700 text-white">Delete Selected</Button><Button onClick={onClose} variant="secondary">Close</Button></div>}
+
+                {duplicateGroups.length > 0 && (
+                    <div className="p-6 border-t bg-gray-50 flex gap-3">
+                        <Button
+                            onClick={handleDeleteSelected}
+                            variant="primary"
+                            className="flex-1 bg-red-600 hover:bg-red-700"
+                            disabled={selectedDuplicates.length === 0}
+                        >
+                            <Trash size={16} className="mr-2" />
+                            Delete {selectedDuplicates.reduce((sum, key) => {
+                                const group = duplicateGroups.find(g => g.key === key);
+                                return sum + (group ? group.tasks.length - 1 : 0);
+                            }, 0)} Duplicate{selectedDuplicates.reduce((sum, key) => {
+                                const group = duplicateGroups.find(g => g.key === key);
+                                return sum + (group ? group.tasks.length - 1 : 0);
+                            }, 0) !== 1 ? 's' : ''}
+                        </Button>
+                        <Button onClick={onClose} variant="secondary">
+                            Close
+                        </Button>
+                    </div>
+                )}
             </Card>
         </div>
     );
@@ -253,14 +446,41 @@ const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) =>
 
 // --- TASK STATUS BADGE ---
 const StatusBadge = ({ status, dueDate }) => {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const due = new Date(dueDate); due.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(dueDate);
+    due.setHours(0, 0, 0, 0);
     const daysUntilDue = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
 
-    if (status === 'COMPLETED') return <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-green-100 text-green-700">✓ Completed</span>;
-    if (daysUntilDue < 0) return <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-red-100 text-red-700 animate-pulse">⚠ Overdue</span>;
-    if (daysUntilDue <= 7) return <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-orange-100 text-orange-700">⏰ Due Soon</span>;
-    return <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-blue-100 text-blue-700">📅 Upcoming</span>;
+    if (status === 'COMPLETED') {
+        return (
+            <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-green-100 text-green-700">
+                ✓ Completed
+            </span>
+        );
+    }
+
+    if (daysUntilDue < 0) {
+        return (
+            <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-red-100 text-red-700 animate-pulse">
+                ⚠ Overdue
+            </span>
+        );
+    }
+
+    if (daysUntilDue <= 7) {
+        return (
+            <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-orange-100 text-orange-700">
+                ⏰ Due Soon
+            </span>
+        );
+    }
+
+    return (
+        <span className="px-2 py-1 rounded-full text-[9px] font-black uppercase bg-blue-100 text-blue-700">
+            📅 Upcoming
+        </span>
+    );
 };
 
 // --- TASK MODAL ---
@@ -274,10 +494,33 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
     const [status, setStatus] = useState(task?.status || 'PENDING');
 
     const handleSave = async () => {
-        if (!title || !dueDate) return alert('Title and date required');
-        const taskData = { title, description, category, dueDate, priority, recurring, status, updatedAt: serverTimestamp() };
-        if (task) await updateDoc(doc(db, "users", user.uid, "business_tasks", task.id), taskData);
-        else await addDoc(collection(db, "users", user.uid, "business_tasks"), { ...taskData, createdAt: serverTimestamp() });
+        if (!title || !dueDate) {
+            alert('Please fill in title and due date');
+            return;
+        }
+
+        const taskData = {
+            title,
+            description,
+            category,
+            dueDate,
+            priority,
+            recurring,
+            status,
+            updatedAt: serverTimestamp()
+        };
+
+        if (task) {
+            // Update existing
+            await updateDoc(doc(db, "users", user.uid, "business_tasks", task.id), taskData);
+        } else {
+            // Create new
+            await addDoc(collection(db, "users", user.uid, "business_tasks"), {
+                ...taskData,
+                createdAt: serverTimestamp()
+            });
+        }
+
         onSave();
     };
 
@@ -285,19 +528,140 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
             <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
                 <div className="p-6 space-y-4">
-                    <div className="flex justify-between items-center mb-4"><h2 className="text-2xl font-black text-gray-800 uppercase">{task ? 'Edit Task' : 'New Business Task'}</h2><button onClick={onClose}><X size={24} className="text-gray-400" /></button></div>
-                    <Input placeholder="Task Title *" value={title} onChange={e => setTitle(e.target.value)} />
-                    <div className="grid grid-cols-2 gap-4">
-                        <select value={category} onChange={e => setCategory(e.target.value)} className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm">{Object.entries(TASK_CATEGORIES).map(([key, cat]) => <option key={key} value={key}>{cat.label}</option>)}</select>
-                        <select value={priority} onChange={e => setPriority(e.target.value)} className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="CRITICAL">Critical</option></select>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-2xl font-black text-gray-800 uppercase tracking-tight">
+                            {task ? 'Edit Task' : 'New Business Task'}
+                        </h2>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                            <X size={24} />
+                        </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold" />
-                        <select value={recurring} onChange={e => setRecurring(e.target.value)} className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm">{RECURRING_PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select>
+
+                    {/* Title */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Task Title *
+                        </label>
+                        <Input
+                            placeholder="e.g., Submit Q4 BIR 2550M"
+                            value={title}
+                            onChange={e => setTitle(e.target.value)}
+                        />
                     </div>
-                    {task && <select value={status} onChange={e => setStatus(e.target.value)} className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"><option value="PENDING">Pending</option><option value="IN_PROGRESS">In Progress</option><option value="COMPLETED">Completed</option></select>}
-                    <Textarea placeholder="Description..." value={description} onChange={e => setDescription(e.target.value)} rows={4} />
-                    <div className="flex gap-2 pt-4 border-t"><Button onClick={handleSave} variant="primary" className="flex-1">{task ? 'Update' : 'Create'}</Button><Button onClick={onClose} variant="secondary">Cancel</Button></div>
+
+                    {/* Category & Priority */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Category *
+                            </label>
+                            <select
+                                value={category}
+                                onChange={e => setCategory(e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
+                            >
+                                {Object.entries(TASK_CATEGORIES).map(([key, cat]) => (
+                                    <option key={key} value={key}>{cat.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Priority
+                            </label>
+                            <select
+                                value={priority}
+                                onChange={e => setPriority(e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
+                            >
+                                <option value="LOW">Low Priority</option>
+                                <option value="MEDIUM">Medium Priority</option>
+                                <option value="HIGH">High Priority</option>
+                                <option value="CRITICAL">Critical</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Due Date & Recurring */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Due Date *
+                            </label>
+                            <input
+                                type="date"
+                                value={dueDate}
+                                onChange={e => setDueDate(e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Recurring
+                            </label>
+                            <select
+                                value={recurring}
+                                onChange={e => setRecurring(e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
+                            >
+                                {RECURRING_PATTERNS.map(p => (
+                                    <option key={p.value} value={p.value}>{p.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Status (only show when editing) */}
+                    {task && (
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Status
+                            </label>
+                            <select
+                                value={status}
+                                onChange={e => setStatus(e.target.value)}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
+                            >
+                                <option value="PENDING">Pending</option>
+                                <option value="IN_PROGRESS">In Progress</option>
+                                <option value="COMPLETED">Completed</option>
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Description */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Description / Notes
+                        </label>
+                        <Textarea
+                            placeholder="Additional details, requirements, documents needed..."
+                            value={description}
+                            onChange={e => setDescription(e.target.value)}
+                            rows={4}
+                        />
+                    </div>
+
+                    {/* Recurring Info */}
+                    {recurring !== 'none' && (
+                        <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <p className="text-xs text-blue-700 font-bold">
+                                ℹ️ This task will recur {recurring}. After completion, a new instance will be created automatically.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-2 pt-4 border-t">
+                        <Button onClick={handleSave} variant="primary" className="flex-1">
+                            {task ? 'Update Task' : 'Create Task'}
+                        </Button>
+                        <Button onClick={onClose} variant="secondary">
+                            Cancel
+                        </Button>
+                    </div>
                 </div>
             </Card>
         </div>
@@ -307,56 +671,52 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
 // --- MAIN COMPONENT ---
 const BusinessTasksCalendar = ({ user }) => {
     const [tasks, setTasks] = useState([]);
-    
-    // --- STATE MANAGEMENT ---
     const [showModal, setShowModal] = useState(false);
     const [showDuplicateDetector, setShowDuplicateDetector] = useState(false);
-    const [showStrategyModal, setShowStrategyModal] = useState(false);
+    const [showStrategyModal, setShowStrategyModal] = useState(false); // New state
     const [editingTask, setEditingTask] = useState(null);
-    
-    // --- ENHANCED FILTER STATE ---
     const [filterCategory, setFilterCategory] = useState('ALL');
     const [filterStatus, setFilterStatus] = useState('ACTIVE');
-    const [searchQuery, setSearchQuery] = useState(''); // NEW: Search State
     const [expandedCategory, setExpandedCategory] = useState(null);
 
     // Load tasks from Firebase
     useEffect(() => {
         if (!user) return;
-        const unsubscribe = onSnapshot(query(collection(db, "users", user.uid, "business_tasks"), orderBy("dueDate", "asc")), 
-            (snap) => setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-            (error) => { console.warn("Collection not initialized", error); setTasks([]); }
+
+        const unsubscribe = onSnapshot(
+            query(collection(db, "users", user.uid, "business_tasks"), orderBy("dueDate", "asc")),
+            (snap) => {
+                setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            },
+            (error) => {
+                console.warn("Business tasks collection not initialized:", error.code);
+                setTasks([]);
+            }
         );
+
         return () => unsubscribe();
     }, [user]);
 
-    // --- ENHANCED FILTER LOGIC ---
+    // Filter tasks
     const filteredTasks = useMemo(() => {
         return tasks.filter(task => {
-            // 1. Category Filter
             if (filterCategory !== 'ALL' && task.category !== filterCategory) return false;
-            
-            // 2. Status Filter
             if (filterStatus === 'ACTIVE' && task.status === 'COMPLETED') return false;
             if (filterStatus === 'COMPLETED' && task.status !== 'COMPLETED') return false;
-
-            // 3. Search Filter (Title or Description)
-            if (searchQuery) {
-                const query = searchQuery.toLowerCase();
-                const titleMatch = task.title?.toLowerCase().includes(query);
-                const descMatch = task.description?.toLowerCase().includes(query);
-                if (!titleMatch && !descMatch) return false;
-            }
             return true;
         });
-    }, [tasks, filterCategory, filterStatus, searchQuery]);
+    }, [tasks, filterCategory, filterStatus]);
 
     // Group tasks by category
     const tasksByCategory = useMemo(() => {
         const grouped = {};
         filteredTasks.forEach(task => {
+            // Safety check in case a task has a legacy category not in the new map
             const safeCategory = TASK_CATEGORIES[task.category] ? task.category : 'OTHER';
-            if (!grouped[safeCategory]) grouped[safeCategory] = [];
+            
+            if (!grouped[safeCategory]) {
+                grouped[safeCategory] = [];
+            }
             grouped[safeCategory].push(task);
         });
         return grouped;
@@ -364,21 +724,30 @@ const BusinessTasksCalendar = ({ user }) => {
 
     // Quick stats
     const stats = useMemo(() => {
-        const today = new Date(); today.setHours(0, 0, 0, 0);
-        const overdue = tasks.filter(t => t.status !== 'COMPLETED' && new Date(t.dueDate) < today).length;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const overdue = tasks.filter(t => 
+            t.status !== 'COMPLETED' && new Date(t.dueDate) < today
+        ).length;
+
         const dueSoon = tasks.filter(t => {
             if (t.status === 'COMPLETED') return false;
             const due = new Date(t.dueDate);
             const daysUntil = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
             return daysUntil >= 0 && daysUntil <= 7;
         }).length;
+
         const completed = tasks.filter(t => t.status === 'COMPLETED').length;
         const pending = tasks.filter(t => t.status !== 'COMPLETED').length;
+
         return { overdue, dueSoon, completed, pending };
     }, [tasks]);
 
     const handleDelete = async (taskId) => {
-        if (window.confirm('Delete this task?')) await deleteDoc(doc(db, "users", user.uid, "business_tasks", taskId));
+        if (window.confirm('Delete this task?')) {
+            await deleteDoc(doc(db, "users", user.uid, "business_tasks", taskId));
+        }
     };
 
     const handleToggleComplete = async (task) => {
@@ -387,16 +756,38 @@ const BusinessTasksCalendar = ({ user }) => {
             status: newStatus,
             completedAt: newStatus === 'COMPLETED' ? serverTimestamp() : null
         });
+
         if (newStatus === 'COMPLETED' && task.recurring !== 'none') {
-            const date = new Date(task.dueDate);
-            if(task.recurring === 'monthly') date.setMonth(date.getMonth() + 1);
-            else if(task.recurring === 'quarterly') date.setMonth(date.getMonth() + 3);
-            else if(task.recurring === 'annually') date.setFullYear(date.getFullYear() + 1);
-            
+            const nextDueDate = calculateNextDueDate(task.dueDate, task.recurring);
             await addDoc(collection(db, "users", user.uid, "business_tasks"), {
-                ...task, dueDate: date.toISOString().split('T')[0], status: 'PENDING', createdAt: serverTimestamp(), completedAt: null
+                title: task.title,
+                description: task.description,
+                category: task.category,
+                dueDate: nextDueDate,
+                priority: task.priority,
+                recurring: task.recurring,
+                status: 'PENDING',
+                createdAt: serverTimestamp()
             });
         }
+    };
+
+    const calculateNextDueDate = (currentDue, pattern) => {
+        const date = new Date(currentDue);
+        
+        switch (pattern) {
+            case 'monthly':
+                date.setMonth(date.getMonth() + 1);
+                break;
+            case 'quarterly':
+                date.setMonth(date.getMonth() + 3);
+                break;
+            case 'annually':
+                date.setFullYear(date.getFullYear() + 1);
+                break;
+        }
+
+        return date.toISOString().split('T')[0];
     };
 
     return (
@@ -404,55 +795,114 @@ const BusinessTasksCalendar = ({ user }) => {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-3xl font-black text-gray-800 uppercase tracking-tight">Business Tasks & Compliance Calendar</h2>
-                    <p className="text-sm text-gray-500 mt-1">Track BIR, DTI, BOI, SEC, and Strategy deadlines</p>
+                    <h2 className="text-3xl font-black text-gray-800 uppercase tracking-tight">
+                        Business Tasks & Compliance Calendar
+                    </h2>
+                    <p className="text-sm text-gray-500 mt-1">
+                        Track BIR, DTI, BOI, SEC, and Strategy deadlines
+                    </p>
                 </div>
+
                 <div className="flex gap-2">
-                    <Button onClick={() => setShowStrategyModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white"><Upload size={16} className="mr-1" /> Import Strategy / AI</Button>
-                    <Button onClick={() => setShowDuplicateDetector(true)} variant="secondary" className="border-orange-200 text-orange-700 bg-orange-50"><Copy size={16} className="mr-1" /> Find Duplicates</Button>
-                    <Button onClick={() => { setEditingTask(null); setShowModal(true); }} variant="primary" className="bg-orange-600 hover:bg-orange-700"><Plus size={16} className="mr-1" /> New Task</Button>
+                    <Button
+                        onClick={() => setShowStrategyModal(true)}
+                        className="bg-purple-600 hover:bg-purple-700 text-white"
+                    >
+                        <Upload size={16} className="mr-1" /> Import Strategy / AI
+                    </Button>
+                    <Button
+                        onClick={() => setShowDuplicateDetector(true)}
+                        variant="secondary"
+                        className="border-orange-200 text-orange-700 bg-orange-50"
+                    >
+                        <Copy size={16} className="mr-1" /> Find Duplicates
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            setEditingTask(null);
+                            setShowModal(true);
+                        }}
+                        variant="primary"
+                        className="bg-orange-600 hover:bg-orange-700"
+                    >
+                        <Plus size={16} className="mr-1" /> New Task
+                    </Button>
                 </div>
             </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card className="p-4 border-l-4 border-red-500"><div className="flex items-center gap-3"><AlertTriangle className="text-red-500" size={24} /><div><p className="text-2xl font-black text-gray-800">{stats.overdue}</p><p className="text-xs text-gray-500 uppercase font-bold">Overdue</p></div></div></Card>
-                <Card className="p-4 border-l-4 border-orange-500"><div className="flex items-center gap-3"><Clock className="text-orange-500" size={24} /><div><p className="text-2xl font-black text-gray-800">{stats.dueSoon}</p><p className="text-xs text-gray-500 uppercase font-bold">Due This Week</p></div></div></Card>
-                <Card className="p-4 border-l-4 border-blue-500"><div className="flex items-center gap-3"><Calendar className="text-blue-500" size={24} /><div><p className="text-2xl font-black text-gray-800">{stats.pending}</p><p className="text-xs text-gray-500 uppercase font-bold">Pending Tasks</p></div></div></Card>
-                <Card className="p-4 border-l-4 border-green-500"><div className="flex items-center gap-3"><CheckCircle className="text-green-500" size={24} /><div><p className="text-2xl font-black text-gray-800">{stats.completed}</p><p className="text-xs text-gray-500 uppercase font-bold">Completed</p></div></div></Card>
+                <Card className="p-4 border-l-4 border-red-500">
+                    <div className="flex items-center gap-3">
+                        <AlertTriangle className="text-red-500" size={24} />
+                        <div>
+                            <p className="text-2xl font-black text-gray-800">{stats.overdue}</p>
+                            <p className="text-xs text-gray-500 uppercase font-bold">Overdue</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="p-4 border-l-4 border-orange-500">
+                    <div className="flex items-center gap-3">
+                        <Clock className="text-orange-500" size={24} />
+                        <div>
+                            <p className="text-2xl font-black text-gray-800">{stats.dueSoon}</p>
+                            <p className="text-xs text-gray-500 uppercase font-bold">Due This Week</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="p-4 border-l-4 border-blue-500">
+                    <div className="flex items-center gap-3">
+                        <Calendar className="text-blue-500" size={24} />
+                        <div>
+                            <p className="text-2xl font-black text-gray-800">{stats.pending}</p>
+                            <p className="text-xs text-gray-500 uppercase font-bold">Pending Tasks</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="p-4 border-l-4 border-green-500">
+                    <div className="flex items-center gap-3">
+                        <CheckCircle className="text-green-500" size={24} />
+                        <div>
+                            <p className="text-2xl font-black text-gray-800">{stats.completed}</p>
+                            <p className="text-xs text-gray-500 uppercase font-bold">Completed</p>
+                        </div>
+                    </div>
+                </Card>
             </div>
 
-            {/* --- UPGRADED FILTER BAR --- */}
+            {/* Filters */}
             <Card className="p-4">
-                <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-                    {/* Search Bar */}
-                    <div className="relative w-full md:w-1/3">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-                        <input type="text" placeholder="Search tasks..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-orange-500 transition-colors" />
-                        {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"><XCircle size={14} /></button>}
-                    </div>
+                <div className="flex flex-wrap gap-3 items-center">
+                    <Filter size={16} className="text-gray-400" />
+                    <span className="text-xs font-bold text-gray-500 uppercase">Filters:</span>
 
-                    {/* Status Tabs */}
-                    <div className="flex p-1 bg-gray-100 rounded-lg">
-                        {['ALL', 'ACTIVE', 'COMPLETED'].map((status) => (
-                            <button key={status} onClick={() => setFilterStatus(status)} className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${filterStatus === status ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                                {status.charAt(0) + status.slice(1).toLowerCase()}
-                            </button>
+                    <select
+                        value={filterCategory}
+                        onChange={e => setFilterCategory(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold"
+                    >
+                        <option value="ALL">All Categories</option>
+                        {Object.entries(TASK_CATEGORIES).map(([key, cat]) => (
+                            <option key={key} value={key}>{cat.label}</option>
                         ))}
-                    </div>
+                    </select>
 
-                    {/* Category Filter + Count */}
-                    <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-                        <div className="relative">
-                            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
-                            <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="pl-9 pr-8 py-2 border border-gray-200 rounded-lg text-xs font-bold bg-white focus:outline-none focus:border-orange-500 appearance-none cursor-pointer">
-                                <option value="ALL">All Categories</option>
-                                {Object.entries(TASK_CATEGORIES).map(([key, cat]) => <option key={key} value={key}>{cat.label}</option>)}
-                            </select>
-                            <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
-                        </div>
-                        <span className="text-xs font-bold bg-gray-100 text-gray-600 px-3 py-2 rounded-lg">{filteredTasks.length} Result{filteredTasks.length !== 1 ? 's' : ''}</span>
-                    </div>
+                    <select
+                        value={filterStatus}
+                        onChange={e => setFilterStatus(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold"
+                    >
+                        <option value="ACTIVE">Active Tasks</option>
+                        <option value="COMPLETED">Completed Tasks</option>
+                        <option value="ALL">All Tasks</option>
+                    </select>
+
+                    <span className="ml-auto text-xs text-gray-400">
+                        {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
+                    </span>
                 </div>
             </Card>
 
@@ -465,35 +915,99 @@ const BusinessTasksCalendar = ({ user }) => {
 
                     return (
                         <Card key={categoryKey} className={`overflow-hidden ${catInfo.borderColor} border-l-4`}>
-                            <div className={`p-4 ${catInfo.bgColor} cursor-pointer hover:opacity-80 transition-opacity`} onClick={() => setExpandedCategory(isExpanded ? null : categoryKey)}>
+                            <div
+                                className={`p-4 ${catInfo.bgColor} cursor-pointer hover:opacity-80 transition-opacity`}
+                                onClick={() => setExpandedCategory(isExpanded ? null : categoryKey)}
+                            >
                                 <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-3"><CategoryIcon className={catInfo.color} size={20} /><div><h3 className="font-black text-gray-800 uppercase text-sm">{catInfo.label}</h3><p className="text-xs text-gray-500">{categoryTasks.length} task{categoryTasks.length !== 1 ? 's' : ''}</p></div></div>
+                                    <div className="flex items-center gap-3">
+                                        <CategoryIcon className={catInfo.color} size={20} />
+                                        <div>
+                                            <h3 className="font-black text-gray-800 uppercase text-sm">
+                                                {catInfo.label}
+                                            </h3>
+                                            <p className="text-xs text-gray-500">
+                                                {categoryTasks.length} task{categoryTasks.length !== 1 ? 's' : ''}
+                                            </p>
+                                        </div>
+                                    </div>
                                     {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                                 </div>
                             </div>
+
                             {isExpanded && (
                                 <div className="divide-y divide-gray-100">
                                     {categoryTasks.map(task => (
                                         <div key={task.id} className="p-4 hover:bg-gray-50 transition-colors">
                                             <div className="flex items-start gap-3">
-                                                <button onClick={() => handleToggleComplete(task)} className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${task.status === 'COMPLETED' ? 'bg-green-500 border-green-500' : 'border-gray-300 hover:border-green-500'}`}>
-                                                    {task.status === 'COMPLETED' && <CheckCircle size={14} className="text-white" />}
+                                                <button
+                                                    onClick={() => handleToggleComplete(task)}
+                                                    className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                                        task.status === 'COMPLETED'
+                                                            ? 'bg-green-500 border-green-500'
+                                                            : 'border-gray-300 hover:border-green-500'
+                                                    }`}
+                                                >
+                                                    {task.status === 'COMPLETED' && (
+                                                        <CheckCircle size={14} className="text-white" />
+                                                    )}
                                                 </button>
+
                                                 <div className="flex-1">
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div>
-                                                            <h4 className={`font-bold text-gray-800 ${task.status === 'COMPLETED' ? 'line-through opacity-50' : ''}`}>{task.title}</h4>
-                                                            {task.description && <p className="text-sm text-gray-600 mt-1">{task.description}</p>}
+                                                            <h4 className={`font-bold text-gray-800 ${
+                                                                task.status === 'COMPLETED' ? 'line-through opacity-50' : ''
+                                                            }`}>
+                                                                {task.title}
+                                                            </h4>
+                                                            {task.description && (
+                                                                <p className="text-sm text-gray-600 mt-1">
+                                                                    {task.description}
+                                                                </p>
+                                                            )}
                                                             <div className="flex flex-wrap gap-2 mt-2 items-center">
                                                                 <StatusBadge status={task.status} dueDate={task.dueDate} />
-                                                                <span className="text-xs text-gray-500">📅 Due: {new Date(task.dueDate).toLocaleDateString()}</span>
-                                                                {task.priority === 'HIGH' || task.priority === 'CRITICAL' ? <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${task.priority === 'CRITICAL' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>{task.priority}</span> : null}
-                                                                {task.recurring !== 'none' && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">🔄 {task.recurring}</span>}
+                                                                <span className="text-xs text-gray-500">
+                                                                    📅 Due: {new Date(task.dueDate).toLocaleDateString('en-US', { 
+                                                                        month: 'short', 
+                                                                        day: 'numeric', 
+                                                                        year: 'numeric' 
+                                                                    })}
+                                                                </span>
+                                                                {task.priority === 'HIGH' || task.priority === 'CRITICAL' ? (
+                                                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                                                        task.priority === 'CRITICAL' 
+                                                                            ? 'bg-red-100 text-red-700' 
+                                                                            : 'bg-orange-100 text-orange-700'
+                                                                    }`}>
+                                                                        {task.priority}
+                                                                    </span>
+                                                                ) : null}
+                                                                {task.recurring !== 'none' && (
+                                                                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                                                                        🔄 {task.recurring}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
+
                                                         <div className="flex gap-1">
-                                                            <button onClick={() => { setEditingTask(task); setShowModal(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit size={16} /></button>
-                                                            <button onClick={() => handleDelete(task.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingTask(task);
+                                                                    setShowModal(true);
+                                                                }}
+                                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                            >
+                                                                <Edit size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDelete(task.id)}
+                                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -510,16 +1024,55 @@ const BusinessTasksCalendar = ({ user }) => {
             {/* Empty State */}
             {filteredTasks.length === 0 && (
                 <Card className="p-12 text-center">
-                    <div className="flex justify-center mb-4">{searchQuery ? <Search size={64} className="text-gray-200"/> : <Calendar size={64} className="text-gray-200"/>}</div>
-                    <h3 className="text-xl font-bold text-gray-600 mb-2">{searchQuery ? `No matches for "${searchQuery}"` : "No Tasks Found"}</h3>
-                    <p className="text-gray-500 mb-4">{searchQuery ? "Try adjusting your search terms or filters" : filterStatus === 'COMPLETED' ? "No completed tasks yet" : "Start by creating your first business task"}</p>
-                    <Button onClick={() => { setEditingTask(null); setShowModal(true); }} variant="primary"><Plus size={16} className="mr-1" /> Create First Task</Button>
+                    <Calendar className="mx-auto text-gray-300 mb-4" size={64} />
+                    <h3 className="text-xl font-bold text-gray-600 mb-2">No Tasks Found</h3>
+                    <p className="text-gray-500 mb-4">
+                        {filterStatus === 'COMPLETED' 
+                            ? "No completed tasks yet" 
+                            : "Start by creating your first business task"}
+                    </p>
+                    <Button
+                        onClick={() => {
+                            setEditingTask(null);
+                            setShowModal(true);
+                        }}
+                        variant="primary"
+                    >
+                        <Plus size={16} className="mr-1" /> Create First Task
+                    </Button>
                 </Card>
             )}
 
-            {showModal && <TaskModal task={editingTask} onClose={() => { setShowModal(false); setEditingTask(null); }} onSave={() => { setShowModal(false); setEditingTask(null); }} user={user} />}
-            {showDuplicateDetector && <DuplicateDetectorModal tasks={tasks} onClose={() => setShowDuplicateDetector(false)} user={user} />}
-            {showStrategyModal && <StrategyImportModal onClose={() => setShowStrategyModal(false)} user={user} />}
+            {/* Modals */}
+            {showModal && (
+                <TaskModal
+                    task={editingTask}
+                    onClose={() => {
+                        setShowModal(false);
+                        setEditingTask(null);
+                    }}
+                    onSave={() => {
+                        setShowModal(false);
+                        setEditingTask(null);
+                    }}
+                    user={user}
+                />
+            )}
+
+            {showDuplicateDetector && (
+                <DuplicateDetectorModal
+                    tasks={tasks}
+                    onClose={() => setShowDuplicateDetector(false)}
+                    user={user}
+                />
+            )}
+
+            {showStrategyModal && (
+                <StrategyImportModal
+                    onClose={() => setShowStrategyModal(false)}
+                    user={user}
+                />
+            )}
         </div>
     );
 };
