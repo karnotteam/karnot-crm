@@ -861,7 +861,7 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7 gap-4">
                 {STAGE_ORDER.map(stage => (
-                    <div key={stage} className="min-h-[500px] min-w-[280px]">
+                    <div key={stage} className="min-h-[500px] min-w-[580px]">
                         <div className={`p-4 rounded-t-lg font-black text-base uppercase tracking-wide ${stageColors[stage]}`}>
                             {stage}
                             <div className="text-sm font-bold mt-1">({enrichedOpportunitiesByStage[stage]?.length || 0})</div>
