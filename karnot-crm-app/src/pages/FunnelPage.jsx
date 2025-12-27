@@ -36,7 +36,7 @@ const HTML_EMAIL_TEMPLATES = {
                 <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                     <tr>
                         <td style="background: linear-gradient(135deg, #ff6b35 0%, #ff8c61 100%); padding: 30px 40px; text-align: center;">
-                            <img src="https://i.postimg.cc/XYgJQbfL/karnot-logo.png" alt="Karnot Energy Solutions" style="height: 50px; margin-bottom: 10px;" />
+                            <img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/karnot-logo.png" alt="Karnot Energy Solutions" style="height: 50px; margin-bottom: 10px;" />
                             <div style="color: #ffffff; font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;">
                                 Low Carbon Heat Pumps
                             </div>
@@ -54,7 +54,7 @@ const HTML_EMAIL_TEMPLATES = {
                                 Thank you for your interest in Karnot Energy Solutions' natural refrigerant heat pump systems.
                             </p>
                             <div style="text-align: center; margin: 30px 0;">
-                                <img src="https://i.postimg.cc/mrLFhg3h/heat-pump-18kw.png" alt="Karnot Heat Pump" style="max-width: 100%; height: auto; border-radius: 8px;" />
+                                <img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/heat-pump-18kw.png" alt="Karnot Heat Pump" style="max-width: 100%; height: auto; border-radius: 8px;" />
                             </div>
                             <p style="color: #34495e; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
                                 We specialize in PFAS-free, environmentally-friendly heating and cooling solutions using CO₂ and R290 technology for commercial and industrial applications.
@@ -151,7 +151,7 @@ const HTML_EMAIL_TEMPLATES = {
                 <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                     <tr>
                         <td style="background: linear-gradient(135deg, #ff6b35 0%, #ff8c61 100%); padding: 30px 40px; text-align: center;">
-                            <img src="https://i.postimg.cc/XYgJQbfL/karnot-logo.png" alt="Karnot" style="height: 50px; margin-bottom: 10px;" />
+                            <img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/karnot-logo.png" alt="Karnot" style="height: 50px; margin-bottom: 10px;" />
                             <div style="color: #ffffff; font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase;">
                                 Low Carbon Heat Pumps
                             </div>
@@ -169,7 +169,7 @@ const HTML_EMAIL_TEMPLATES = {
                                 Thank you for taking the time to meet with us regarding the <strong>${data.project}</strong> project.
                             </p>
                             <div style="text-align: center; margin: 30px 0;">
-                                <img src="https://i.postimg.cc/YSRqwSF1/heat-pump-9kw.png" alt="Karnot R290 Heat Pump" style="max-width: 100%; height: auto; border-radius: 8px;" />
+                                <img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/heat-pump-9kw.png" alt="Karnot R290 Heat Pump" style="max-width: 100%; height: auto; border-radius: 8px;" />
                             </div>
                             <table width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px; margin: 30px 0;">
                                 <tr>
@@ -266,7 +266,7 @@ const HTML_EMAIL_TEMPLATES = {
                 <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                     <tr>
                         <td style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); padding: 30px 40px; text-align: center;">
-                            <img src="https://i.postimg.cc/XYgJQbfL/karnot-logo.png" alt="Karnot" style="height: 50px; margin-bottom: 10px;" />
+                            <img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/karnot-logo.png" alt="Karnot" style="height: 50px; margin-bottom: 10px;" />
                             <div style="color: #ffffff; font-size: 14px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-top: 15px;">
                                 Formal Proposal
                             </div>
@@ -354,7 +354,7 @@ const HTML_EMAIL_TEMPLATES = {
         <tr><td align="center">
             <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <tr><td style="background: linear-gradient(135deg, #3498db 0%, #5dade2 100%); padding: 30px 40px; text-align: center;">
-                    <img src="https://i.postimg.cc/XYgJQbfL/karnot-logo.png" alt="Karnot" style="height: 50px;" />
+                    <img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/karnot-logo.png" alt="Karnot" style="height: 50px;" />
                 </td></tr>
                 <tr><td style="padding: 40px;">
                     <h2 style="color: #2c3e50; font-size: 24px; font-weight: 700; margin: 0 0 20px 0;">Re: ${data.project}</h2>
@@ -393,7 +393,7 @@ const HTML_EMAIL_TEMPLATES = {
         <tr><td align="center">
             <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <tr><td style="background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); padding: 40px; text-align: center;">
-                    <img src="https://i.postimg.cc/XYgJQbfL/karnot-logo.png" alt="Karnot" style="height: 50px; margin-bottom: 15px;" />
+                    <img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/karnot-logo.png" alt="Karnot" style="height: 50px; margin-bottom: 15px;" />
                     <div style="color: #ffffff; font-size: 28px; font-weight: 700; margin-top: 20px;">🎉 Welcome to Karnot!</div>
                     <div style="color: #d5f4e6; font-size: 14px; margin-top: 10px;">We're thrilled to partner with ${data.company}</div>
                 </td></tr>
@@ -403,7 +403,7 @@ const HTML_EMAIL_TEMPLATES = {
                         Congratulations! We're thrilled to begin working with ${data.company} on the <span style="color: #27ae60;">${data.project}</span>.
                     </p>
                     <div style="text-align: center; margin: 30px 0;">
-                        <img src="https://i.postimg.cc/mrLFhg3h/heat-pump-18kw.png" alt="Heat Pump System" style="max-width: 100%; height: auto; border-radius: 8px;" />
+                        <img src="https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/heat-pump-18kw.png" alt="Heat Pump System" style="max-width: 100%; height: auto; border-radius: 8px;" />
                     </div>
                     <table cellpadding="0" cellspacing="0" style="margin: 30px auto;">
                         <tr><td align="center" style="background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); border-radius: 6px; padding: 14px 32px;">
@@ -536,7 +536,6 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
     const [showNewOpportunity, setShowNewOpportunity] = useState(false);
     const [editingOpportunity, setEditingOpportunity] = useState(null);
     const [selectedEmailOpp, setSelectedEmailOpp] = useState(null);
-    const [showDuplicateCleaner, setShowDuplicateCleaner] = useState(false);
     
     const [formData, setFormData] = useState({
         customerName: '',
@@ -787,9 +786,7 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
                     </p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                    <Button onClick={() => setShowDuplicateCleaner(true)} variant="secondary">
-                        <Building size={16} className="mr-2" /> Clean Duplicates
-                    </Button>
+                    <DuplicateCompanyCleaner companies={companies} user={user} />
                     <ExportButton 
                         data={opportunities}
                         filename="sales_funnel_export.csv"
@@ -909,14 +906,6 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
                 <EmailTemplateModal
                     opportunity={selectedEmailOpp}
                     onClose={() => setSelectedEmailOpp(null)}
-                />
-            )}
-
-            {showDuplicateCleaner && (
-                <DuplicateCompanyCleaner 
-                    companies={companies} 
-                    user={user}
-                    onClose={() => setShowDuplicateCleaner(false)}
                 />
             )}
         </div>
