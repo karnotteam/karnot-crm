@@ -38,7 +38,7 @@ import TerritoryLeadGenerator from './pages/TerritoryLeadGenerator.jsx';
 import BOIProjectLeads from './pages/BOIProjectLeads.jsx';
 import PEZAZones from './pages/PEZAZones.jsx';
 
-// --- Export Operations (NEW) ---
+// --- Export Operations ---
 import ASEANExportPage from './pages/ASEANExportPage.jsx';
 import UKExportPage from './pages/UKExportPage.jsx';
 import ExportCompaniesPage from './pages/ExportCompaniesPage.jsx';
@@ -77,12 +77,13 @@ import BIRBookPrep from './data/BIRBookPrep.jsx';
 // ==========================================
 // 4. CONSTANTS & STYLING
 // ==========================================
+import { KARNOT_LOGO_BASE_64, Button } from './data/constants.jsx'; 
 import { 
     BarChart2, List, HardHat, LogOut, Building, 
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
-    UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload  // ADD Upload here
-} from 'lucide-react';
+    UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload
+} from 'lucide-react'; 
 
 // ==========================================
 // 5. DROPDOWN MENU COMPONENT
@@ -155,21 +156,25 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'pezaZones', label: 'PEZA Zones', icon: HardHat, badge: 'NEW' }
     ];
 
-    // Operations Menu (Recurring Revenue)
-   // In App.jsx
-// Export Operations Menu (UPDATED)
-const exportOpsMenu = [
-    { view: 'aseanExport', label: 'ASEAN Markets', icon: Globe, badge: 'BOI' },
-    { view: 'ukExport', label: 'UK Operations', icon: Globe },
-    { view: 'exportCompanies', label: 'Companies', icon: Building },
-    { view: 'exportContacts', label: 'Contacts', icon: Users },
-    { view: 'escoImport', label: 'Import ESCOs', icon: Upload, badge: 'NEW' }  // ADD THIS LINE
-];
+    // Export Operations Menu
+    const exportOpsMenu = [
+        { view: 'aseanExport', label: 'ASEAN Markets', icon: Globe, badge: 'BOI' },
+        { view: 'ukExport', label: 'UK Operations', icon: Globe },
+        { view: 'exportCompanies', label: 'Companies', icon: Building },
+        { view: 'exportContacts', label: 'Contacts', icon: Users },
+        { view: 'escoImport', label: 'Import ESCOs', icon: Upload, badge: 'NEW' }
+    ];
 
-// Add view handler
-{activeView === 'escoImport' && (
-    <ESCOImportEnrichmentTool user={user} />
-)}
+    // Operations Menu (Recurring Revenue)
+    const operationsMenu = [
+        { view: 'assets', label: 'Asset Registry', icon: Package, badge: 'NEW' },
+        { view: 'serviceContracts', label: 'Service Contracts', icon: FileText },
+        { view: 'maintenanceCalendar', label: 'Ops Calendar', icon: CalendarIcon },
+        { view: 'businessTasks', label: 'Business Tasks', icon: CheckCircle, badge: 'NEW' },
+        { view: 'technicianView', label: 'Technician App', icon: Wrench, badge: 'MOBILE' },
+        { view: 'installEstimator', label: 'Install & QC', icon: Wrench },
+        { view: 'serviceInvoice', label: 'Service Invoice', icon: FileText }
+    ];
 
     // Calculators Menu
     const calculatorsMenu = [
@@ -668,7 +673,6 @@ export default function App() {
                     <UKExportPage user={user} />
                 )}
 
-                {/* EXPORT CRM PAGES */}
                 {activeView === 'exportCompanies' && (
                     <ExportCompaniesPage 
                         companies={companies}
@@ -687,9 +691,11 @@ export default function App() {
                         user={user}
                     />
                 )}
+
                 {activeView === 'escoImport' && (
-    <ESCOImportEnrichmentTool user={user} />
-)}
+                    <ESCOImportEnrichmentTool user={user} />
+                )}
+                
                 {/* 7. QUOTING */}
                 {activeView === 'calculator' && (
                     <QuoteCalculator 
