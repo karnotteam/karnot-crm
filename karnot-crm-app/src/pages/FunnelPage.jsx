@@ -679,26 +679,26 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
         const filteredContacts = contacts.filter(c => c.companyId === opportunity.companyId);
 
         return (
-            <Card className={`p-4 mb-3 border-l-4 ${stageColors[opportunity.stage] || 'bg-white'} hover:shadow-lg transition-shadow`}>
-                <div className="flex justify-between items-start mb-3">
+            <Card className={`p-5 mb-4 border-l-4 ${stageColors[opportunity.stage] || 'bg-white'} hover:shadow-lg transition-shadow`}>
+                <div className="flex justify-between items-start mb-4">
                     <div className="flex-1">
-                        <h3 className="font-black text-gray-800 text-lg mb-1">{opportunity.customerName}</h3>
-                        <p className="text-sm text-gray-600 font-semibold">{opportunity.project}</p>
+                        <h3 className="font-black text-gray-800 text-xl mb-2">{opportunity.customerName}</h3>
+                        <p className="text-base text-gray-600 font-semibold">{opportunity.project}</p>
                         {company && (
-                            <div className="mt-2 text-xs text-gray-500">
+                            <div className="mt-3 text-sm text-gray-500">
                                 <div>Total Quotes: {companyQuotes.length} (${companyValue.toLocaleString()})</div>
                                 {lastQuoteDate && <div>Last Quote: {lastQuoteDate.toLocaleDateString()}</div>}
                             </div>
                         )}
                     </div>
-                    <div className="flex gap-1">
+                    <div className="flex gap-2">
                         <Button
                             onClick={() => setSelectedEmailOpp(opportunity)}
                             variant="secondary"
                             className="!p-2 hover:bg-orange-50"
                             title="Send Email"
                         >
-                            <Mail size={16} className="text-orange-600" />
+                            <Mail size={18} className="text-orange-600" />
                         </Button>
                         <Button
                             onClick={() => {
@@ -709,34 +709,34 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
                             variant="secondary"
                             className="!p-2"
                         >
-                            <Edit size={16} />
+                            <Edit size={18} />
                         </Button>
                         <Button
                             onClick={() => handleDeleteOpportunity(opportunity.id)}
                             variant="secondary"
                             className="!p-2 text-red-500"
                         >
-                            <Trash2 size={16} />
+                            <Trash2 size={18} />
                         </Button>
                     </div>
                 </div>
 
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                        <DollarSign size={16} className="text-green-600" />
-                        <span className="font-bold text-gray-900">
+                        <DollarSign size={18} className="text-green-600" />
+                        <span className="font-bold text-gray-900 text-lg">
                             ${(opportunity.estimatedValue || 0).toLocaleString()}
                         </span>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-sm text-gray-500">
                             ({opportunity.probability}% prob)
                         </span>
                     </div>
                 </div>
 
                 {relatedQuotes.length > 0 && (
-                    <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded">
-                        <div className="flex items-center gap-2 text-xs">
-                            <FileText size={14} className="text-blue-600" />
+                    <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <div className="flex items-center gap-2 text-sm">
+                            <FileText size={16} className="text-blue-600" />
                             <span className="font-bold text-blue-900">
                                 {relatedQuotes.length} Quote{relatedQuotes.length !== 1 ? 's' : ''} (${totalQuoteValue.toLocaleString()})
                             </span>
@@ -745,9 +745,9 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
                 )}
 
                 {nextAppointment && (
-                    <div className="mb-3 p-2 bg-purple-50 border border-purple-200 rounded">
-                        <div className="flex items-center gap-2 text-xs">
-                            <Calendar size={14} className="text-purple-600" />
+                    <div className="mb-3 p-3 bg-purple-50 border border-purple-200 rounded">
+                        <div className="flex items-center gap-2 text-sm">
+                            <Calendar size={16} className="text-purple-600" />
                             <span className="font-bold text-purple-900">
                                 Next Meeting: {new Date(nextAppointment.appointmentDate).toLocaleDateString()}
                             </span>
@@ -755,22 +755,22 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
                     </div>
                 )}
 
-                <div className="flex gap-2 mt-3">
+                <div className="flex gap-2 mt-4">
                     <Button
                         onClick={() => handleMoveStage(opportunity.id, -1)}
                         variant="secondary"
-                        className="flex-1 text-xs"
+                        className="flex-1 text-sm"
                         disabled={STAGE_ORDER.indexOf(opportunity.stage) === 0}
                     >
-                        <ChevronLeft size={14} /> Back
+                        <ChevronLeft size={16} /> Back
                     </Button>
                     <Button
                         onClick={() => handleMoveStage(opportunity.id, 1)}
                         variant="secondary"
-                        className="flex-1 text-xs"
+                        className="flex-1 text-sm"
                         disabled={STAGE_ORDER.indexOf(opportunity.stage) === STAGE_ORDER.length - 1}
                     >
-                        Forward <ChevronRight size={14} />
+                        Forward <ChevronRight size={16} />
                     </Button>
                 </div>
             </Card>
@@ -802,14 +802,14 @@ const FunnelPage = ({ opportunities, user, quotes, onOpenQuote, onOpen, companie
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6">
                 {STAGE_ORDER.map(stage => (
-                    <div key={stage} className="min-h-[400px]">
-                        <div className={`p-3 rounded-t-lg font-black text-sm uppercase tracking-wide ${stageColors[stage]}`}>
+                    <div key={stage} className="min-h-[500px]">
+                        <div className={`p-4 rounded-t-lg font-black text-base uppercase tracking-wide ${stageColors[stage]}`}>
                             {stage}
-                            <span className="ml-2 text-xs">({opportunitiesByStage[stage]?.length || 0})</span>
+                            <span className="ml-2 text-sm font-bold">({opportunitiesByStage[stage]?.length || 0})</span>
                         </div>
-                        <div className="p-2 bg-gray-50 rounded-b-lg min-h-[350px]">
+                        <div className="p-3 bg-gray-50 rounded-b-lg min-h-[450px]">
                             {(opportunitiesByStage[stage] || []).map(opp => (
                                 <OpportunityCard key={opp.id} opportunity={opp} />
                             ))}
