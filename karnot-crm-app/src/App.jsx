@@ -29,6 +29,9 @@ import ContactsPage from './pages/ContactsPage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
 import CalculatorsPage from './pages/CalculatorsPage.jsx'; 
 import SupplierManager from './pages/SupplierManager.jsx';
+// --- Export CRM Modules (NEW) ---
+import ExportCompaniesPage from './pages/ExportCompaniesPage.jsx';
+import ExportContactsPage from './pages/ExportContactsPage.jsx';
 
 // --- Territory & Field Sales Modules ---
 import TerritoryManagement from './pages/TerritoryManagement.jsx';
