@@ -1,39 +1,65 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Copy, X, FileText, Send, TrendingUp, ShieldCheck, Cpu } from 'lucide-react';
+import { Mail, Copy, X, FileText, Send, TrendingUp, ShieldCheck, Globe, Award } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx';
 
 // ============================================================================
-// "COMPONENT-HEAVY" EMAIL TEMPLATES (High Trust)
+// "NO FLUFF" DIRECT RESPONSE TEMPLATES (With 10k Unit Social Proof)
 // ============================================================================
 
 const EMAIL_TEMPLATES = {
+    europe_proof: {
+        name: '🇪🇺 The "10,000 Units" Pitch (Social Proof)',
+        category: 'Trust',
+        subject: 'We are new to the UK, but not to Europe',
+        body: `Hi {{contact}},
+
+A lot of installers ask me: "I haven't heard of Karnot. Am I the guinea pig?"
+
+The answer is no.
+
+While we are new to the UK trade market, our R290 platform is already a veteran.
+
+**The Stats:**
+* **10,000+ Units** currently running across Europe (Germany, Netherlands, Poland).
+* **3 Years** of winter field data.
+* **0% Duty** (We ship via our Philippines hub, not direct China).
+
+You are getting a machine that has already been stress-tested in climates colder than Manchester.
+
+We just cut out the middleman so you get it for **£2,100** instead of £4,000.
+
+Want to see the case studies?
+
+Cheers,
+
+Stuart
+Karnot Energy`
+    },
+
     spec_sheet_smackdown: {
         name: '🛠️ The "What\'s Inside" Pitch (Quality)',
         category: 'Trust',
         subject: 'Panasonic, Grundfos, Carel (Inside our R290 units)',
         body: `Hi {{contact}},
 
-A lot of installers ask me: "It's cheaper, but is it built to last?"
+Installers often ask me: "It's half the price of a Vaillant, so what's the catch? Is it certified?"
 
-I don't hide what's inside our boxes. In fact, I brag about it.
+There is no catch. Just direct supply.
 
-Here is exactly what you get inside a Karnot iHEAT R290 Monobloc (£2,100 trade):
+Here is exactly what you get with a Karnot iHEAT R290 Monobloc (£2,100 trade):
 
-**The Guts (Tier 1 Components):**
-✅ **Compressor:** Panasonic R290 Inverter (A+++ Rated)
-✅ **Controller:** Full CAREL System (Inverter & PCB)
-✅ **Pump:** Grundfos (High Efficiency)
-✅ **Contactor:** Schneider Electric
-✅ **Safety:** Full ATEX-Rated Components (Compressor, Pump, EEV)
+**1. The "Paperwork" (Grant Ready):**
+✅ **MCS Certified:** Fully approved for the £7,500 BUS Grant.
+✅ **Keymark & TUV:** Safety certified.
+✅ **Proven:** 10,000+ units currently operating across Europe.
 
-**Built-In Extras (Stuff you usually buy separately):**
-* Vortex Water Flow Meter
-* Energy Consumption Meter (SG Ready)
-* Air Vent & Pressure Relief Valve included
+**2. The "Guts" (Tier 1 Components):**
+⚙️ **Compressor:** Panasonic R290 "DC Inverter" (Dedicated Propane Design).
+⚙️ **Controller:** Full CAREL System (Inverter Drive & PCB).
+⚙️ **Pump:** Grundfos UPM3 (The gold standard).
+⚙️ **Contactor:** Schneider Electric.
 
-It’s European-spec engineering, built efficiently, sold direct.
-
-Why pay £4k for a badge when the components are the same?
+It is top-tier European-spec engineering, built efficiently, sold direct.
 
 Cheers,
 
@@ -57,7 +83,7 @@ We supply MCS-Certified R290 Heat Pumps directly to the trade. No wholesalers. N
 * **Competitor 12kW R290:** ~£3,800 + VAT
 * **Karnot 12kW R290:** ~£2,100 + VAT
 
-It’s the same spec (Panasonic Compressor, Carel Controls). Same grant eligibility (£7,500 BUS). You just keep the extra £1,700.
+It’s the same spec (Panasonic/Carel). Same grant eligibility. You just keep the extra £1,700.
 
 Mind if I send you the trade price list?
 
@@ -65,26 +91,6 @@ Best,
 
 Stuart
 Karnot Energy`
-    },
-
-    r32_price_war: {
-        name: '🥊 The "Samsung Alternative" (R32)',
-        category: 'Sales',
-        subject: '12kW unit for under £2k?',
-        body: `{{contact}},
-
-If you are currently installing Samsung or LG R32 units, you are likely paying around £3,000 a pop.
-
-We have a 12kW R32 Monobloc (The iHEAT Pro) landing next week.
-**Trade price: £1,950.**
-
-It does the exact same job. It has the same warranty.
-
-Do you want to reserve one for your next project to test the difference?
-
-Cheers,
-
-Stuart`
     },
 
     cooling_upsell: {
@@ -112,7 +118,7 @@ Stuart`
 };
 
 const EmailTemplateModal = ({ opportunity, onClose }) => {
-    const [selectedTemplate, setSelectedTemplate] = useState('spec_sheet_smackdown');
+    const [selectedTemplate, setSelectedTemplate] = useState('europe_proof');
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('');
     const [copied, setCopied] = useState(false);
@@ -145,7 +151,7 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
         window.open(mailtoLink, '_blank');
     };
 
-    // Group templates
+    // Grouping
     const templatesByCategory = Object.entries(EMAIL_TEMPLATES).reduce((acc, [key, template]) => {
         const category = template.category || 'General';
         if (!acc[category]) acc[category] = [];
@@ -212,11 +218,11 @@ const EmailTemplateModal = ({ opportunity, onClose }) => {
                         />
                     </div>
 
-                    {/* Component Trust Note */}
-                    <div className="bg-orange-50 border border-orange-200 p-3 rounded-lg flex items-start gap-3">
-                        <Cpu className="text-orange-600 shrink-0 mt-0.5" size={16} />
-                        <p className="text-xs text-orange-800">
-                            <strong>Trust Builder:</strong> The "What's Inside" template lists the Tier 1 components (Panasonic, Grundfos, Carel). Use this when a prospect questions quality or compares you to "Cheap Chinese" brands.
+                    {/* Social Proof Note */}
+                    <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg flex items-start gap-3">
+                        <Globe className="text-blue-600 shrink-0 mt-0.5" size={16} />
+                        <p className="text-xs text-blue-800">
+                            <strong>10,000 Unit Stat:</strong> This is your strongest trust signal. It moves the conversation from "Testing a new product" (Risky) to "Using a proven European standard" (Safe).
                         </p>
                     </div>
                 </div>
