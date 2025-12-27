@@ -3,20 +3,20 @@ import { db } from '../firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, serverTimestamp, writeBatch } from 'firebase/firestore';
 import {
     CheckCircle, Clock, AlertTriangle, Plus, Edit, Trash2, Calendar,
-    FileText, Building, Landmark, Users, Filter, X, ChevronDown, ChevronUp, Copy, Trash,
-    Upload, FileJson, FileSpreadsheet // Added new icons here
+    FileText, Building, Landmark, Users, Filter, X, ChevronDown, ChevronUp, Copy,
+    Upload, FileJson, FileSpreadsheet, Search, SortAsc, SortDesc, List, Grid,
+    CheckSquare, Square, MoreVertical, Download, Eye, EyeOff
 } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx';
 
 // --- TASK CATEGORIES WITH ICONS & COLORS ---
 const TASK_CATEGORIES = {
-    // --- NEW STRATEGY CATEGORIES ADDED HERE ---
-    'REGULATION': { 
-        label: 'Gov & Regulation (DOE/PELP)', 
+    'FUNDRAISING': { 
+        label: 'Fundraising & Investment', 
         icon: Landmark, 
-        color: 'text-red-700', 
-        bgColor: 'bg-red-50', 
-        borderColor: 'border-red-200' 
+        color: 'text-green-700', 
+        bgColor: 'bg-green-50', 
+        borderColor: 'border-green-200' 
     },
     'STRATEGY': { 
         label: 'Strategy & Networking', 
@@ -25,7 +25,27 @@ const TASK_CATEGORIES = {
         bgColor: 'bg-purple-50', 
         borderColor: 'border-purple-200' 
     },
-    // --- END NEW CATEGORIES ---
+    'REGULATION': { 
+        label: 'Gov & Regulation (DOE/PELP)', 
+        icon: Landmark, 
+        color: 'text-red-700', 
+        bgColor: 'bg-red-50', 
+        borderColor: 'border-red-200' 
+    },
+    'LEGAL': { 
+        label: 'Legal & Contracts', 
+        icon: FileText, 
+        color: 'text-gray-700', 
+        bgColor: 'bg-gray-50', 
+        borderColor: 'border-gray-200' 
+    },
+    'OPERATIONS': { 
+        label: 'Operations & Systems', 
+        icon: Building, 
+        color: 'text-blue-700', 
+        bgColor: 'bg-blue-50', 
+        borderColor: 'border-blue-200' 
+    },
     'BIR': { 
         label: 'BIR Filing', 
         icon: FileText, 
@@ -68,13 +88,6 @@ const TASK_CATEGORIES = {
         bgColor: 'bg-indigo-50', 
         borderColor: 'border-indigo-200' 
     },
-    'LEGAL': { 
-        label: 'Legal & Contracts', 
-        icon: FileText, 
-        color: 'text-gray-600', 
-        bgColor: 'bg-gray-50', 
-        borderColor: 'border-gray-200' 
-    },
     'OTHER': { 
         label: 'Other Business Tasks', 
         icon: Clock, 
@@ -84,7 +97,6 @@ const TASK_CATEGORIES = {
     }
 };
 
-// --- RECURRING PATTERNS ---
 const RECURRING_PATTERNS = [
     { value: 'none', label: 'One-time Task' },
     { value: 'monthly', label: 'Monthly' },
@@ -92,14 +104,20 @@ const RECURRING_PATTERNS = [
     { value: 'annually', label: 'Annually' }
 ];
 
-// --- NEW STRATEGY IMPORT MODAL ---
+const PRIORITY_LEVELS = [
+    { value: 'LOW', label: 'Low', color: 'bg-gray-100 text-gray-700' },
+    { value: 'MEDIUM', label: 'Medium', color: 'bg-blue-100 text-blue-700' },
+    { value: 'HIGH', label: 'High', color: 'bg-orange-100 text-orange-700' },
+    { value: 'CRITICAL', label: 'Critical', color: 'bg-red-100 text-red-700' }
+];
+
+// --- STRATEGY IMPORT MODAL ---
 const StrategyImportModal = ({ onClose, user }) => {
-    const [importMode, setImportMode] = useState('JSON'); // 'JSON' or 'CSV'
+    const [importMode, setImportMode] = useState('JSON');
     const [inputText, setInputText] = useState('');
     const [previewTasks, setPreviewTasks] = useState([]);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // Parse Input
     useEffect(() => {
         if (!inputText) {
             setPreviewTasks([]);
@@ -113,7 +131,6 @@ const StrategyImportModal = ({ onClose, user }) => {
                     setPreviewTasks(parsed);
                 }
             } else {
-                // Simple CSV Parser (Title, DueDate, Category, Description)
                 const rows = inputText.split('\n').filter(r => r.trim());
                 const tasks = rows.map(row => {
                     const [title, dueDate, category, description] = row.split(',').map(s => s.trim());
@@ -132,7 +149,6 @@ const StrategyImportModal = ({ onClose, user }) => {
         
         previewTasks.forEach(task => {
             const docRef = doc(collection(db, "users", user.uid, "business_tasks"));
-            // Safe fallback for category if the AI suggests something invalid
             const safeCategory = (task.category && TASK_CATEGORIES[task.category]) ? task.category : 'STRATEGY';
 
             batch.set(docRef, {
@@ -142,7 +158,9 @@ const StrategyImportModal = ({ onClose, user }) => {
                 dueDate: task.dueDate || new Date().toISOString().split('T')[0],
                 priority: task.priority || 'MEDIUM',
                 recurring: 'none',
-                status: 'PENDING',
+                status: task.status || 'PENDING',
+                owner: task.owner || '',
+                notes: task.notes || '',
                 createdAt: serverTimestamp()
             });
         });
@@ -184,10 +202,9 @@ const StrategyImportModal = ({ onClose, user }) => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Input Area */}
                     <div className="flex flex-col h-full">
                         <label className="text-xs font-bold uppercase text-gray-500 mb-2">
-                            {importMode === 'JSON' ? 'Paste JSON from Gemini' : 'Paste CSV (Title, Date, Category, Desc)'}
+                            {importMode === 'JSON' ? 'Paste JSON Array' : 'Paste CSV (Title, Date, Category, Desc)'}
                         </label>
                         <textarea
                             className="flex-1 w-full p-4 border rounded-xl font-mono text-xs bg-slate-900 text-green-400"
@@ -197,7 +214,6 @@ const StrategyImportModal = ({ onClose, user }) => {
                         />
                     </div>
 
-                    {/* Preview Area */}
                     <div className="bg-gray-100 rounded-xl p-4 overflow-y-auto h-64 md:h-auto border">
                         <h3 className="font-bold text-gray-700 mb-3 flex justify-between">
                             <span>Preview ({previewTasks.length} Tasks)</span>
@@ -239,10 +255,9 @@ const StrategyImportModal = ({ onClose, user }) => {
 };
 
 // --- DUPLICATE DETECTOR MODAL ---
-const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) => {
+const DuplicateDetectorModal = ({ tasks, onClose, user }) => {
     const [selectedDuplicates, setSelectedDuplicates] = useState([]);
 
-    // Find duplicates based on title + dueDate + category
     const duplicateGroups = useMemo(() => {
         const groups = {};
         
@@ -254,13 +269,11 @@ const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) =>
             groups[key].push(task);
         });
 
-        // Only keep groups with duplicates (more than 1 task)
         const duplicates = Object.entries(groups)
             .filter(([_, taskGroup]) => taskGroup.length > 1)
             .map(([key, taskGroup]) => ({
                 key,
                 tasks: taskGroup.sort((a, b) => {
-                    // Sort by creation date if available, oldest first
                     const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
                     const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
                     return dateA - dateB;
@@ -283,7 +296,6 @@ const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) =>
         const tasksToDelete = [];
 
         selectedGroups.forEach(group => {
-            // Keep the oldest (first) task, delete the rest
             const duplicatesToDelete = group.tasks.slice(1);
             tasksToDelete.push(...duplicatesToDelete);
         });
@@ -297,7 +309,6 @@ const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) =>
             return;
         }
 
-        // Use batch delete for efficiency
         const batch = writeBatch(db);
         tasksToDelete.forEach(task => {
             const taskRef = doc(db, "users", user.uid, "business_tasks", task.id);
@@ -336,7 +347,6 @@ const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) =>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {/* Select All */}
                             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input
@@ -354,7 +364,6 @@ const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) =>
                                 </span>
                             </div>
 
-                            {/* Duplicate Groups */}
                             {duplicateGroups.map(group => (
                                 <Card key={group.key} className="border-l-4 border-orange-500">
                                     <div className="p-4">
@@ -425,7 +434,6 @@ const DuplicateDetectorModal = ({ tasks, onClose, onDeleteDuplicates, user }) =>
                             className="flex-1 bg-red-600 hover:bg-red-700"
                             disabled={selectedDuplicates.length === 0}
                         >
-                            <Trash size={16} className="mr-2" />
                             Delete {selectedDuplicates.reduce((sum, key) => {
                                 const group = duplicateGroups.find(g => g.key === key);
                                 return sum + (group ? group.tasks.length - 1 : 0);
@@ -492,6 +500,8 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
     const [priority, setPriority] = useState(task?.priority || 'MEDIUM');
     const [recurring, setRecurring] = useState(task?.recurring || 'none');
     const [status, setStatus] = useState(task?.status || 'PENDING');
+    const [owner, setOwner] = useState(task?.owner || '');
+    const [notes, setNotes] = useState(task?.notes || '');
 
     const handleSave = async () => {
         if (!title || !dueDate) {
@@ -507,14 +517,14 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
             priority,
             recurring,
             status,
+            owner,
+            notes,
             updatedAt: serverTimestamp()
         };
 
         if (task) {
-            // Update existing
             await updateDoc(doc(db, "users", user.uid, "business_tasks", task.id), taskData);
         } else {
-            // Create new
             await addDoc(collection(db, "users", user.uid, "business_tasks"), {
                 ...taskData,
                 createdAt: serverTimestamp()
@@ -537,7 +547,6 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
                         </button>
                     </div>
 
-                    {/* Title */}
                     <div>
                         <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
                             Task Title *
@@ -549,7 +558,6 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
                         />
                     </div>
 
-                    {/* Category & Priority */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
@@ -575,15 +583,13 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
                                 onChange={e => setPriority(e.target.value)}
                                 className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
                             >
-                                <option value="LOW">Low Priority</option>
-                                <option value="MEDIUM">Medium Priority</option>
-                                <option value="HIGH">High Priority</option>
-                                <option value="CRITICAL">Critical</option>
+                                {PRIORITY_LEVELS.map(p => (
+                                    <option key={p.value} value={p.value}>{p.label}</option>
+                                ))}
                             </select>
                         </div>
                     </div>
 
-                    {/* Due Date & Recurring */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
@@ -599,21 +605,31 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
 
                         <div>
                             <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
-                                Recurring
+                                Owner
                             </label>
-                            <select
-                                value={recurring}
-                                onChange={e => setRecurring(e.target.value)}
-                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
-                            >
-                                {RECURRING_PATTERNS.map(p => (
-                                    <option key={p.value} value={p.value}>{p.label}</option>
-                                ))}
-                            </select>
+                            <Input
+                                placeholder="Stuart Cox, Lenilia Cox, etc."
+                                value={owner}
+                                onChange={e => setOwner(e.target.value)}
+                            />
                         </div>
                     </div>
 
-                    {/* Status (only show when editing) */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Recurring
+                        </label>
+                        <select
+                            value={recurring}
+                            onChange={e => setRecurring(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold text-sm"
+                        >
+                            {RECURRING_PATTERNS.map(p => (
+                                <option key={p.value} value={p.value}>{p.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
                     {task && (
                         <div>
                             <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
@@ -631,7 +647,6 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
                         </div>
                     )}
 
-                    {/* Description */}
                     <div>
                         <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
                             Description / Notes
@@ -644,7 +659,6 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
                         />
                     </div>
 
-                    {/* Recurring Info */}
                     {recurring !== 'none' && (
                         <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
                             <p className="text-xs text-blue-700 font-bold">
@@ -653,7 +667,6 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
                         </div>
                     )}
 
-                    {/* Actions */}
                     <div className="flex gap-2 pt-4 border-t">
                         <Button onClick={handleSave} variant="primary" className="flex-1">
                             {task ? 'Update Task' : 'Create Task'}
@@ -673,18 +686,28 @@ const BusinessTasksCalendar = ({ user }) => {
     const [tasks, setTasks] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [showDuplicateDetector, setShowDuplicateDetector] = useState(false);
-    const [showStrategyModal, setShowStrategyModal] = useState(false); // New state
+    const [showStrategyModal, setShowStrategyModal] = useState(false);
     const [editingTask, setEditingTask] = useState(null);
+    
+    // --- ENHANCED FILTERS ---
     const [filterCategory, setFilterCategory] = useState('ALL');
     const [filterStatus, setFilterStatus] = useState('ACTIVE');
+    const [filterPriority, setFilterPriority] = useState('ALL');
+    const [filterOwner, setFilterOwner] = useState('ALL');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [sortBy, setSortBy] = useState('dueDate');
+    const [sortDirection, setSortDirection] = useState('asc');
+    const [viewMode, setViewMode] = useState('list'); // list or grouped
     const [expandedCategory, setExpandedCategory] = useState(null);
+    const [selectedTasks, setSelectedTasks] = useState([]);
+    const [showCompletedTasks, setShowCompletedTasks] = useState(false);
 
-    // Load tasks from Firebase
+    // Load tasks
     useEffect(() => {
         if (!user) return;
 
         const unsubscribe = onSnapshot(
-            query(collection(db, "users", user.uid, "business_tasks"), orderBy("dueDate", "asc")),
+            query(collection(db, "users", user.uid, "business_tasks"), orderBy("createdAt", "desc")),
             (snap) => {
                 setTasks(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             },
@@ -697,32 +720,102 @@ const BusinessTasksCalendar = ({ user }) => {
         return () => unsubscribe();
     }, [user]);
 
-    // Filter tasks
-    const filteredTasks = useMemo(() => {
-        return tasks.filter(task => {
+    // Get unique owners for filter
+    const uniqueOwners = useMemo(() => {
+        const owners = new Set();
+        tasks.forEach(task => {
+            if (task.owner) owners.add(task.owner);
+        });
+        return Array.from(owners);
+    }, [tasks]);
+
+    // Advanced filtering and sorting
+    const filteredAndSortedTasks = useMemo(() => {
+        let filtered = tasks.filter(task => {
+            // Category filter
             if (filterCategory !== 'ALL' && task.category !== filterCategory) return false;
+            
+            // Status filter
             if (filterStatus === 'ACTIVE' && task.status === 'COMPLETED') return false;
             if (filterStatus === 'COMPLETED' && task.status !== 'COMPLETED') return false;
+            
+            // Priority filter
+            if (filterPriority !== 'ALL' && task.priority !== filterPriority) return false;
+            
+            // Owner filter
+            if (filterOwner !== 'ALL' && task.owner !== filterOwner) return false;
+            
+            // Search filter
+            if (searchTerm) {
+                const search = searchTerm.toLowerCase();
+                return (
+                    task.title.toLowerCase().includes(search) ||
+                    (task.description && task.description.toLowerCase().includes(search)) ||
+                    (task.owner && task.owner.toLowerCase().includes(search)) ||
+                    (task.notes && task.notes.toLowerCase().includes(search))
+                );
+            }
+            
+            // Hide completed toggle
+            if (!showCompletedTasks && task.status === 'COMPLETED') return false;
+            
             return true;
         });
-    }, [tasks, filterCategory, filterStatus]);
 
-    // Group tasks by category
+        // Sort
+        filtered.sort((a, b) => {
+            let compareA, compareB;
+
+            switch (sortBy) {
+                case 'dueDate':
+                    compareA = new Date(a.dueDate);
+                    compareB = new Date(b.dueDate);
+                    break;
+                case 'priority':
+                    const priorityOrder = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+                    compareA = priorityOrder[a.priority] || 0;
+                    compareB = priorityOrder[b.priority] || 0;
+                    break;
+                case 'title':
+                    compareA = a.title.toLowerCase();
+                    compareB = b.title.toLowerCase();
+                    break;
+                case 'category':
+                    compareA = a.category;
+                    compareB = b.category;
+                    break;
+                case 'status':
+                    compareA = a.status;
+                    compareB = b.status;
+                    break;
+                default:
+                    return 0;
+            }
+
+            if (sortDirection === 'asc') {
+                return compareA > compareB ? 1 : compareA < compareB ? -1 : 0;
+            } else {
+                return compareA < compareB ? 1 : compareA > compareB ? -1 : 0;
+            }
+        });
+
+        return filtered;
+    }, [tasks, filterCategory, filterStatus, filterPriority, filterOwner, searchTerm, sortBy, sortDirection, showCompletedTasks]);
+
+    // Group tasks by category for grouped view
     const tasksByCategory = useMemo(() => {
         const grouped = {};
-        filteredTasks.forEach(task => {
-            // Safety check in case a task has a legacy category not in the new map
+        filteredAndSortedTasks.forEach(task => {
             const safeCategory = TASK_CATEGORIES[task.category] ? task.category : 'OTHER';
-            
             if (!grouped[safeCategory]) {
                 grouped[safeCategory] = [];
             }
             grouped[safeCategory].push(task);
         });
         return grouped;
-    }, [filteredTasks]);
+    }, [filteredAndSortedTasks]);
 
-    // Quick stats
+    // Statistics
     const stats = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -741,8 +834,62 @@ const BusinessTasksCalendar = ({ user }) => {
         const completed = tasks.filter(t => t.status === 'COMPLETED').length;
         const pending = tasks.filter(t => t.status !== 'COMPLETED').length;
 
-        return { overdue, dueSoon, completed, pending };
+        const criticalPending = tasks.filter(t => 
+            t.status !== 'COMPLETED' && t.priority === 'CRITICAL'
+        ).length;
+
+        return { overdue, dueSoon, completed, pending, criticalPending, total: tasks.length };
     }, [tasks]);
+
+    // Bulk actions
+    const handleBulkDelete = async () => {
+        if (selectedTasks.length === 0) {
+            alert('No tasks selected');
+            return;
+        }
+
+        if (!window.confirm(`Delete ${selectedTasks.length} selected task${selectedTasks.length !== 1 ? 's' : ''}?`)) {
+            return;
+        }
+
+        const batch = writeBatch(db);
+        selectedTasks.forEach(taskId => {
+            const taskRef = doc(db, "users", user.uid, "business_tasks", taskId);
+            batch.delete(taskRef);
+        });
+
+        await batch.commit();
+        setSelectedTasks([]);
+        alert(`✅ Deleted ${selectedTasks.length} task${selectedTasks.length !== 1 ? 's' : ''}!`);
+    };
+
+    const handleBulkComplete = async () => {
+        if (selectedTasks.length === 0) {
+            alert('No tasks selected');
+            return;
+        }
+
+        const batch = writeBatch(db);
+        selectedTasks.forEach(taskId => {
+            const taskRef = doc(db, "users", user.uid, "business_tasks", taskId);
+            batch.update(taskRef, {
+                status: 'COMPLETED',
+                completedAt: serverTimestamp()
+            });
+        });
+
+        await batch.commit();
+        setSelectedTasks([]);
+        alert(`✅ Marked ${selectedTasks.length} task${selectedTasks.length !== 1 ? 's' : ''} as completed!`);
+    };
+
+    const handleSelectAll = () => {
+        if (selectedTasks.length === filteredAndSortedTasks.length) {
+            setSelectedTasks([]);
+        } else {
+            setSelectedTasks(filteredAndSortedTasks.map(t => t.id));
+        }
+    };
 
     const handleDelete = async (taskId) => {
         if (window.confirm('Delete this task?')) {
@@ -767,6 +914,8 @@ const BusinessTasksCalendar = ({ user }) => {
                 priority: task.priority,
                 recurring: task.recurring,
                 status: 'PENDING',
+                owner: task.owner,
+                notes: task.notes,
                 createdAt: serverTimestamp()
             });
         }
@@ -790,30 +939,60 @@ const BusinessTasksCalendar = ({ user }) => {
         return date.toISOString().split('T')[0];
     };
 
+    const handleExportCSV = () => {
+        const csv = [
+            ['Title', 'Category', 'Priority', 'Status', 'Due Date', 'Owner', 'Description', 'Notes'].join(','),
+            ...filteredAndSortedTasks.map(task => [
+                `"${task.title}"`,
+                task.category,
+                task.priority,
+                task.status,
+                task.dueDate,
+                task.owner || '',
+                `"${task.description || ''}"`,
+                `"${task.notes || ''}"`
+            ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `karnot-tasks-${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+    };
+
     return (
         <div className="space-y-6 pb-10">
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-3xl font-black text-gray-800 uppercase tracking-tight">
-                        Business Tasks & Compliance Calendar
+                        Business Tasks & Strategy
                     </h2>
                     <p className="text-sm text-gray-500 mt-1">
-                        Track BIR, DTI, BOI, SEC, and Strategy deadlines
+                        {stats.total} total tasks · {stats.pending} active · {stats.completed} completed
                     </p>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                    <Button
+                        onClick={handleExportCSV}
+                        variant="secondary"
+                        className="text-sm"
+                    >
+                        <Download size={16} className="mr-1" /> Export CSV
+                    </Button>
                     <Button
                         onClick={() => setShowStrategyModal(true)}
-                        className="bg-purple-600 hover:bg-purple-700 text-white"
+                        className="bg-purple-600 hover:bg-purple-700 text-white text-sm"
                     >
-                        <Upload size={16} className="mr-1" /> Import Strategy / AI
+                        <Upload size={16} className="mr-1" /> Import AI/JSON
                     </Button>
                     <Button
                         onClick={() => setShowDuplicateDetector(true)}
                         variant="secondary"
-                        className="border-orange-200 text-orange-700 bg-orange-50"
+                        className="border-orange-200 text-orange-700 bg-orange-50 text-sm"
                     >
                         <Copy size={16} className="mr-1" /> Find Duplicates
                     </Button>
@@ -823,7 +1002,7 @@ const BusinessTasksCalendar = ({ user }) => {
                             setShowModal(true);
                         }}
                         variant="primary"
-                        className="bg-orange-600 hover:bg-orange-700"
+                        className="bg-orange-600 hover:bg-orange-700 text-sm"
                     >
                         <Plus size={16} className="mr-1" /> New Task
                     </Button>
@@ -831,206 +1010,540 @@ const BusinessTasksCalendar = ({ user }) => {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <Card className="p-4 border-l-4 border-red-500">
                     <div className="flex items-center gap-3">
-                        <AlertTriangle className="text-red-500" size={24} />
+                        <AlertTriangle className="text-red-500" size={20} />
                         <div>
-                            <p className="text-2xl font-black text-gray-800">{stats.overdue}</p>
-                            <p className="text-xs text-gray-500 uppercase font-bold">Overdue</p>
+                            <p className="text-xl font-black text-gray-800">{stats.overdue}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold">Overdue</p>
                         </div>
                     </div>
                 </Card>
 
                 <Card className="p-4 border-l-4 border-orange-500">
                     <div className="flex items-center gap-3">
-                        <Clock className="text-orange-500" size={24} />
+                        <Clock className="text-orange-500" size={20} />
                         <div>
-                            <p className="text-2xl font-black text-gray-800">{stats.dueSoon}</p>
-                            <p className="text-xs text-gray-500 uppercase font-bold">Due This Week</p>
+                            <p className="text-xl font-black text-gray-800">{stats.dueSoon}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold">Due This Week</p>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className="p-4 border-l-4 border-purple-500">
+                    <div className="flex items-center gap-3">
+                        <AlertTriangle className="text-purple-500" size={20} />
+                        <div>
+                            <p className="text-xl font-black text-gray-800">{stats.criticalPending}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold">Critical</p>
                         </div>
                     </div>
                 </Card>
 
                 <Card className="p-4 border-l-4 border-blue-500">
                     <div className="flex items-center gap-3">
-                        <Calendar className="text-blue-500" size={24} />
+                        <Calendar className="text-blue-500" size={20} />
                         <div>
-                            <p className="text-2xl font-black text-gray-800">{stats.pending}</p>
-                            <p className="text-xs text-gray-500 uppercase font-bold">Pending Tasks</p>
+                            <p className="text-xl font-black text-gray-800">{stats.pending}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold">Pending</p>
                         </div>
                     </div>
                 </Card>
 
                 <Card className="p-4 border-l-4 border-green-500">
                     <div className="flex items-center gap-3">
-                        <CheckCircle className="text-green-500" size={24} />
+                        <CheckCircle className="text-green-500" size={20} />
                         <div>
-                            <p className="text-2xl font-black text-gray-800">{stats.completed}</p>
-                            <p className="text-xs text-gray-500 uppercase font-bold">Completed</p>
+                            <p className="text-xl font-black text-gray-800">{stats.completed}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold">Completed</p>
                         </div>
                     </div>
                 </Card>
             </div>
 
-            {/* Filters */}
+            {/* Advanced Filters & Search */}
             <Card className="p-4">
-                <div className="flex flex-wrap gap-3 items-center">
-                    <Filter size={16} className="text-gray-400" />
-                    <span className="text-xs font-bold text-gray-500 uppercase">Filters:</span>
+                <div className="space-y-4">
+                    {/* Search Bar */}
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                        <input
+                            type="text"
+                            placeholder="Search tasks by title, description, owner, or notes..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl font-medium"
+                        />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm('')}
+                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                                <X size={20} />
+                            </button>
+                        )}
+                    </div>
 
-                    <select
-                        value={filterCategory}
-                        onChange={e => setFilterCategory(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold"
-                    >
-                        <option value="ALL">All Categories</option>
-                        {Object.entries(TASK_CATEGORIES).map(([key, cat]) => (
-                            <option key={key} value={key}>{cat.label}</option>
-                        ))}
-                    </select>
+                    {/* Filter Row */}
+                    <div className="flex flex-wrap gap-3 items-center">
+                        <Filter size={16} className="text-gray-400" />
+                        <span className="text-xs font-bold text-gray-500 uppercase">Filters:</span>
 
-                    <select
-                        value={filterStatus}
-                        onChange={e => setFilterStatus(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold"
-                    >
-                        <option value="ACTIVE">Active Tasks</option>
-                        <option value="COMPLETED">Completed Tasks</option>
-                        <option value="ALL">All Tasks</option>
-                    </select>
+                        <select
+                            value={filterCategory}
+                            onChange={e => setFilterCategory(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
+                        >
+                            <option value="ALL">All Categories</option>
+                            {Object.entries(TASK_CATEGORIES).map(([key, cat]) => (
+                                <option key={key} value={key}>{cat.label}</option>
+                            ))}
+                        </select>
 
-                    <span className="ml-auto text-xs text-gray-400">
-                        {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
-                    </span>
+                        <select
+                            value={filterStatus}
+                            onChange={e => setFilterStatus(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
+                        >
+                            <option value="ACTIVE">Active Tasks</option>
+                            <option value="COMPLETED">Completed Tasks</option>
+                            <option value="ALL">All Tasks</option>
+                        </select>
+
+                        <select
+                            value={filterPriority}
+                            onChange={e => setFilterPriority(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
+                        >
+                            <option value="ALL">All Priorities</option>
+                            {PRIORITY_LEVELS.map(p => (
+                                <option key={p.value} value={p.value}>{p.label}</option>
+                            ))}
+                        </select>
+
+                        {uniqueOwners.length > 0 && (
+                            <select
+                                value={filterOwner}
+                                onChange={e => setFilterOwner(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
+                            >
+                                <option value="ALL">All Owners</option>
+                                {uniqueOwners.map(owner => (
+                                    <option key={owner} value={owner}>{owner}</option>
+                                ))}
+                            </select>
+                        )}
+
+                        <div className="ml-auto flex gap-2 items-center">
+                            <button
+                                onClick={() => setShowCompletedTasks(!showCompletedTasks)}
+                                className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                                    showCompletedTasks 
+                                        ? 'bg-green-100 text-green-700' 
+                                        : 'bg-gray-100 text-gray-600'
+                                }`}
+                            >
+                                {showCompletedTasks ? <Eye size={14} /> : <EyeOff size={14} />}
+                                {showCompletedTasks ? 'Hide' : 'Show'} Completed
+                            </button>
+
+                            <select
+                                value={sortBy}
+                                onChange={e => setSortBy(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
+                            >
+                                <option value="dueDate">Sort: Due Date</option>
+                                <option value="priority">Sort: Priority</option>
+                                <option value="title">Sort: Title</option>
+                                <option value="category">Sort: Category</option>
+                                <option value="status">Sort: Status</option>
+                            </select>
+
+                            <button
+                                onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                            >
+                                {sortDirection === 'asc' ? <SortAsc size={16} /> : <SortDesc size={16} />}
+                            </button>
+
+                            <button
+                                onClick={() => setViewMode(viewMode === 'list' ? 'grouped' : 'list')}
+                                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                            >
+                                {viewMode === 'list' ? <Grid size={16} /> : <List size={16} />}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Active Filters Badge */}
+                    {(filterCategory !== 'ALL' || filterStatus !== 'ACTIVE' || filterPriority !== 'ALL' || filterOwner !== 'ALL' || searchTerm) && (
+                        <div className="flex items-center gap-2 text-xs">
+                            <span className="text-gray-500">Active filters:</span>
+                            {filterCategory !== 'ALL' && (
+                                <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full font-bold">
+                                    {TASK_CATEGORIES[filterCategory].label}
+                                </span>
+                            )}
+                            {filterPriority !== 'ALL' && (
+                                <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full font-bold">
+                                    {filterPriority} Priority
+                                </span>
+                            )}
+                            {filterOwner !== 'ALL' && (
+                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-bold">
+                                    Owner: {filterOwner}
+                                </span>
+                            )}
+                            {searchTerm && (
+                                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full font-bold">
+                                    Search: "{searchTerm}"
+                                </span>
+                            )}
+                            <button
+                                onClick={() => {
+                                    setFilterCategory('ALL');
+                                    setFilterStatus('ACTIVE');
+                                    setFilterPriority('ALL');
+                                    setFilterOwner('ALL');
+                                    setSearchTerm('');
+                                }}
+                                className="text-red-600 hover:underline font-bold"
+                            >
+                                Clear All
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2 border-t">
+                        <span className="text-xs text-gray-500">
+                            Showing {filteredAndSortedTasks.length} of {tasks.length} task{tasks.length !== 1 ? 's' : ''}
+                        </span>
+                        
+                        {selectedTasks.length > 0 && (
+                            <div className="flex gap-2">
+                                <Button
+                                    onClick={handleBulkComplete}
+                                    variant="secondary"
+                                    className="text-xs bg-green-50 text-green-700 border-green-200"
+                                >
+                                    <CheckCircle size={14} className="mr-1" />
+                                    Complete {selectedTasks.length}
+                                </Button>
+                                <Button
+                                    onClick={handleBulkDelete}
+                                    variant="secondary"
+                                    className="text-xs bg-red-50 text-red-700 border-red-200"
+                                >
+                                    <Trash2 size={14} className="mr-1" />
+                                    Delete {selectedTasks.length}
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </Card>
 
-            {/* Tasks Grouped by Category */}
-            <div className="space-y-4">
-                {Object.entries(tasksByCategory).map(([categoryKey, categoryTasks]) => {
-                    const catInfo = TASK_CATEGORIES[categoryKey] || TASK_CATEGORIES['OTHER'];
-                    const CategoryIcon = catInfo.icon;
-                    const isExpanded = expandedCategory === categoryKey;
+            {/* Bulk Select Bar */}
+            {filteredAndSortedTasks.length > 0 && (
+                <Card className="p-3 bg-gray-50">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={selectedTasks.length === filteredAndSortedTasks.length}
+                            onChange={handleSelectAll}
+                            className="w-4 h-4"
+                        />
+                        <span className="text-sm font-bold text-gray-700">
+                            Select All ({filteredAndSortedTasks.length} task{filteredAndSortedTasks.length !== 1 ? 's' : ''})
+                        </span>
+                        {selectedTasks.length > 0 && (
+                            <span className="ml-auto text-xs text-gray-500">
+                                {selectedTasks.length} selected
+                            </span>
+                        )}
+                    </label>
+                </Card>
+            )}
 
-                    return (
-                        <Card key={categoryKey} className={`overflow-hidden ${catInfo.borderColor} border-l-4`}>
-                            <div
-                                className={`p-4 ${catInfo.bgColor} cursor-pointer hover:opacity-80 transition-opacity`}
-                                onClick={() => setExpandedCategory(isExpanded ? null : categoryKey)}
-                            >
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-3">
-                                        <CategoryIcon className={catInfo.color} size={20} />
-                                        <div>
-                                            <h3 className="font-black text-gray-800 uppercase text-sm">
+            {/* Tasks Display - List View */}
+            {viewMode === 'list' && (
+                <div className="space-y-2">
+                    {filteredAndSortedTasks.map(task => {
+                        const catInfo = TASK_CATEGORIES[task.category] || TASK_CATEGORIES['OTHER'];
+                        const CategoryIcon = catInfo.icon;
+                        const isSelected = selectedTasks.includes(task.id);
+
+                        return (
+                            <Card key={task.id} className={`p-4 hover:shadow-md transition-all ${isSelected ? 'ring-2 ring-blue-500' : ''}`}>
+                                <div className="flex items-start gap-3">
+                                    <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedTasks([...selectedTasks, task.id]);
+                                            } else {
+                                                setSelectedTasks(selectedTasks.filter(id => id !== task.id));
+                                            }
+                                        }}
+                                        className="w-4 h-4 mt-1"
+                                    />
+
+                                    <button
+                                        onClick={() => handleToggleComplete(task)}
+                                        className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0 ${
+                                            task.status === 'COMPLETED'
+                                                ? 'bg-green-500 border-green-500'
+                                                : 'border-gray-300 hover:border-green-500'
+                                        }`}
+                                    >
+                                        {task.status === 'COMPLETED' && (
+                                            <CheckCircle size={14} className="text-white" />
+                                        )}
+                                    </button>
+
+                                    <CategoryIcon className={`${catInfo.color} mt-1 flex-shrink-0`} size={18} />
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-start justify-between gap-3 mb-2">
+                                            <div className="flex-1">
+                                                <h4 className={`font-bold text-gray-800 ${
+                                                    task.status === 'COMPLETED' ? 'line-through opacity-50' : ''
+                                                }`}>
+                                                    {task.title}
+                                                </h4>
+                                                {task.description && (
+                                                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                                        {task.description}
+                                                    </p>
+                                                )}
+                                            </div>
+
+                                            <div className="flex gap-1 flex-shrink-0">
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingTask(task);
+                                                        setShowModal(true);
+                                                    }}
+                                                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                >
+                                                    <Edit size={16} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(task.id)}
+                                                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-2 items-center">
+                                            <StatusBadge status={task.status} dueDate={task.dueDate} />
+                                            
+                                            <span className="text-xs text-gray-500">
+                                                📅 {new Date(task.dueDate).toLocaleDateString('en-US', { 
+                                                    month: 'short', 
+                                                    day: 'numeric', 
+                                                    year: 'numeric' 
+                                                })}
+                                            </span>
+
+                                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                                PRIORITY_LEVELS.find(p => p.value === task.priority)?.color || 'bg-gray-100 text-gray-700'
+                                            }`}>
+                                                {task.priority}
+                                            </span>
+
+                                            <span className={`text-xs px-2 py-0.5 rounded-full ${catInfo.bgColor} ${catInfo.color} font-bold`}>
                                                 {catInfo.label}
-                                            </h3>
-                                            <p className="text-xs text-gray-500">
-                                                {categoryTasks.length} task{categoryTasks.length !== 1 ? 's' : ''}
-                                            </p>
+                                            </span>
+
+                                            {task.owner && (
+                                                <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                                                    👤 {task.owner}
+                                                </span>
+                                            )}
+
+                                            {task.recurring !== 'none' && (
+                                                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                                                    🔄 {task.recurring}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
-                                    {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                                 </div>
-                            </div>
+                            </Card>
+                        );
+                    })}
+                </div>
+            )}
 
-                            {isExpanded && (
-                                <div className="divide-y divide-gray-100">
-                                    {categoryTasks.map(task => (
-                                        <div key={task.id} className="p-4 hover:bg-gray-50 transition-colors">
-                                            <div className="flex items-start gap-3">
-                                                <button
-                                                    onClick={() => handleToggleComplete(task)}
-                                                    className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
-                                                        task.status === 'COMPLETED'
-                                                            ? 'bg-green-500 border-green-500'
-                                                            : 'border-gray-300 hover:border-green-500'
-                                                    }`}
-                                                >
-                                                    {task.status === 'COMPLETED' && (
-                                                        <CheckCircle size={14} className="text-white" />
-                                                    )}
-                                                </button>
+            {/* Tasks Display - Grouped View */}
+            {viewMode === 'grouped' && (
+                <div className="space-y-4">
+                    {Object.entries(tasksByCategory).map(([categoryKey, categoryTasks]) => {
+                        const catInfo = TASK_CATEGORIES[categoryKey] || TASK_CATEGORIES['OTHER'];
+                        const CategoryIcon = catInfo.icon;
+                        const isExpanded = expandedCategory === categoryKey || expandedCategory === null;
 
-                                                <div className="flex-1">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div>
-                                                            <h4 className={`font-bold text-gray-800 ${
-                                                                task.status === 'COMPLETED' ? 'line-through opacity-50' : ''
-                                                            }`}>
-                                                                {task.title}
-                                                            </h4>
-                                                            {task.description && (
-                                                                <p className="text-sm text-gray-600 mt-1">
-                                                                    {task.description}
-                                                                </p>
+                        return (
+                            <Card key={categoryKey} className={`overflow-hidden ${catInfo.borderColor} border-l-4`}>
+                                <div
+                                    className={`p-4 ${catInfo.bgColor} cursor-pointer hover:opacity-80 transition-opacity`}
+                                    onClick={() => setExpandedCategory(isExpanded ? null : categoryKey)}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-3">
+                                            <CategoryIcon className={catInfo.color} size={20} />
+                                            <div>
+                                                <h3 className="font-black text-gray-800 uppercase text-sm">
+                                                    {catInfo.label}
+                                                </h3>
+                                                <p className="text-xs text-gray-500">
+                                                    {categoryTasks.length} task{categoryTasks.length !== 1 ? 's' : ''}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                    </div>
+                                </div>
+
+                                {isExpanded && (
+                                    <div className="divide-y divide-gray-100">
+                                        {categoryTasks.map(task => {
+                                            const isSelected = selectedTasks.includes(task.id);
+                                            
+                                            return (
+                                                <div key={task.id} className={`p-4 hover:bg-gray-50 transition-colors ${isSelected ? 'bg-blue-50' : ''}`}>
+                                                    <div className="flex items-start gap-3">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedTasks([...selectedTasks, task.id]);
+                                                                } else {
+                                                                    setSelectedTasks(selectedTasks.filter(id => id !== task.id));
+                                                                }
+                                                            }}
+                                                            className="w-4 h-4 mt-1"
+                                                        />
+
+                                                        <button
+                                                            onClick={() => handleToggleComplete(task)}
+                                                            className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                                                task.status === 'COMPLETED'
+                                                                    ? 'bg-green-500 border-green-500'
+                                                                    : 'border-gray-300 hover:border-green-500'
+                                                            }`}
+                                                        >
+                                                            {task.status === 'COMPLETED' && (
+                                                                <CheckCircle size={14} className="text-white" />
                                                             )}
-                                                            <div className="flex flex-wrap gap-2 mt-2 items-center">
-                                                                <StatusBadge status={task.status} dueDate={task.dueDate} />
-                                                                <span className="text-xs text-gray-500">
-                                                                    📅 Due: {new Date(task.dueDate).toLocaleDateString('en-US', { 
-                                                                        month: 'short', 
-                                                                        day: 'numeric', 
-                                                                        year: 'numeric' 
-                                                                    })}
-                                                                </span>
-                                                                {task.priority === 'HIGH' || task.priority === 'CRITICAL' ? (
-                                                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                                                                        task.priority === 'CRITICAL' 
-                                                                            ? 'bg-red-100 text-red-700' 
-                                                                            : 'bg-orange-100 text-orange-700'
-                                                                    }`}>
-                                                                        {task.priority}
-                                                                    </span>
-                                                                ) : null}
-                                                                {task.recurring !== 'none' && (
-                                                                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
-                                                                        🔄 {task.recurring}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
+                                                        </button>
 
-                                                        <div className="flex gap-1">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setEditingTask(task);
-                                                                    setShowModal(true);
-                                                                }}
-                                                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                            >
-                                                                <Edit size={16} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDelete(task.id)}
-                                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                            >
-                                                                <Trash2 size={16} />
-                                                            </button>
+                                                        <div className="flex-1">
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div>
+                                                                    <h4 className={`font-bold text-gray-800 ${
+                                                                        task.status === 'COMPLETED' ? 'line-through opacity-50' : ''
+                                                                    }`}>
+                                                                        {task.title}
+                                                                    </h4>
+                                                                    {task.description && (
+                                                                        <p className="text-sm text-gray-600 mt-1">
+                                                                            {task.description}
+                                                                        </p>
+                                                                    )}
+                                                                    <div className="flex flex-wrap gap-2 mt-2 items-center">
+                                                                        <StatusBadge status={task.status} dueDate={task.dueDate} />
+                                                                        <span className="text-xs text-gray-500">
+                                                                            📅 Due: {new Date(task.dueDate).toLocaleDateString('en-US', { 
+                                                                                month: 'short', 
+                                                                                day: 'numeric', 
+                                                                                year: 'numeric' 
+                                                                            })}
+                                                                        </span>
+                                                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                                                                            PRIORITY_LEVELS.find(p => p.value === task.priority)?.color || 'bg-gray-100 text-gray-700'
+                                                                        }`}>
+                                                                            {task.priority}
+                                                                        </span>
+                                                                        {task.owner && (
+                                                                            <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                                                                                👤 {task.owner}
+                                                                            </span>
+                                                                        )}
+                                                                        {task.recurring !== 'none' && (
+                                                                            <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                                                                                🔄 {task.recurring}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex gap-1">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setEditingTask(task);
+                                                                            setShowModal(true);
+                                                                        }}
+                                                                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                                    >
+                                                                        <Edit size={16} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDelete(task.id)}
+                                                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </Card>
-                    );
-                })}
-            </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </Card>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* Empty State */}
-            {filteredTasks.length === 0 && (
+            {filteredAndSortedTasks.length === 0 && (
                 <Card className="p-12 text-center">
                     <Calendar className="mx-auto text-gray-300 mb-4" size={64} />
-                    <h3 className="text-xl font-bold text-gray-600 mb-2">No Tasks Found</h3>
+                    <h3 className="text-xl font-bold text-gray-600 mb-2">
+                        {searchTerm || filterCategory !== 'ALL' || filterPriority !== 'ALL' || filterOwner !== 'ALL'
+                            ? 'No Tasks Match Your Filters'
+                            : 'No Tasks Found'}
+                    </h3>
                     <p className="text-gray-500 mb-4">
-                        {filterStatus === 'COMPLETED' 
-                            ? "No completed tasks yet" 
-                            : "Start by creating your first business task"}
+                        {searchTerm || filterCategory !== 'ALL' || filterPriority !== 'ALL' || filterOwner !== 'ALL'
+                            ? 'Try adjusting your filters or search term'
+                            : 'Start by creating your first business task'}
                     </p>
+                    {(searchTerm || filterCategory !== 'ALL' || filterPriority !== 'ALL' || filterOwner !== 'ALL') && (
+                        <Button
+                            onClick={() => {
+                                setFilterCategory('ALL');
+                                setFilterStatus('ACTIVE');
+                                setFilterPriority('ALL');
+                                setFilterOwner('ALL');
+                                setSearchTerm('');
+                            }}
+                            variant="secondary"
+                            className="mb-2"
+                        >
+                            Clear All Filters
+                        </Button>
+                    )}
                     <Button
                         onClick={() => {
                             setEditingTask(null);
