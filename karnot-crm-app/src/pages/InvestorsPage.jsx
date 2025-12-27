@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { Building, Mail, Phone, Globe, Linkedin, Plus, Edit, Trash2, Search, Filter, DollarSign, MapPin, Users, FileText } from 'lucide-react';
+import { Building, Mail, Phone, Globe, Linkedin, Plus, Edit, Trash2, Search, Filter, DollarSign, MapPin, Users, FileText, Grid, List } from 'lucide-react';
 import { importInvestors } from '../utils/importInvestors';
+import InvestorFunnel from '../components/InvestorFunnel';
 
 const InvestorsPage = ({ user, contacts }) => {
   const [investors, setInvestors] = useState([]);
@@ -13,6 +14,9 @@ const InvestorsPage = ({ user, contacts }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingInvestor, setEditingInvestor] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'funnel'
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [duplicates, setDuplicates] = useState([]);
 
   const REGIONS = ['Philippines', 'United Kingdom', 'Malaysia', 'Southeast Asia', 'Global'];
   const INVESTOR_TYPES = ['Venture Capital', 'Family Office', 'Strategic Corporate', 'Impact Investor', 'Revenue-Based Financing', 'Bank/Lender', 'Angel Investor', 'Accelerator', 'Government Fund', 'Utility', 'Energy Company', 'Crowdfunding Platform', 'Infrastructure Fund', 'Climate Fund'];
@@ -71,6 +75,66 @@ const InvestorsPage = ({ user, contacts }) => {
     }
   };
 
+  // Find duplicates
+  const findDuplicates = () => {
+    const nameGroups = {};
+    
+    // Group investors by similar names
+    investors.forEach(investor => {
+      const normalizedName = investor.name?.toLowerCase().trim();
+      if (!normalizedName) return;
+      
+      if (!nameGroups[normalizedName]) {
+        nameGroups[normalizedName] = [];
+      }
+      nameGroups[normalizedName].push(investor);
+    });
+    
+    // Find groups with more than one investor
+    const duplicateGroups = Object.values(nameGroups)
+      .filter(group => group.length > 1)
+      .map(group => ({
+        name: group[0].name,
+        count: group.length,
+        investors: group.sort((a, b) => {
+          // Sort by creation date (oldest first)
+          const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+          const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+          return dateA - dateB;
+        })
+      }));
+    
+    setDuplicates(duplicateGroups);
+    setShowDuplicates(true);
+  };
+
+  // Delete selected duplicates
+  const handleDeleteDuplicates = async (investorsToDelete) => {
+    if (window.confirm(`Delete ${investorsToDelete.length} duplicate investor${investorsToDelete.length !== 1 ? 's' : ''}?`)) {
+      try {
+        for (const investor of investorsToDelete) {
+          await deleteDoc(doc(db, 'users', user.uid, 'investors', investor.id));
+        }
+        loadInvestors();
+        setShowDuplicates(false);
+        alert(`✅ Deleted ${investorsToDelete.length} duplicate${investorsToDelete.length !== 1 ? 's' : ''}!`);
+      } catch (error) {
+        console.error('Error deleting duplicates:', error);
+        alert('Failed to delete some duplicates');
+      }
+    }
+  };
+
+  // Merge duplicates (keep oldest, delete others)
+  const handleMergeDuplicates = async (group) => {
+    const keepInvestor = group.investors[0]; // Keep the oldest
+    const deleteInvestors = group.investors.slice(1); // Delete the rest
+    
+    if (window.confirm(`Keep "${keepInvestor.name}" and delete ${deleteInvestors.length} duplicate${deleteInvestors.length !== 1 ? 's' : ''}?`)) {
+      await handleDeleteDuplicates(deleteInvestors);
+    }
+  };
+
   // Filter investors
   const filteredInvestors = investors.filter(inv => {
     const matchesSearch = inv.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -117,6 +181,41 @@ const InvestorsPage = ({ user, contacts }) => {
         </div>
         
         <div className="flex gap-2">
+          <div className="flex gap-1 border-2 border-gray-200 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`px-3 py-1.5 rounded flex items-center gap-2 text-xs font-bold uppercase transition-all ${
+                viewMode === 'grid' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <Grid size={14} />
+              Grid
+            </button>
+            <button
+              onClick={() => setViewMode('funnel')}
+              className={`px-3 py-1.5 rounded flex items-center gap-2 text-xs font-bold uppercase transition-all ${
+                viewMode === 'funnel' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <List size={14} />
+              Funnel
+            </button>
+          </div>
+
+          {investors.length > 0 && (
+            <button
+              onClick={findDuplicates}
+              className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 font-bold uppercase text-xs tracking-wider flex items-center gap-2"
+            >
+              <Search size={16} />
+              Find Duplicates
+            </button>
+          )}
+          
           {investors.length === 0 && (
             <button
               onClick={handleImportDatabase}
@@ -243,40 +342,51 @@ const InvestorsPage = ({ user, contacts }) => {
         </div>
       </div>
 
-      {/* Investors Grid */}
-      {filteredInvestors.length === 0 ? (
-        <div className="bg-white p-12 rounded-lg border-2 border-dashed border-gray-300 text-center">
-          <Building className="mx-auto mb-4 text-gray-400" size={48} />
-          <h3 className="text-xl font-bold text-gray-700 mb-2">No Investors Found</h3>
-          <p className="text-gray-600 mb-4">
-            {investors.length === 0 
-              ? 'Import the investor database or add your first investor manually'
-              : 'No investors match your search criteria'}
-          </p>
-          {investors.length === 0 && (
-            <button
-              onClick={handleImportDatabase}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold"
-            >
-              📥 Import 43 Investors
-            </button>
-          )}
-        </div>
+      {/* View Toggle: Grid or Funnel */}
+      {viewMode === 'funnel' ? (
+        <InvestorFunnel 
+          investors={investors} 
+          onRefresh={loadInvestors} 
+          user={user} 
+        />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filteredInvestors.map(investor => (
-            <InvestorCard
-              key={investor.id}
-              investor={investor}
-              onEdit={() => {
-                setEditingInvestor(investor);
-                setShowAddModal(true);
-              }}
-              onDelete={() => handleDelete(investor.id)}
-              contacts={contacts}
-            />
-          ))}
-        </div>
+        <>
+          {/* Investors Grid */}
+          {filteredInvestors.length === 0 ? (
+            <div className="bg-white p-12 rounded-lg border-2 border-dashed border-gray-300 text-center">
+              <Building className="mx-auto mb-4 text-gray-400" size={48} />
+              <h3 className="text-xl font-bold text-gray-700 mb-2">No Investors Found</h3>
+              <p className="text-gray-600 mb-4">
+                {investors.length === 0 
+                  ? 'Import the investor database or add your first investor manually'
+                  : 'No investors match your search criteria'}
+              </p>
+              {investors.length === 0 && (
+                <button
+                  onClick={handleImportDatabase}
+                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold"
+                >
+                  📥 Import 43 Investors
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredInvestors.map(investor => (
+                <InvestorCard
+                  key={investor.id}
+                  investor={investor}
+                  onEdit={() => {
+                    setEditingInvestor(investor);
+                    setShowAddModal(true);
+                  }}
+                  onDelete={() => handleDelete(investor.id)}
+                  contacts={contacts}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {/* Add/Edit Modal */}
@@ -307,6 +417,15 @@ const InvestorsPage = ({ user, contacts }) => {
           regions={REGIONS}
           types={INVESTOR_TYPES}
           priorities={PRIORITIES}
+        />
+      )}
+
+      {/* Duplicates Modal */}
+      {showDuplicates && (
+        <DuplicatesModal
+          duplicates={duplicates}
+          onMerge={handleMergeDuplicates}
+          onClose={() => setShowDuplicates(false)}
         />
       )}
     </div>
@@ -713,6 +832,150 @@ const InvestorModal = ({ investor, onSave, onCancel, regions, types, priorities 
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+};
+
+// Duplicates Modal Component
+const DuplicatesModal = ({ duplicates, onMerge, onClose }) => {
+  if (duplicates.length === 0) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+          <h2 className="text-2xl font-black mb-4 uppercase text-green-600">
+            ✅ No Duplicates Found!
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Your investor database is clean. No duplicate investors detected.
+          </p>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const totalDuplicates = duplicates.reduce((sum, group) => sum + (group.count - 1), 0);
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+      <div className="bg-white rounded-lg p-6 max-w-4xl w-full my-8">
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <h2 className="text-2xl font-black uppercase text-red-600">
+              ⚠️ {totalDuplicates} Duplicate{totalDuplicates !== 1 ? 's' : ''} Found
+            </h2>
+            <p className="text-gray-600 mt-1">
+              {duplicates.length} investor{duplicates.length !== 1 ? 's have' : ' has'} duplicate entries
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 text-2xl"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+          {duplicates.map((group, idx) => (
+            <div key={idx} className="border-2 border-yellow-200 rounded-lg p-4 bg-yellow-50">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h3 className="font-black text-lg">{group.name}</h3>
+                  <p className="text-sm text-gray-600">
+                    {group.count} duplicate entries found
+                  </p>
+                </div>
+                <button
+                  onClick={() => onMerge(group)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold text-sm"
+                >
+                  Keep Oldest, Delete {group.count - 1}
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {group.investors.map((investor, invIdx) => (
+                  <div
+                    key={investor.id}
+                    className={`p-3 rounded-lg border-2 ${
+                      invIdx === 0 
+                        ? 'bg-green-50 border-green-300' 
+                        : 'bg-white border-gray-200'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          {invIdx === 0 && (
+                            <span className="px-2 py-0.5 bg-green-600 text-white rounded text-xs font-bold">
+                              KEEP
+                            </span>
+                          )}
+                          {invIdx > 0 && (
+                            <span className="px-2 py-0.5 bg-red-600 text-white rounded text-xs font-bold">
+                              DELETE
+                            </span>
+                          )}
+                          <span className="text-sm font-bold">{investor.type}</span>
+                          <span className="text-sm text-gray-600">•</span>
+                          <span className="text-sm text-gray-600">{investor.region}</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mt-2">
+                          {investor.email && (
+                            <div>
+                              <span className="font-bold">Email:</span> {investor.email}
+                            </div>
+                          )}
+                          {investor.contactPerson && (
+                            <div>
+                              <span className="font-bold">Contact:</span> {investor.contactPerson}
+                            </div>
+                          )}
+                          {investor.stage && (
+                            <div>
+                              <span className="font-bold">Stage:</span> {investor.stage}
+                            </div>
+                          )}
+                          {investor.priority && (
+                            <div>
+                              <span className="font-bold">Priority:</span> {investor.priority}
+                            </div>
+                          )}
+                          {investor.createdAt && (
+                            <div className="col-span-2">
+                              <span className="font-bold">Created:</span>{' '}
+                              {new Date(investor.createdAt?.toDate?.() || investor.createdAt).toLocaleDateString()}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 pt-4 border-t flex justify-between items-center">
+          <p className="text-sm text-gray-600">
+            💡 <strong>Tip:</strong> The oldest entry will be kept (marked in green). Newer duplicates will be deleted.
+          </p>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 font-bold"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
