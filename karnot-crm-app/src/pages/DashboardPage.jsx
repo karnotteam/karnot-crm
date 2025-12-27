@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { 
     DollarSign, TrendingUp, CheckCircle, Target, Globe, 
     Briefcase, Calendar, Users, Wrench, PhoneCall, Building,
-    AlertTriangle, Activity, Package, FileText, TrendingDown
+    AlertTriangle, Activity, Package, FileText, TrendingDown,
+    MapPin, Award, Zap
 } from 'lucide-react';
 import { Card, BOI_TARGETS_USD } from '../data/constants.jsx';
 
@@ -106,6 +107,41 @@ const DashboardPage = ({
 
         return { totalQuotes, totalValue, wonQuotes, wonValue, lostQuotes, pipelineValue };
     }, [quotes]);
+
+    // --- 1B. Calculate Export Operations Stats (NEW) ---
+    const exportStats = useMemo(() => {
+        const exportCompanies = (companies || []).filter(c => c.isExportTarget === true);
+        const totalExportCompanies = exportCompanies.length;
+        const vipTargets = exportCompanies.filter(c => c.vipTarget === true).length;
+        const highPriority = exportCompanies.filter(c => c.priority === 'High').length;
+        
+        // Count by region
+        const byRegion = exportCompanies.reduce((acc, c) => {
+            const region = c.region || 'Unknown';
+            acc[region] = (acc[region] || 0) + 1;
+            return acc;
+        }, {});
+        
+        const activeMarkets = Object.keys(byRegion).length;
+        
+        // Calculate regional distribution
+        const malaysia = byRegion['MALAYSIA'] || 0;
+        const thailand = byRegion['THAILAND'] || 0;
+        const vietnam = byRegion['VIETNAM'] || 0;
+        const uk = byRegion['UK'] || 0;
+        
+        return {
+            totalExportCompanies,
+            vipTargets,
+            highPriority,
+            activeMarkets,
+            byRegion,
+            malaysia,
+            thailand,
+            vietnam,
+            uk
+        };
+    }, [companies]);
 
     // --- 2. Calculate Financial Stats (P&L from ManagementAccounts logic) ---
     const financials = useMemo(() => {
@@ -319,6 +355,87 @@ const DashboardPage = ({
                     </div>
                 </Card>
             </div>
+
+            {/* --- NEW: EXPORT OPERATIONS ROW --- */}
+            {exportStats.totalExportCompanies > 0 && (
+                <Card className="bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-200">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <div className="p-2 bg-orange-600 rounded-lg">
+                                <Globe className="text-white" size={20}/>
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-black text-gray-800 uppercase">Export Operations</h3>
+                                <p className="text-xs text-gray-600 font-bold">International Market Penetration</p>
+                            </div>
+                        </div>
+                        <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-xs font-black">
+                            BOI EXPORT
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                        {/* Total Partners */}
+                        <div className="bg-white rounded-xl p-4 border-2 border-orange-100 text-center">
+                            <Building className="mx-auto text-orange-600 mb-2" size={24}/>
+                            <p className="text-2xl font-black text-gray-800">{exportStats.totalExportCompanies}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold">Partners</p>
+                        </div>
+
+                        {/* VIP Targets */}
+                        <div className="bg-white rounded-xl p-4 border-2 border-purple-100 text-center">
+                            <Award className="mx-auto text-purple-600 mb-2" size={24}/>
+                            <p className="text-2xl font-black text-gray-800">{exportStats.vipTargets}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold">VIP Targets</p>
+                        </div>
+
+                        {/* High Priority */}
+                        <div className="bg-white rounded-xl p-4 border-2 border-red-100 text-center">
+                            <Zap className="mx-auto text-red-600 mb-2" size={24}/>
+                            <p className="text-2xl font-black text-gray-800">{exportStats.highPriority}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold">High Priority</p>
+                        </div>
+
+                        {/* Active Markets */}
+                        <div className="bg-white rounded-xl p-4 border-2 border-blue-100 text-center">
+                            <MapPin className="mx-auto text-blue-600 mb-2" size={24}/>
+                            <p className="text-2xl font-black text-gray-800">{exportStats.activeMarkets}</p>
+                            <p className="text-[10px] text-gray-500 uppercase font-bold">Markets</p>
+                        </div>
+
+                        {/* Regional Breakdown */}
+                        <div className="bg-white rounded-xl p-4 border-2 border-green-100">
+                            <p className="text-[10px] text-gray-500 uppercase font-black mb-2 text-center">By Region</p>
+                            <div className="space-y-1 text-xs">
+                                {exportStats.malaysia > 0 && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600 font-bold">🇲🇾 MY</span>
+                                        <span className="font-black text-gray-800">{exportStats.malaysia}</span>
+                                    </div>
+                                )}
+                                {exportStats.thailand > 0 && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600 font-bold">🇹🇭 TH</span>
+                                        <span className="font-black text-gray-800">{exportStats.thailand}</span>
+                                    </div>
+                                )}
+                                {exportStats.vietnam > 0 && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600 font-bold">🇻🇳 VN</span>
+                                        <span className="font-black text-gray-800">{exportStats.vietnam}</span>
+                                    </div>
+                                )}
+                                {exportStats.uk > 0 && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-600 font-bold">🇬🇧 UK</span>
+                                        <span className="font-black text-gray-800">{exportStats.uk}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+            )}
 
             {/* --- MAIN CONTENT ROW: BOI COMPLIANCE & REVENUE TARGET --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
