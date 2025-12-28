@@ -1,11 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
     DollarSign, TrendingUp, CheckCircle, Target, Globe, 
     Briefcase, Calendar, Users, Wrench, PhoneCall, Building,
     AlertTriangle, Activity, Package, FileText, TrendingDown,
-    MapPin, Award, Zap
+    MapPin, Award, Zap, Download, Printer
 } from 'lucide-react';
-import { Card, BOI_TARGETS_USD } from '../data/constants.jsx';
+import { Card, BOI_TARGETS_USD, Button } from '../data/constants.jsx';
 
 // Helper to format currency
 const formatCurrency = (value) => 
@@ -92,6 +92,7 @@ const DashboardPage = ({
     serviceContracts = [],
     companies = []
 }) => {
+    const [generating, setGenerating] = useState(false);
     
     // --- 1. Calculate Sales Pipeline Stats ---
     const pipelineStats = useMemo(() => {
@@ -108,14 +109,13 @@ const DashboardPage = ({
         return { totalQuotes, totalValue, wonQuotes, wonValue, lostQuotes, pipelineValue };
     }, [quotes]);
 
-    // --- 1B. Calculate Export Operations Stats (NEW) ---
+    // --- 1B. Calculate Export Operations Stats ---
     const exportStats = useMemo(() => {
         const exportCompanies = (companies || []).filter(c => c.isExportTarget === true);
         const totalExportCompanies = exportCompanies.length;
         const vipTargets = exportCompanies.filter(c => c.vipTarget === true).length;
         const highPriority = exportCompanies.filter(c => c.priority === 'High').length;
         
-        // Count by region
         const byRegion = exportCompanies.reduce((acc, c) => {
             const region = c.region || 'Unknown';
             acc[region] = (acc[region] || 0) + 1;
@@ -123,8 +123,6 @@ const DashboardPage = ({
         }, {});
         
         const activeMarkets = Object.keys(byRegion).length;
-        
-        // Calculate regional distribution
         const malaysia = byRegion['MALAYSIA'] || 0;
         const thailand = byRegion['THAILAND'] || 0;
         const vietnam = byRegion['VIETNAM'] || 0;
@@ -143,11 +141,10 @@ const DashboardPage = ({
         };
     }, [companies]);
 
-    // --- 2. Calculate Financial Stats (P&L from ManagementAccounts logic) ---
+    // --- 2. Calculate Financial Stats ---
     const financials = useMemo(() => {
-        const rate = 58.5; // PHP per USD
+        const rate = 58.5;
         
-        // BOI Revenue (from quotes)
         const boiRevenue = quotes
             .filter(q => ['WON', 'INVOICED', 'PAID'].includes(q.status) && q.boiActivity !== false)
             .reduce((sum, q) => {
@@ -155,19 +152,16 @@ const DashboardPage = ({
                 return sum + (Number(q.finalSalesPrice) * quoteRate);
             }, 0);
 
-        // Non-BOI Revenue (from service invoices)
         const nonBoiRevenue = (serviceInvoices || [])
             .filter(inv => inv.status === 'PAID' || inv.status === 'INVOICED')
             .reduce((sum, inv) => sum + Number(inv.totalAmount || 0), 0);
         
         const totalRevenue = boiRevenue + nonBoiRevenue;
 
-        // COGS
         const cogs = ledgerEntries
             .filter(e => ['Cost of Goods Sold', 'Project Materials', 'Direct Materials'].includes(e.category))
             .reduce((sum, e) => sum + Number(e.amountPHP || 0), 0);
 
-        // OpEx
         const opex = ledgerEntries
             .filter(e => !['Cost of Goods Sold', 'Project Materials', 'Direct Materials'].includes(e.category))
             .reduce((sum, e) => sum + Number(e.amountPHP || 0), 0);
@@ -175,6 +169,7 @@ const DashboardPage = ({
         const grossProfit = totalRevenue - cogs;
         const netIncome = totalRevenue - cogs - opex;
         const margin = totalRevenue > 0 ? (netIncome / totalRevenue) * 100 : 0;
+        const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
         return {
             boiRevenue,
@@ -184,7 +179,8 @@ const DashboardPage = ({
             grossProfit,
             opex,
             netIncome,
-            margin
+            margin,
+            grossMargin
         };
     }, [quotes, ledgerEntries, serviceInvoices]);
 
@@ -278,9 +274,104 @@ const DashboardPage = ({
         };
     }, [appointments, agents, companies]);
 
+    // --- INVESTOR REPORT GENERATION ---
+    const generateInvestorReport = () => {
+        setGenerating(true);
+        
+        const reportData = {
+            period: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+            generatedDate: new Date().toISOString(),
+            
+            revenue: {
+                total: financials.totalRevenue,
+                boi: financials.boiRevenue,
+                service: financials.nonBoiRevenue,
+            },
+            profitability: {
+                grossProfit: financials.grossProfit,
+                grossMargin: financials.grossMargin,
+                netIncome: financials.netIncome,
+                netMargin: financials.margin,
+                cogs: financials.cogs,
+                opex: financials.opex
+            },
+            sales: {
+                pipelineValue: pipelineStats.pipelineValue,
+                wonValue: pipelineStats.wonValue,
+                totalQuotes: pipelineStats.totalQuotes,
+                wonQuotes: pipelineStats.wonQuotes.length
+            },
+            boi: {
+                exportRevenue: boiCompliance.exportRevenue,
+                domesticRevenue: boiCompliance.domesticRevenue,
+                exportPercentage: boiCompliance.exportPercentage,
+                isCompliant: boiCompliance.isCompliant,
+                annualTarget: boiCompliance.annualTarget,
+                progress: boiCompliance.progressPercentage
+            },
+            operations: {
+                activeContracts: serviceStats.activeContracts,
+                serviceRevenue: serviceStats.serviceRevenue,
+                upcomingAppointments: salesActivity.upcomingAppts,
+                activeAgents: salesActivity.activeAgents,
+                customerAccounts: salesActivity.customerAccounts,
+                targetAccounts: salesActivity.targetAccounts
+            },
+            export: exportStats
+        };
+        
+        // Download JSON for now (can be sent to Python backend later)
+        const dataStr = JSON.stringify(reportData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Karnot_Report_Data_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        setGenerating(false);
+        alert('📊 Report data downloaded!\n\nTo generate PDF:\n1. Run: python3 generate_investor_report.py\n2. Upload the JSON when prompted\n3. PDF will be generated!');
+    };
+
     return (
         <div className="space-y-6 pb-10">
-            <h2 className="text-3xl font-bold text-gray-800">Executive Dashboard</h2>
+            {/* HEADER WITH INVESTOR REPORT BUTTON */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                <h2 className="text-3xl font-bold text-gray-800">Executive Dashboard</h2>
+                
+                <div className="flex gap-2">
+                    <Button
+                        onClick={generateInvestorReport}
+                        disabled={generating}
+                        variant="primary"
+                        className="bg-purple-600 hover:bg-purple-700 font-bold uppercase text-xs tracking-wider h-10"
+                    >
+                        {generating ? (
+                            <>
+                                <Activity size={16} className="mr-2 animate-spin" />
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                <Download size={16} className="mr-2" />
+                                Investor Report
+                            </>
+                        )}
+                    </Button>
+                    
+                    <Button
+                        onClick={() => window.print()}
+                        variant="secondary"
+                        className="font-bold uppercase text-xs tracking-wider h-10"
+                    >
+                        <Printer size={16} className="mr-2" />
+                        Print
+                    </Button>
+                </div>
+            </div>
 
             {/* --- TOP ROW: PRIMARY KPI CARDS --- */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -356,7 +447,7 @@ const DashboardPage = ({
                 </Card>
             </div>
 
-            {/* --- NEW: EXPORT OPERATIONS ROW --- */}
+            {/* --- EXPORT OPERATIONS ROW --- */}
             {exportStats.totalExportCompanies > 0 && (
                 <Card className="bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-200">
                     <div className="flex items-center justify-between mb-4">
@@ -375,35 +466,30 @@ const DashboardPage = ({
                     </div>
 
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        {/* Total Partners */}
                         <div className="bg-white rounded-xl p-4 border-2 border-orange-100 text-center">
                             <Building className="mx-auto text-orange-600 mb-2" size={24}/>
                             <p className="text-2xl font-black text-gray-800">{exportStats.totalExportCompanies}</p>
                             <p className="text-[10px] text-gray-500 uppercase font-bold">Partners</p>
                         </div>
 
-                        {/* VIP Targets */}
                         <div className="bg-white rounded-xl p-4 border-2 border-purple-100 text-center">
                             <Award className="mx-auto text-purple-600 mb-2" size={24}/>
                             <p className="text-2xl font-black text-gray-800">{exportStats.vipTargets}</p>
                             <p className="text-[10px] text-gray-500 uppercase font-bold">VIP Targets</p>
                         </div>
 
-                        {/* High Priority */}
                         <div className="bg-white rounded-xl p-4 border-2 border-red-100 text-center">
                             <Zap className="mx-auto text-red-600 mb-2" size={24}/>
                             <p className="text-2xl font-black text-gray-800">{exportStats.highPriority}</p>
                             <p className="text-[10px] text-gray-500 uppercase font-bold">High Priority</p>
                         </div>
 
-                        {/* Active Markets */}
                         <div className="bg-white rounded-xl p-4 border-2 border-blue-100 text-center">
                             <MapPin className="mx-auto text-blue-600 mb-2" size={24}/>
                             <p className="text-2xl font-black text-gray-800">{exportStats.activeMarkets}</p>
                             <p className="text-[10px] text-gray-500 uppercase font-bold">Markets</p>
                         </div>
 
-                        {/* Regional Breakdown */}
                         <div className="bg-white rounded-xl p-4 border-2 border-green-100">
                             <p className="text-[10px] text-gray-500 uppercase font-black mb-2 text-center">By Region</p>
                             <div className="space-y-1 text-xs">
@@ -437,10 +523,9 @@ const DashboardPage = ({
                 </Card>
             )}
 
-            {/* --- MAIN CONTENT ROW: BOI COMPLIANCE & REVENUE TARGET --- */}
+            {/* --- BOI COMPLIANCE & REVENUE TARGET --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                {/* 1. EXPORT COMPLIANCE CARD */}
                 <Card>
                     <div className="flex justify-between items-start mb-6">
                         <div>
@@ -479,7 +564,6 @@ const DashboardPage = ({
                     </div>
                 </Card>
 
-                {/* 2. REVENUE TARGET CARD */}
                 <Card>
                     <div className="flex justify-between items-start mb-6">
                         <div>
@@ -516,10 +600,9 @@ const DashboardPage = ({
                 </Card>
             </div>
 
-            {/* --- FINANCIALS OVERVIEW ROW --- */}
+            {/* --- FINANCIALS OVERVIEW --- */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                {/* PROFIT & LOSS SUMMARY */}
                 <Card>
                     <div className="flex items-center gap-2 mb-6">
                         <Activity className="text-indigo-600" size={20}/>
@@ -579,7 +662,6 @@ const DashboardPage = ({
                     </div>
                 </Card>
 
-                {/* SALES & SERVICE ACTIVITY */}
                 <Card>
                     <div className="flex items-center gap-2 mb-6">
                         <Target className="text-cyan-600" size={20}/>
@@ -587,7 +669,6 @@ const DashboardPage = ({
                     </div>
 
                     <div className="space-y-4">
-                        {/* Accounts Overview */}
                         <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
                             <p className="text-xs font-black uppercase text-slate-500 mb-3">Account Portfolio</p>
                             <div className="grid grid-cols-2 gap-3">
@@ -604,7 +685,6 @@ const DashboardPage = ({
                             </div>
                         </div>
 
-                        {/* Appointments */}
                         <div className="p-4 bg-cyan-50 rounded-xl border border-cyan-100">
                             <p className="text-xs font-black uppercase text-cyan-700 mb-3">Appointments</p>
                             <div className="flex justify-between items-center">
@@ -619,7 +699,6 @@ const DashboardPage = ({
                             </div>
                         </div>
 
-                        {/* Service Operations */}
                         <div className="p-4 bg-orange-50 rounded-xl border border-orange-100">
                             <p className="text-xs font-black uppercase text-orange-700 mb-3">Service Operations</p>
                             <div className="space-y-2">
@@ -638,7 +717,6 @@ const DashboardPage = ({
                             </div>
                         </div>
 
-                        {/* Sales Team */}
                         <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                             <p className="text-xs font-black uppercase text-indigo-700 mb-3">Sales Team</p>
                             <div className="flex items-center justify-between">
@@ -655,7 +733,7 @@ const DashboardPage = ({
                 </Card>
             </div>
 
-            {/* --- QUICK ALERTS & NOTIFICATIONS --- */}
+            {/* --- ALERTS --- */}
             {(!boiCompliance.isCompliant || financials.netIncome < 0 || salesActivity.upcomingAppts < 5) && (
                 <Card className="border-l-4 border-yellow-500 bg-yellow-50">
                     <div className="flex items-start gap-3">
