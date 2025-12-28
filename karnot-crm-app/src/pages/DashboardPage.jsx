@@ -23,7 +23,7 @@ const MiniBarChart = ({ data, height = 50 }) => {
         <div className="flex items-end gap-0.5 h-12 mt-2">
             {data.map((value, idx) => (
                 <div key={idx} className="flex-1 bg-blue-400 rounded-t transition-all duration-300" 
-                     style={{ height: `${(value / max) * 100}%`, minHeight: '3px' }} />
+                      style={{ height: `${(value / max) * 100}%`, minHeight: '3px' }} />
             ))}
         </div>
     );
@@ -473,22 +473,6 @@ const DashboardPage = ({
             setGenerating(false);
         }
     };
-        
-        // Download JSON for now (can be sent to Python backend later)
-        const dataStr = JSON.stringify(reportData, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Karnot_Report_Data_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        setGenerating(false);
-        alert('📊 Report data downloaded!\n\nTo generate PDF:\n1. Run: python3 generate_investor_report.py\n2. Upload the JSON when prompted\n3. PDF will be generated!');
-    };
 
     return (
         <div className="space-y-6 pb-10">
@@ -525,8 +509,6 @@ const DashboardPage = ({
                         Print
                     </Button>
                 </div>
-            </div>
-
             </div>
 
             {/* --- NEW: PROFESSIONAL BUSINESS METRICS ROW --- */}
@@ -624,6 +606,7 @@ const DashboardPage = ({
                     <div className={`p-3 rounded-full ${boiCompliance.isCompliant ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
                         <Globe size={24}/>
                     </div>
+                    <div>
                         <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Export Ratio</p>
                         <p className="text-xl font-extrabold text-gray-800">{boiCompliance.exportPercentage.toFixed(1)}% <span className="text-xs text-gray-400 font-normal">/ 70%</span></p>
                     </div>
