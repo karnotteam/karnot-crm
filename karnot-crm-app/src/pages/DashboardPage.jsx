@@ -3,7 +3,7 @@ import {
     DollarSign, TrendingUp, CheckCircle, Target, Globe, 
     Briefcase, Calendar, Users, Wrench, PhoneCall, Building,
     AlertTriangle, Activity, Package, FileText, TrendingDown,
-    MapPin, Award, Zap, Download, Printer
+    MapPin, Award, Zap, Download, Printer, Flame, Wallet
 } from 'lucide-react';
 import { Card, BOI_TARGETS_USD, Button } from '../data/constants.jsx';
 
@@ -13,6 +13,45 @@ const formatCurrency = (value) =>
 
 const formatPHP = (value) => 
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(value);
+
+const formatPHP = (value) => 
+    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(value);
+
+// --- NEW CHART COMPONENTS ---
+
+const MiniBarChart = ({ data, height = 50 }) => {
+    if (!data || data.length === 0) return null;
+    const max = Math.max(...data);
+    return (
+        <div className="flex items-end gap-0.5 h-12 mt-2">
+            {data.map((value, idx) => (
+                <div key={idx} className="flex-1 bg-blue-400 rounded-t transition-all duration-300" 
+                     style={{ height: `${(value / max) * 100}%`, minHeight: '3px' }} />
+            ))}
+        </div>
+    );
+};
+
+const ProgressCircle = ({ percentage, size = 70 }) => {
+    const radius = 30;
+    const circumference = radius * 2 * Math.PI;
+    const offset = circumference - (percentage / 100) * circumference;
+    return (
+        <div className="relative inline-flex">
+            <svg width={size} height={size}>
+                <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#e5e7eb" strokeWidth="6"/>
+                <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="#9333EA" strokeWidth="6"
+                    strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
+                    transform={`rotate(-90 ${size/2} ${size/2})`} className="transition-all duration-1000"/>
+            </svg>
+            <span className="absolute inset-0 flex items-center justify-center text-sm font-black">
+                {percentage.toFixed(0)}%
+            </span>
+        </div>
+    );
+};
+
+// --- CSS-Based Chart Components ---
 
 // --- CSS-Based Chart Components ---
 
@@ -273,6 +312,174 @@ const DashboardPage = ({
             customerAccounts
         };
     }, [appointments, agents, companies]);
+
+    }, [appointments, agents, companies]);
+
+    // --- 6. PROFESSIONAL BUSINESS METRICS ---
+    const businessMetrics = useMemo(() => {
+        // MRR (Monthly Recurring Revenue)
+        const mrr = serviceStats.serviceRevenue;
+        const arr = mrr * 12;
+        
+        // CAC (Customer Acquisition Cost)
+        const marketingSpend = ledgerEntries
+            .filter(e => e.category === 'Marketing' || e.category === 'Sales & Marketing')
+            .reduce((sum, e) => sum + Number(e.amountPHP || 0), 0);
+        
+        const newCustomers = pipelineStats.wonQuotes.length || 1;
+        const cac = marketingSpend / newCustomers;
+        
+        // LTV (Lifetime Value)
+        const avgContractValue = pipelineStats.wonValue / newCustomers;
+        const avgContractLengthMonths = 36; // 3 years
+        const ltv = avgContractValue * (financials.grossMargin / 100) * avgContractLengthMonths;
+        
+        // LTV:CAC Ratio
+        const ltvCacRatio = cac > 0 ? ltv / cac : 0;
+        
+        // Burn Rate & Runway
+        const monthlyBurn = financials.opex / 12;
+        const estimatedCash = 500000; // Update this with your actual cash balance
+        const runway = monthlyBurn > 0 ? estimatedCash / monthlyBurn : 999;
+        
+        // Unit Economics
+        const avgDealSize = pipelineStats.wonValue / Math.max(pipelineStats.wonQuotes.length, 1);
+        const avgGrossMargin = avgDealSize * (financials.grossMargin / 100);
+        const paybackMonths = cac > 0 ? cac / (avgGrossMargin / 12) : 0;
+        
+        // Monthly revenue trend (last 6 months simulation)
+        const monthlyRevenue = [0.6, 0.7, 0.8, 0.85, 0.92, 1.0].map(x => financials.totalRevenue * x);
+        
+        return {
+            mrr,
+            arr,
+            cac,
+            ltv,
+            ltvCacRatio,
+            burnRate: monthlyBurn,
+            runway,
+            avgDealSize,
+            avgGrossMargin,
+            paybackMonths,
+            monthlyRevenue
+        };
+    }, [pipelineStats, financials, ledgerEntries, serviceStats]);
+
+// --- ONE-CLICK PDF GENERATION ---
+    const generatePDF = async () => {
+        setGenerating(true);
+        
+        try {
+            if (!window.jspdf) {
+                alert('⚠️ Loading PDF library... Please refresh and try again.');
+                setGenerating(false);
+                return;
+            }
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // PAGE 1: COVER
+            doc.setFillColor(255, 107, 53); // Karnot Orange
+            doc.rect(0, 0, 210, 40, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(24);
+            doc.setFont('helvetica', 'bold');
+            doc.text('KARNOT ENERGY SOLUTIONS', 105, 20, { align: 'center' });
+            doc.setFontSize(14);
+            doc.text('Monthly Investor Report', 105, 30, { align: 'center' });
+            
+            doc.setTextColor(0);
+            doc.setFontSize(12);
+            doc.text(new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), 105, 50, { align: 'center' });
+            
+            // Executive Summary
+            doc.setFillColor(245, 245, 245);
+            doc.rect(15, 60, 180, 95, 'F');
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text('EXECUTIVE SUMMARY', 20, 70);
+            
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            let y = 80;
+            doc.text(`Revenue: ${formatPHP(financials.totalRevenue)}`, 25, y); y += 7;
+            doc.text(`Net Income: ${formatPHP(financials.netIncome)}`, 25, y); y += 7;
+            doc.text(`Gross Margin: ${financials.grossMargin.toFixed(1)}%`, 25, y); y += 7;
+            doc.text(`Pipeline: ${formatCurrency(pipelineStats.pipelineValue)}`, 25, y); y += 7;
+            doc.text(`Export: ${boiCompliance.exportPercentage.toFixed(1)}% ${boiCompliance.isCompliant ? '✓' : '✗'}`, 25, y); y += 7;
+            doc.text(`LTV:CAC: ${businessMetrics.ltvCacRatio.toFixed(2)}:1`, 25, y); y += 7;
+            doc.text(`ARR: ${formatPHP(businessMetrics.arr)}`, 25, y); y += 7;
+            doc.text(`MRR: ${formatPHP(businessMetrics.mrr)}`, 25, y); y += 7;
+            doc.text(`Burn: ${formatPHP(businessMetrics.burnRate)}/mo`, 25, y); y += 7;
+            doc.text(`Runway: ${businessMetrics.runway.toFixed(0)} months`, 25, y);
+            
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 105, 280, { align: 'center' });
+            doc.text('Confidential - For Investor Use Only', 105, 285, { align: 'center' });
+            
+            // PAGE 2: FINANCIALS
+            doc.addPage();
+            doc.setTextColor(0);
+            doc.setFillColor(74, 144, 226);
+            doc.rect(0, 0, 210, 25, 'F');
+            doc.setTextColor(255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Financial Performance', 20, 15);
+            
+            doc.setTextColor(0);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            y = 35;
+            doc.text(`BOI Revenue: ${formatPHP(financials.boiRevenue)}`, 25, y); y += 6;
+            doc.text(`Service Revenue: ${formatPHP(financials.nonBoiRevenue)}`, 25, y); y += 6;
+            doc.text(`Total Revenue: ${formatPHP(financials.totalRevenue)}`, 25, y); y += 8;
+            doc.text(`COGS: ${formatPHP(financials.cogs)}`, 25, y); y += 6;
+            doc.text(`Gross Profit: ${formatPHP(financials.grossProfit)} (${financials.grossMargin.toFixed(1)}%)`, 25, y); y += 6;
+            doc.text(`OpEx: ${formatPHP(financials.opex)}`, 25, y); y += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Net Income: ${formatPHP(financials.netIncome)} (${financials.margin.toFixed(1)}%)`, 25, y);
+            
+            // PAGE 3: SALES & BOI
+            doc.addPage();
+            doc.setFillColor(123, 31, 162);
+            doc.rect(0, 0, 210, 25, 'F');
+            doc.setTextColor(255);
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Sales & BOI Compliance', 20, 15);
+            
+            doc.setTextColor(0);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            y = 35;
+            doc.text(`Pipeline: ${formatCurrency(pipelineStats.pipelineValue)}`, 25, y); y += 6;
+            doc.text(`Won (YTD): ${formatCurrency(pipelineStats.wonValue)}`, 25, y); y += 6;
+            doc.text(`Quotes: ${pipelineStats.totalQuotes} (${pipelineStats.wonQuotes.length} won)`, 25, y); y += 6;
+            doc.text(`Win Rate: ${(pipelineStats.wonQuotes.length / Math.max(pipelineStats.totalQuotes, 1) * 100).toFixed(1)}%`, 25, y); y += 10;
+            
+            doc.setFont('helvetica', 'bold');
+            doc.text('BOI Compliance:', 25, y); y += 8;
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Export: ${formatCurrency(boiCompliance.exportRevenue)}`, 25, y); y += 6;
+            doc.text(`Domestic: ${formatCurrency(boiCompliance.domesticRevenue)}`, 25, y); y += 6;
+            doc.text(`Export %: ${boiCompliance.exportPercentage.toFixed(1)}%`, 25, y); y += 6;
+            doc.text(`Status: ${boiCompliance.isCompliant ? 'COMPLIANT ✓' : 'ACTION REQUIRED ✗'}`, 25, y); y += 6;
+            doc.text(`Target: ${formatCurrency(boiCompliance.annualTarget)}`, 25, y); y += 6;
+            doc.text(`Progress: ${boiCompliance.progressPercentage.toFixed(1)}%`, 25, y);
+            
+            doc.save(`Karnot_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+            alert('✅ PDF Downloaded Successfully!');
+            
+        } catch (error) {
+            console.error('PDF Error:', error);
+            alert('❌ Error generating PDF. Check console.');
+        } finally {
+            setGenerating(false);
+        }
+    };
 
     // --- INVESTOR REPORT GENERATION ---
     const generateInvestorReport = () => {
