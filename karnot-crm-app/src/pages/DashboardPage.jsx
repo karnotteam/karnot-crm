@@ -473,52 +473,6 @@ const DashboardPage = ({
             setGenerating(false);
         }
     };
-
-    // --- INVESTOR REPORT GENERATION ---
-    const generateInvestorReport = () => {
-        setGenerating(true);
-        
-        const reportData = {
-            period: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-            generatedDate: new Date().toISOString(),
-            
-            revenue: {
-                total: financials.totalRevenue,
-                boi: financials.boiRevenue,
-                service: financials.nonBoiRevenue,
-            },
-            profitability: {
-                grossProfit: financials.grossProfit,
-                grossMargin: financials.grossMargin,
-                netIncome: financials.netIncome,
-                netMargin: financials.margin,
-                cogs: financials.cogs,
-                opex: financials.opex
-            },
-            sales: {
-                pipelineValue: pipelineStats.pipelineValue,
-                wonValue: pipelineStats.wonValue,
-                totalQuotes: pipelineStats.totalQuotes,
-                wonQuotes: pipelineStats.wonQuotes.length
-            },
-            boi: {
-                exportRevenue: boiCompliance.exportRevenue,
-                domesticRevenue: boiCompliance.domesticRevenue,
-                exportPercentage: boiCompliance.exportPercentage,
-                isCompliant: boiCompliance.isCompliant,
-                annualTarget: boiCompliance.annualTarget,
-                progress: boiCompliance.progressPercentage
-            },
-            operations: {
-                activeContracts: serviceStats.activeContracts,
-                serviceRevenue: serviceStats.serviceRevenue,
-                upcomingAppointments: salesActivity.upcomingAppts,
-                activeAgents: salesActivity.activeAgents,
-                customerAccounts: salesActivity.customerAccounts,
-                targetAccounts: salesActivity.targetAccounts
-            },
-            export: exportStats
-        };
         
         // Download JSON for now (can be sent to Python backend later)
         const dataStr = JSON.stringify(reportData, null, 2);
@@ -544,7 +498,7 @@ const DashboardPage = ({
                 
                 <div className="flex gap-2">
                     <Button
-                        onClick={generateInvestorReport}
+                        onClick={generatePDF}
                         disabled={generating}
                         variant="primary"
                         className="bg-purple-600 hover:bg-purple-700 font-bold uppercase text-xs tracking-wider h-10"
@@ -670,7 +624,6 @@ const DashboardPage = ({
                     <div className={`p-3 rounded-full ${boiCompliance.isCompliant ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
                         <Globe size={24}/>
                     </div>
-                    <div>
                         <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Export Ratio</p>
                         <p className="text-xl font-extrabold text-gray-800">{boiCompliance.exportPercentage.toFixed(1)}% <span className="text-xs text-gray-400 font-normal">/ 70%</span></p>
                     </div>
@@ -689,6 +642,7 @@ const DashboardPage = ({
                 </Card>
                 <Card className="flex items-center gap-4 border-l-4 border-indigo-500 shadow-sm hover:shadow-md transition-shadow">
                     <div className="p-3 bg-indigo-50 rounded-full text-indigo-600"><Activity size={24}/></div>
+                    <div>
                         <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Gross Profit</p>
                         <p className="text-lg font-extrabold text-gray-800">{formatPHP(financials.grossProfit)}</p>
                         <p className="text-[10px] text-gray-400">
