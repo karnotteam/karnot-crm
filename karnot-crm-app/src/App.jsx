@@ -94,18 +94,28 @@ import {
 } from 'lucide-react'; 
 
 // ==========================================
-// 5. DROPDOWN MENU COMPONENT
+// 5. DROPDOWN MENU COMPONENT (FIXED!)
 // ==========================================
 const DropdownMenu = ({ label, icon: Icon, items, activeView, setActiveView, variant = 'secondary' }) => {
     const [isOpen, setIsOpen] = useState(false);
     const isActive = items.some(item => item.view === activeView);
 
-    // HELPER FUNCTION FOR PROPER STYLING
+    // Helper function for proper variant styling
     const getButtonClassName = () => {
         let baseClass = 'font-bold uppercase text-[10px] tracking-widest h-9';
-        if (isActive) return baseClass;
-        if (variant === 'orange') return `${baseClass} !border-orange-200 !text-orange-700 !bg-orange-50`;
-        if (variant === 'purple') return `${baseClass} !border-purple-200 !text-purple-700 !bg-purple-50`;
+        
+        if (isActive) {
+            return baseClass;
+        }
+        
+        if (variant === 'orange') {
+            return `${baseClass} !border-orange-200 !text-orange-700 !bg-orange-50 hover:!bg-orange-100`;
+        }
+        
+        if (variant === 'purple') {
+            return `${baseClass} !border-purple-200 !text-purple-700 !bg-purple-50 hover:!bg-purple-100`;
+        }
+        
         return baseClass;
     };
 
@@ -117,6 +127,8 @@ const DropdownMenu = ({ label, icon: Icon, items, activeView, setActiveView, var
                 variant={isActive ? 'primary' : variant}
                 className={getButtonClassName()}
             >
+                <Icon className="mr-1.5" size={14} /> {label} <ChevronDown size={12} className="ml-1"/>
+            </Button>
             
             {isOpen && (
                 <div className="absolute top-full left-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl min-w-[200px] z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
@@ -193,7 +205,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'serviceInvoice', label: 'Service Invoice', icon: FileText }
     ];
 
-    // NEW: Investment Menu
+    // Investment Menu
     const investmentMenu = [
         { view: 'investors', label: 'Investor Companies', icon: Building, badge: '43' },
         { view: 'investmentCallCentre', label: 'Call Centre', icon: Phone },
@@ -283,7 +295,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
                     />
                     <DropdownMenu label="Operations" icon={Wrench} items={operationsMenu} activeView={activeView} setActiveView={setActiveView} />
                     
-                    {/* NEW: Investment Menu */}
+                    {/* Investment Menu with PURPLE variant */}
                     <DropdownMenu 
                         label="Investment" 
                         icon={DollarSign} 
@@ -740,7 +752,7 @@ export default function App() {
                 )}
 
                 {/* ====================================== */}
-                {/* 6C. NEW: INVESTMENT MODULES            */}
+                {/* 6C. INVESTMENT MODULES                 */}
                 {/* ====================================== */}
                 {activeView === 'investors' && (
                     <InvestorsPage user={user} contacts={contacts} />
