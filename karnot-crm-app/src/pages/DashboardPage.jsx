@@ -580,6 +580,74 @@ const DashboardPage = ({
                 </div>
             </div>
 
+            </div>
+
+            {/* --- NEW: PROFESSIONAL BUSINESS METRICS ROW --- */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* LTV:CAC Ratio */}
+                <Card className="border-l-4 border-purple-500">
+                    <div className="flex justify-between items-start mb-2">
+                        <div>
+                            <p className="text-xs text-gray-500 font-bold uppercase">LTV:CAC Ratio</p>
+                            <p className="text-3xl font-black text-purple-600">
+                                {businessMetrics.ltvCacRatio.toFixed(1)}:1
+                            </p>
+                            <p className="text-[10px] text-gray-400">Target: 3:1</p>
+                        </div>
+                        <ProgressCircle percentage={Math.min(businessMetrics.ltvCacRatio / 3 * 100, 100)} />
+                    </div>
+                    <div className={`text-xs font-bold mt-2 ${businessMetrics.ltvCacRatio >= 3 ? 'text-green-600' : 'text-orange-600'}`}>
+                        {businessMetrics.ltvCacRatio >= 3 ? '✓ Healthy' : '⚠ Monitor'}
+                    </div>
+                </Card>
+
+                {/* ARR */}
+                <Card className="border-l-4 border-green-500">
+                    <div className="flex items-start justify-between mb-2">
+                        <div>
+                            <p className="text-xs text-gray-500 font-bold uppercase">ARR</p>
+                            <p className="text-2xl font-black text-green-600">
+                                {formatPHP(businessMetrics.arr)}
+                            </p>
+                            <p className="text-[10px] text-gray-400">MRR: {formatPHP(businessMetrics.mrr)}</p>
+                        </div>
+                        <DollarSign className="text-green-600" size={24} />
+                    </div>
+                    <MiniBarChart data={businessMetrics.monthlyRevenue} />
+                </Card>
+
+                {/* Burn Rate */}
+                <Card className="border-l-4 border-orange-500">
+                    <div className="flex items-start justify-between mb-2">
+                        <div>
+                            <p className="text-xs text-gray-500 font-bold uppercase">Monthly Burn</p>
+                            <p className="text-2xl font-black text-orange-600">
+                                {formatPHP(businessMetrics.burnRate)}
+                            </p>
+                            <p className="text-[10px] text-gray-400">Runway: {businessMetrics.runway.toFixed(0)}mo</p>
+                        </div>
+                        <Flame className="text-orange-600" size={24} />
+                    </div>
+                    <div className={`text-xs font-bold mt-2 ${businessMetrics.runway >= 12 ? 'text-green-600' : 'text-red-600'}`}>
+                        {businessMetrics.runway >= 12 ? '✓ Safe' : '⚠ Funding Needed'}
+                    </div>
+                </Card>
+
+                {/* Unit Economics */}
+                <Card className="border-l-4 border-blue-500">
+                    <div className="flex items-start justify-between mb-2">
+                        <div>
+                            <p className="text-xs text-gray-500 font-bold uppercase">Avg Deal Size</p>
+                            <p className="text-2xl font-black text-blue-600">
+                                {formatCurrency(businessMetrics.avgDealSize)}
+                            </p>
+                            <p className="text-[10px] text-gray-400">Payback: {businessMetrics.paybackMonths.toFixed(1)}mo</p>
+                        </div>
+                        <Briefcase className="text-blue-600" size={24} />
+                    </div>
+                </Card>
+            </div>
+
             {/* --- TOP ROW: PRIMARY KPI CARDS --- */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card className="flex items-center gap-4 border-l-4 border-blue-500 shadow-sm hover:shadow-md transition-shadow">
