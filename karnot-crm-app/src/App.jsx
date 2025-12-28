@@ -117,7 +117,6 @@ const DropdownMenu = ({ label, icon: Icon, items, activeView, setActiveView, var
                 variant={isActive ? 'primary' : variant}
                 className={getButtonClassName()}
             >
-
             
             {isOpen && (
                 <div className="absolute top-full left-0 mt-1 bg-white border-2 border-gray-100 rounded-xl shadow-xl min-w-[200px] z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
