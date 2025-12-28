@@ -658,8 +658,13 @@ export default function App() {
                 )}
                 
                 {activeView === 'maintenanceCalendar' && (
-                    <MaintenanceCalendar companies={companies} user={user} />
-                )}
+    <MaintenanceCalendar 
+        companies={companies} 
+        user={user}
+        appointments={appointments}
+        opportunities={opportunities}
+    />
+)}
                 
                 {activeView === 'technicianView' && (
                     <TechnicianMobileView companies={companies} user={user} />
