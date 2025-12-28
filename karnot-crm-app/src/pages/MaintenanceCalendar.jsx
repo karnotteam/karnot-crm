@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { Button } from '../data/constants';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Filter, MapPin, Users, Wrench, TrendingUp, X } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Plus, Filter, MapPin, Users, Wrench, TrendingUp, X, Edit2, Trash2, Clock, Building } from 'lucide-react';
 
 // Philippine Holidays 2026
 const PHILIPPINE_HOLIDAYS_2026 = [
@@ -66,25 +66,245 @@ const STRATEGIC_EVENTS_2026 = [
     }
 ];
 
-const MaintenanceCalendar = ({ companies, contracts, user }) => {
+// Event Creation/Edit Modal
+const EventModal = ({ event, onClose, onSave, companies }) => {
+    const [formData, setFormData] = useState({
+        title: event?.title || '',
+        type: event?.type || 'OPERATION',
+        category: event?.category || 'Meeting',
+        priority: event?.priority || 'Medium',
+        start: event?.start || new Date().toISOString().slice(0, 16),
+        end: event?.end || new Date().toISOString().slice(0, 16),
+        allDay: event?.allDay || false,
+        description: event?.description || '',
+        location: event?.location || '',
+        companyId: event?.companyId || '',
+        assignedTo: event?.assignedTo || ''
+    });
+
+    const categoryOptions = {
+        'OPERATION': ['Meeting', 'Site Visit', 'Installation', 'Maintenance', 'Follow-up', 'Demo'],
+        'STRATEGY': ['Trade Show', 'Marketing', 'Partnership', 'Planning', 'Conference'],
+        'CONSTRAINT': ['Holiday', 'Blocked Time', 'Internal']
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-start mb-6">
+                    <h2 className="text-2xl font-black text-gray-800 uppercase">
+                        {event ? 'Edit Event' : 'Create New Event'}
+                    </h2>
+                    <Button onClick={onClose} variant="secondary" className="!p-2">
+                        <X size={16} />
+                    </Button>
+                </div>
+
+                <div className="space-y-4">
+                    {/* Title */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Event Title
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.title}
+                            onChange={e => setFormData({ ...formData, title: e.target.value })}
+                            className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                            placeholder="e.g., Client Meeting with Nestlé"
+                        />
+                    </div>
+
+                    {/* Type & Category */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Event Type
+                            </label>
+                            <select
+                                value={formData.type}
+                                onChange={e => setFormData({ ...formData, type: e.target.value })}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                            >
+                                <option value="OPERATION">Operation</option>
+                                <option value="STRATEGY">Strategy</option>
+                                <option value="CONSTRAINT">Constraint</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                Category
+                            </label>
+                            <select
+                                value={formData.category}
+                                onChange={e => setFormData({ ...formData, category: e.target.value })}
+                                className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                            >
+                                {categoryOptions[formData.type]?.map(cat => (
+                                    <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Company (Optional) */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Related Company (Optional)
+                        </label>
+                        <select
+                            value={formData.companyId}
+                            onChange={e => setFormData({ ...formData, companyId: e.target.value })}
+                            className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                        >
+                            <option value="">No Company</option>
+                            {companies.map(company => (
+                                <option key={company.id} value={company.id}>
+                                    {company.companyName}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Date & Time */}
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={formData.allDay}
+                                onChange={e => setFormData({ ...formData, allDay: e.target.checked })}
+                                className="w-4 h-4"
+                            />
+                            <label className="text-xs font-bold text-gray-700">All Day Event</label>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                    Start
+                                </label>
+                                <input
+                                    type={formData.allDay ? 'date' : 'datetime-local'}
+                                    value={formData.allDay ? formData.start.slice(0, 10) : formData.start}
+                                    onChange={e => setFormData({ ...formData, start: formData.allDay ? `${e.target.value}T00:00:00` : e.target.value })}
+                                    className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                                    End
+                                </label>
+                                <input
+                                    type={formData.allDay ? 'date' : 'datetime-local'}
+                                    value={formData.allDay ? formData.end.slice(0, 10) : formData.end}
+                                    onChange={e => setFormData({ ...formData, end: formData.allDay ? `${e.target.value}T23:59:59` : e.target.value })}
+                                    className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Priority */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Priority
+                        </label>
+                        <select
+                            value={formData.priority}
+                            onChange={e => setFormData({ ...formData, priority: e.target.value })}
+                            className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                        >
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical</option>
+                        </select>
+                    </div>
+
+                    {/* Location */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Location
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.location}
+                            onChange={e => setFormData({ ...formData, location: e.target.value })}
+                            className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                            placeholder="e.g., Client Office, Manila"
+                        />
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Description
+                        </label>
+                        <textarea
+                            value={formData.description}
+                            onChange={e => setFormData({ ...formData, description: e.target.value })}
+                            className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                            rows="3"
+                            placeholder="Event details, agenda, notes..."
+                        />
+                    </div>
+
+                    {/* Assigned To */}
+                    <div>
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
+                            Assigned To
+                        </label>
+                        <input
+                            type="text"
+                            value={formData.assignedTo}
+                            onChange={e => setFormData({ ...formData, assignedTo: e.target.value })}
+                            className="w-full p-3 border border-gray-300 rounded-xl bg-white font-bold"
+                            placeholder="Team member name"
+                        />
+                    </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 mt-6 pt-4 border-t">
+                    <Button onClick={onClose} variant="secondary" className="flex-1">
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={() => onSave(formData)}
+                        variant="primary"
+                        className="flex-1"
+                        disabled={!formData.title || !formData.start}
+                    >
+                        {event ? 'Update' : 'Create'} Event
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const MaintenanceCalendar = ({ companies = [], contracts = [], user, appointments = [], opportunities = [] }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [calendarEvents, setCalendarEvents] = useState([]);
     const [maintenanceEvents, setMaintenanceEvents] = useState([]);
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [showNewEvent, setShowNewEvent] = useState(false);
+    const [editingEvent, setEditingEvent] = useState(null);
     const [filterType, setFilterType] = useState('ALL');
     const [viewMode, setViewMode] = useState('month');
     const [seeding, setSeeding] = useState(false);
 
     // Load all calendar events
     useEffect(() => {
-        const eventsQuery = query(collection(db, 'calendar_events'), orderBy('start', 'asc'));
+        if (!user) return;
+
+        const eventsQuery = query(collection(db, 'users', user.uid, 'calendar_events'), orderBy('start', 'asc'));
         const unsubEvents = onSnapshot(eventsQuery, (snapshot) => {
             const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setCalendarEvents(eventsData);
         });
 
-        const maintenanceQuery = query(collection(db, 'maintenance_events'), orderBy('scheduled_date', 'asc'));
+        const maintenanceQuery = query(collection(db, 'users', user.uid, 'maintenance_events'), orderBy('scheduled_date', 'asc'));
         const unsubMaintenance = onSnapshot(maintenanceQuery, (snapshot) => {
             const maintenanceData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setMaintenanceEvents(maintenanceData);
@@ -94,29 +314,27 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
             unsubEvents();
             unsubMaintenance();
         };
-    }, []);
+    }, [user]);
 
-    // FIXED: Seed holidays and strategic events (with duplicate checking)
+    // Seed initial events
     const seedInitialEvents = async () => {
-        if (seeding) return;
+        if (seeding || !user) return;
         
         setSeeding(true);
         try {
             let addedCount = 0;
             let skippedCount = 0;
 
-            // Check and seed holidays
             for (const holiday of PHILIPPINE_HOLIDAYS_2026) {
-                // Check if holiday already exists
                 const existingQuery = query(
-                    collection(db, 'calendar_events'),
+                    collection(db, 'users', user.uid, 'calendar_events'),
                     where('title', '==', holiday.title),
                     where('type', '==', 'CONSTRAINT')
                 );
                 const existingDocs = await getDocs(existingQuery);
 
                 if (existingDocs.empty) {
-                    await addDoc(collection(db, 'calendar_events'), {
+                    await addDoc(collection(db, 'users', user.uid, 'calendar_events'), {
                         ...holiday,
                         start: `${holiday.date}T00:00:00`,
                         end: `${holiday.date}T23:59:59`,
@@ -129,18 +347,16 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
                 }
             }
 
-            // Check and seed strategic events
             for (const event of STRATEGIC_EVENTS_2026) {
-                // Check if event already exists
                 const existingQuery = query(
-                    collection(db, 'calendar_events'),
+                    collection(db, 'users', user.uid, 'calendar_events'),
                     where('title', '==', event.title),
                     where('type', '==', 'STRATEGY')
                 );
                 const existingDocs = await getDocs(existingQuery);
 
                 if (existingDocs.empty) {
-                    await addDoc(collection(db, 'calendar_events'), {
+                    await addDoc(collection(db, 'users', user.uid, 'calendar_events'), {
                         ...event,
                         allDay: false
                     });
@@ -159,18 +375,17 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
         }
     };
 
-    // ADDED: Clear all calendar events
     const clearAllEvents = async () => {
-        if (!window.confirm('Are you sure you want to delete ALL calendar events? This cannot be undone!')) {
+        if (!user || !window.confirm('Are you sure you want to delete ALL calendar events? This cannot be undone!')) {
             return;
         }
 
         try {
-            const eventsSnapshot = await getDocs(collection(db, 'calendar_events'));
+            const eventsSnapshot = await getDocs(collection(db, 'users', user.uid, 'calendar_events'));
             let deleteCount = 0;
 
             for (const docSnap of eventsSnapshot.docs) {
-                await deleteDoc(doc(db, 'calendar_events', docSnap.id));
+                await deleteDoc(doc(db, 'users', user.uid, 'calendar_events', docSnap.id));
                 deleteCount++;
             }
 
@@ -178,6 +393,35 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
         } catch (error) {
             console.error('Error clearing events:', error);
             alert('Error clearing events. Check console.');
+        }
+    };
+
+    const handleSaveEvent = async (formData) => {
+        if (!user) return;
+
+        try {
+            if (editingEvent) {
+                await updateDoc(doc(db, 'users', user.uid, 'calendar_events', editingEvent.id), formData);
+            } else {
+                await addDoc(collection(db, 'users', user.uid, 'calendar_events'), formData);
+            }
+            setShowNewEvent(false);
+            setEditingEvent(null);
+        } catch (error) {
+            console.error('Error saving event:', error);
+            alert('Error saving event. Check console.');
+        }
+    };
+
+    const handleDeleteEvent = async (eventId) => {
+        if (!user || !window.confirm('Delete this event?')) return;
+
+        try {
+            await deleteDoc(doc(db, 'users', user.uid, 'calendar_events', eventId));
+            setSelectedEvent(null);
+        } catch (error) {
+            console.error('Error deleting event:', error);
+            alert('Error deleting event.');
         }
     };
 
@@ -191,7 +435,6 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
 
         const days = [];
         
-        // Previous month's days
         const prevMonthDays = new Date(year, month, 0).getDate();
         for (let i = startingDayOfWeek - 1; i >= 0; i--) {
             days.push({
@@ -200,7 +443,6 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
             });
         }
 
-        // Current month's days
         for (let i = 1; i <= daysInMonth; i++) {
             days.push({
                 date: new Date(year, month, i),
@@ -208,7 +450,6 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
             });
         }
 
-        // Next month's days
         const remainingDays = 42 - days.length;
         for (let i = 1; i <= remainingDays; i++) {
             days.push({
@@ -240,14 +481,42 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
                 title: `${event.maintenance_type} - ${getClientName(event.client_ref)}`
             }));
 
-        return [...calEvents, ...maintEvents].filter(event => 
+        // Appointments
+        const aptEvents = (appointments || [])
+            .filter(apt => apt.appointmentDate === dateStr)
+            .map(apt => ({
+                ...apt,
+                type: 'OPERATION',
+                category: 'Appointment',
+                title: `📞 ${apt.companyName}`,
+                description: `${apt.purpose} - ${apt.contactPerson}`,
+                start: `${apt.appointmentDate}T${apt.appointmentTime || '00:00'}:00`,
+                end: `${apt.appointmentDate}T${apt.appointmentTime || '00:00'}:00`,
+                priority: apt.priority || 'Medium'
+            }));
+
+        // Opportunity follow-ups (Next Action dates)
+        const oppEvents = (opportunities || [])
+            .filter(opp => opp.nextAction && opp.nextAction.date === dateStr)
+            .map(opp => ({
+                ...opp,
+                type: 'STRATEGY',
+                category: 'Follow-up',
+                title: `🎯 ${opp.customerName}`,
+                description: opp.nextAction.action,
+                start: `${opp.nextAction.date}T09:00:00`,
+                end: `${opp.nextAction.date}T09:00:00`,
+                priority: 'High'
+            }));
+
+        return [...calEvents, ...maintEvents, ...aptEvents, ...oppEvents].filter(event => 
             filterType === 'ALL' || event.type === filterType
         );
     };
 
     const getClientName = (clientRef) => {
         const company = companies.find(c => c.id === clientRef);
-        return company?.name || 'Unknown Client';
+        return company?.companyName || 'Unknown Client';
     };
 
     const getEventTypeColor = (type, priority) => {
@@ -287,16 +556,36 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
 
     return (
         <div className="p-6 max-w-7xl mx-auto">
+            {/* Modals */}
+            {(showNewEvent || editingEvent) && (
+                <EventModal
+                    event={editingEvent}
+                    onClose={() => {
+                        setShowNewEvent(false);
+                        setEditingEvent(null);
+                    }}
+                    onSave={handleSaveEvent}
+                    companies={companies}
+                />
+            )}
+
             {/* Header */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
                 <div>
-                    <h1 className="text-3xl font-black text-gray-800 tracking-tight uppercase">Operations Calendar</h1>
+                    <h1 className="text-3xl font-black text-gray-800 tracking-tight uppercase">Company Calendar</h1>
                     <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mt-1">
-                        Maintenance • Trade Shows • Holidays
+                        Appointments • Maintenance • Trade Shows • Follow-ups
                     </p>
                 </div>
                 
                 <div className="flex gap-2 flex-wrap">
+                    <Button
+                        onClick={() => setShowNewEvent(true)}
+                        variant="primary"
+                        className="text-xs"
+                    >
+                        <Plus size={12} className="mr-1" /> New Event
+                    </Button>
                     <Button
                         onClick={() => setFilterType('ALL')}
                         variant={filterType === 'ALL' ? 'primary' : 'secondary'}
@@ -417,9 +706,32 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
                                     {selectedEvent.type} - {selectedEvent.priority || selectedEvent.category}
                                 </span>
                             </div>
-                            <Button onClick={() => setSelectedEvent(null)} variant="secondary">
-                                <X size={16} />
-                            </Button>
+                            <div className="flex gap-2">
+                                {selectedEvent.id && !selectedEvent.appointmentDate && (
+                                    <>
+                                        <Button
+                                            onClick={() => {
+                                                setEditingEvent(selectedEvent);
+                                                setSelectedEvent(null);
+                                            }}
+                                            variant="secondary"
+                                            className="!p-2"
+                                        >
+                                            <Edit2 size={16} />
+                                        </Button>
+                                        <Button
+                                            onClick={() => handleDeleteEvent(selectedEvent.id)}
+                                            variant="secondary"
+                                            className="!p-2 text-red-600 hover:bg-red-50"
+                                        >
+                                            <Trash2 size={16} />
+                                        </Button>
+                                    </>
+                                )}
+                                <Button onClick={() => setSelectedEvent(null)} variant="secondary" className="!p-2">
+                                    <X size={16} />
+                                </Button>
+                            </div>
                         </div>
 
                         {selectedEvent.description && (
@@ -434,16 +746,33 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
                         )}
 
                         {selectedEvent.start && (
-                            <div className="text-sm text-gray-600 mb-4">
-                                {new Date(selectedEvent.start).toLocaleString()} 
-                                {selectedEvent.end && ` - ${new Date(selectedEvent.end).toLocaleString()}`}
+                            <div className="flex items-center gap-2 text-gray-600 mb-4">
+                                <Clock size={16} />
+                                <span className="text-sm">
+                                    {new Date(selectedEvent.start).toLocaleString()} 
+                                    {selectedEvent.end && ` - ${new Date(selectedEvent.end).toLocaleString()}`}
+                                </span>
                             </div>
                         )}
 
-                        {selectedEvent.type === 'OPERATION' && (
+                        {selectedEvent.companyName && (
+                            <div className="flex items-center gap-2 text-gray-600 mb-2">
+                                <Building size={16} />
+                                <span className="text-sm font-bold">{selectedEvent.companyName}</span>
+                            </div>
+                        )}
+
+                        {selectedEvent.assignedTo && (
+                            <div className="flex items-center gap-2 text-gray-600 mb-4">
+                                <Users size={16} />
+                                <span className="text-sm">Assigned to: {selectedEvent.assignedTo}</span>
+                            </div>
+                        )}
+
+                        {selectedEvent.type === 'OPERATION' && selectedEvent.status && (
                             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
-                                <p className="text-xs font-bold text-blue-700 uppercase mb-2">Maintenance Details</p>
-                                <p className="text-sm text-gray-700">Status: {selectedEvent.status}</p>
+                                <p className="text-xs font-bold text-blue-700 uppercase mb-2">Status</p>
+                                <p className="text-sm text-gray-700">{selectedEvent.status}</p>
                                 {selectedEvent.assigned_tech && (
                                     <p className="text-sm text-gray-700">Technician: {selectedEvent.assigned_tech}</p>
                                 )}
@@ -453,7 +782,7 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
                 </div>
             )}
 
-            {/* FIXED: Calendar Management Tools */}
+            {/* Calendar Management Tools */}
             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
                 <p className="text-xs font-bold text-blue-800 uppercase mb-3">Calendar Management</p>
                 <div className="flex gap-2 flex-wrap">
@@ -473,11 +802,11 @@ const MaintenanceCalendar = ({ companies, contracts, user }) => {
                         Clear All Events
                     </Button>
                     <div className="text-xs text-gray-600 self-center ml-2">
-                        Total events: {calendarEvents.length}
+                        Manual Events: {calendarEvents.length} | Appointments: {appointments?.length || 0} | Follow-ups: {opportunities?.filter(o => o.nextAction).length || 0}
                     </div>
                 </div>
                 <p className="text-xs text-gray-600 mt-2">
-                    ℹ️ Seed button will skip existing events to prevent duplicates
+                    ℹ️ Calendar automatically shows appointments and opportunity follow-ups
                 </p>
             </div>
         </div>
