@@ -50,8 +50,6 @@ const ProgressCircle = ({ percentage, size = 70 }) => {
 
 // --- CSS-Based Chart Components ---
 
-// --- CSS-Based Chart Components ---
-
 const ProgressBar = ({ label, value, max, color, subLabel }) => {
     const percentage = Math.min((value / max) * 100, 100);
     return (
@@ -308,8 +306,6 @@ const DashboardPage = ({
             targetAccounts,
             customerAccounts
         };
-    }, [appointments, agents, companies]);
-
     }, [appointments, agents, companies]);
 
     // --- 6. PROFESSIONAL BUSINESS METRICS ---
@@ -693,7 +689,6 @@ const DashboardPage = ({
                 </Card>
                 <Card className="flex items-center gap-4 border-l-4 border-indigo-500 shadow-sm hover:shadow-md transition-shadow">
                     <div className="p-3 bg-indigo-50 rounded-full text-indigo-600"><Activity size={24}/></div>
-                    <div>
                         <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">Gross Profit</p>
                         <p className="text-lg font-extrabold text-gray-800">{formatPHP(financials.grossProfit)}</p>
                         <p className="text-[10px] text-gray-400">
