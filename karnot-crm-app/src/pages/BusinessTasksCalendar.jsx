@@ -5,7 +5,7 @@ import {
     CheckCircle, Clock, AlertTriangle, Plus, Edit, Trash2, Calendar,
     FileText, Building, Landmark, Users, Filter, X, ChevronDown, ChevronUp, Copy,
     Upload, FileJson, FileSpreadsheet, Search, SortAsc, SortDesc, List, Grid,
-    CheckSquare, Square, MoreVertical, Download, Eye, EyeOff
+    CheckSquare, Square, MoreVertical, Download, Eye, EyeOff, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Card, Button, Input, Textarea } from '../data/constants.jsx';
 
@@ -110,6 +110,402 @@ const PRIORITY_LEVELS = [
     { value: 'HIGH', label: 'High', color: 'bg-orange-100 text-orange-700' },
     { value: 'CRITICAL', label: 'Critical', color: 'bg-red-100 text-red-700' }
 ];
+
+// --- CALENDAR VIEW COMPONENT ---
+const BusinessTasksCalendarView = ({ tasks, onTaskClick, onDateClick, user }) => {
+    const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState(null);
+
+    const getMonthDays = () => {
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const daysInMonth = lastDay.getDate();
+        const startingDayOfWeek = firstDay.getDay();
+
+        const days = [];
+        
+        const prevMonthDays = new Date(year, month, 0).getDate();
+        for (let i = startingDayOfWeek - 1; i >= 0; i--) {
+            days.push({
+                date: new Date(year, month - 1, prevMonthDays - i),
+                isCurrentMonth: false
+            });
+        }
+
+        for (let i = 1; i <= daysInMonth; i++) {
+            days.push({
+                date: new Date(year, month, i),
+                isCurrentMonth: true
+            });
+        }
+
+        const remainingDays = 42 - days.length;
+        for (let i = 1; i <= remainingDays; i++) {
+            days.push({
+                date: new Date(year, month + 1, i),
+                isCurrentMonth: false
+            });
+        }
+
+        return days;
+    };
+
+    const getTasksForDate = (date) => {
+        const dateStr = date.toISOString().split('T')[0];
+        return tasks.filter(task => task.dueDate === dateStr);
+    };
+
+    const isToday = (date) => {
+        const today = new Date();
+        return date.toDateString() === today.toDateString();
+    };
+
+    const isOverdue = (date, task) => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const taskDate = new Date(date);
+        taskDate.setHours(0, 0, 0, 0);
+        return taskDate < today && task.status !== 'COMPLETED';
+    };
+
+    const navigateMonth = (direction) => {
+        const newDate = new Date(currentDate);
+        newDate.setMonth(currentDate.getMonth() + direction);
+        setCurrentDate(newDate);
+    };
+
+    const goToToday = () => {
+        setCurrentDate(new Date());
+    };
+
+    const monthDays = getMonthDays();
+    const monthName = currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    // Calculate monthly stats
+    const monthStats = useMemo(() => {
+        const monthTasks = tasks.filter(task => {
+            const taskDate = new Date(task.dueDate);
+            return taskDate.getMonth() === currentDate.getMonth() && 
+                   taskDate.getFullYear() === currentDate.getFullYear();
+        });
+
+        return {
+            total: monthTasks.length,
+            completed: monthTasks.filter(t => t.status === 'COMPLETED').length,
+            overdue: monthTasks.filter(t => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const taskDate = new Date(t.dueDate);
+                taskDate.setHours(0, 0, 0, 0);
+                return taskDate < today && t.status !== 'COMPLETED';
+            }).length,
+            critical: monthTasks.filter(t => t.priority === 'CRITICAL' && t.status !== 'COMPLETED').length
+        };
+    }, [tasks, currentDate]);
+
+    return (
+        <div className="space-y-4">
+            {/* Calendar Header */}
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-4">
+                        <Button onClick={() => navigateMonth(-1)} variant="secondary" className="!p-2">
+                            <ChevronLeft size={20} />
+                        </Button>
+                        
+                        <div className="text-center">
+                            <h2 className="text-2xl font-black text-gray-800 uppercase">{monthName}</h2>
+                            <Button onClick={goToToday} variant="secondary" className="text-xs mt-1">
+                                Today
+                            </Button>
+                        </div>
+                        
+                        <Button onClick={() => navigateMonth(1)} variant="secondary" className="!p-2">
+                            <ChevronRight size={20} />
+                        </Button>
+                    </div>
+
+                    {/* Month Stats */}
+                    <div className="flex gap-4 text-center">
+                        <div className="bg-blue-50 px-4 py-2 rounded-lg border border-blue-200">
+                            <p className="text-xl font-black text-blue-700">{monthStats.total}</p>
+                            <p className="text-[9px] font-black uppercase text-blue-600">Total</p>
+                        </div>
+                        <div className="bg-green-50 px-4 py-2 rounded-lg border border-green-200">
+                            <p className="text-xl font-black text-green-700">{monthStats.completed}</p>
+                            <p className="text-[9px] font-black uppercase text-green-600">Done</p>
+                        </div>
+                        {monthStats.overdue > 0 && (
+                            <div className="bg-red-50 px-4 py-2 rounded-lg border border-red-200 animate-pulse">
+                                <p className="text-xl font-black text-red-700">{monthStats.overdue}</p>
+                                <p className="text-[9px] font-black uppercase text-red-600">Overdue</p>
+                            </div>
+                        )}
+                        {monthStats.critical > 0 && (
+                            <div className="bg-orange-50 px-4 py-2 rounded-lg border border-orange-200">
+                                <p className="text-xl font-black text-orange-700">{monthStats.critical}</p>
+                                <p className="text-[9px] font-black uppercase text-orange-600">Critical</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Calendar Grid */}
+            <div className="bg-white border-2 border-gray-200 rounded-xl overflow-hidden">
+                {/* Day Headers */}
+                <div className="grid grid-cols-7 bg-gradient-to-r from-orange-50 to-purple-50 border-b-2 border-gray-200">
+                    {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => (
+                        <div key={day} className="p-3 text-center">
+                            <div className="font-black text-xs uppercase text-gray-600">{day.slice(0, 3)}</div>
+                            <div className="text-[9px] text-gray-400 hidden md:block">{day.slice(3)}</div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Calendar Days */}
+                <div className="grid grid-cols-7">
+                    {monthDays.map((day, idx) => {
+                        const dayTasks = getTasksForDate(day.date);
+                        const hasOverdue = dayTasks.some(t => isOverdue(day.date, t));
+                        const hasCritical = dayTasks.some(t => t.priority === 'CRITICAL' && t.status !== 'COMPLETED');
+                        const allCompleted = dayTasks.length > 0 && dayTasks.every(t => t.status === 'COMPLETED');
+                        
+                        return (
+                            <div
+                                key={idx}
+                                onClick={() => {
+                                    if (dayTasks.length > 0) {
+                                        setSelectedDate(day.date);
+                                    } else if (day.isCurrentMonth) {
+                                        onDateClick(day.date);
+                                    }
+                                }}
+                                className={`min-h-[100px] md:min-h-[120px] border-r border-b border-gray-200 p-2 transition-all cursor-pointer ${
+                                    !day.isCurrentMonth ? 'bg-gray-50' : 
+                                    hasOverdue ? 'bg-red-50 hover:bg-red-100' :
+                                    hasCritical ? 'bg-orange-50 hover:bg-orange-100' :
+                                    allCompleted ? 'bg-green-50 hover:bg-green-100' :
+                                    'bg-white hover:bg-blue-50'
+                                } ${isToday(day.date) ? 'ring-2 ring-orange-500 ring-inset' : ''}`}
+                            >
+                                {/* Date Number */}
+                                <div className={`text-sm font-bold mb-2 ${
+                                    isToday(day.date) 
+                                        ? 'bg-orange-500 text-white rounded-full w-7 h-7 flex items-center justify-center'
+                                        : day.isCurrentMonth ? 'text-gray-800' : 'text-gray-400'
+                                }`}>
+                                    {day.date.getDate()}
+                                </div>
+                                
+                                {/* Tasks */}
+                                <div className="space-y-1">
+                                    {dayTasks.slice(0, 3).map((task, taskIdx) => {
+                                        const catInfo = TASK_CATEGORIES[task.category] || TASK_CATEGORIES['OTHER'];
+                                        const CategoryIcon = catInfo.icon;
+                                        const isTaskOverdue = isOverdue(day.date, task);
+                                        
+                                        return (
+                                            <div
+                                                key={taskIdx}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onTaskClick(task);
+                                                }}
+                                                className={`text-xs px-2 py-1 rounded border-l-2 hover:shadow-md transition-shadow ${
+                                                    task.status === 'COMPLETED' 
+                                                        ? 'bg-green-100 border-green-500 text-green-700 line-through opacity-60' :
+                                                    isTaskOverdue 
+                                                        ? 'bg-red-100 border-red-500 text-red-700 animate-pulse' :
+                                                    task.priority === 'CRITICAL'
+                                                        ? 'bg-orange-100 border-orange-500 text-orange-700' :
+                                                    task.priority === 'HIGH'
+                                                        ? 'bg-yellow-100 border-yellow-500 text-yellow-700' :
+                                                    catInfo.bgColor + ' ' + catInfo.borderColor + ' ' + catInfo.color
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-1">
+                                                    <CategoryIcon size={10} className="flex-shrink-0" />
+                                                    <div className="font-bold truncate flex-1">{task.title}</div>
+                                                </div>
+                                                {task.owner && (
+                                                    <div className="text-[9px] opacity-75 truncate">
+                                                        👤 {task.owner}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                    {dayTasks.length > 3 && (
+                                        <div className="text-xs text-gray-500 font-bold px-2">
+                                            +{dayTasks.length - 3} more
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Day Indicator Dots */}
+                                {dayTasks.length > 0 && (
+                                    <div className="flex gap-1 mt-1 justify-center">
+                                        {hasOverdue && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+                                        {hasCritical && <div className="w-2 h-2 bg-orange-500 rounded-full" />}
+                                        {allCompleted && <div className="w-2 h-2 bg-green-500 rounded-full" />}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Selected Date Detail Panel */}
+            {selectedDate && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <Card className="w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl">
+                        <div className="p-6 border-b bg-gradient-to-r from-orange-50 to-purple-50">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h3 className="text-2xl font-black text-gray-800 uppercase">
+                                        {selectedDate.toLocaleDateString('en-US', {
+                                            weekday: 'long',
+                                            month: 'long',
+                                            day: 'numeric',
+                                            year: 'numeric'
+                                        })}
+                                    </h3>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        {getTasksForDate(selectedDate).length} task{getTasksForDate(selectedDate).length !== 1 ? 's' : ''} due
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setSelectedDate(null)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto max-h-[60vh] space-y-3">
+                            {getTasksForDate(selectedDate).map(task => {
+                                const catInfo = TASK_CATEGORIES[task.category] || TASK_CATEGORIES['OTHER'];
+                                const CategoryIcon = catInfo.icon;
+                                const isTaskOverdue = isOverdue(selectedDate, task);
+
+                                return (
+                                    <div
+                                        key={task.id}
+                                        onClick={() => {
+                                            onTaskClick(task);
+                                            setSelectedDate(null);
+                                        }}
+                                        className={`p-4 rounded-xl border-2 cursor-pointer hover:shadow-lg transition-all ${
+                                            task.status === 'COMPLETED' 
+                                                ? 'bg-green-50 border-green-200' :
+                                            isTaskOverdue 
+                                                ? 'bg-red-50 border-red-300 animate-pulse' :
+                                            task.priority === 'CRITICAL'
+                                                ? 'bg-orange-50 border-orange-300' :
+                                            'bg-white border-gray-200'
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <CategoryIcon className={catInfo.color} size={20} />
+                                            <div className="flex-1">
+                                                <h4 className={`font-bold text-gray-800 mb-1 ${
+                                                    task.status === 'COMPLETED' ? 'line-through opacity-60' : ''
+                                                }`}>
+                                                    {task.title}
+                                                </h4>
+                                                
+                                                {task.description && (
+                                                    <p className="text-sm text-gray-600 mb-2">{task.description}</p>
+                                                )}
+
+                                                <div className="flex flex-wrap gap-2 items-center">
+                                                    <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                                                        PRIORITY_LEVELS.find(p => p.value === task.priority)?.color || 'bg-gray-100 text-gray-700'
+                                                    }`}>
+                                                        {task.priority}
+                                                    </span>
+
+                                                    <span className={`text-xs px-2 py-0.5 rounded-full ${catInfo.bgColor} ${catInfo.color} font-bold`}>
+                                                        {catInfo.label}
+                                                    </span>
+
+                                                    {task.owner && (
+                                                        <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold">
+                                                            👤 {task.owner}
+                                                        </span>
+                                                    )}
+
+                                                    {task.recurring !== 'none' && (
+                                                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-bold">
+                                                            🔄 {task.recurring}
+                                                        </span>
+                                                    )}
+
+                                                    {task.status === 'COMPLETED' && (
+                                                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">
+                                                            ✓ Completed
+                                                        </span>
+                                                    )}
+
+                                                    {isTaskOverdue && (
+                                                        <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold animate-pulse">
+                                                            ⚠ Overdue
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="p-4 border-t bg-gray-50">
+                            <Button
+                                onClick={() => {
+                                    onDateClick(selectedDate);
+                                    setSelectedDate(null);
+                                }}
+                                variant="primary"
+                                className="w-full"
+                            >
+                                <Plus size={16} className="mr-2" />
+                                Add Task for This Date
+                            </Button>
+                        </div>
+                    </Card>
+                </div>
+            )}
+
+            {/* Legend */}
+            <Card className="p-4 bg-gradient-to-r from-gray-50 to-blue-50">
+                <div className="flex flex-wrap gap-4 items-center justify-center text-xs">
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-red-200 border-2 border-red-500 rounded"></div>
+                        <span className="font-bold text-gray-700">Overdue Tasks</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-orange-200 border-2 border-orange-500 rounded"></div>
+                        <span className="font-bold text-gray-700">Critical Priority</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-green-200 border-2 border-green-500 rounded"></div>
+                        <span className="font-bold text-gray-700">All Completed</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-orange-500 rounded-full"></div>
+                        <span className="font-bold text-gray-700">Today</span>
+                    </div>
+                </div>
+            </Card>
+        </div>
+    );
+};
 
 // --- STRATEGY IMPORT MODAL ---
 const StrategyImportModal = ({ onClose, user }) => {
@@ -522,7 +918,7 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
             updatedAt: serverTimestamp()
         };
 
-        if (task) {
+        if (task && task.id) {
             await updateDoc(doc(db, "users", user.uid, "business_tasks", task.id), taskData);
         } else {
             await addDoc(collection(db, "users", user.uid, "business_tasks"), {
@@ -540,7 +936,7 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
                 <div className="p-6 space-y-4">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-2xl font-black text-gray-800 uppercase tracking-tight">
-                            {task ? 'Edit Task' : 'New Business Task'}
+                            {task && task.id ? 'Edit Task' : 'New Business Task'}
                         </h2>
                         <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
                             <X size={24} />
@@ -630,7 +1026,7 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
                         </select>
                     </div>
 
-                    {task && (
+                    {task && task.id && (
                         <div>
                             <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block">
                                 Status
@@ -669,7 +1065,7 @@ const TaskModal = ({ task, onClose, onSave, user }) => {
 
                     <div className="flex gap-2 pt-4 border-t">
                         <Button onClick={handleSave} variant="primary" className="flex-1">
-                            {task ? 'Update Task' : 'Create Task'}
+                            {task && task.id ? 'Update Task' : 'Create Task'}
                         </Button>
                         <Button onClick={onClose} variant="secondary">
                             Cancel
@@ -697,7 +1093,7 @@ const BusinessTasksCalendar = ({ user }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [sortBy, setSortBy] = useState('dueDate');
     const [sortDirection, setSortDirection] = useState('asc');
-    const [viewMode, setViewMode] = useState('list'); // list or grouped
+    const [viewMode, setViewMode] = useState('list'); // list, grouped, or calendar
     const [expandedCategory, setExpandedCategory] = useState(null);
     const [selectedTasks, setSelectedTasks] = useState([]);
     const [showCompletedTasks, setShowCompletedTasks] = useState(false);
@@ -1062,190 +1458,252 @@ const BusinessTasksCalendar = ({ user }) => {
                 </Card>
             </div>
 
-            {/* Advanced Filters & Search */}
-            <Card className="p-4">
-                <div className="space-y-4">
-                    {/* Search Bar */}
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                        <input
-                            type="text"
-                            placeholder="Search tasks by title, description, owner, or notes..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl font-medium"
-                        />
-                        {searchTerm && (
-                            <button
-                                onClick={() => setSearchTerm('')}
-                                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            >
-                                <X size={20} />
-                            </button>
-                        )}
+            {/* VIEW MODE TOGGLE */}
+            <Card className="p-4 bg-gradient-to-r from-orange-50 to-purple-50">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                viewMode === 'list'
+                                    ? 'bg-orange-600 text-white shadow-lg'
+                                    : 'bg-white text-gray-600 hover:bg-gray-100'
+                            }`}
+                        >
+                            <List size={16} />
+                            List View
+                        </button>
+                        <button
+                            onClick={() => setViewMode('grouped')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                viewMode === 'grouped'
+                                    ? 'bg-orange-600 text-white shadow-lg'
+                                    : 'bg-white text-gray-600 hover:bg-gray-100'
+                            }`}
+                        >
+                            <Grid size={16} />
+                            Grouped View
+                        </button>
+                        <button
+                            onClick={() => setViewMode('calendar')}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                                viewMode === 'calendar'
+                                    ? 'bg-orange-600 text-white shadow-lg'
+                                    : 'bg-white text-gray-600 hover:bg-gray-100'
+                            }`}
+                        >
+                            <Calendar size={16} />
+                            Calendar View
+                        </button>
                     </div>
 
-                    {/* Filter Row */}
-                    <div className="flex flex-wrap gap-3 items-center">
-                        <Filter size={16} className="text-gray-400" />
-                        <span className="text-xs font-bold text-gray-500 uppercase">Filters:</span>
-
-                        <select
-                            value={filterCategory}
-                            onChange={e => setFilterCategory(e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
-                        >
-                            <option value="ALL">All Categories</option>
-                            {Object.entries(TASK_CATEGORIES).map(([key, cat]) => (
-                                <option key={key} value={key}>{cat.label}</option>
-                            ))}
-                        </select>
-
-                        <select
-                            value={filterStatus}
-                            onChange={e => setFilterStatus(e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
-                        >
-                            <option value="ACTIVE">Active Tasks</option>
-                            <option value="COMPLETED">Completed Tasks</option>
-                            <option value="ALL">All Tasks</option>
-                        </select>
-
-                        <select
-                            value={filterPriority}
-                            onChange={e => setFilterPriority(e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
-                        >
-                            <option value="ALL">All Priorities</option>
-                            {PRIORITY_LEVELS.map(p => (
-                                <option key={p.value} value={p.value}>{p.label}</option>
-                            ))}
-                        </select>
-
-                        {uniqueOwners.length > 0 && (
-                            <select
-                                value={filterOwner}
-                                onChange={e => setFilterOwner(e.target.value)}
-                                className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
-                            >
-                                <option value="ALL">All Owners</option>
-                                {uniqueOwners.map(owner => (
-                                    <option key={owner} value={owner}>{owner}</option>
-                                ))}
-                            </select>
-                        )}
-
-                        <div className="ml-auto flex gap-2 items-center">
-                            <button
-                                onClick={() => setShowCompletedTasks(!showCompletedTasks)}
-                                className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
-                                    showCompletedTasks 
-                                        ? 'bg-green-100 text-green-700' 
-                                        : 'bg-gray-100 text-gray-600'
-                                }`}
-                            >
-                                {showCompletedTasks ? <Eye size={14} /> : <EyeOff size={14} />}
-                                {showCompletedTasks ? 'Hide' : 'Show'} Completed
-                            </button>
-
-                            <select
-                                value={sortBy}
-                                onChange={e => setSortBy(e.target.value)}
-                                className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
-                            >
-                                <option value="dueDate">Sort: Due Date</option>
-                                <option value="priority">Sort: Priority</option>
-                                <option value="title">Sort: Title</option>
-                                <option value="category">Sort: Category</option>
-                                <option value="status">Sort: Status</option>
-                            </select>
-
-                            <button
-                                onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-                                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                            >
-                                {sortDirection === 'asc' ? <SortAsc size={16} /> : <SortDesc size={16} />}
-                            </button>
-
-                            <button
-                                onClick={() => setViewMode(viewMode === 'list' ? 'grouped' : 'list')}
-                                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                            >
-                                {viewMode === 'list' ? <Grid size={16} /> : <List size={16} />}
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Active Filters Badge */}
-                    {(filterCategory !== 'ALL' || filterStatus !== 'ACTIVE' || filterPriority !== 'ALL' || filterOwner !== 'ALL' || searchTerm) && (
-                        <div className="flex items-center gap-2 text-xs">
-                            <span className="text-gray-500">Active filters:</span>
-                            {filterCategory !== 'ALL' && (
-                                <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full font-bold">
-                                    {TASK_CATEGORIES[filterCategory].label}
-                                </span>
-                            )}
-                            {filterPriority !== 'ALL' && (
-                                <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full font-bold">
-                                    {filterPriority} Priority
-                                </span>
-                            )}
-                            {filterOwner !== 'ALL' && (
-                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-bold">
-                                    Owner: {filterOwner}
-                                </span>
-                            )}
-                            {searchTerm && (
-                                <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full font-bold">
-                                    Search: "{searchTerm}"
-                                </span>
-                            )}
-                            <button
-                                onClick={() => {
-                                    setFilterCategory('ALL');
-                                    setFilterStatus('ACTIVE');
-                                    setFilterPriority('ALL');
-                                    setFilterOwner('ALL');
-                                    setSearchTerm('');
-                                }}
-                                className="text-red-600 hover:underline font-bold"
-                            >
-                                Clear All
-                            </button>
-                        </div>
-                    )}
-
-                    <div className="flex items-center justify-between pt-2 border-t">
-                        <span className="text-xs text-gray-500">
-                            Showing {filteredAndSortedTasks.length} of {tasks.length} task{tasks.length !== 1 ? 's' : ''}
-                        </span>
-                        
-                        {selectedTasks.length > 0 && (
-                            <div className="flex gap-2">
-                                <Button
-                                    onClick={handleBulkComplete}
-                                    variant="secondary"
-                                    className="text-xs bg-green-50 text-green-700 border-green-200"
-                                >
-                                    <CheckCircle size={14} className="mr-1" />
-                                    Complete {selectedTasks.length}
-                                </Button>
-                                <Button
-                                    onClick={handleBulkDelete}
-                                    variant="secondary"
-                                    className="text-xs bg-red-50 text-red-700 border-red-200"
-                                >
-                                    <Trash2 size={14} className="mr-1" />
-                                    Delete {selectedTasks.length}
-                                </Button>
-                            </div>
+                    <div className="text-xs text-gray-600">
+                        {viewMode === 'calendar' ? (
+                            <span className="font-bold">📅 CEO Calendar - Chase Tasks & Deadlines</span>
+                        ) : (
+                            <span>Switch views to organize your workflow</span>
                         )}
                     </div>
                 </div>
             </Card>
 
-            {/* Bulk Select Bar */}
-            {filteredAndSortedTasks.length > 0 && (
+            {/* CALENDAR VIEW */}
+            {viewMode === 'calendar' && (
+                <BusinessTasksCalendarView
+                    tasks={tasks}
+                    onTaskClick={(task) => {
+                        setEditingTask(task);
+                        setShowModal(true);
+                    }}
+                    onDateClick={(date) => {
+                        setEditingTask({
+                            dueDate: date.toISOString().split('T')[0]
+                        });
+                        setShowModal(true);
+                    }}
+                    user={user}
+                />
+            )}
+
+            {/* Advanced Filters & Search - only show in list/grouped views */}
+            {viewMode !== 'calendar' && (
+                <Card className="p-4">
+                    <div className="space-y-4">
+                        {/* Search Bar */}
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                            <input
+                                type="text"
+                                placeholder="Search tasks by title, description, owner, or notes..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl font-medium"
+                            />
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    <X size={20} />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Filter Row */}
+                        <div className="flex flex-wrap gap-3 items-center">
+                            <Filter size={16} className="text-gray-400" />
+                            <span className="text-xs font-bold text-gray-500 uppercase">Filters:</span>
+
+                            <select
+                                value={filterCategory}
+                                onChange={e => setFilterCategory(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
+                            >
+                                <option value="ALL">All Categories</option>
+                                {Object.entries(TASK_CATEGORIES).map(([key, cat]) => (
+                                    <option key={key} value={key}>{cat.label}</option>
+                                ))}
+                            </select>
+
+                            <select
+                                value={filterStatus}
+                                onChange={e => setFilterStatus(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
+                            >
+                                <option value="ACTIVE">Active Tasks</option>
+                                <option value="COMPLETED">Completed Tasks</option>
+                                <option value="ALL">All Tasks</option>
+                            </select>
+
+                            <select
+                                value={filterPriority}
+                                onChange={e => setFilterPriority(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
+                            >
+                                <option value="ALL">All Priorities</option>
+                                {PRIORITY_LEVELS.map(p => (
+                                    <option key={p.value} value={p.value}>{p.label}</option>
+                                ))}
+                            </select>
+
+                            {uniqueOwners.length > 0 && (
+                                <select
+                                    value={filterOwner}
+                                    onChange={e => setFilterOwner(e.target.value)}
+                                    className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
+                                >
+                                    <option value="ALL">All Owners</option>
+                                    {uniqueOwners.map(owner => (
+                                        <option key={owner} value={owner}>{owner}</option>
+                                    ))}
+                                </select>
+                            )}
+
+                            <div className="ml-auto flex gap-2 items-center">
+                                <button
+                                    onClick={() => setShowCompletedTasks(!showCompletedTasks)}
+                                    className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold transition-colors ${
+                                        showCompletedTasks 
+                                            ? 'bg-green-100 text-green-700' 
+                                            : 'bg-gray-100 text-gray-600'
+                                    }`}
+                                >
+                                    {showCompletedTasks ? <Eye size={14} /> : <EyeOff size={14} />}
+                                    {showCompletedTasks ? 'Hide' : 'Show'} Completed
+                                </button>
+
+                                <select
+                                    value={sortBy}
+                                    onChange={e => setSortBy(e.target.value)}
+                                    className="px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold bg-white"
+                                >
+                                    <option value="dueDate">Sort: Due Date</option>
+                                    <option value="priority">Sort: Priority</option>
+                                    <option value="title">Sort: Title</option>
+                                    <option value="category">Sort: Category</option>
+                                    <option value="status">Sort: Status</option>
+                                </select>
+
+                                <button
+                                    onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                >
+                                    {sortDirection === 'asc' ? <SortAsc size={16} /> : <SortDesc size={16} />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Active Filters Badge */}
+                        {(filterCategory !== 'ALL' || filterStatus !== 'ACTIVE' || filterPriority !== 'ALL' || filterOwner !== 'ALL' || searchTerm) && (
+                            <div className="flex items-center gap-2 text-xs flex-wrap">
+                                <span className="text-gray-500">Active filters:</span>
+                                {filterCategory !== 'ALL' && (
+                                    <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full font-bold">
+                                        {TASK_CATEGORIES[filterCategory].label}
+                                    </span>
+                                )}
+                                {filterPriority !== 'ALL' && (
+                                    <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full font-bold">
+                                        {filterPriority} Priority
+                                    </span>
+                                )}
+                                {filterOwner !== 'ALL' && (
+                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full font-bold">
+                                        Owner: {filterOwner}
+                                    </span>
+                                )}
+                                {searchTerm && (
+                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full font-bold">
+                                        Search: "{searchTerm}"
+                                    </span>
+                                )}
+                                <button
+                                    onClick={() => {
+                                        setFilterCategory('ALL');
+                                        setFilterStatus('ACTIVE');
+                                        setFilterPriority('ALL');
+                                        setFilterOwner('ALL');
+                                        setSearchTerm('');
+                                    }}
+                                    className="text-red-600 hover:underline font-bold"
+                                >
+                                    Clear All
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-2 border-t">
+                            <span className="text-xs text-gray-500">
+                                Showing {filteredAndSortedTasks.length} of {tasks.length} task{tasks.length !== 1 ? 's' : ''}
+                            </span>
+                            
+                            {selectedTasks.length > 0 && (
+                                <div className="flex gap-2">
+                                    <Button
+                                        onClick={handleBulkComplete}
+                                        variant="secondary"
+                                        className="text-xs bg-green-50 text-green-700 border-green-200"
+                                    >
+                                        <CheckCircle size={14} className="mr-1" />
+                                        Complete {selectedTasks.length}
+                                    </Button>
+                                    <Button
+                                        onClick={handleBulkDelete}
+                                        variant="secondary"
+                                        className="text-xs bg-red-50 text-red-700 border-red-200"
+                                    >
+                                        <Trash2 size={14} className="mr-1" />
+                                        Delete {selectedTasks.length}
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </Card>
+            )}
+
+            {/* Bulk Select Bar - only in list/grouped views */}
+            {viewMode !== 'calendar' && filteredAndSortedTasks.length > 0 && (
                 <Card className="p-3 bg-gray-50">
                     <label className="flex items-center gap-3 cursor-pointer">
                         <input
@@ -1515,8 +1973,8 @@ const BusinessTasksCalendar = ({ user }) => {
                 </div>
             )}
 
-            {/* Empty State */}
-            {filteredAndSortedTasks.length === 0 && (
+            {/* Empty State - only in list/grouped views */}
+            {viewMode !== 'calendar' && filteredAndSortedTasks.length === 0 && (
                 <Card className="p-12 text-center">
                     <Calendar className="mx-auto text-gray-300 mb-4" size={64} />
                     <h3 className="text-xl font-bold text-gray-600 mb-2">
