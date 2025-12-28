@@ -14,9 +14,6 @@ const formatCurrency = (value) =>
 const formatPHP = (value) => 
     new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(value);
 
-const formatPHP = (value) => 
-    new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 }).format(value);
-
 // --- NEW CHART COMPONENTS ---
 
 const MiniBarChart = ({ data, height = 50 }) => {
