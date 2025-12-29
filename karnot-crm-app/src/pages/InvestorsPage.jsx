@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { Building, Mail, Phone, Globe, Linkedin, Plus, Edit, Trash2, Search, Filter, DollarSign, MapPin, Users, FileText, Grid, List, Send, Download, X, CheckSquare, Copy, PlusCircle, ExternalLink, Navigation, Target, Handshake, UserCheck } from 'lucide-react';
+import { Building, Mail, Phone, Globe, Linkedin, Plus, Edit, Trash2, Search, Filter, DollarSign, MapPin, Users, FileText, Grid, List, Send, Download, X, CheckSquare, Copy, PlusCircle, ExternalLink, Navigation, Target, Handshake, UserCheck, Upload } from 'lucide-react';
 import { importInvestors } from '../utils/importInvestors';
 import InvestorFunnel from '../components/InvestorFunnel';
 import Papa from 'papaparse';
@@ -145,6 +145,440 @@ const DuplicateResolver = ({ investors, onClose, onResolve }) => {
   );
 };
 
+// ========================================
+// CSV IMPORT MODAL
+// ========================================
+const CSVImportModal = ({ onClose, onImport, user }) => {
+  const [csvData, setCsvData] = useState([]);
+  const [preview, setPreview] = useState([]);
+  const [mapping, setMapping] = useState({
+    name: '',
+    type: '',
+    region: '',
+    city: '',
+    contactPerson: '',
+    email: '',
+    phone: '',
+    website: '',
+    linkedin: '',
+    ticketSize: '',
+    priority: '',
+    stage: '',
+    fit: '',
+    notes: ''
+  });
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      complete: (results) => {
+        setCsvData(results.data);
+        setPreview(results.data.slice(0, 6)); // Show first 5 rows + header
+        
+        // Auto-map columns if they match common patterns
+        const headers = results.data[0];
+        const autoMapping = {};
+        
+        headers.forEach((header, idx) => {
+          const lower = header.toLowerCase().trim();
+          if (lower.includes('name') || lower.includes('company')) autoMapping.name = header;
+          if (lower.includes('type') || lower.includes('investor type')) autoMapping.type = header;
+          if (lower.includes('region') || lower.includes('location')) autoMapping.region = header;
+          if (lower.includes('city')) autoMapping.city = header;
+          if (lower.includes('contact') || lower.includes('person')) autoMapping.contactPerson = header;
+          if (lower.includes('email') || lower.includes('e-mail')) autoMapping.email = header;
+          if (lower.includes('phone') || lower.includes('tel')) autoMapping.phone = header;
+          if (lower.includes('website') || lower.includes('url')) autoMapping.website = header;
+          if (lower.includes('linkedin')) autoMapping.linkedin = header;
+          if (lower.includes('ticket') || lower.includes('size')) autoMapping.ticketSize = header;
+          if (lower.includes('priority')) autoMapping.priority = header;
+          if (lower.includes('stage')) autoMapping.stage = header;
+          if (lower.includes('fit') || lower.includes('score')) autoMapping.fit = header;
+          if (lower.includes('notes') || lower.includes('comment')) autoMapping.notes = header;
+        });
+        
+        setMapping(prev => ({ ...prev, ...autoMapping }));
+      },
+      header: true,
+      skipEmptyLines: true
+    });
+  };
+
+  const handleImport = async () => {
+    if (!mapping.name) {
+      alert('⚠️ Please map the "Company Name" field');
+      return;
+    }
+
+    setImporting(true);
+    
+    try {
+      const batch = writeBatch(db);
+      let importCount = 0;
+      
+      // Skip header row
+      for (let i = 1; i < csvData.length; i++) {
+        const row = csvData[i];
+        
+        const investorData = {
+          name: row[mapping.name] || '',
+          type: row[mapping.type] || 'Venture Capital',
+          region: row[mapping.region] || 'Philippines',
+          city: row[mapping.city] || '',
+          contactPerson: row[mapping.contactPerson] || '',
+          email: row[mapping.email] || '',
+          phone: row[mapping.phone] || '',
+          website: row[mapping.website] || '',
+          linkedin: row[mapping.linkedin] || '',
+          ticketSize: row[mapping.ticketSize] || '',
+          priority: row[mapping.priority] || 'MEDIUM',
+          stage: row[mapping.stage] || 'RESEARCH',
+          fit: row[mapping.fit] || 'MODERATE',
+          notes: row[mapping.notes] || '',
+          focus: [],
+          interactions: [],
+          amount: 0,
+          status: 'ACTIVE',
+          createdAt: serverTimestamp()
+        };
+
+        // Skip rows with no company name
+        if (!investorData.name.trim()) continue;
+
+        const docRef = doc(collection(db, 'users', user.uid, 'investors'));
+        batch.set(docRef, investorData);
+        importCount++;
+      }
+
+      await batch.commit();
+      alert(`✅ Successfully imported ${importCount} investors!`);
+      onImport();
+      onClose();
+      
+    } catch (error) {
+      console.error('Import error:', error);
+      alert('❌ Import failed. Please check the console for details.');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const availableColumns = csvData.length > 0 ? Object.keys(csvData[0]) : [];
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+        <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6 border-b">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white bg-opacity-20 rounded-lg text-white">
+                <Upload size={24} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black uppercase text-white tracking-tight">Import Investors from CSV</h2>
+                <p className="text-sm text-green-100 font-bold">
+                  Upload a CSV file and map columns to investor fields
+                </p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-2 hover:bg-white hover:bg-opacity-10 rounded-full text-white">
+              <X size={24} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* FILE UPLOAD */}
+          <div className="bg-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-8 text-center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Upload size={48} className="mx-auto mb-4 text-blue-400" />
+            <h3 className="font-black text-gray-800 text-lg mb-2">Upload CSV File</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Select a CSV file containing your investor data
+            </p>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold uppercase text-sm"
+            >
+              Choose File
+            </button>
+            {csvData.length > 0 && (
+              <p className="mt-4 text-sm font-bold text-green-600">
+                ✅ {csvData.length - 1} rows loaded
+              </p>
+            )}
+          </div>
+
+          {/* COLUMN MAPPING */}
+          {csvData.length > 0 && (
+            <>
+              <div className="bg-white border-2 border-gray-200 rounded-2xl p-6">
+                <h3 className="font-black text-gray-800 text-lg mb-4 flex items-center gap-2">
+                  <Target size={20} className="text-purple-600" />
+                  Map CSV Columns to Investor Fields
+                </h3>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      Company Name * (Required)
+                    </label>
+                    <select
+                      value={mapping.name}
+                      onChange={(e) => setMapping({...mapping, name: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      Investor Type
+                    </label>
+                    <select
+                      value={mapping.type}
+                      onChange={(e) => setMapping({...mapping, type: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      Region
+                    </label>
+                    <select
+                      value={mapping.region}
+                      onChange={(e) => setMapping({...mapping, region: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      City
+                    </label>
+                    <select
+                      value={mapping.city}
+                      onChange={(e) => setMapping({...mapping, city: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      Contact Person
+                    </label>
+                    <select
+                      value={mapping.contactPerson}
+                      onChange={(e) => setMapping({...mapping, contactPerson: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      Email
+                    </label>
+                    <select
+                      value={mapping.email}
+                      onChange={(e) => setMapping({...mapping, email: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      Phone
+                    </label>
+                    <select
+                      value={mapping.phone}
+                      onChange={(e) => setMapping({...mapping, phone: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      Website
+                    </label>
+                    <select
+                      value={mapping.website}
+                      onChange={(e) => setMapping({...mapping, website: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      Ticket Size
+                    </label>
+                    <select
+                      value={mapping.ticketSize}
+                      onChange={(e) => setMapping({...mapping, ticketSize: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      Priority
+                    </label>
+                    <select
+                      value={mapping.priority}
+                      onChange={(e) => setMapping({...mapping, priority: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-black uppercase text-gray-500 mb-2">
+                      Notes
+                    </label>
+                    <select
+                      value={mapping.notes}
+                      onChange={(e) => setMapping({...mapping, notes: e.target.value})}
+                      className="w-full p-2 border-2 border-gray-300 rounded-lg font-bold"
+                    >
+                      <option value="">-- Select Column --</option>
+                      {availableColumns.map(col => (
+                        <option key={col} value={col}>{col}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* PREVIEW */}
+              <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-6">
+                <h3 className="font-black text-gray-800 text-lg mb-4">Preview (First 5 Rows)</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-gray-200">
+                        {availableColumns.map(col => (
+                          <th key={col} className="p-2 text-left font-black uppercase border">
+                            {col}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.slice(1, 6).map((row, idx) => (
+                        <tr key={idx} className="border-b hover:bg-gray-100">
+                          {availableColumns.map(col => (
+                            <td key={col} className="p-2 border">
+                              {row[col]}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* FOOTER */}
+        <div className="p-6 bg-gray-100 border-t flex justify-between items-center">
+          <div className="text-sm text-gray-600">
+            {csvData.length > 0 && (
+              <p className="font-bold">
+                Ready to import <span className="text-green-600">{csvData.length - 1}</span> investors
+              </p>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-gray-300 rounded-lg hover:bg-gray-400 font-bold"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={!mapping.name || importing}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold uppercase text-sm disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {importing ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                  Importing...
+                </>
+              ) : (
+                <>
+                  <Upload size={16} />
+                  Import Investors
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const InvestorsPage = ({ user, contacts }) => {
   const [investors, setInvestors] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -157,6 +591,7 @@ const InvestorsPage = ({ user, contacts }) => {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid');
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showCSVImport, setShowCSVImport] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showEmailMenu, setShowEmailMenu] = useState(null);
 
@@ -398,6 +833,14 @@ const InvestorsPage = ({ user, contacts }) => {
         />
       )}
 
+      {showCSVImport && (
+        <CSVImportModal
+          onClose={() => setShowCSVImport(false)}
+          onImport={loadInvestors}
+          user={user}
+        />
+      )}
+
       {/* HEADER */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
@@ -409,7 +852,7 @@ const InvestorsPage = ({ user, contacts }) => {
           </p>
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <div className="flex gap-1 border-2 border-gray-200 rounded-lg p-1">
             <button
               onClick={() => setViewMode('grid')}
@@ -444,6 +887,14 @@ const InvestorsPage = ({ user, contacts }) => {
               Clean Duplicates
             </button>
           )}
+
+          <button
+            onClick={() => setShowCSVImport(true)}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-bold uppercase text-xs tracking-wider flex items-center gap-2"
+          >
+            <Upload size={16} />
+            Import CSV
+          </button>
           
           {investors.length === 0 && (
             <button
@@ -629,16 +1080,24 @@ const InvestorsPage = ({ user, contacts }) => {
               <h3 className="text-xl font-bold text-gray-700 mb-2">No Investors Found</h3>
               <p className="text-gray-600 mb-4">
                 {investors.length === 0 
-                  ? 'Import the investor database or add your first investor manually'
+                  ? 'Import the investor database, CSV, or add your first investor manually'
                   : 'No investors match your search criteria'}
               </p>
               {investors.length === 0 && (
-                <button
-                  onClick={handleImportDatabase}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold"
-                >
-                  📥 Import 43 Investors
-                </button>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={handleImportDatabase}
+                    className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold"
+                  >
+                    📥 Import 43 Investors
+                  </button>
+                  <button
+                    onClick={() => setShowCSVImport(true)}
+                    className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-bold"
+                  >
+                    📊 Import CSV
+                  </button>
+                </div>
               )}
             </div>
           ) : (
