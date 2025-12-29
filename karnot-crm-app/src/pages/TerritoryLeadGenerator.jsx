@@ -16,6 +16,37 @@ const TerritoryLeadGenerator = ({ territories = [], user }) => {
     const [addingToCompanies, setAddingToCompanies] = useState(new Set());
 
     const businessTypes = [
+        // HVAC & Heating Contractors
+        { value: 'heating_contractor', keyword: 'heating contractor HVAC', label: 'Heating Contractors', icon: '🔥', category: 'HVAC & Heating' },
+        { value: 'hvac_contractor', keyword: 'HVAC contractor air conditioning', label: 'HVAC Contractors', icon: '❄️', category: 'HVAC & Heating' },
+        { value: 'furnace_repair', keyword: 'furnace repair installation service', label: 'Furnace Repair & Installation', icon: '🔧', category: 'HVAC & Heating' },
+        { value: 'boiler_installation', keyword: 'boiler installation repair service', label: 'Boiler Installation & Repair', icon: '⚙️', category: 'HVAC & Heating' },
+        { value: 'heating_system', keyword: 'heating system specialist repair', label: 'Heating System Specialists', icon: '🌡️', category: 'HVAC & Heating' },
+        { value: 'emergency_heating', keyword: '24/7 emergency heating service repair', label: '24/7 Emergency Heating Service', icon: '🚨', category: 'HVAC & Heating' },
+        { value: 'heating_cooling', keyword: 'heating and cooling specialist HVAC', label: 'Heating & Cooling Specialists', icon: '♨️', category: 'HVAC & Heating' },
+        
+        // Hot Water & Boiler Suppliers
+        { value: 'boiler_supplier', keyword: 'hot water boiler supplier commercial', label: 'Hot Water Boiler Suppliers', icon: '💧', category: 'Boiler & Hot Water' },
+        { value: 'commercial_boiler', keyword: 'commercial boiler supplier industrial', label: 'Commercial Boiler Suppliers', icon: '🏭', category: 'Boiler & Hot Water' },
+        { value: 'industrial_boiler', keyword: 'industrial boiler manufacturer supplier', label: 'Industrial Boiler Manufacturers', icon: '⚡', category: 'Boiler & Hot Water' },
+        { value: 'electric_boiler', keyword: 'electric boiler supplier installation', label: 'Electric Boiler Suppliers', icon: '🔌', category: 'Boiler & Hot Water' },
+        { value: 'boiler_parts', keyword: 'boiler parts equipment supplier', label: 'Boiler Parts & Equipment', icon: '🔩', category: 'Boiler & Hot Water' },
+        { value: 'water_heater', keyword: 'water heater supplier commercial', label: 'Water Heater Suppliers', icon: '🚿', category: 'Boiler & Hot Water' },
+        { value: 'gas_boiler', keyword: 'gas fired boiler water tube', label: 'Gas-Fired Boiler Suppliers', icon: '🔥', category: 'Boiler & Hot Water' },
+        
+        // Plumbing & Heating Merchants
+        { value: 'heating_merchant', keyword: 'heating merchant wholesale supplier', label: 'Heating Merchants', icon: '🏪', category: 'Plumbing & Merchants' },
+        { value: 'plumber_supplier', keyword: 'plumber supplier wholesale distributor', label: 'Plumber Suppliers', icon: '🔧', category: 'Plumbing & Merchants' },
+        { value: 'plumbing_heating_wholesale', keyword: 'plumbing heating wholesale distributor', label: 'Plumbing & Heating Wholesalers', icon: '📦', category: 'Plumbing & Merchants' },
+        { value: 'hvac_distributor', keyword: 'HVAC equipment distributor supplier', label: 'HVAC Equipment Distributors', icon: '🚚', category: 'Plumbing & Merchants' },
+        { value: 'mechanical_contractor', keyword: 'mechanical contractor plumbing HVAC', label: 'Mechanical Contractors', icon: '⚙️', category: 'Plumbing & Merchants' },
+        
+        // Water Treatment
+        { value: 'water_treatment', keyword: 'water treatment company industrial', label: 'Water Treatment Companies', icon: '💦', category: 'Water Treatment' },
+        { value: 'water_purification', keyword: 'water purification system commercial', label: 'Water Purification Systems', icon: '🌊', category: 'Water Treatment' },
+        { value: 'industrial_water', keyword: 'industrial water treatment plant', label: 'Industrial Water Treatment', icon: '🏭', category: 'Water Treatment' },
+        { value: 'water_filtration', keyword: 'water filtration system supplier', label: 'Water Filtration Suppliers', icon: '💧', category: 'Water Treatment' },
+        
         // Hospitality
         { value: 'hotel', keyword: 'hotel resort', label: 'Hotels & Resorts', icon: '🏨', category: 'Hospitality' },
         { value: 'restaurant', keyword: 'restaurant fine dining', label: 'Fine Dining Restaurants', icon: '🍽️', category: 'Hospitality' },
