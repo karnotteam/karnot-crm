@@ -309,6 +309,10 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             return;
         }
 
+        // --- CAPEX (MUST BE CALCULATED BEFORE HEAT RECOVERY) ---
+        const icoolSalePrice = selectedICool.salesPriceUSD * CONFIG.FX_USD_PHP;
+        const totalCapex = icoolSalePrice + installationCost;
+
         // --- HEAT RECOVERY DETECTION & CALCULATIONS ---
         const hasHeatRecoveryPort = 
             (selectedICool.name || '').toLowerCase().includes('heat recovery') ||
@@ -403,10 +407,6 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         const heatRecoverySavings = heatRecovery?.savings?.vs_electric || 0;
         const netAnnualCost = annualElectricityCost - heatRecoverySavings;
         const effectivePayback = totalCapex / Math.max(1, Math.abs(netAnnualCost));
-
-        // --- CAPEX ---
-        const icoolSalePrice = selectedICool.salesPriceUSD * CONFIG.FX_USD_PHP;
-        const totalCapex = icoolSalePrice + installationCost;
 
         // --- ROI CALCULATIONS ---
         // Note: For cold rooms, "savings" come from avoiding alternative cooling methods
