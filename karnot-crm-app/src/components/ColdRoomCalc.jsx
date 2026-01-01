@@ -370,7 +370,8 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             );
             
             // Energy value of hot water produced
-            const energy_per_liter_kWh = (CONFIG.WATER_SPECIFIC_HEAT_KJ_KGK * temp_rise_K) / 3600;
+            // kJ to kWh conversion: divide by 3.6 (not 3600!)
+            const energy_per_liter_kWh = (CONFIG.WATER_SPECIFIC_HEAT_KJ_KGK * temp_rise_K) / 3.6;
             const daily_hr_energy_kWh = actual_hot_water_utilized_L_day * energy_per_liter_kWh;
             const annual_hr_energy_kWh = daily_hr_energy_kWh * 365;
             
