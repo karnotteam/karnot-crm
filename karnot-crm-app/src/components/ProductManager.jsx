@@ -31,7 +31,9 @@ import {
   Thermometer,
   Box,
   Wind,
-  Battery
+  Battery,
+  Image as ImageIcon,
+  FileText // Added for certificate icon
 } from 'lucide-react';
 import { Card, Button, Input, Checkbox, Textarea } from '../data/constants';
 
@@ -301,6 +303,10 @@ const ProductManager = ({ user }) => {
     Fan_Details: '',
     Air_Flow: '',
     Certificates: '',
+    // ✅ NEW FIELDS ADDED
+    Certificate_Detail: '', // Specific cert numbers (MCS HP0304 etc)
+    Image_URL: '',          // Direct image link for datasheets
+
     max_temp_c: 75,
     isReversible: true,
     Unit_Dimensions: '',
@@ -453,6 +459,10 @@ const ProductManager = ({ user }) => {
       Net_Weight: parseFloat(product.Net_Weight || 0),
       Gross_Weight: parseFloat(product.Gross_Weight || 0),
       isReversible: product.isReversible !== undefined ? product.isReversible : true,
+
+      // ✅ NEW FIELDS IN EDIT
+      Certificate_Detail: product.Certificate_Detail || '',
+      Image_URL: product.Image_URL || '',
 
       // ✅ fan coil numeric normalize
       kW_Heating_Nominal: parseFloat(product.kW_Heating_Nominal || 0),
@@ -743,6 +753,10 @@ const ProductManager = ({ user }) => {
       "Fan Details": p.Fan_Details,
       "Air Flow": p.Air_Flow,
       "Certificates": p.Certificates,
+      // ✅ EXPORT NEW FIELDS
+      "Certificate_Detail": p.Certificate_Detail,
+      "Image_URL": p.Image_URL,
+
       "Net Weight": p.Net_Weight,
       "Gross Weight": p.Gross_Weight,
       "Unit Dimensions": p.Unit_Dimensions,
@@ -863,6 +877,12 @@ const ProductManager = ({ user }) => {
           'fan details': 'Fan_Details',
           'air flow': 'Air_Flow',
           'certificates': 'Certificates',
+          // ✅ NEW FIELD MAPPINGS
+          'certificate detail': 'Certificate_Detail',
+          'certificate_detail': 'Certificate_Detail',
+          'image url': 'Image_URL',
+          'image_url': 'Image_URL',
+
           'net weight': 'Net_Weight',
           'gross weight': 'Gross_Weight',
           'unit dimensions': 'Unit_Dimensions',
@@ -922,54 +942,19 @@ const ProductManager = ({ user }) => {
         };
 
         const numericFields = [
-          'salesPriceUSD',
-          'costPriceUSD',
-          'kW_DHW_Nominal',
-          'kW_Cooling_Nominal',
-          'COP_DHW',
-          'SCOP_DHW_Avg',
-          'max_temp_c',
-          'Rated_Power_Input',
-          'Max_Running_Current',
-          'Sound_Power_Level',
-          'Net_Weight',
-          'Gross_Weight',
+          'salesPriceUSD', 'costPriceUSD', 'kW_DHW_Nominal', 'kW_Cooling_Nominal',
+          'COP_DHW', 'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current',
+          'Sound_Power_Level', 'Net_Weight', 'Gross_Weight',
 
-          // ✅ fan coil numeric
-          'kW_Heating_Nominal',
-          'Airflow_H_m3h',
-          'Airflow_M_m3h',
-          'Airflow_L_m3h',
-          'Noise_H_dBA',
-          'Noise_M_dBA',
-          'Noise_L_dBA',
-          'PowerInput_W',
-          'WaterFlow_Cooling_m3h',
-          'WaterFlow_Heating_m3h',
+          // ✅ FAN COIL numeric
+          'kW_Heating_Nominal', 'Airflow_H_m3h', 'Airflow_M_m3h', 'Airflow_L_m3h',
+          'Noise_H_dBA', 'Noise_M_dBA', 'Noise_L_dBA', 'PowerInput_W',
+          'WaterFlow_Cooling_m3h', 'WaterFlow_Heating_m3h',
 
           // ✅ iVOLT numeric
-          'pv_Watt_Rated',
-          'pv_Efficiency_pct',
-          'pv_Voc_V',
-          'pv_Vmp_V',
-          'pv_Isc_A',
-          'pv_Imp_A',
-          'pv_Weight_kg',
-          'pv_Warranty_years',
-
-          'inv_kW_Rated',
-          'inv_MPPT_Count',
-          'inv_Max_PV_Input_kW',
-          'inv_Max_PV_Voltage_V',
-          'inv_Warranty_years',
-
-          'bat_kWh_Nominal',
-          'bat_Voltage_V',
-          'bat_Ah',
-          'bat_DoD_pct',
-          'bat_Cycle_Life',
-          'bat_Max_Discharge_kW',
-          'bat_Warranty_years',
+          'pv_Watt_Rated', 'pv_Efficiency_pct', 'pv_Voc_V', 'pv_Vmp_V', 'pv_Isc_A', 'pv_Imp_A', 'pv_Weight_kg', 'pv_Warranty_years',
+          'inv_kW_Rated', 'inv_MPPT_Count', 'inv_Max_PV_Input_kW', 'inv_Max_PV_Voltage_V', 'inv_Warranty_years',
+          'bat_kWh_Nominal', 'bat_Voltage_V', 'bat_Ah', 'bat_DoD_pct', 'bat_Cycle_Life', 'bat_Max_Discharge_kW', 'bat_Warranty_years',
         ];
 
         const booleanFields = [
@@ -1191,6 +1176,17 @@ const ProductManager = ({ user }) => {
             <Input label="Category" value={formData.category} onChange={handleInputChange('category')} />
             <Input label="System ID (Unique)" value={formData.id} onChange={handleInputChange('id')} disabled={!!editId} />
 
+            {/* ✅ NEW: Image URL Input */}
+            <div className="md:col-span-4">
+              <Input 
+                label="Image URL (For Datasheets)" 
+                value={formData.Image_URL} 
+                onChange={handleInputChange('Image_URL')} 
+                placeholder="https://... (e.g. GitHub raw link)"
+                icon={ImageIcon}
+              />
+            </div>
+
             <Input label="Sales Price (USD)" type="number" value={formData.salesPriceUSD} onChange={handleInputChange('salesPriceUSD')} />
             <Input label="Cost Price (USD)" type="number" value={formData.costPriceUSD} onChange={handleInputChange('costPriceUSD')} />
           </div>
@@ -1259,7 +1255,16 @@ const ProductManager = ({ user }) => {
 
               <Input label="Outdoor Temp Range" value={formData.Outdoor_Air_Temp_Range} onChange={handleInputChange('Outdoor_Air_Temp_Range')} placeholder="e.g. -7 °C to 43 °C" />
               <Input label="Sound Power Level (dB(A))" type="number" value={formData.Sound_Power_Level} onChange={handleInputChange('Sound_Power_Level')} />
-              <Input label="Certificates" value={formData.Certificates} onChange={handleInputChange('Certificates')} placeholder="e.g. CE, TUV, RoHS" />
+              <Input label="Certificates (General)" value={formData.Certificates} onChange={handleInputChange('Certificates')} placeholder="e.g. CE, TUV, RoHS" />
+              
+              {/* ✅ NEW: Certificate Details Input */}
+              <Input 
+                label="Certificate Details (MCS etc)" 
+                value={formData.Certificate_Detail} 
+                onChange={handleInputChange('Certificate_Detail')} 
+                placeholder="e.g. MCS HP0304"
+                icon={FileText}
+              />
             </div>
           </div>
 
