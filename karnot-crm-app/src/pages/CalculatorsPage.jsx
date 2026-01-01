@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '../data/constants.jsx';
-import { Calculator, Sun, Droplets, Wind, Zap, Flame, ArrowRight } from 'lucide-react';
+import { Calculator, Sun, Droplets, Wind, Zap, Flame, ArrowRight, Snowflake } from 'lucide-react';
 
 const CalculatorsPage = ({ setActiveView }) => {
     const tools = [
@@ -16,6 +16,13 @@ const CalculatorsPage = ({ setActiveView }) => {
             title: 'Warm Room Heating',
             description: 'Industrial heat pump sizing for temperature-controlled rooms, replacing steam boiler systems.',
             icon: <Flame className="text-red-600" size={32} />,
+            status: 'Ready'
+        },
+        {
+            id: 'coldRoomCalc',
+            title: 'Cold Room Cooling',
+            description: 'Panasonic iCOOL system sizing for refrigerated storage, blast freezing, and cold chain facilities.',
+            icon: <Snowflake className="text-blue-600" size={32} />,
             status: 'Ready'
         },
         {
