@@ -26,6 +26,16 @@ const CONFIG = {
     HEAT_RECOVERY_EFFICIENCY: 0.70, // 70% of condenser heat recoverable
     WATER_DENSITY_KG_L: 1.0,
     
+    // Fuel Heating Values (kWh per unit)
+    LPG_KWH_PER_L: 6.9, // ~6.9 kWh per liter of LPG
+    DIESEL_KWH_PER_L: 10.0, // ~10 kWh per liter of diesel
+    NATURAL_GAS_KWH_PER_M3: 10.55, // ~10.55 kWh per m³ natural gas
+    
+    // CO2 Emissions (kg CO2 per unit)
+    LPG_CO2_KG_PER_L: 1.51,
+    DIESEL_CO2_KG_PER_L: 2.68,
+    NATURAL_GAS_CO2_KG_PER_M3: 1.98,
+    
     // Product-specific heat and latent heat data
     PRODUCT_DATA: {
         'meat_frozen': { 
@@ -138,7 +148,16 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         enableHeatRecovery: true, // Auto-enabled if unit supports it
         hotWaterUsage_L_day: 1000, // Daily hot water requirement
         hotWaterInletTemp: 20, // Incoming water temperature
-        hotWaterOutletTemp: 60 // Target hot water temperature
+        hotWaterOutletTemp: 60, // Target hot water temperature
+        // Alternative Heating Systems for Comparison
+        currentHeatingSystem: 'electric', // electric, lpg, diesel, natural_gas
+        lpgPrice: 60.00, // ₱/L
+        dieselPrice: 65.00, // ₱/L
+        naturalGasPrice: 45.00, // ₱/m³
+        lpgEfficiency: 85, // %
+        dieselEfficiency: 80, // %
+        naturalGasEfficiency: 90, // %
+        electricHeaterEfficiency: 95 // %
     });
     
     const [results, setResults] = useState(null);
@@ -355,36 +374,185 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             const daily_hr_energy_kWh = actual_hot_water_utilized_L_day * energy_per_liter_kWh;
             const annual_hr_energy_kWh = daily_hr_energy_kWh * 365;
             
-            // Cost savings from heat recovery
-            // vs Electric water heater (90% efficiency)
-            const annual_electric_savings = (annual_hr_energy_kWh / 0.90) * electricityTariff;
+            // Cost savings from heat recovery - COMPREHENSIVE FUEL COMPARISON
             
-            // vs LPG water heater (85% efficiency)
-            const lpg_required_L = (annual_hr_energy_kWh / 0.85) * 0.0341; // LPG: ~29.3 kWh/L
-            const annual_lpg_savings = lpg_required_L * dieselPrice;
+            // 1. vs Electric water heater
+            const electric_eff = inputs.electricHeaterEfficiency / 100;
+            const annual_electric_kWh = annual_hr_energy_kWh / electric_eff;
+            const annual_electric_cost = annual_electric_kWh * electricityTariff;
+            const electric_co2_kg = annual_electric_kWh * CONFIG.GRID_CO2_KG_PER_KWH;
             
-            // CO2 avoided
-            const co2_avoided_kg = (annual_hr_energy_kWh / 0.90) * CONFIG.GRID_CO2_KG_PER_KWH;
+            // 2. vs LPG water heater
+            const lpg_eff = inputs.lpgEfficiency / 100;
+            const lpg_energy_needed_kWh = annual_hr_energy_kWh / lpg_eff;
+            const lpg_required_L = lpg_energy_needed_kWh / CONFIG.LPG_KWH_PER_L;
+            const annual_lpg_cost = lpg_required_L * inputs.lpgPrice;
+            const lpg_co2_kg = lpg_required_L * CONFIG.LPG_CO2_KG_PER_L;
+            
+            // 3. vs Diesel water heater
+            const diesel_eff = inputs.dieselEfficiency / 100;
+            const diesel_energy_needed_kWh = annual_hr_energy_kWh / diesel_eff;
+            const diesel_required_L = diesel_energy_needed_kWh / CONFIG.DIESEL_KWH_PER_L;
+            const annual_diesel_cost = diesel_required_L * inputs.dieselPrice;
+            const diesel_co2_kg = diesel_required_L * CONFIG.DIESEL_CO2_KG_PER_L;
+            
+            // 4. vs Natural Gas water heater
+            const ng_eff = inputs.naturalGasEfficiency / 100;
+            const ng_energy_needed_kWh = annual_hr_energy_kWh / ng_eff;
+            const ng_required_m3 = ng_energy_needed_kWh / CONFIG.NATURAL_GAS_KWH_PER_M3;
+            const annual_ng_cost = ng_required_m3 * inputs.naturalGasPrice;
+            const ng_co2_kg = ng_required_m3 * CONFIG.NATURAL_GAS_CO2_KG_PER_M3;
+            
+            // Select comparison based on current heating system
+            let primaryComparison = {
+                name: 'Electric Water Heater',
+                annualCost: annual_electric_cost,
+                annualFuel: `${Math.round(annual_electric_kWh).toLocaleString()} kWh`,
+                co2_kg: electric_co2_kg,
+                efficiency: inputs.electricHeaterEfficiency
+            };
+            
+            if (inputs.currentHeatingSystem === 'lpg') {
+                primaryComparison = {
+                    name: 'LPG Water Heater',
+                    annualCost: annual_lpg_cost,
+                    annualFuel: `${Math.round(lpg_required_L).toLocaleString()} L`,
+                    co2_kg: lpg_co2_kg,
+                    efficiency: inputs.lpgEfficiency
+                };
+            } else if (inputs.currentHeatingSystem === 'diesel') {
+                primaryComparison = {
+                    name: 'Diesel Water Heater',
+                    annualCost: annual_diesel_cost,
+                    annualFuel: `${Math.round(diesel_required_L).toLocaleString()} L`,
+                    co2_kg: diesel_co2_kg,
+                    efficiency: inputs.dieselEfficiency
+                };
+            } else if (inputs.currentHeatingSystem === 'natural_gas') {
+                primaryComparison = {
+                    name: 'Natural Gas Water Heater',
+                    annualCost: annual_ng_cost,
+                    annualFuel: `${Math.round(ng_required_m3).toLocaleString()} m³`,
+                    co2_kg: ng_co2_kg,
+                    efficiency: inputs.naturalGasEfficiency
+                };
+            }
             
             // Payback improvement
-            const hr_payback_years = totalCapex / Math.max(1, annual_electric_savings);
+            const hr_payback_years = totalCapex / Math.max(1, primaryComparison.annualCost);
+            const hr_payback_months = hr_payback_years * 12;
             
             heatRecovery = {
                 hasCapability: true,
+                enabled: true,
                 capacity_kW: hr_capacity_kW,
                 max_production_L_hour: max_hot_water_L_hour,
                 daily_production_L: daily_hot_water_production_L,
                 utilized_L_day: actual_hot_water_utilized_L_day,
                 utilization_pct: (actual_hot_water_utilized_L_day / daily_hot_water_production_L) * 100,
                 annual_energy_kWh: annual_hr_energy_kWh,
+                primaryComparison: primaryComparison,
+                allComparisons: {
+                    electric: {
+                        name: 'Electric Water Heater',
+                        annualCost: annual_electric_cost,
+                        annualCostUSD: annual_electric_cost / CONFIG.FX_USD_PHP,
+                        annualFuel: `${Math.round(annual_electric_kWh).toLocaleString()} kWh`,
+                        fuelPrice: `₱${electricityTariff.toFixed(2)}/kWh`,
+                        co2_kg: electric_co2_kg,
+                        efficiency: inputs.electricHeaterEfficiency
+                    },
+                    lpg: {
+                        name: 'LPG Water Heater',
+                        annualCost: annual_lpg_cost,
+                        annualCostUSD: annual_lpg_cost / CONFIG.FX_USD_PHP,
+                        annualFuel: `${Math.round(lpg_required_L).toLocaleString()} L`,
+                        fuelPrice: `₱${inputs.lpgPrice.toFixed(2)}/L`,
+                        co2_kg: lpg_co2_kg,
+                        efficiency: inputs.lpgEfficiency
+                    },
+                    diesel: {
+                        name: 'Diesel Water Heater',
+                        annualCost: annual_diesel_cost,
+                        annualCostUSD: annual_diesel_cost / CONFIG.FX_USD_PHP,
+                        annualFuel: `${Math.round(diesel_required_L).toLocaleString()} L`,
+                        fuelPrice: `₱${inputs.dieselPrice.toFixed(2)}/L`,
+                        co2_kg: diesel_co2_kg,
+                        efficiency: inputs.dieselEfficiency
+                    },
+                    naturalGas: {
+                        name: 'Natural Gas Water Heater',
+                        annualCost: annual_ng_cost,
+                        annualCostUSD: annual_ng_cost / CONFIG.FX_USD_PHP,
+                        annualFuel: `${Math.round(ng_required_m3).toLocaleString()} m³`,
+                        fuelPrice: `₱${inputs.naturalGasPrice.toFixed(2)}/m³`,
+                        co2_kg: ng_co2_kg,
+                        efficiency: inputs.naturalGasEfficiency
+                    }
+                },
                 savings: {
-                    vs_electric: annual_electric_savings,
-                    vs_lpg: annual_lpg_savings,
-                    co2_avoided_kg: co2_avoided_kg
+                    vs_electric: annual_electric_cost,
+                    vs_lpg: annual_lpg_cost,
+                    vs_diesel: annual_diesel_cost,
+                    vs_naturalGas: annual_ng_cost,
+                    co2_avoided_kg: primaryComparison.co2_kg
                 },
                 payback_years: hr_payback_years,
+                payback_months: hr_payback_months,
                 outlet_temp: inputs.hotWaterOutletTemp,
-                inlet_temp: inputs.hotWaterInletTemp
+                inlet_temp: inputs.hotWaterInletTemp,
+                // NESTLE-STYLE ENTERPRISE ROI METRICS
+                enterpriseMetrics: {
+                    simplePayback_months: hr_payback_months,
+                    simplePayback_years: hr_payback_years,
+                    roi_percent: (primaryComparison.annualCost / totalCapex) * 100,
+                    roi_percent_annual: ((primaryComparison.annualCost * projectLifespan) / totalCapex) * 100,
+                    // NPV Calculation
+                    npv: (() => {
+                        let npv = -totalCapex;
+                        for (let year = 1; year <= projectLifespan; year++) {
+                            npv += primaryComparison.annualCost / Math.pow(1 + (discountRate / 100), year);
+                        }
+                        return npv;
+                    })(),
+                    // IRR Calculation
+                    irr: calculateIRR(totalCapex, primaryComparison.annualCost, projectLifespan),
+                    // Benefit-Cost Ratio
+                    bcr: (() => {
+                        let totalBenefits = 0;
+                        for (let year = 1; year <= projectLifespan; year++) {
+                            totalBenefits += primaryComparison.annualCost / Math.pow(1 + (discountRate / 100), year);
+                        }
+                        return totalBenefits / totalCapex;
+                    })(),
+                    // Cumulative Savings over project life
+                    cumulativeSavings_10yr: primaryComparison.annualCost * projectLifespan,
+                    cumulativeSavings_10yr_USD: (primaryComparison.annualCost * projectLifespan) / CONFIG.FX_USD_PHP,
+                    // Year-by-year cash flow
+                    cashFlow: (() => {
+                        const cashFlow = [];
+                        let cumulative = -totalCapex;
+                        cashFlow.push({
+                            year: 0,
+                            investment: -totalCapex,
+                            savings: 0,
+                            cashFlow: -totalCapex,
+                            cumulative: cumulative
+                        });
+                        for (let year = 1; year <= projectLifespan; year++) {
+                            const yearSavings = primaryComparison.annualCost;
+                            cumulative += yearSavings;
+                            cashFlow.push({
+                                year: year,
+                                investment: 0,
+                                savings: yearSavings,
+                                cashFlow: yearSavings,
+                                cumulative: cumulative
+                            });
+                        }
+                        return cashFlow;
+                    })()
+                }
             };
         } else {
             heatRecovery = {
@@ -404,7 +572,7 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         const annualCO2_kg = annualElectricity_kWh * CONFIG.GRID_CO2_KG_PER_KWH;
         
         // NET operating cost (after heat recovery savings)
-        const heatRecoverySavings = heatRecovery?.savings?.vs_electric || 0;
+        const heatRecoverySavings = heatRecovery?.primaryComparison?.annualCost || 0;
         const netAnnualCost = annualElectricityCost - heatRecoverySavings;
         const effectivePayback = totalCapex / Math.max(1, Math.abs(netAnnualCost));
 
@@ -719,7 +887,10 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                             ✅ FREE Hot Water Production: {fmt(results.heatRecovery.utilized_L_day)} liters/day @ {results.heatRecovery.outlet_temp}°C
                                         </p>
                                         <p className="text-sm text-gray-600">
-                                            System recovers waste heat from refrigeration process to heat water from {results.heatRecovery.inlet_temp}°C to {results.heatRecovery.outlet_temp}°C
+                                            System recovers waste heat from refrigeration to heat water from {results.heatRecovery.inlet_temp}°C to {results.heatRecovery.outlet_temp}°C
+                                        </p>
+                                        <p className="text-sm text-orange-600 font-semibold mt-2">
+                                            💰 Replaces: {results.heatRecovery.primaryComparison.name} ({results.heatRecovery.primaryComparison.annualFuel}/year @ {results.heatRecovery.primaryComparison.efficiency}% efficiency)
                                         </p>
                                     </div>
 
@@ -732,7 +903,7 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                         <div className="bg-white p-4 rounded-lg border-2 border-orange-200 shadow-sm">
                                             <p className="text-xs font-bold text-gray-500 uppercase mb-2">Daily Hot Water</p>
                                             <p className="text-2xl font-bold text-orange-600">{fmt(results.heatRecovery.utilized_L_day)} L</p>
-                                            <p className="text-xs text-gray-500 mt-1">({fmt(results.heatRecovery.utilization_pct, 0)}% of production capacity)</p>
+                                            <p className="text-xs text-gray-500 mt-1">({fmt(results.heatRecovery.utilization_pct, 0)}% of capacity)</p>
                                         </div>
                                         <div className="bg-white p-4 rounded-lg border-2 border-green-200 shadow-sm">
                                             <p className="text-xs font-bold text-gray-500 uppercase mb-2">Annual Energy Recovered</p>
@@ -741,23 +912,175 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                     </div>
 
                                     <div className="bg-white rounded-lg p-4 mb-4">
-                                        <h5 className="font-semibold text-gray-800 mb-3">💰 Annual Cost Savings from Heat Recovery</h5>
+                                        <h5 className="font-semibold text-gray-800 mb-3">💰 Annual Savings vs Alternative Heating Systems</h5>
                                         <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b-2 border-gray-300">
+                                                    <th className="text-left py-2 text-gray-700">Heating System</th>
+                                                    <th className="text-right py-2 text-gray-700">Annual Cost (PHP)</th>
+                                                    <th className="text-right py-2 text-gray-700">Annual Cost (USD)</th>
+                                                    <th className="text-right py-2 text-gray-700">CO₂ Emissions</th>
+                                                </tr>
+                                            </thead>
                                             <tbody>
-                                                <tr className="border-b">
-                                                    <td className="py-2 text-gray-600">vs. Electric Water Heater</td>
-                                                    <td className="text-right font-bold text-green-600">₱ {fmt(results.heatRecovery.savings.vs_electric)} / year</td>
+                                                <tr className="border-b hover:bg-gray-50">
+                                                    <td className="py-2 text-gray-600">
+                                                        {results.heatRecovery.allComparisons.electric.name}
+                                                        <br/>
+                                                        <span className="text-xs text-gray-400">
+                                                            {results.heatRecovery.allComparisons.electric.annualFuel} @ {results.heatRecovery.allComparisons.electric.fuelPrice}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-right font-bold text-red-600">₱ {fmt(results.heatRecovery.allComparisons.electric.annualCost)}</td>
+                                                    <td className="text-right font-bold text-red-600">$ {fmt(results.heatRecovery.allComparisons.electric.annualCostUSD)}</td>
+                                                    <td className="text-right text-gray-600">{fmt(results.heatRecovery.allComparisons.electric.co2_kg)} kg</td>
                                                 </tr>
-                                                <tr className="border-b">
-                                                    <td className="py-2 text-gray-600">vs. LPG Water Heater</td>
-                                                    <td className="text-right font-bold text-green-600">₱ {fmt(results.heatRecovery.savings.vs_lpg)} / year</td>
+                                                <tr className="border-b hover:bg-gray-50">
+                                                    <td className="py-2 text-gray-600">
+                                                        {results.heatRecovery.allComparisons.lpg.name}
+                                                        <br/>
+                                                        <span className="text-xs text-gray-400">
+                                                            {results.heatRecovery.allComparisons.lpg.annualFuel} @ {results.heatRecovery.allComparisons.lpg.fuelPrice}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-right font-bold text-red-600">₱ {fmt(results.heatRecovery.allComparisons.lpg.annualCost)}</td>
+                                                    <td className="text-right font-bold text-red-600">$ {fmt(results.heatRecovery.allComparisons.lpg.annualCostUSD)}</td>
+                                                    <td className="text-right text-gray-600">{fmt(results.heatRecovery.allComparisons.lpg.co2_kg)} kg</td>
                                                 </tr>
-                                                <tr className="border-b">
-                                                    <td className="py-2 text-gray-600">CO₂ Emissions Avoided</td>
-                                                    <td className="text-right font-bold text-green-600">{fmt(results.heatRecovery.savings.co2_avoided_kg)} kg / year</td>
+                                                <tr className="border-b hover:bg-gray-50">
+                                                    <td className="py-2 text-gray-600">
+                                                        {results.heatRecovery.allComparisons.diesel.name}
+                                                        <br/>
+                                                        <span className="text-xs text-gray-400">
+                                                            {results.heatRecovery.allComparisons.diesel.annualFuel} @ {results.heatRecovery.allComparisons.diesel.fuelPrice}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-right font-bold text-red-600">₱ {fmt(results.heatRecovery.allComparisons.diesel.annualCost)}</td>
+                                                    <td className="text-right font-bold text-red-600">$ {fmt(results.heatRecovery.allComparisons.diesel.annualCostUSD)}</td>
+                                                    <td className="text-right text-gray-600">{fmt(results.heatRecovery.allComparisons.diesel.co2_kg)} kg</td>
+                                                </tr>
+                                                <tr className="border-b hover:bg-gray-50">
+                                                    <td className="py-2 text-gray-600">
+                                                        {results.heatRecovery.allComparisons.naturalGas.name}
+                                                        <br/>
+                                                        <span className="text-xs text-gray-400">
+                                                            {results.heatRecovery.allComparisons.naturalGas.annualFuel} @ {results.heatRecovery.allComparisons.naturalGas.fuelPrice}
+                                                        </span>
+                                                    </td>
+                                                    <td className="text-right font-bold text-red-600">₱ {fmt(results.heatRecovery.allComparisons.naturalGas.annualCost)}</td>
+                                                    <td className="text-right font-bold text-red-600">$ {fmt(results.heatRecovery.allComparisons.naturalGas.annualCostUSD)}</td>
+                                                    <td className="text-right text-gray-600">{fmt(results.heatRecovery.allComparisons.naturalGas.co2_kg)} kg</td>
+                                                </tr>
+                                                <tr className="bg-green-50 border-t-2 border-green-400 font-bold">
+                                                    <td className="py-3 text-green-800">
+                                                        🔥 With Heat Recovery (FREE)
+                                                    </td>
+                                                    <td className="text-right text-green-700 text-lg">₱ 0</td>
+                                                    <td className="text-right text-green-700 text-lg">$ 0</td>
+                                                    <td className="text-right text-green-700">0 kg</td>
                                                 </tr>
                                             </tbody>
                                         </table>
+                                    </div>
+
+                                    {/* NESTLE-STYLE ENTERPRISE ROI ANALYSIS */}
+                                    <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-6 rounded-xl border-2 border-purple-300 mb-4">
+                                        <h5 className="font-bold text-purple-900 text-lg mb-4 flex items-center gap-2">
+                                            <Target size={20} className="text-purple-600"/>
+                                            Enterprise Financial Analysis - Heat Recovery ROI
+                                        </h5>
+                                        
+                                        {/* Key Metrics Grid */}
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                            <div className="bg-white p-4 rounded-lg border-2 border-green-300 shadow-sm">
+                                                <p className="text-xs font-bold text-gray-500 uppercase mb-1">Simple Payback</p>
+                                                <p className="text-3xl font-bold text-green-600">{fmt(results.heatRecovery.enterpriseMetrics.simplePayback_months, 1)}</p>
+                                                <p className="text-xs text-gray-500 mt-1">months ({fmt(results.heatRecovery.enterpriseMetrics.simplePayback_years, 2)} years)</p>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-lg border-2 border-blue-300 shadow-sm">
+                                                <p className="text-xs font-bold text-gray-500 uppercase mb-1">ROI (Annual)</p>
+                                                <p className="text-3xl font-bold text-blue-600">{fmt(results.heatRecovery.enterpriseMetrics.roi_percent, 1)}%</p>
+                                                <p className="text-xs text-gray-500 mt-1">First year return</p>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-lg border-2 border-indigo-300 shadow-sm">
+                                                <p className="text-xs font-bold text-gray-500 uppercase mb-1">NPV @ {inputs.discountRate}%</p>
+                                                <p className="text-2xl font-bold text-indigo-600">₱{fmt(results.heatRecovery.enterpriseMetrics.npv)}</p>
+                                                <p className="text-xs text-gray-500 mt-1">${fmt(results.heatRecovery.enterpriseMetrics.npv / CONFIG.FX_USD_PHP)} USD</p>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-lg border-2 border-purple-300 shadow-sm">
+                                                <p className="text-xs font-bold text-gray-500 uppercase mb-1">Internal Rate of Return</p>
+                                                <p className="text-3xl font-bold text-purple-600">{fmt(results.heatRecovery.enterpriseMetrics.irr, 1)}%</p>
+                                                <p className="text-xs text-gray-500 mt-1">IRR over {inputs.projectLifespan} years</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Additional Metrics */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                            <div className="bg-white p-4 rounded-lg border border-gray-200">
+                                                <p className="text-sm font-bold text-gray-600 mb-1">Benefit-Cost Ratio (BCR)</p>
+                                                <p className="text-2xl font-bold text-green-600">{fmt(results.heatRecovery.enterpriseMetrics.bcr, 2)}:1</p>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    {results.heatRecovery.enterpriseMetrics.bcr > 2 ? "Excellent" : results.heatRecovery.enterpriseMetrics.bcr > 1.5 ? "Very Good" : "Good"} investment
+                                                </p>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-lg border border-gray-200">
+                                                <p className="text-sm font-bold text-gray-600 mb-1">{inputs.projectLifespan}-Year Cumulative Savings</p>
+                                                <p className="text-xl font-bold text-orange-600">₱{fmt(results.heatRecovery.enterpriseMetrics.cumulativeSavings_10yr)}</p>
+                                                <p className="text-xs text-gray-500 mt-1">${fmt(results.heatRecovery.enterpriseMetrics.cumulativeSavings_10yr_USD)} USD</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Cash Flow Table */}
+                                        <div className="bg-white rounded-lg p-4">
+                                            <h6 className="font-semibold text-gray-800 mb-3">Year-by-Year Cash Flow Analysis</h6>
+                                            <div className="overflow-x-auto">
+                                                <table className="w-full text-sm">
+                                                    <thead>
+                                                        <tr className="border-b-2 border-gray-300">
+                                                            <th className="text-left py-2 text-gray-700">Year</th>
+                                                            <th className="text-right py-2 text-gray-700">Investment</th>
+                                                            <th className="text-right py-2 text-gray-700">Annual Savings</th>
+                                                            <th className="text-right py-2 text-gray-700">Cash Flow</th>
+                                                            <th className="text-right py-2 text-gray-700">Cumulative</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {results.heatRecovery.enterpriseMetrics.cashFlow.map((row, idx) => (
+                                                            <tr key={idx} className={`border-b ${row.cumulative >= 0 && idx > 0 ? 'bg-green-50' : ''}`}>
+                                                                <td className="py-2 font-semibold text-gray-700">{row.year}</td>
+                                                                <td className="text-right text-red-600">
+                                                                    {row.investment < 0 ? `(₱${fmt(Math.abs(row.investment))})` : '-'}
+                                                                </td>
+                                                                <td className="text-right text-green-600">
+                                                                    {row.savings > 0 ? `₱${fmt(row.savings)}` : '-'}
+                                                                </td>
+                                                                <td className={`text-right font-semibold ${row.cashFlow < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                                    {row.cashFlow < 0 ? `(₱${fmt(Math.abs(row.cashFlow))})` : `₱${fmt(row.cashFlow)}`}
+                                                                </td>
+                                                                <td className={`text-right font-bold ${row.cumulative < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                                    {row.cumulative < 0 ? `(₱${fmt(Math.abs(row.cumulative))})` : `₱${fmt(row.cumulative)}`}
+                                                                    {row.cumulative >= 0 && idx > 0 && results.heatRecovery.enterpriseMetrics.cashFlow[idx-1].cumulative < 0 && (
+                                                                        <span className="ml-2 text-xs bg-green-600 text-white px-2 py-1 rounded">BREAKEVEN</span>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4 bg-blue-50 p-3 rounded border border-blue-200">
+                                            <p className="text-xs text-gray-700">
+                                                <strong>📊 Investment Recommendation:</strong> {
+                                                    results.heatRecovery.enterpriseMetrics.irr > 25 
+                                                        ? "STRONGLY RECOMMENDED - Excellent returns with payback under 4 years"
+                                                        : results.heatRecovery.enterpriseMetrics.irr > 15
+                                                        ? "RECOMMENDED - Good returns with reasonable payback period"
+                                                        : "ACCEPTABLE - Positive returns, consider strategic value"
+                                                }
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <div className="bg-gradient-to-r from-green-100 to-emerald-100 p-4 rounded-lg border-2 border-green-400">
@@ -1012,6 +1335,66 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                             value={inputs.hotWaterOutletTemp} 
                                             onChange={(e) => handleInputChange('hotWaterOutletTemp', parseFloat(e.target.value))} 
                                         />
+                                        
+                                        <div className="border-t-2 border-orange-300 pt-4 mt-4">
+                                            <h4 className="font-semibold text-gray-800 mb-3">Current Heating System (for Comparison)</h4>
+                                            
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Select Current Water Heating Method</label>
+                                                <select
+                                                    value={inputs.currentHeatingSystem}
+                                                    onChange={(e) => handleInputChange('currentHeatingSystem', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 mb-3"
+                                                >
+                                                    <option value="electric">Electric Water Heater</option>
+                                                    <option value="lpg">LPG Water Heater</option>
+                                                    <option value="diesel">Diesel Water Heater</option>
+                                                    <option value="natural_gas">Natural Gas Water Heater</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <InputField 
+                                                    label="LPG Price (₱/L)" 
+                                                    value={inputs.lpgPrice} 
+                                                    step="0.1"
+                                                    onChange={(e) => handleInputChange('lpgPrice', parseFloat(e.target.value))} 
+                                                />
+                                                <InputField 
+                                                    label="LPG Efficiency (%)" 
+                                                    value={inputs.lpgEfficiency} 
+                                                    onChange={(e) => handleInputChange('lpgEfficiency', parseFloat(e.target.value))} 
+                                                />
+                                                <InputField 
+                                                    label="Diesel Price (₱/L)" 
+                                                    value={inputs.dieselPrice} 
+                                                    step="0.1"
+                                                    onChange={(e) => handleInputChange('dieselPrice', parseFloat(e.target.value))} 
+                                                />
+                                                <InputField 
+                                                    label="Diesel Efficiency (%)" 
+                                                    value={inputs.dieselEfficiency} 
+                                                    onChange={(e) => handleInputChange('dieselEfficiency', parseFloat(e.target.value))} 
+                                                />
+                                                <InputField 
+                                                    label="Natural Gas Price (₱/m³)" 
+                                                    value={inputs.naturalGasPrice} 
+                                                    step="0.1"
+                                                    onChange={(e) => handleInputChange('naturalGasPrice', parseFloat(e.target.value))} 
+                                                />
+                                                <InputField 
+                                                    label="Natural Gas Efficiency (%)" 
+                                                    value={inputs.naturalGasEfficiency} 
+                                                    onChange={(e) => handleInputChange('naturalGasEfficiency', parseFloat(e.target.value))} 
+                                                />
+                                                <InputField 
+                                                    label="Electric Heater Efficiency (%)" 
+                                                    value={inputs.electricHeaterEfficiency} 
+                                                    onChange={(e) => handleInputChange('electricHeaterEfficiency', parseFloat(e.target.value))} 
+                                                />
+                                            </div>
+                                        </div>
+                                        
                                         <div className="bg-blue-50 p-3 rounded border border-blue-200">
                                             <p className="text-xs text-gray-700">
                                                 <strong>💡 Typical Applications:</strong><br/>
