@@ -389,6 +389,29 @@ const OpportunityCard = ({ opp, onUpdate, onDelete, onEdit, onOpen, onEmail, quo
                 </div>
             )}
 
+            {/* Notes Section */}
+            {opp.notes && opp.notes.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                    <div className="flex items-center gap-1 text-xs text-gray-600 mb-2">
+                        <FileText size={12} />
+                        <span className="font-semibold">Recent Notes ({opp.notes.length})</span>
+                    </div>
+                    <div className="bg-yellow-50 border border-yellow-200 rounded p-2 text-xs text-gray-700 max-h-20 overflow-y-auto">
+                        {opp.notes.slice(-2).reverse().map((note, idx) => (
+                            <div key={idx} className="mb-1 last:mb-0">
+                                <span className="font-semibold text-gray-600">
+                                    {note.timestamp ? new Date(note.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Recent'}:
+                                </span>
+                                {' '}
+                                <span className="text-gray-800">
+                                    {note.text?.length > 60 ? note.text.substring(0, 60) + '...' : note.text}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Company History Data */}
             {companyData && (
                 <div className="mt-3 pt-3 border-t border-gray-200 space-y-1">
