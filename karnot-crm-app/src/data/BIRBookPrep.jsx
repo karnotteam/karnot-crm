@@ -56,7 +56,11 @@ const BIRBookPrep = ({ quotes = [], ledgerEntries = [] }) => {
 
     // --- 2. SALES JOURNAL (Output VAT & Income) ---
     const salesData = useMemo(() => {
-        const revenueQuotes = quotes.filter(q => ['WON', 'APPROVED', 'INVOICED'].includes(q.status));
+        // *** CRITICAL PROFORMA FIX ***
+        // Only include 'INVOICED' or 'PAID'. 
+        // Excludes 'WON'/'APPROVED' so you do not pay VAT on Proforma Invoices.
+        const revenueQuotes = quotes.filter(q => ['INVOICED', 'PAID'].includes(q.status));
+        
         return filterByDate(revenueQuotes, 'createdAt').map(q => {
             const rate = q.costing?.forexRate || 58.5;
             const isExport = q.customer?.saleType === 'Export';
