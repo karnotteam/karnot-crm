@@ -200,26 +200,34 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
 
     // --- CALCULATION ENGINE ---
     const calculate = () => {
-        const {
-            roomL, roomW, roomH, panelType, ambientTemp, roomTemp,
-            productType, dailyTurnover, incomingTemp,
-            people, lightingWatts, motorsWatts, doorOpenings,
-            electricityTariff, dieselPrice, installationCost,
-            projectLifespan, discountRate, implementationDelay, operatingHoursPerDay
-        } = inputs;
-
-        // --- BASIC CALCS ---
-        const roomVolume_m3 = roomL * roomW * roomH;
-        const surfaceArea_m2 = (2 * roomL * roomH) + (2 * roomW * roomH) + (roomL * roomW);
-        const tempDiff = Math.abs(ambientTemp - roomTemp);
-        const panelInfo = CONFIG.PANEL_TYPES[panelType];
-        const uValue = panelInfo.uValue;
+        console.log('=== CALCULATE FUNCTION STARTED ===');
+        console.log('Products available:', products.length);
         
-        const pullDownTimeSeconds = 24 * 3600; // 24 hours
+        try {
+            const {
+                roomL, roomW, roomH, panelType, ambientTemp, roomTemp,
+                productType, dailyTurnover, incomingTemp,
+                people, lightingWatts, motorsWatts, doorOpenings,
+                electricityTariff, dieselPrice, installationCost,
+                projectLifespan, discountRate, implementationDelay, operatingHoursPerDay
+            } = inputs;
 
-        // --- 1. TRANSMISSION LOAD ---
-        const transmissionLoad_W = surfaceArea_m2 * uValue * tempDiff * 1000; // Convert to Watts
-        const transmissionLoad_kW = transmissionLoad_W / 1000;
+            console.log('Inputs extracted successfully');
+
+            // --- BASIC CALCS ---
+            const roomVolume_m3 = roomL * roomW * roomH;
+            const surfaceArea_m2 = (2 * roomL * roomH) + (2 * roomW * roomH) + (roomL * roomW);
+            const tempDiff = Math.abs(ambientTemp - roomTemp);
+            const panelInfo = CONFIG.PANEL_TYPES[panelType];
+            const uValue = panelInfo.uValue;
+            
+            const pullDownTimeSeconds = 24 * 3600; // 24 hours
+
+            console.log('Basic calcs done. Room volume:', roomVolume_m3);
+
+            // --- 1. TRANSMISSION LOAD ---
+            const transmissionLoad_W = surfaceArea_m2 * uValue * tempDiff * 1000; // Convert to Watts
+            const transmissionLoad_kW = transmissionLoad_W / 1000;
 
         // --- 2. PRODUCT LOAD ---
         const product = CONFIG.PRODUCT_DATA[productType];
@@ -487,8 +495,19 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             enterpriseROI: enterpriseROI
         });
 
+        console.log('=== Results object created successfully ===');
+        console.log('Setting showReport to true...');
         setShowReport(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        console.log('=== CALCULATE FUNCTION COMPLETED ===');
+        
+        } catch (error) {
+            console.error('=== ERROR IN CALCULATE FUNCTION ===');
+            console.error('Error:', error);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+            alert(`Calculation Error: ${error.message}\n\nPlease check the browser console for details.`);
+        }
     };
 
     // Simple IRR calculator
