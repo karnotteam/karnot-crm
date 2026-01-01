@@ -89,6 +89,23 @@ const CONFIG = {
     }
 };
 
+// Helper Input Component
+const InputField = ({ label, value, onChange, type = "number", step = "1", disabled = false, min, max }) => (
+    <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <input
+            type={type}
+            value={value}
+            onChange={onChange}
+            step={step}
+            disabled={disabled}
+            min={min}
+            max={max}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-200 disabled:text-gray-600"
+        />
+    </div>
+);
+
 const ColdRoomCalc = ({ setActiveView, user }) => {
     // --- STATE ---
     const [products, setProducts] = useState([]);
@@ -280,7 +297,7 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         }
 
         if (!selectedICool) {
-            alert('No iCOOL products found in database!\n\nPlease add Panasonic iCOOL products with:\n1. Category or name containing "iCOOL"\n2. kW_Cooling_Nominal field set\n3. salesPriceUSD set');
+            alert('No iCOOL products found in database!\n\nPlease add Karnot iCOOL products with:\n1. Category or name containing "iCOOL"\n2. kW_Cooling_Nominal field set\n3. salesPriceUSD set');
             return;
         }
 
@@ -527,7 +544,7 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                             <Snowflake className="text-blue-600" />
                             Cold Room Calculator
                         </h2>
-                        <p className="text-gray-600 mt-1">Panasonic iCOOL system sizing for refrigerated storage</p>
+                        <p className="text-gray-600 mt-1">Karnot iCOOL CO₂ system sizing for refrigerated storage</p>
                     </div>
                 </div>
             </div>
@@ -1007,22 +1024,5 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         </div>
     );
 };
-
-// Helper Input Component
-const InputField = ({ label, value, onChange, type = "number", step = "1", disabled = false, min, max }) => (
-    <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-        <input
-            type={type}
-            value={value}
-            onChange={onChange}
-            step={step}
-            disabled={disabled}
-            min={min}
-            max={max}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-200 disabled:text-gray-600"
-        />
-    </div>
-);
 
 export default ColdRoomCalc;
