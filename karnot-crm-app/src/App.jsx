@@ -73,6 +73,7 @@ import CallCentre from './pages/CallCentre.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
+import DatasheetLibrary from './components/DatasheetLibrary.jsx'; // <--- NEW IMPORT
 
 // ==========================================
 // 3. DATA & ACCOUNTING MODULES
@@ -91,7 +92,7 @@ import {
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
     UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload, Sparkles,
-    DollarSign, Mail, TrendingUp, Phone, Grid
+    DollarSign, Mail, TrendingUp, Phone, Grid, Printer // <--- Added Printer Icon
 } from 'lucide-react'; 
 
 // ==========================================
@@ -169,6 +170,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
     const salesMenu = [
         { view: 'funnel', label: 'Sales Funnel', icon: HardHat },
         { view: 'list', label: 'Quotes List', icon: ListIcon, badge: quoteCount },
+        { view: 'datasheets', label: 'Datasheet Library', icon: Printer, badge: 'NEW' }, // <--- ADDED HERE
         { view: 'companies', label: 'Companies', icon: Building },
         { view: 'contacts', label: 'Contacts', icon: Users },
         { view: 'suppliers', label: 'Suppliers', icon: Briefcase }
@@ -216,12 +218,12 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
     ];
 
     // Calculators Menu
-const calculatorsMenu = [
-    { view: 'calculatorsHub', label: 'Calculator Hub', icon: Calculator },
-    { view: 'heatPumpCalc', label: 'Heat Pump ROI', icon: Calculator },
-    { view: 'warmRoomCalc', label: 'Warm Room', icon: Calculator },
-    { view: 'coldRoomCalc', label: 'Cold Room', icon: Calculator } // ← ADD THIS
-];
+    const calculatorsMenu = [
+        { view: 'calculatorsHub', label: 'Calculator Hub', icon: Calculator },
+        { view: 'heatPumpCalc', label: 'Heat Pump ROI', icon: Calculator },
+        { view: 'warmRoomCalc', label: 'Warm Room', icon: Calculator },
+        { view: 'coldRoomCalc', label: 'Cold Room', icon: Calculator } 
+    ];
 
     return (
         <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
@@ -602,7 +604,7 @@ export default function App() {
                 {activeView === 'dashboard' && (
                     <DashboardPage 
                         quotes={quotes} 
-                        user={user}
+                        user={user} 
                         ledgerEntries={ledgerEntries}
                         serviceInvoices={serviceInvoices}
                         appointments={appointments}
@@ -660,13 +662,13 @@ export default function App() {
                 )}
                 
                 {activeView === 'maintenanceCalendar' && (
-    <MaintenanceCalendar 
-        companies={companies} 
-        user={user}
-        appointments={appointments}
-        opportunities={opportunities}
-    />
-)}
+                    <MaintenanceCalendar 
+                        companies={companies} 
+                        user={user}
+                        appointments={appointments}
+                        opportunities={opportunities}
+                    />
+                )}
                 
                 {activeView === 'technicianView' && (
                     <TechnicianMobileView companies={companies} user={user} />
@@ -804,7 +806,12 @@ export default function App() {
                     />
                 )}
 
-                {/* 8. CALCULATORS */}
+                {/* 8. DATASHEETS (NEW) */}
+                {activeView === 'datasheets' && (
+                    <DatasheetLibrary />
+                )}
+
+                {/* 9. CALCULATORS */}
                 {activeView === 'calculatorsHub' && <CalculatorsPage setActiveView={setActiveView} />}
                 
                 {activeView === 'heatPumpCalc' && (
@@ -820,7 +827,7 @@ export default function App() {
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
                 {/* ======================= */}
-                {/* 9. ACCOUNTS HUB (ADMIN) */}
+                {/* 10. ACCOUNTS HUB (ADMIN) */}
                 {/* ======================= */}
                 {activeView === 'accounts' && (
                     <div className="space-y-6 pb-20">
