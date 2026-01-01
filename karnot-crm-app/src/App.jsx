@@ -38,6 +38,7 @@ import TerritoryLeadGenerator from './pages/TerritoryLeadGenerator.jsx';
 import BOIProjectLeads from './pages/BOIProjectLeads.jsx';
 import PEZAZones from './pages/PEZAZones.jsx';
 import SmartTextScraper from './pages/SmartTextScraper.jsx';
+import ColdRoomCalc from './components/ColdRoomCalc.jsx';
 
 // --- Export Operations ---
 import ASEANExportPage from './pages/ASEANExportPage.jsx';
@@ -215,11 +216,12 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
     ];
 
     // Calculators Menu
-    const calculatorsMenu = [
-        { view: 'calculatorsHub', label: 'Calculator Hub', icon: Calculator },
-        { view: 'heatPumpCalc', label: 'Heat Pump ROI', icon: Calculator },
-        { view: 'warmRoomCalc', label: 'Warm Room', icon: Calculator }
-    ];
+const calculatorsMenu = [
+    { view: 'calculatorsHub', label: 'Calculator Hub', icon: Calculator },
+    { view: 'heatPumpCalc', label: 'Heat Pump ROI', icon: Calculator },
+    { view: 'warmRoomCalc', label: 'Warm Room', icon: Calculator },
+    { view: 'coldRoomCalc', label: 'Cold Room', icon: Calculator } // ← ADD THIS
+];
 
     return (
         <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
@@ -788,7 +790,7 @@ export default function App() {
                         initialData={quoteToEdit} 
                         companies={companies} 
                         contacts={contacts} 
-                        opportunities={opportunities} 
+                        opportunities={opportunities}
                     />
                 )}
                 
@@ -813,6 +815,7 @@ export default function App() {
                 )}
                 
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
+                {activeView === 'coldRoomCalc' && <ColdRoomCalc setActiveView={setActiveView} user={user} />}
                 
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
