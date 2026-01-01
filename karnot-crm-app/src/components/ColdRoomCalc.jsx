@@ -21,6 +21,11 @@ const CONFIG = {
     SAFETY_FACTOR: 1.10,
     DEFAULT_COP: 2.5,
     
+    // Heat Recovery Constants
+    WATER_SPECIFIC_HEAT_KJ_KGK: 4.186,
+    HEAT_RECOVERY_EFFICIENCY: 0.70, // 70% of condenser heat recoverable
+    WATER_DENSITY_KG_L: 1.0,
+    
     // Product-specific heat and latent heat data
     PRODUCT_DATA: {
         'meat_frozen': { 
@@ -111,7 +116,12 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         implementationDelay: 6,
         enableEnterpriseROI: false,
         enterpriseWACC: 0.07,
-        operatingHoursPerDay: 24
+        operatingHoursPerDay: 24,
+        // Heat Recovery Inputs
+        enableHeatRecovery: true, // Auto-enabled if unit supports it
+        hotWaterUsage_L_day: 1000, // Daily hot water requirement
+        hotWaterInletTemp: 20, // Incoming water temperature
+        hotWaterOutletTemp: 60 // Target hot water temperature
     });
     
     const [results, setResults] = useState(null);
@@ -274,11 +284,100 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             return;
         }
 
-        // --- OPERATING COSTS ---
+        // --- HEAT RECOVERY DETECTION & CALCULATIONS ---
+        const hasHeatRecoveryPort = 
+            (selectedICool.name || '').toLowerCase().includes('heat recovery') ||
+            (selectedICool.name || '').toLowerCase().includes('hr') ||
+            (selectedICool.specs || '').toLowerCase().includes('heat recovery port: yes') ||
+            parseFloat(selectedICool.kW_DHW_Nominal || 0) > 0;
+
+        let heatRecovery = null;
+        
+        if (hasHeatRecoveryPort && inputs.enableHeatRecovery) {
+            // Calculate total heat rejection from refrigeration
+            const cooling_kW = getCoolingKWFromName(selectedICool);
+            const electrical_input_kW = cooling_kW / CONFIG.DEFAULT_COP;
+            const total_heat_rejection_kW = cooling_kW + electrical_input_kW;
+            
+            // Recoverable heat (70% efficiency)
+            const recoverable_heat_kW = total_heat_rejection_kW * CONFIG.HEAT_RECOVERY_EFFICIENCY;
+            
+            // Use product's DHW rating if available, otherwise use calculated
+            const hr_capacity_kW = parseFloat(selectedICool.kW_DHW_Nominal || 0) > 0 
+                ? parseFloat(selectedICool.kW_DHW_Nominal)
+                : recoverable_heat_kW;
+            
+            // Hot water production calculations
+            const temp_rise_K = inputs.hotWaterOutletTemp - inputs.hotWaterInletTemp;
+            const max_hot_water_L_hour = (hr_capacity_kW * 3600) / 
+                (CONFIG.WATER_SPECIFIC_HEAT_KJ_KGK * temp_rise_K * CONFIG.WATER_DENSITY_KG_L);
+            
+            // Daily hot water production (based on operating hours)
+            const daily_hot_water_production_L = max_hot_water_L_hour * operatingHoursPerDay;
+            
+            // Actual hot water utilized (min of production and demand)
+            const actual_hot_water_utilized_L_day = Math.min(
+                daily_hot_water_production_L,
+                inputs.hotWaterUsage_L_day
+            );
+            
+            // Energy value of hot water produced
+            const energy_per_liter_kWh = (CONFIG.WATER_SPECIFIC_HEAT_KJ_KGK * temp_rise_K) / 3600;
+            const daily_hr_energy_kWh = actual_hot_water_utilized_L_day * energy_per_liter_kWh;
+            const annual_hr_energy_kWh = daily_hr_energy_kWh * 365;
+            
+            // Cost savings from heat recovery
+            // vs Electric water heater (90% efficiency)
+            const annual_electric_savings = (annual_hr_energy_kWh / 0.90) * electricityTariff;
+            
+            // vs LPG water heater (85% efficiency)
+            const lpg_required_L = (annual_hr_energy_kWh / 0.85) * 0.0341; // LPG: ~29.3 kWh/L
+            const annual_lpg_savings = lpg_required_L * dieselPrice;
+            
+            // CO2 avoided
+            const co2_avoided_kg = (annual_hr_energy_kWh / 0.90) * CONFIG.GRID_CO2_KG_PER_KWH;
+            
+            // Payback improvement
+            const hr_payback_years = totalCapex / Math.max(1, annual_electric_savings);
+            
+            heatRecovery = {
+                hasCapability: true,
+                capacity_kW: hr_capacity_kW,
+                max_production_L_hour: max_hot_water_L_hour,
+                daily_production_L: daily_hot_water_production_L,
+                utilized_L_day: actual_hot_water_utilized_L_day,
+                utilization_pct: (actual_hot_water_utilized_L_day / daily_hot_water_production_L) * 100,
+                annual_energy_kWh: annual_hr_energy_kWh,
+                savings: {
+                    vs_electric: annual_electric_savings,
+                    vs_lpg: annual_lpg_savings,
+                    co2_avoided_kg: co2_avoided_kg
+                },
+                payback_years: hr_payback_years,
+                outlet_temp: inputs.hotWaterOutletTemp,
+                inlet_temp: inputs.hotWaterInletTemp
+            };
+        } else {
+            heatRecovery = {
+                hasCapability: hasHeatRecoveryPort,
+                enabled: false,
+                message: hasHeatRecoveryPort 
+                    ? 'Heat recovery available but not enabled in inputs' 
+                    : 'Selected unit does not have heat recovery capability'
+            };
+        }
+
+        // --- OPERATING COSTS (ADJUSTED FOR HEAT RECOVERY) ---
+        // --- OPERATING COSTS (ADJUSTED FOR HEAT RECOVERY) ---
         const annualOperatingHours = operatingHoursPerDay * 365;
         const annualElectricity_kWh = requiredElectrical_kW * annualOperatingHours;
         const annualElectricityCost = annualElectricity_kWh * electricityTariff;
         const annualCO2_kg = annualElectricity_kWh * CONFIG.GRID_CO2_KG_PER_KWH;
+        
+        // NET operating cost (after heat recovery savings)
+        const heatRecoverySavings = heatRecovery?.savings?.vs_electric || 0;
+        const netAnnualCost = annualElectricityCost - heatRecoverySavings;
+        const effectivePayback = totalCapex / Math.max(1, Math.abs(netAnnualCost));
 
         // --- CAPEX ---
         const icoolSalePrice = selectedICool.salesPriceUSD * CONFIG.FX_USD_PHP;
@@ -353,8 +452,11 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             operating: {
                 annualElectricity_kWh: annualElectricity_kWh,
                 annualCost: annualElectricityCost,
-                annualCO2_kg: annualCO2_kg
+                annualCO2_kg: annualCO2_kg,
+                netAnnualCost: netAnnualCost,
+                heatRecoverySavings: heatRecoverySavings
             },
+            heatRecovery: heatRecovery,
             capex: {
                 icool: icoolSalePrice,
                 installation: installationCost,
@@ -362,7 +464,8 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             },
             tco: {
                 lifetime: totalLifetimeCost,
-                annualTCO: annualTCO
+                annualTCO: annualTCO,
+                effectivePayback: effectivePayback
             },
             enterpriseROI: enterpriseROI
         });
@@ -558,6 +661,106 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                         </div>
                     </div>
 
+                    {/* HEAT RECOVERY SECTION */}
+                    {results.heatRecovery && results.heatRecovery.hasCapability && (
+                        <div className="mb-6 bg-gradient-to-br from-orange-50 to-red-50 p-6 rounded-xl border-2 border-orange-300">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Thermometer className="text-orange-600" size={28}/>
+                                <h3 className="text-2xl font-bold text-orange-900">🔥 Heat Recovery System</h3>
+                            </div>
+
+                            {results.heatRecovery.enabled === false ? (
+                                <div className="bg-yellow-100 border-2 border-yellow-400 rounded-lg p-4 mb-4">
+                                    <p className="text-yellow-800 font-semibold">
+                                        ⚠️ This unit has heat recovery capability but it's not enabled in your inputs. 
+                                        Enable it to see FREE hot water production and cost savings!
+                                    </p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="bg-white p-4 rounded-lg mb-4 border-2 border-green-300">
+                                        <p className="text-green-800 font-bold text-lg mb-2">
+                                            ✅ FREE Hot Water Production: {fmt(results.heatRecovery.utilized_L_day)} liters/day @ {results.heatRecovery.outlet_temp}°C
+                                        </p>
+                                        <p className="text-sm text-gray-600">
+                                            System recovers waste heat from refrigeration process to heat water from {results.heatRecovery.inlet_temp}°C to {results.heatRecovery.outlet_temp}°C
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                        <div className="bg-white p-4 rounded-lg border-2 border-orange-200 shadow-sm">
+                                            <p className="text-xs font-bold text-gray-500 uppercase mb-2">Heat Recovery Capacity</p>
+                                            <p className="text-2xl font-bold text-orange-600">{fmt(results.heatRecovery.capacity_kW, 1)} kW</p>
+                                            <p className="text-xs text-gray-500 mt-1">({fmt(results.heatRecovery.max_production_L_hour)} L/hour max)</p>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-lg border-2 border-orange-200 shadow-sm">
+                                            <p className="text-xs font-bold text-gray-500 uppercase mb-2">Daily Hot Water</p>
+                                            <p className="text-2xl font-bold text-orange-600">{fmt(results.heatRecovery.utilized_L_day)} L</p>
+                                            <p className="text-xs text-gray-500 mt-1">({fmt(results.heatRecovery.utilization_pct, 0)}% of production capacity)</p>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-lg border-2 border-green-200 shadow-sm">
+                                            <p className="text-xs font-bold text-gray-500 uppercase mb-2">Annual Energy Recovered</p>
+                                            <p className="text-2xl font-bold text-green-600">{fmt(results.heatRecovery.annual_energy_kWh)} kWh</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-white rounded-lg p-4 mb-4">
+                                        <h5 className="font-semibold text-gray-800 mb-3">💰 Annual Cost Savings from Heat Recovery</h5>
+                                        <table className="w-full text-sm">
+                                            <tbody>
+                                                <tr className="border-b">
+                                                    <td className="py-2 text-gray-600">vs. Electric Water Heater</td>
+                                                    <td className="text-right font-bold text-green-600">₱ {fmt(results.heatRecovery.savings.vs_electric)} / year</td>
+                                                </tr>
+                                                <tr className="border-b">
+                                                    <td className="py-2 text-gray-600">vs. LPG Water Heater</td>
+                                                    <td className="text-right font-bold text-green-600">₱ {fmt(results.heatRecovery.savings.vs_lpg)} / year</td>
+                                                </tr>
+                                                <tr className="border-b">
+                                                    <td className="py-2 text-gray-600">CO₂ Emissions Avoided</td>
+                                                    <td className="text-right font-bold text-green-600">{fmt(results.heatRecovery.savings.co2_avoided_kg)} kg / year</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    <div className="bg-gradient-to-r from-green-100 to-emerald-100 p-4 rounded-lg border-2 border-green-400">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-600 uppercase mb-1">NET Annual Operating Cost</p>
+                                                <p className="text-sm text-gray-600">
+                                                    Electricity: ₱{fmt(results.operating.annualCost)} 
+                                                    <span className="text-green-600 font-bold"> - Heat Recovery Savings: ₱{fmt(results.operating.heatRecoverySavings)}</span>
+                                                </p>
+                                                <p className="text-3xl font-bold text-green-700 mt-2">
+                                                    = ₱ {fmt(results.operating.netAnnualCost)}
+                                                    {results.operating.netAnnualCost < 0 && (
+                                                        <span className="text-base ml-2 text-green-800">(PROFIT!)</span>
+                                                    )}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs font-bold text-gray-600 uppercase mb-1">Effective Payback</p>
+                                                <p className="text-3xl font-bold text-blue-600">
+                                                    {fmt(results.tco.effectivePayback, 1)} years
+                                                </p>
+                                                <p className="text-xs text-gray-600 mt-1">({fmt(results.tco.effectivePayback * 12, 0)} months)</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 bg-blue-50 p-3 rounded border border-blue-200">
+                                        <p className="text-xs text-gray-700">
+                                            <strong>💡 Use Cases:</strong> Perfect for food processing plants (CIP cleaning water), 
+                                            hotels (laundry + guest facilities), commercial kitchens (sanitation), 
+                                            dairy processing, or any facility needing hot water @ {results.heatRecovery.outlet_temp}°C
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
                     {/* Enterprise ROI */}
                     {results.enterpriseROI && (
                         <div className="mb-6 bg-gradient-to-br from-purple-50 to-indigo-50 p-6 rounded-xl border-2 border-purple-300">
@@ -731,6 +934,59 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                     onChange={(e) => handleInputChange('projectLifespan', parseFloat(e.target.value))} />
                                 <InputField label="Annual Discount Rate (%)" value={inputs.discountRate} step="0.5"
                                     onChange={(e) => handleInputChange('discountRate', parseFloat(e.target.value))} />
+                            </div>
+                        </div>
+
+                        {/* Section 5: Heat Recovery Parameters */}
+                        <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-6 border-2 border-orange-300">
+                            <h3 className="text-lg font-bold text-gray-800 mb-2 border-b-2 border-orange-500 pb-2 flex items-center gap-2">
+                                <Thermometer className="text-orange-600" size={20} />
+                                5. Heat Recovery Configuration 🔥
+                            </h3>
+                            <p className="text-xs text-gray-600 mb-4">
+                                If your selected iCOOL unit has heat recovery capability, enable it to see FREE hot water production and cost savings
+                            </p>
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3 bg-white p-3 rounded border border-orange-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={inputs.enableHeatRecovery}
+                                        onChange={(e) => handleInputChange('enableHeatRecovery', e.target.checked)}
+                                        className="w-5 h-5 text-orange-600 rounded border-gray-300 focus:ring-orange-500"
+                                    />
+                                    <label className="font-semibold text-gray-800">
+                                        Enable Heat Recovery (if available)
+                                    </label>
+                                </div>
+                                
+                                {inputs.enableHeatRecovery && (
+                                    <>
+                                        <InputField 
+                                            label="Daily Hot Water Requirement (Liters)" 
+                                            value={inputs.hotWaterUsage_L_day} 
+                                            onChange={(e) => handleInputChange('hotWaterUsage_L_day', parseFloat(e.target.value))} 
+                                        />
+                                        <InputField 
+                                            label="Inlet Water Temperature (°C)" 
+                                            value={inputs.hotWaterInletTemp} 
+                                            onChange={(e) => handleInputChange('hotWaterInletTemp', parseFloat(e.target.value))} 
+                                        />
+                                        <InputField 
+                                            label="Target Hot Water Temperature (°C)" 
+                                            value={inputs.hotWaterOutletTemp} 
+                                            onChange={(e) => handleInputChange('hotWaterOutletTemp', parseFloat(e.target.value))} 
+                                        />
+                                        <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                                            <p className="text-xs text-gray-700">
+                                                <strong>💡 Typical Applications:</strong><br/>
+                                                • Food Processing: CIP cleaning (60°C)<br/>
+                                                • Hotels: Laundry & guest bathrooms (50-60°C)<br/>
+                                                • Commercial Kitchens: Dishwashing & sanitation (60°C)<br/>
+                                                • Dairy Processing: Equipment washing (55-65°C)
+                                            </p>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
