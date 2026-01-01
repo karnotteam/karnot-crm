@@ -6,8 +6,10 @@ import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { getAuth } from "firebase/auth";
 
 // --- CONFIGURATION ---
-const IMAGE_BASE_URL = "https://raw.githubusercontent.com/karnot-crm-app/images/main/"; 
-const IMAGE_EXTENSION = ".png"; 
+// OLD (BROKEN): const IMAGE_BASE_URL = "https://github.com/stuartecox/karnot-crm/blob/main/karnot-crm-app/images/";
+// NEW (FIXED):
+const IMAGE_BASE_URL = "https://raw.githubusercontent.com/stuartecox/karnot-crm/main/karnot-crm-app/images/"; 
+const IMAGE_EXTENSION = ".png"; // Ensure your files on GitHub end in .png (case sensitive!) 
 
 const DatasheetLibrary = () => {
     // 1. STATE: Holds the live data from your Product Manager
