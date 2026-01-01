@@ -1,125 +1,158 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Printer, Package, Search, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../data/constants.jsx';
+import { db } from '../firebase'; // Ensure this path is correct
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { getAuth } from "firebase/auth";
 
 // --- CONFIGURATION ---
 const IMAGE_BASE_URL = "https://raw.githubusercontent.com/karnot-crm-app/images/main/"; 
 const IMAGE_EXTENSION = ".png"; 
 
-// --- REAL DATA FROM YOUR CSV ---
-const IMPORTED_PRODUCT_DATA = [
-    // ... (Previous AquaHERO, iCOOL, iHEAT products remain here) ...
-    {
-        id: "istor_p58",
-        category: "iSTOR", // Triggers Thermal Battery Layout
-        name: "Karnot iSTOR P58 Thermal Battery",
-        subtitle: "High-Temp Thermal Storage",
-        description: "80 kWh thermal battery using Plentigrade P58 Phase Change Material. Ideal for heat buffering and decarbonizing hot water systems.",
-        certifications: "CE, RAL Quality Mark",
-        specs: {
-            orderRef: "iSTOR-P58-80",
-            nominalCapacity: "80 kWh",
-            standbyLoss: "3.0 kWh/24h",
-            dischargeTemp: "54°C",
-            chargingTemp: "65°C to 80°C",
-            maxFlow: "50 L/min",
-            dimensions: "1200 x 1000 x 1470 mm",
-            weight: "1,402 kg"
-        }
-    },
-    {
-        id: "istor_stainless_1000l",
-        category: "iSTOR", // Triggers Standard Tank Layout
-        name: "Karnot iSTOR Stainless Steel Tank - 1000L",
-        subtitle: "Hydraulic Buffer Tank",
-        description: "Premium stainless steel buffer tank for hydronic heating and cooling systems. Includes optional DN32 coil.",
-        certifications: "CE",
-        specs: {
-            orderRef: "iSTOR-SS-1000",
-            volume: "1000 L",
-            material: "Stainless Steel (SUS304)",
-            dimensions: "φ900×2080 mm",
-            packing: "1020×1020×2270 mm",
-            coil: "Optional DN32 (USD 5/m)"
-        }
-    }
-];
-
 const DatasheetLibrary = () => {
-    const [selectedId, setSelectedId] = useState(IMPORTED_PRODUCT_DATA[0].id);
+    // State for Products from DB
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    
+    // UI State
+    const [selectedId, setSelectedId] = useState(null);
     const [units, setUnits] = useState('metric');
     const [searchTerm, setSearchTerm] = useState('');
     const printRef = useRef();
 
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    // --- 1. FETCH REAL DATA FROM FIRESTORE ---
+    useEffect(() => {
+        if (!user) {
+            setLoading(false);
+            return;
+        }
+
+        const q = query(collection(db, "users", user.uid, "products"), orderBy("category", "asc"));
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setProducts(list);
+            if (list.length > 0) {
+                setSelectedId(list[0].id); // Select first product by default
+            }
+            setLoading(false);
+        }, (error) => {
+            console.error("Error fetching products:", error);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, [user]);
+
+    // --- 2. FILTER LOGIC ---
     const filteredProducts = useMemo(() => {
-        return IMPORTED_PRODUCT_DATA.filter(p => 
-            p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-            p.id.toLowerCase().includes(searchTerm.toLowerCase())
+        return products.filter(p => 
+            (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+            (p.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (p.category || '').toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [searchTerm]);
+    }, [products, searchTerm]);
 
-    const product = IMPORTED_PRODUCT_DATA.find(p => p.id === selectedId) || IMPORTED_PRODUCT_DATA[0];
-    const data = product.specs; // iSTOR data structure is flatter in this example
+    // Get current product safely
+    const product = products.find(p => p.id === selectedId) || products[0];
 
-    const getProductImage = (id) => `${IMAGE_BASE_URL}${id}${IMAGE_EXTENSION}`;
+    // Helper: Build Image URL
+    const getProductImage = (id) => {
+        if (!id) return '';
+        // If there's a manual Image_URL in DB, use it. Otherwise, generate GitHub link.
+        if (product?.Image_URL) return product.Image_URL;
+        return `${IMAGE_BASE_URL}${id}${IMAGE_EXTENSION}`;
+    };
 
+    // Helper: Format Certificates
     const renderCertBadges = (certString) => {
         if (!certString) return null;
+        // Handle both comma-separated strings and arrays (just in case)
+        const certs = Array.isArray(certString) ? certString : certString.split(',');
         return (
             <div className="badges">
-                {certString.split(',').map((c, i) => (
-                    <span key={i} className="badge">{c.trim()}</span>
+                {certs.map((c, i) => (
+                    <span key={i} className={`badge ${c.trim().includes('MCS') ? 'mcs' : ''}`}>
+                        {c.trim().includes('MCS') && <i className="bi bi-patch-check-fill" style={{marginRight: '4px'}}></i>}
+                        {c.trim()}
+                    </span>
                 ))}
             </div>
         );
     };
 
-    // --- SMART SPEC RENDERER ---
+    // --- 3. SMART SPEC RENDERER ---
     const renderTechnicalSpecs = () => {
-        const s = product.specs;
+        if (!product) return null;
+        
+        const cat = (product.category || '').toUpperCase();
         
         // 1. iHEAT / AquaHERO (Heat Pumps)
-        if (product.category.includes("iHEAT") || product.category.includes("AquaHERO")) {
-             // ... (Same Heat Pump Logic as before) ...
-             return <div>Heat Pump Specs Placeholder</div>;
+        if (cat.includes("IHEAT") || cat.includes("AQUAHERO")) {
+            return (
+                <>
+                    <div className="section-head">Performance Data</div>
+                    <table className="data-table">
+                        <tbody>
+                            <tr><td>Heating Capacity</td><td>{product.kW_Heating_Nominal || product.kW_DHW_Nominal || '-'} kW</td></tr>
+                            <tr><td>COP (Efficiency)</td><td>{product.COP_DHW || '-'}</td></tr>
+                            {product.kW_Cooling_Nominal > 0 && <tr><td>Cooling Capacity</td><td>{product.kW_Cooling_Nominal} kW</td></tr>}
+                            <tr><td>Max Water Temp</td><td>{product.max_temp_c || '-'} °C</td></tr>
+                            <tr><td>Refrigerant</td><td>{product.Refrigerant || '-'}</td></tr>
+                        </tbody>
+                    </table>
+                </>
+            );
         }
 
         // 2. iCOOL (Refrigeration)
-        if (product.category.includes("iCOOL")) {
-             // ... (Same Refrigeration Logic as before) ...
-             return <div>Refrigeration Specs Placeholder</div>;
+        if (cat.includes("ICOOL")) {
+            return (
+                <>
+                    <div className="section-head">Refrigeration Performance</div>
+                    <table className="data-table">
+                        <tbody>
+                            <tr><td>Cooling Capacity</td><td>{product.kW_Cooling_Nominal || '-'} kW</td></tr>
+                            <tr><td>Refrigerant</td><td>{product.Refrigerant || '-'}</td></tr>
+                            <tr><td>Compressor</td><td>{product.Suitable_Compressor || '-'}</td></tr>
+                            <tr><td>Evap Temp Range</td><td>{product.Evaporating_Temp_Nominal || '-'}</td></tr>
+                        </tbody>
+                    </table>
+                </>
+            );
         }
 
-        // 3. iSTOR (Storage) - NEW LOGIC
-        if (product.category.includes("iSTOR")) {
-            // Check if it's a PCM Battery (has "nominalCapacity") or a simple Tank
-            if (s.nominalCapacity) {
-                // PCM Thermal Battery Layout
-                return (
+        // 3. iSTOR (Storage)
+        if (cat.includes("ISTOR")) {
+            // Distinguish Thermal Battery (PCM) vs Standard Tank
+            // Logic: If it has "nominal capacity" in kWh (stored in a custom field or description), treat as PCM.
+            // For now, we look at the name or category
+            if (product.name.includes("P5") || product.name.includes("P58") || product.name.includes("Battery")) {
+                 return (
                     <>
                         <div className="section-head">Thermal Performance</div>
                         <table className="data-table">
                             <tbody>
-                                <tr><td>Storage Capacity</td><td>{s.nominalCapacity}</td></tr>
-                                <tr><td>Discharge Temp</td><td>{s.dischargeTemp}</td></tr>
-                                <tr><td>Standby Loss</td><td>{s.standbyLoss}</td></tr>
-                                <tr><td>Max Flow Rate</td><td>{s.maxFlow}</td></tr>
-                                <tr><td>Charging Source</td><td>{s.chargingTemp}</td></tr>
+                                <tr><td>Storage Capacity</td><td>{product.Receiver_Volume || '-'} kWh</td></tr>
+                                <tr><td>Max Flow Rate</td><td>{product.WaterFlow_Heating_m3h || '-'} m³/h</td></tr>
+                                <tr><td>Standby Loss</td><td>Check Manual</td></tr>
                             </tbody>
                         </table>
                     </>
                 );
             } else {
-                // Standard Tank Layout
+                // Standard Tank
                 return (
                     <>
                         <div className="section-head">Tank Specifications</div>
                         <table className="data-table">
                             <tbody>
-                                <tr><td>Volume</td><td>{s.volume}</td></tr>
-                                <tr><td>Material</td><td>{s.material}</td></tr>
-                                <tr><td>Coil Option</td><td>{s.coil}</td></tr>
-                                <tr><td>Packing Dims</td><td>{s.packing}</td></tr>
+                                <tr><td>Volume</td><td>{product.Receiver_Volume || '-'} L</td></tr>
+                                <tr><td>Material</td><td>Stainless Steel</td></tr>
+                                <tr><td>Coil Option</td><td>See Options</td></tr>
+                                <tr><td>Packing Dims</td><td>{product.Unit_Dimensions || '-'}</td></tr>
                             </tbody>
                         </table>
                     </>
@@ -127,14 +160,44 @@ const DatasheetLibrary = () => {
             }
         }
 
-        return <div>Generic Specs</div>;
+        // 4. iZONE (Fan Coils)
+        if (cat.includes("IZONE") || cat.includes("FAN COIL")) {
+            return (
+                <>
+                    <div className="section-head">Air & Water Data</div>
+                    <table className="data-table">
+                        <tbody>
+                            <tr><td>Airflow (High)</td><td>{product.Airflow_H_m3h || '-'} m³/h</td></tr>
+                            <tr><td>Heating Output</td><td>{product.kW_Heating_Nominal || '-'} kW</td></tr>
+                            <tr><td>Cooling Output</td><td>{product.kW_Cooling_Nominal || '-'} kW</td></tr>
+                            <tr><td>Water Flow</td><td>{product.WaterFlow_Heating_m3h || '-'} m³/h</td></tr>
+                            <tr><td>Noise Level</td><td>{product.Noise_H_dBA || '-'} dBA</td></tr>
+                        </tbody>
+                    </table>
+                </>
+            );
+        }
+
+        // Default / Generic
+        return (
+            <>
+                <div className="section-head">Technical Data</div>
+                <table className="data-table">
+                    <tbody>
+                       <tr><td>Category</td><td>{product.category}</td></tr>
+                       <tr><td>Price</td><td>${product.salesPriceUSD}</td></tr>
+                       <tr><td>Power</td><td>{product.Rated_Power_Input || '-'} kW</td></tr>
+                    </tbody>
+                </table>
+            </>
+        );
     };
 
     const handlePrint = () => {
         const content = printRef.current.innerHTML;
         const printWindow = window.open('', '', 'height=800,width=1200');
         printWindow.document.write(`
-            <html><head><title>${product.name}</title>
+            <html><head><title>${product?.name || 'Datasheet'}</title>
             <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
             <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
             <style>${getStyles()}</style></head><body><div class="ds-container">${content}</div></body></html>
@@ -155,6 +218,7 @@ const DatasheetLibrary = () => {
         .ds-hero img { width: 100%; border-radius: 8px; object-fit: contain; max-height: 280px; }
         .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 15px; }
         .badge { background: #f5f5f7; padding: 5px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid #eee; }
+        .badge.mcs { color: #00884A; border-color: #00884A; background: #f0fdf4; }
         .spec-sec { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; border-top: 1px solid #eee; margin-top: 20px; }
         .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .data-table td { padding: 10px 0; border-bottom: 1px solid #eee; }
@@ -162,7 +226,15 @@ const DatasheetLibrary = () => {
         .data-table td:last-child { text-align: right; color: var(--sub); }
         .disclaimer { font-size: 10px; color: #999; text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; }
         .missing-img-placeholder { width: 100%; height: 250px; background: #f9f9fa; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #ccc; border-radius: 12px; border: 2px dashed #eee; }
+        .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 20px; }
+        .feat-item { background: #f9f9fa; padding: 15px; border-radius: 10px; border: 1px solid #e5e5e5; }
+        .feat-item i { font-size: 20px; color: var(--orange); display: block; margin-bottom: 8px; }
+        .feat-item h3 { font-size: 13px; margin: 0 0 4px 0; font-weight: 700; }
+        .feat-item p { font-size: 11px; margin: 0; color: var(--sub); line-height: 1.4; }
     `;
+
+    if (loading) return <div className="p-10 text-center text-gray-500">Loading Product Library...</div>;
+    if (!product) return <div className="p-10 text-center text-gray-500">No products found. Please add products in Product Manager.</div>;
 
     return (
         <div className="flex h-screen bg-gray-100 overflow-hidden">
@@ -192,6 +264,10 @@ const DatasheetLibrary = () => {
             <div className="flex-1 flex flex-col h-screen relative">
                 <div className="h-14 bg-white border-b flex items-center justify-between px-6 shadow-sm z-10">
                     <div className="flex items-center gap-4">
+                        <div className="flex bg-gray-100 p-1 rounded-lg">
+                            <button onClick={() => setUnits('metric')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${units === 'metric' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}>Metric</button>
+                            <button onClick={() => setUnits('imperial')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${units === 'imperial' ? 'bg-white shadow text-gray-800' : 'text-gray-500'}`}>Imperial</button>
+                        </div>
                         <div className="text-[10px] text-gray-400">
                             Image Source: <span className="font-mono text-blue-500">{getProductImage(selectedId)}</span>
                         </div>
@@ -204,9 +280,12 @@ const DatasheetLibrary = () => {
                             <div className="section-pad ds-hero">
                                 <div>
                                     <h1>{product.name}</h1>
-                                    <p className="sub">{product.category} SERIES</p>
-                                    <p className="text-sm text-gray-600 mb-4">{product.description}</p>
-                                    {renderCertBadges(product.certifications)}
+                                    <p className="sub">{product.category}</p>
+                                    {/* Fallback description if Specs field is empty */}
+                                    <p className="text-sm text-gray-600 mb-4">{product.specs || product.Order_Reference || 'High efficiency system designed for commercial and residential applications.'}</p>
+                                    
+                                    {/* Certificate Detail Badges */}
+                                    {renderCertBadges(product.Certificate_Detail || product.Certificates)}
                                 </div>
                                 <div style={{textAlign:'center'}}>
                                     <img 
@@ -220,8 +299,30 @@ const DatasheetLibrary = () => {
                                     />
                                     <div className="missing-img-placeholder" style={{display:'none'}}>
                                         <ImageIcon size={48} />
-                                        <span style={{marginTop:'10px', fontSize:'12px'}}>Image not found on GitHub</span>
+                                        <span style={{marginTop:'10px', fontSize:'12px'}}>Image not found</span>
                                         <span style={{fontSize:'10px', fontFamily:'monospace'}}>{product.id}{IMAGE_EXTENSION}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* DYNAMIC FEATURE ICONS (If available, currently hardcoded placeholders) */}
+                            <div className="section-pad" style={{ background: '#fff', paddingBottom: '20px' }}>
+                                <div className="section-head">Key Features</div>
+                                <div className="feat-grid">
+                                    <div className="feat-item">
+                                        <i className="bi bi-shield-check"></i>
+                                        <h3>Reliability</h3>
+                                        <p>Engineered with high-quality components for long service life.</p>
+                                    </div>
+                                    <div className="feat-item">
+                                        <i className="bi bi-lightning-charge"></i>
+                                        <h3>Efficiency</h3>
+                                        <p>Optimized for low energy consumption and high performance.</p>
+                                    </div>
+                                    <div className="feat-item">
+                                        <i className="bi bi-tools"></i>
+                                        <h3>Serviceability</h3>
+                                        <p>Designed for easy maintenance and quick part replacement.</p>
                                     </div>
                                 </div>
                             </div>
@@ -234,11 +335,21 @@ const DatasheetLibrary = () => {
                                     <div className="section-head">Physical Data</div>
                                     <table className="data-table">
                                         <tbody>
-                                            {product.specs.dimensions && <tr><td>Dimensions</td><td>{product.specs.dimensions}</td></tr>}
-                                            {product.specs.weight && <tr><td>Weight</td><td>{product.specs.weight}</td></tr>}
-                                            {product.specs.orderRef && <tr><td>Order Ref</td><td>{product.specs.orderRef}</td></tr>}
+                                            <tr><td>Power Supply</td><td>{product.Power_Supply || '-'}</td></tr>
+                                            <tr><td>Sound Level</td><td>{product.Sound_Power_Level ? product.Sound_Power_Level + ' dBA' : '-'}</td></tr>
+                                            <tr><td>Dimensions</td><td>{product.Unit_Dimensions || '-'}</td></tr>
+                                            <tr><td>Net Weight</td><td>{product.Net_Weight ? product.Net_Weight + ' kg' : '-'}</td></tr>
+                                            <tr><td>Breaker</td><td>{product.Recommended_Breaker || '-'}</td></tr>
                                         </tbody>
                                     </table>
+                                    
+                                    <div style={{marginTop: '30px', background: '#f9f9fa', padding:'15px', borderRadius:'8px', border:'1px solid #eee'}}>
+                                        <h4 style={{fontSize:'13px', fontWeight:'700', marginBottom:'5px', color:'#333'}}>System Notes</h4>
+                                        <p style={{fontSize:'11px', color:'#666', lineHeight:'1.4'}}>
+                                            • Ref. Order Code: {product.Order_Reference || '-'}<br/>
+                                            • Certifications: {product.Certificates || 'Pending'}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 
