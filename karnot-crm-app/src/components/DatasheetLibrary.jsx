@@ -1,7 +1,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Printer, Package, Search, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { Button } from '../data/constants.jsx';
-import { db } from '../firebase'; // Ensure this path is correct
+import { db } from '../firebase'; 
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { getAuth } from "firebase/auth";
 
@@ -10,11 +10,11 @@ const IMAGE_BASE_URL = "https://raw.githubusercontent.com/karnot-crm-app/images/
 const IMAGE_EXTENSION = ".png"; 
 
 const DatasheetLibrary = () => {
-    // State for Products from DB
+    // 1. STATE: Holds the live data from your Product Manager
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     
-    // UI State
+    // 2. UI STATE: Which product is showing? Metric or Imperial?
     const [selectedId, setSelectedId] = useState(null);
     const [units, setUnits] = useState('metric');
     const [searchTerm, setSearchTerm] = useState('');
@@ -23,19 +23,22 @@ const DatasheetLibrary = () => {
     const auth = getAuth();
     const user = auth.currentUser;
 
-    // --- 1. FETCH REAL DATA FROM FIRESTORE ---
+    // --- 3. THE ENGINE: Connects to Firestore Database ---
     useEffect(() => {
         if (!user) {
             setLoading(false);
             return;
         }
 
+        // Fetches ALL products you imported via CSV
         const q = query(collection(db, "users", user.uid, "products"), orderBy("category", "asc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setProducts(list);
-            if (list.length > 0) {
-                setSelectedId(list[0].id); // Select first product by default
+            
+            // Auto-select the first product if nothing is selected
+            if (list.length > 0 && !selectedId) {
+                setSelectedId(list[0].id); 
             }
             setLoading(false);
         }, (error) => {
@@ -46,7 +49,7 @@ const DatasheetLibrary = () => {
         return () => unsubscribe();
     }, [user]);
 
-    // --- 2. FILTER LOGIC ---
+    // --- 4. SEARCH FILTER ---
     const filteredProducts = useMemo(() => {
         return products.filter(p => 
             (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -55,22 +58,23 @@ const DatasheetLibrary = () => {
         );
     }, [products, searchTerm]);
 
-    // Get current product safely
+    // Get the currently selected product object
     const product = products.find(p => p.id === selectedId) || products[0];
 
-    // Helper: Build Image URL
+    // --- 5. DYNAMIC HELPERS ---
+    
+    // Automatically finds the image on GitHub using the System ID
     const getProductImage = (id) => {
         if (!id) return '';
-        // If there's a manual Image_URL in DB, use it. Otherwise, generate GitHub link.
-        if (product?.Image_URL) return product.Image_URL;
-        return `${IMAGE_BASE_URL}${id}${IMAGE_EXTENSION}`;
+        if (product?.Image_URL) return product.Image_URL; // Use CSV link if exists
+        return `${IMAGE_BASE_URL}${id}${IMAGE_EXTENSION}`; // Fallback to GitHub
     };
 
-    // Helper: Format Certificates
+    // Parses your "Certificates" column into visual badges
     const renderCertBadges = (certString) => {
         if (!certString) return null;
-        // Handle both comma-separated strings and arrays (just in case)
-        const certs = Array.isArray(certString) ? certString : certString.split(',');
+        // Handles both "CE, MCS" (string) and ["CE", "MCS"] (array) formats
+        const certs = Array.isArray(certString) ? certString : String(certString).split(',');
         return (
             <div className="badges">
                 {certs.map((c, i) => (
@@ -83,13 +87,14 @@ const DatasheetLibrary = () => {
         );
     };
 
-    // --- 3. SMART SPEC RENDERER ---
+    // --- 6. SMART LAYOUT ENGINE ---
+    // This decides WHICH technical table to show based on the Product Category
     const renderTechnicalSpecs = () => {
         if (!product) return null;
         
         const cat = (product.category || '').toUpperCase();
         
-        // 1. iHEAT / AquaHERO (Heat Pumps)
+        // LAYOUT A: HEAT PUMPS (iHEAT / AquaHERO)
         if (cat.includes("IHEAT") || cat.includes("AQUAHERO")) {
             return (
                 <>
@@ -107,14 +112,14 @@ const DatasheetLibrary = () => {
             );
         }
 
-        // 2. iCOOL (Refrigeration)
+        // LAYOUT B: REFRIGERATION (iCOOL)
         if (cat.includes("ICOOL")) {
             return (
                 <>
                     <div className="section-head">Refrigeration Performance</div>
                     <table className="data-table">
                         <tbody>
-                            <tr><td>Cooling Capacity</td><td>{product.kW_Cooling_Nominal || '-'} kW</td></tr>
+                            <tr><td>Cooling Capacity (MT)</td><td>{product.kW_Cooling_Nominal || '-'} kW</td></tr>
                             <tr><td>Refrigerant</td><td>{product.Refrigerant || '-'}</td></tr>
                             <tr><td>Compressor</td><td>{product.Suitable_Compressor || '-'}</td></tr>
                             <tr><td>Evap Temp Range</td><td>{product.Evaporating_Temp_Nominal || '-'}</td></tr>
@@ -124,11 +129,9 @@ const DatasheetLibrary = () => {
             );
         }
 
-        // 3. iSTOR (Storage)
+        // LAYOUT C: STORAGE (iSTOR)
         if (cat.includes("ISTOR")) {
-            // Distinguish Thermal Battery (PCM) vs Standard Tank
-            // Logic: If it has "nominal capacity" in kWh (stored in a custom field or description), treat as PCM.
-            // For now, we look at the name or category
+            // Detects "P5" or "Battery" in name to show PCM specs vs Standard Tank specs
             if (product.name.includes("P5") || product.name.includes("P58") || product.name.includes("Battery")) {
                  return (
                     <>
@@ -137,13 +140,13 @@ const DatasheetLibrary = () => {
                             <tbody>
                                 <tr><td>Storage Capacity</td><td>{product.Receiver_Volume || '-'} kWh</td></tr>
                                 <tr><td>Max Flow Rate</td><td>{product.WaterFlow_Heating_m3h || '-'} m³/h</td></tr>
-                                <tr><td>Standby Loss</td><td>Check Manual</td></tr>
+                                <tr><td>Dimensions</td><td>{product.Unit_Dimensions}</td></tr>
                             </tbody>
                         </table>
                     </>
                 );
             } else {
-                // Standard Tank
+                // Standard Stainless Tank
                 return (
                     <>
                         <div className="section-head">Tank Specifications</div>
@@ -160,7 +163,7 @@ const DatasheetLibrary = () => {
             }
         }
 
-        // 4. iZONE (Fan Coils)
+        // LAYOUT D: FAN COILS (iZONE)
         if (cat.includes("IZONE") || cat.includes("FAN COIL")) {
             return (
                 <>
@@ -178,7 +181,7 @@ const DatasheetLibrary = () => {
             );
         }
 
-        // Default / Generic
+        // LAYOUT E: DEFAULT (Anything else)
         return (
             <>
                 <div className="section-head">Technical Data</div>
@@ -186,13 +189,15 @@ const DatasheetLibrary = () => {
                     <tbody>
                        <tr><td>Category</td><td>{product.category}</td></tr>
                        <tr><td>Price</td><td>${product.salesPriceUSD}</td></tr>
-                       <tr><td>Power</td><td>{product.Rated_Power_Input || '-'} kW</td></tr>
+                       <tr><td>Power Input</td><td>{product.Rated_Power_Input || '-'} kW</td></tr>
+                       <tr><td>Dimensions</td><td>{product.Unit_Dimensions || '-'}</td></tr>
                     </tbody>
                 </table>
             </>
         );
     };
 
+    // --- 7. PDF PRINT GENERATOR ---
     const handlePrint = () => {
         const content = printRef.current.innerHTML;
         const printWindow = window.open('', '', 'height=800,width=1200');
@@ -238,7 +243,7 @@ const DatasheetLibrary = () => {
 
     return (
         <div className="flex h-screen bg-gray-100 overflow-hidden">
-            {/* SIDEBAR */}
+            {/* LEFT SIDEBAR - PRODUCT LIST */}
             <div className="w-80 bg-white border-r border-gray-200 flex flex-col z-20 shadow-sm">
                 <div className="p-5 border-b">
                     <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
@@ -280,11 +285,9 @@ const DatasheetLibrary = () => {
                             <div className="section-pad ds-hero">
                                 <div>
                                     <h1>{product.name}</h1>
-                                    <p className="sub">{product.category}</p>
-                                    {/* Fallback description if Specs field is empty */}
+                                    <p className="sub">{product.category} SERIES</p>
                                     <p className="text-sm text-gray-600 mb-4">{product.specs || product.Order_Reference || 'High efficiency system designed for commercial and residential applications.'}</p>
                                     
-                                    {/* Certificate Detail Badges */}
                                     {renderCertBadges(product.Certificate_Detail || product.Certificates)}
                                 </div>
                                 <div style={{textAlign:'center'}}>
@@ -305,7 +308,6 @@ const DatasheetLibrary = () => {
                                 </div>
                             </div>
 
-                            {/* DYNAMIC FEATURE ICONS (If available, currently hardcoded placeholders) */}
                             <div className="section-pad" style={{ background: '#fff', paddingBottom: '20px' }}>
                                 <div className="section-head">Key Features</div>
                                 <div className="feat-grid">
