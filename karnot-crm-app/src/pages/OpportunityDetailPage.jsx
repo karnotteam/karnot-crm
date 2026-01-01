@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { 
     Mail, Phone, Hash, ArrowLeft, DollarSign, List, Calendar, 
-    Edit, Plus, FileText, User, Layout, Activity, Trash2, PlusCircle, ExternalLink
+    Edit, Plus, FileText, User, Layout, Activity, Trash2, PlusCircle, 
+    ExternalLink, Save, X, Edit2
 } from 'lucide-react';
 import { db } from '../firebase'; 
 import { 
-    collection, addDoc, serverTimestamp, doc, updateDoc, getDoc,
+    collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, setDoc,
     query, onSnapshot, orderBy 
 } from "firebase/firestore";
-
 import { Card, Button, Section, Input, Textarea } from '../data/constants.jsx';
 
 const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, onOpenQuote, user, companies = [] }) => {
     
+    const [notes, setNotes] = useState(opportunity?.notes || []); 
     const [newNoteText, setNewNoteText] = useState('');
-    const [notes, setNotes] = useState([]); 
+    const [editingNoteIndex, setEditingNoteIndex] = useState(null);
+    const [editingNoteText, setEditingNoteText] = useState('');
+    
     const [interactions, setInteractions] = useState([]);
     const [newLogType, setNewLogType] = useState('Call');
     const [newLogOutcome, setNewLogOutcome] = useState('');
@@ -27,69 +30,150 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
         return 'text-red-600';
     };
 
-    // NEW: Load interactions from BOTH opportunity AND company
+    // Load notes from opportunity document
+    useEffect(() => {
+        if (opportunity?.notes) {
+            setNotes(opportunity.notes);
+        }
+    }, [opportunity]);
+
+    // Load interactions from BOTH opportunity AND company
     useEffect(() => {
         if (!opportunity || !companies || !user) return;
-
-        // Get interactions from opportunity
+        
         const oppInteractions = opportunity.interactions || [];
-
-        // Find the matching company and get its interactions
         const matchingCompany = companies.find(c => 
             c.companyName.toLowerCase() === opportunity.customerName.toLowerCase()
         );
-
         const companyInteractions = matchingCompany?.interactions || [];
-
-        // Merge both sets of interactions and sort by date
+        
         const allInteractions = [...oppInteractions, ...companyInteractions]
             .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-        // Remove duplicates by ID
+        
         const uniqueInteractions = allInteractions.filter((item, index, self) =>
             index === self.findIndex((t) => t.id === item.id)
         );
-
+        
         setInteractions(uniqueInteractions);
     }, [opportunity, companies, user]);
 
-    useEffect(() => {
-        if (!opportunity?.id || !user?.uid) {
-            setNotes([]); 
+    // ==========================================
+    // NOTES HANDLERS (Stored in opportunity doc)
+    // ==========================================
+    const handleAddNote = async () => {
+        if (!newNoteText.trim()) {
+            alert('Please enter a note before saving.');
             return;
         }
 
-        const notesRef = collection(db, "users", user.uid, "opportunities", opportunity.id, "notes");
-        const q = query(notesRef, orderBy('createdAt', 'desc'));
+        const newNote = {
+            text: newNoteText.trim(),
+            timestamp: new Date().toISOString(),
+            author: user.email || user.displayName || 'Unknown'
+        };
 
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const notesList = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setNotes(notesList);
+        const updatedNotes = [...notes, newNote];
+
+        try {
+            const oppRef = doc(db, 'users', user.uid, 'opportunities', opportunity.id);
+            await setDoc(oppRef, {
+                notes: updatedNotes,
+                lastModified: serverTimestamp()
+            }, { merge: true });
+
+            setNotes(updatedNotes);
+            setNewNoteText('');
+            console.log('Note added successfully!');
+        } catch (error) {
+            console.error('Error adding note:', error);
+            alert('Failed to add note. Please try again.');
+        }
+    };
+
+    const handleDeleteNote = async (indexToDelete) => {
+        if (!window.confirm('Are you sure you want to delete this note?')) {
+            return;
+        }
+
+        const updatedNotes = notes.filter((_, index) => index !== indexToDelete);
+
+        try {
+            const oppRef = doc(db, 'users', user.uid, 'opportunities', opportunity.id);
+            await setDoc(oppRef, {
+                notes: updatedNotes,
+                lastModified: serverTimestamp()
+            }, { merge: true });
+
+            setNotes(updatedNotes);
+            console.log('Note deleted successfully!');
+        } catch (error) {
+            console.error('Error deleting note:', error);
+            alert('Failed to delete note. Please try again.');
+        }
+    };
+
+    const handleStartEditNote = (index) => {
+        setEditingNoteIndex(index);
+        setEditingNoteText(notes[index].text);
+    };
+
+    const handleSaveEditNote = async () => {
+        if (!editingNoteText.trim()) {
+            alert('Note cannot be empty.');
+            return;
+        }
+
+        const updatedNotes = notes.map((note, index) => {
+            if (index === editingNoteIndex) {
+                return {
+                    ...note,
+                    text: editingNoteText.trim(),
+                    lastEdited: new Date().toISOString(),
+                    editedBy: user.email || user.displayName
+                };
+            }
+            return note;
         });
 
-        return () => unsubscribe();
-    }, [opportunity, user]); 
+        try {
+            const oppRef = doc(db, 'users', user.uid, 'opportunities', opportunity.id);
+            await setDoc(oppRef, {
+                notes: updatedNotes,
+                lastModified: serverTimestamp()
+            }, { merge: true });
 
-    // NEW: Save interactions to BOTH opportunity AND company
+            setNotes(updatedNotes);
+            setEditingNoteIndex(null);
+            setEditingNoteText('');
+            console.log('Note updated successfully!');
+        } catch (error) {
+            console.error('Error updating note:', error);
+            alert('Failed to update note. Please try again.');
+        }
+    };
+
+    const handleCancelEdit = () => {
+        setEditingNoteIndex(null);
+        setEditingNoteText('');
+    };
+
+    // ==========================================
+    // INTERACTIONS HANDLERS
+    // ==========================================
     const saveInteractionsToFirebase = async (updatedInteractions) => {
         if (!user || !opportunity) return;
         
         try {
-            // Save to opportunity
             const oppRef = doc(db, "users", user.uid, "opportunities", opportunity.id);
             await updateDoc(oppRef, {
                 interactions: updatedInteractions,
                 lastModified: serverTimestamp()
             });
-
-            // ALSO save to company if it exists
+            
             const matchingCompany = companies.find(c => 
                 c.companyName.toLowerCase() === opportunity.customerName.toLowerCase()
             );
-
+            
             if (matchingCompany) {
                 const companyRef = doc(db, "users", user.uid, "companies", matchingCompany.id);
                 await updateDoc(companyRef, {
@@ -102,24 +186,6 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
         }
     };
 
-    const handleSaveNote = async () => {
-        if (!newNoteText.trim()) return; 
-        if (!user?.uid) return alert("Error: User not logged in.");
-
-        try {
-            const notesRef = collection(db, "users", user.uid, "opportunities", opportunity.id, "notes");
-            await addDoc(notesRef, {
-                text: newNoteText,
-                createdAt: serverTimestamp(),
-                authorName: user.displayName || user.email 
-            });
-            setNewNoteText('');
-        } catch (error) {
-            console.error("Error adding note: ", error);
-            alert("Failed to save note.");
-        }
-    };
-
     const handleAddInteraction = async () => {
         if (!newLogOutcome) return;
         
@@ -127,7 +193,7 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
         if (selectedQuoteId) {
             linkedQuote = relatedQuotes.find(q => q.id === selectedQuoteId);
         }
-
+        
         const newInteraction = {
             id: Date.now(),
             date: newLogDate,
@@ -135,15 +201,14 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
             outcome: newLogOutcome,
             linkedQuote
         };
-
+        
         const updatedInteractions = [newInteraction, ...interactions].sort((a, b) => 
             new Date(b.date) - new Date(a.date)
         );
-
+        
         setInteractions(updatedInteractions);
         await saveInteractionsToFirebase(updatedInteractions);
-
-        // Reset form
+        
         setNewLogOutcome('');
         setSelectedQuoteId('');
     };
@@ -181,7 +246,10 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* LEFT COLUMN - MAIN CONTENT */}
                 <div className="lg:col-span-2 space-y-6">
+                    
+                    {/* OPPORTUNITY HEADER */}
                     <Card className="border-t-4 border-t-orange-500">
                         <div className="mb-6">
                             <h2 className="text-4xl font-black text-gray-800 uppercase tracking-tighter leading-none">{opportunity.customerName}</h2>
@@ -199,6 +267,7 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                         </div>
                     </Card>
 
+                    {/* PROPOSALS/QUOTES */}
                     <Card>
                         <div className="flex justify-between items-center mb-6">
                             <div className="flex items-center gap-2">
@@ -229,9 +298,129 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                             <div className="text-center py-10 border-2 border-dashed rounded-2xl"><p className="text-sm font-bold text-gray-300 uppercase tracking-[0.2em]">No quotes created yet</p></div>
                         )}
                     </Card>
+
+                    {/* NOTES SECTION - ENHANCED */}
+                    <Card>
+                        <div className="flex items-center gap-2 mb-6">
+                            <div className="p-2 bg-yellow-50 text-yellow-600 rounded-lg"><FileText size={20}/></div>
+                            <h3 className="text-xl font-black text-gray-800 uppercase tracking-tight">Notes & Documentation ({notes.length})</h3>
+                        </div>
+
+                        {/* ADD NEW NOTE */}
+                        <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
+                            <label className="block text-xs font-black text-gray-700 uppercase tracking-widest mb-2">Add New Note</label>
+                            <textarea
+                                value={newNoteText}
+                                onChange={(e) => setNewNoteText(e.target.value)}
+                                placeholder="Document important details, decisions, technical requirements, customer concerns..."
+                                rows={3}
+                                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-orange-500 focus:outline-none text-sm mb-2"
+                            />
+                            <div className="flex justify-end">
+                                <Button onClick={handleAddNote} variant="primary" className="bg-orange-600 hover:bg-orange-700 text-xs">
+                                    <Plus size={14} className="mr-2" /> Add Note
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* NOTES LIST */}
+                        {notes.length === 0 ? (
+                            <div className="text-center py-10 border-2 border-dashed rounded-2xl">
+                                <FileText size={48} className="mx-auto mb-2 text-gray-200" />
+                                <p className="text-sm font-bold text-gray-300 uppercase tracking-[0.2em]">No notes yet</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {[...notes].reverse().map((note, reverseIndex) => {
+                                    const actualIndex = notes.length - 1 - reverseIndex;
+                                    const isEditing = editingNoteIndex === actualIndex;
+
+                                    return (
+                                        <div 
+                                            key={actualIndex} 
+                                            className="p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-yellow-300 transition-colors group"
+                                        >
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                                                    <Calendar size={12} />
+                                                    <span className="font-bold uppercase tracking-widest">
+                                                        {note.timestamp 
+                                                            ? new Date(note.timestamp).toLocaleString('en-US', {
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                year: 'numeric',
+                                                                hour: '2-digit',
+                                                                minute: '2-digit'
+                                                            })
+                                                            : 'Recent'
+                                                        }
+                                                    </span>
+                                                    {note.author && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span className="text-orange-600">{note.author.split('@')[0]}</span>
+                                                        </>
+                                                    )}
+                                                    {note.lastEdited && (
+                                                        <>
+                                                            <span>•</span>
+                                                            <span className="italic text-blue-600">Edited</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                                
+                                                {!isEditing && (
+                                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() => handleStartEditNote(actualIndex)}
+                                                            className="p-1 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                            title="Edit note"
+                                                        >
+                                                            <Edit2 size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteNote(actualIndex)}
+                                                            className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                            title="Delete note"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {isEditing ? (
+                                                <div>
+                                                    <textarea
+                                                        value={editingNoteText}
+                                                        onChange={(e) => setEditingNoteText(e.target.value)}
+                                                        rows={3}
+                                                        className="w-full p-3 border-2 border-orange-300 rounded-lg focus:border-orange-500 focus:outline-none text-sm mb-2"
+                                                    />
+                                                    <div className="flex justify-end gap-2">
+                                                        <Button onClick={handleCancelEdit} variant="secondary" className="text-xs !py-1">
+                                                            <X size={12} className="mr-1" /> Cancel
+                                                        </Button>
+                                                        <Button onClick={handleSaveEditNote} variant="primary" className="text-xs !py-1 bg-orange-600 hover:bg-orange-700">
+                                                            <Save size={12} className="mr-1" /> Save
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{note.text}</p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </Card>
                 </div>
 
+                {/* RIGHT COLUMN - SIDEBAR */}
                 <div className="space-y-6">
+                    
+                    {/* DECISION MAKER CARD */}
                     <Card className="bg-slate-900 text-white">
                         <h3 className="text-xs font-black uppercase tracking-[0.2em] text-orange-400 mb-4 flex items-center gap-2"><User size={14}/> Decision Maker</h3>
                         <div className="space-y-4">
@@ -243,8 +432,11 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                         </div>
                     </Card>
 
+                    {/* ACTIVITY LOG */}
                     <Card className="max-h-[600px] flex flex-col">
-                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4">Activity Log</h3>
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400 mb-4 flex items-center gap-2">
+                            <Activity size={14}/> Activity Log
+                        </h3>
                         
                         <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2 mb-4">
                             <div className="flex gap-2">
@@ -265,7 +457,6 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                                     <option value="Meeting">Meeting</option>
                                 </select>
                             </div>
-
                             {relatedQuotes.length > 0 && (
                                 <select 
                                     value={selectedQuoteId} 
@@ -280,7 +471,6 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                                     ))}
                                 </select>
                             )}
-
                             <div className="flex gap-2">
                                 <input 
                                     type="text" 
@@ -295,6 +485,7 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                             </div>
                         </div>
 
+                        {/* INTERACTIONS LIST */}
                         <div className="flex-1 overflow-y-auto space-y-3 pr-2">
                             {interactions.length > 0 && interactions.map(log => (
                                 <div key={log.id} className="bg-white p-4 rounded-xl border shadow-sm group relative hover:border-orange-200 transition-all">
@@ -340,19 +531,9 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                                     </button>
                                 </div>
                             ))}
-
-                            {notes.length > 0 && notes.map(note => (
-                                <div key={note.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                    <p className="text-sm text-gray-700 font-medium leading-relaxed">{note.text}</p>
-                                    <div className="mt-2 flex justify-between items-center text-[9px] font-black uppercase tracking-widest text-gray-400">
-                                        <span className="text-orange-600">{note.authorName?.split(' ')[0]}</span>
-                                        <span>{note.createdAt ? note.createdAt.toDate().toLocaleDateString() : 'Just now'}</span>
-                                    </div> 
-                                </div>
-                            ))}
-
-                            {interactions.length === 0 && notes.length === 0 && (
-                                <p className="text-[10px] text-gray-300 font-black uppercase tracking-widest text-center py-4">No recent history</p>
+                            
+                            {interactions.length === 0 && (
+                                <p className="text-[10px] text-gray-300 font-black uppercase tracking-widest text-center py-4">No activity logged yet</p>
                             )}
                         </div>
                     </Card>
