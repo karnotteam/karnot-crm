@@ -236,7 +236,6 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
     const [showReport, setShowReport] = useState(false);
     const [showEnterpriseDetails, setShowEnterpriseDetails] = useState(false);
     const [showCalculations, setShowCalculations] = useState(false);
-    const [showEnterpriseDetails, setShowEnterpriseDetails] = useState(false);
 
     // --- FETCH PRODUCTS ---
     useEffect(() => {
