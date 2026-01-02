@@ -19,29 +19,74 @@ const CONFIG = {
     GRID_CO2_KG_PER_KWH: 0.7,
     FX_USD_PHP: 58.5,
     SAFETY_FACTOR: 1.10,
-    DEFAULT_COP: 2.5, // Legacy - replaced by temperature-dependent function
+    DEFAULT_COP: 2.5, // Legacy - replaced by real performance data
     
-    // Temperature-dependent COP for CO₂ systems
-    getCOP_CO2: (evapTemp) => {
-        // CO₂ transcritical systems - COP varies dramatically with temperature
-        if (evapTemp >= 0) return 3.2;      // Chiller (+4°C): Excellent efficiency
-        if (evapTemp >= -5) return 2.8;     // Medium Temp (-2°C): Very good
-        if (evapTemp >= -10) return 2.3;    // Low Temp (-8°C): Good
-        if (evapTemp >= -18) return 1.8;    // Freezer (-18°C): Moderate
-        if (evapTemp >= -25) return 1.5;    // Deep Freeze (-25°C): Lower
-        if (evapTemp >= -35) return 1.2;    // Ultra Low (-35°C): Needs 2-stage
-        return 1.0;                         // -40°C+: Requires cascade system
+    // Working envelope for iCOOL 15HP (from HTML datasheet)
+    WORKING_ENVELOPE: [
+        {x: 0, y: 10},   // Top left
+        {x: -38, y: 10}, // Bottom left
+        {x: -38, y: 38}, // Bottom right corner
+        {x: -30, y: 43}, // Right side point
+        {x: 0, y: 43},   // Top right
+        {x: 0, y: 10}    // Close polygon
+    ],
+    
+    // Check if operating point is within safe working envelope
+    isPointInEnvelope: (evapTemp, ambientTemp) => {
+        const point = {x: evapTemp, y: ambientTemp};
+        const vs = CONFIG.WORKING_ENVELOPE;
+        const x = point.x, y = point.y;
+        let inside = false;
+        
+        for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+            const xi = vs[i].x, yi = vs[i].y;
+            const xj = vs[j].x, yj = vs[j].y;
+            const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
     },
     
-    // Baseline R22/R507/R404A COP (always lower than CO₂)
-    getCOP_Baseline: (evapTemp) => {
-        if (evapTemp >= 0) return 2.5;      // 22% worse than CO₂
-        if (evapTemp >= -5) return 2.2;     
-        if (evapTemp >= -10) return 1.9;    
-        if (evapTemp >= -18) return 1.5;    // 20% worse
-        if (evapTemp >= -25) return 1.2;    
-        if (evapTemp >= -35) return 0.9;    
-        return 0.8;
+    // REAL iCOOL 15HP Performance Data (from datasheet HTML)
+    ICOOL_15HP_REFERENCE: {
+        evap: -30,          // °C
+        ambient: 32,        // °C
+        maxCapacity: 8.675, // kW @ -30/32
+        maxPower: 7.579,    // kW
+        realCOP: 1.145      // Measured: 8.675 / 7.579
+    },
+    
+    // REAL Performance Calculator - from your HTML datasheet
+    calculateRealPerformance: (evapTemp, ambientTemp) => {
+        const ref = CONFIG.ICOOL_15HP_REFERENCE;
+        
+        // Capacity adjustments (from your HTML)
+        let capacity = ref.maxCapacity;
+        const teFactor = 1 + (evapTemp - ref.evap) * 0.03;      // Evap temp factor
+        const taFactor = 1 - (ambientTemp - ref.ambient) * 0.025; // Ambient temp factor
+        capacity *= teFactor * taFactor;
+        
+        // Power adjustments (from your HTML)
+        let power = ref.maxPower;
+        power *= (1 - (evapTemp - ref.evap) * 0.005);
+        power *= (1 + (ambientTemp - ref.ambient) * 0.015);
+        
+        const realCOP = capacity / power;
+        
+        return { capacity, power, realCOP };
+    },
+    
+    // Temperature-dependent COP for CO₂ systems (using real data)
+    getCOP_CO2: (evapTemp, ambientTemp = 32) => {
+        // Use actual measured performance from iCOOL datasheet
+        const { realCOP } = CONFIG.calculateRealPerformance(evapTemp, ambientTemp);
+        return realCOP;
+    },
+    
+    // Baseline R22/R507/R404A COP (30% less efficient than CO₂)
+    getCOP_Baseline: (evapTemp, ambientTemp = 32) => {
+        const co2_cop = CONFIG.getCOP_CO2(evapTemp, ambientTemp);
+        return co2_cop * 0.70; // Old HFC systems are ~30% worse
     },
     
     // Heat Recovery Constants
@@ -266,21 +311,37 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             
             const pullDownTimeSeconds = 24 * 3600; // 24 hours
             
-            // COP based on actual evaporator temperature (room temp - 10°C TD)
+            // COP based on REAL iCOOL performance data (from HTML datasheet)
             const evapTemp = roomTemp - 10; // Typical 10°C temperature difference
-            const icool_cop = CONFIG.getCOP_CO2(evapTemp);
-            const baseline_cop = CONFIG.getCOP_Baseline(evapTemp);
             
-            console.log('=== COP CALCULATION ===');
+            // Check if operating point is within safe working envelope
+            const inEnvelope = CONFIG.isPointInEnvelope(evapTemp, ambientTemp);
+            if (!inEnvelope) {
+                console.warn('⚠️ OPERATING POINT OUTSIDE WORKING ENVELOPE!');
+                console.warn(`Evap: ${evapTemp}°C, Ambient: ${ambientTemp}°C`);
+            }
+            
+            const icool_cop = CONFIG.getCOP_CO2(evapTemp, ambientTemp);
+            const baseline_cop = CONFIG.getCOP_Baseline(evapTemp, ambientTemp);
+            
+            // Get full performance details
+            const performance = CONFIG.calculateRealPerformance(evapTemp, ambientTemp);
+            
+            console.log('=== REAL ICOOL PERFORMANCE ===');
             console.log('Room temp:', roomTemp, '°C');
+            console.log('Ambient temp:', ambientTemp, '°C');
             console.log('Evaporator temp:', evapTemp, '°C');
-            console.log('Karnot CO₂ COP:', icool_cop);
-            console.log('Baseline R22 COP:', baseline_cop);
+            console.log('Within envelope:', inEnvelope ? 'YES ✅' : 'NO ⚠️');
+            console.log('Real Capacity:', performance.capacity.toFixed(2), 'kW');
+            console.log('Real Power:', performance.power.toFixed(2), 'kW');
+            console.log('Real COP:', performance.realCOP.toFixed(2));
+            console.log('Baseline R22 COP:', baseline_cop.toFixed(2));
 
             console.log('Basic calcs done. Room volume:', roomVolume_m3);
 
             // --- 1. TRANSMISSION LOAD ---
-            const transmissionLoad_W = surfaceArea_m2 * uValue * tempDiff * 1000; // Convert to Watts
+            // U-value formula: Area (m²) × U (W/m²·K) × TempDiff (K) = Watts
+            const transmissionLoad_W = surfaceArea_m2 * uValue * tempDiff; // Already in Watts!
             const transmissionLoad_kW = transmissionLoad_W / 1000;
 
         // --- 2. PRODUCT LOAD ---
@@ -381,7 +442,8 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         if (hasHeatRecoveryPort && inputs.enableHeatRecovery) {
             // Calculate total heat rejection from refrigeration
             const cooling_kW = getCoolingKWFromName(selectedICool);
-            const electrical_input_kW = cooling_kW / CONFIG.DEFAULT_COP;
+            // FIX: Use actual temperature-dependent COP, not DEFAULT_COP
+            const electrical_input_kW = cooling_kW / icool_cop;
             const total_heat_rejection_kW = cooling_kW + electrical_input_kW;
             
             // Recoverable heat (70% efficiency)
@@ -722,6 +784,8 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                 baseline_annual_co2: baseline_annual_co2,
                 baseline_cop: baseline_cop,
                 evapTemp: evapTemp,
+                ambientTemp: ambientTemp,
+                inEnvelope: inEnvelope,
                 // Savings
                 refrig_savings_kWh: refrig_savings_kWh,
                 refrig_savings_cost: refrig_savings_cost,
@@ -846,7 +910,7 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                     <tr className="border-b">
                                         <th className="text-left py-3 text-gray-600">Cooling Capacity</th>
                                         <td className="text-right py-3 font-bold text-blue-600">
-                                            {fmt(results.selection.cooling_kW, 1)} kW / {fmt(results.loads.totalWithSafety_TR, 1)} TR
+                                            {fmt(results.selection.cooling_kW, 1)} kW / {fmt(results.selection.cooling_kW / CONFIG.KW_TO_TR, 1)} TR
                                         </td>
                                     </tr>
                                     <tr className="border-b">
@@ -949,6 +1013,31 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                             </table>
                         </div>
                     </div>
+
+                    {/* WORKING ENVELOPE WARNING */}
+                    {!results.operating.inEnvelope && (
+                        <div className="mb-6 bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                                <AlertCircle className="text-yellow-600 flex-shrink-0 mt-1" size={24} />
+                                <div>
+                                    <h4 className="font-bold text-yellow-900 mb-2">⚠️ Operating Point Outside Working Envelope</h4>
+                                    <p className="text-sm text-yellow-800 mb-2">
+                                        <strong>Evaporator:</strong> {results.operating.evapTemp}°C &nbsp; | &nbsp;
+                                        <strong>Ambient:</strong> {results.operating.ambientTemp}°C
+                                    </p>
+                                    <p className="text-sm text-yellow-800">
+                                        This combination of temperatures is outside the manufacturer's recommended operating range. 
+                                        The system may not achieve rated performance. Consider:
+                                    </p>
+                                    <ul className="text-sm text-yellow-800 mt-2 ml-4 list-disc">
+                                        <li>Using a 2-stage cascade system for temperatures below -35°C</li>
+                                        <li>Adding subcooling or parallel compression for high ambient conditions</li>
+                                        <li>Consulting with Karnot engineering for custom solutions</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* REFRIGERATION SYSTEM COMPARISON */}
                     <div className="mb-6">
@@ -1231,7 +1320,8 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                             <div>
                                                 <p className="text-xs font-bold text-gray-600 uppercase mb-1">NET Annual Operating Cost</p>
                                                 <p className="text-sm text-gray-600">
-                                                    Electricity: ₱{fmt(results.operating.annualCost)} 
+                                                    Electricity: ₱{fmt(results.operating.icool_annual_cost)} 
+                                                    <span className="text-blue-600 font-bold"> - Refrigeration Savings: ₱{fmt(results.operating.refrig_savings_cost)}</span>
                                                     <span className="text-green-600 font-bold"> - Heat Recovery Savings: ₱{fmt(results.operating.heatRecoverySavings)}</span>
                                                 </p>
                                                 <p className="text-3xl font-bold text-green-700 mt-2">
