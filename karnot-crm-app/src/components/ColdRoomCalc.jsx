@@ -4,7 +4,7 @@ import { Card, Button, Input, Textarea, Checkbox, Section, PRICING_TIERS } from 
 import { db } from '../firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
-import { ArrowLeft, Calculator, Snowflake, AlertCircle, CheckCircle, Download, TrendingUp, DollarSign, Leaf, Award, Target, BarChart3, ChevronDown, ChevronUp, Thermometer } from 'lucide-react';
+import { ArrowLeft, Calculator, Snowflake, AlertCircle, CheckCircle, Download, TrendingUp, TrendingDown, DollarSign, Leaf, Award, Target, BarChart3, ChevronDown, ChevronUp, Thermometer } from 'lucide-react';
 
 // ==========================================
 // CONFIGURATION & CONSTANTS
@@ -234,6 +234,7 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
     
     const [results, setResults] = useState(null);
     const [showReport, setShowReport] = useState(false);
+    const [showEnterpriseDetails, setShowEnterpriseDetails] = useState(false);
     const [showCalculations, setShowCalculations] = useState(false);
     const [showEnterpriseDetails, setShowEnterpriseDetails] = useState(false);
 
@@ -1423,7 +1424,10 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
 
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                                 <div className="bg-white p-4 rounded-lg border-2 border-purple-200 shadow-sm">
-                                    <p className="text-xs font-bold text-gray-500 uppercase mb-2">NPV @ {((inputs.enterpriseWACC || 0.07) * 100).toFixed(1)}%</p>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <TrendingUp className="text-green-600" size={20}/>
+                                        <p className="text-xs font-bold text-gray-500 uppercase">NPV @ {((inputs.enterpriseWACC || 0.07) * 100).toFixed(1)}%</p>
+                                    </div>
                                     <p className={`text-2xl font-bold ${results.enterpriseROI.financial.npv >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                         ₱{fmt(results.enterpriseROI.financial.npv)}
                                     </p>
@@ -1432,14 +1436,20 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                     </p>
                                 </div>
                                 <div className="bg-white p-4 rounded-lg border-2 border-purple-200 shadow-sm">
-                                    <p className="text-xs font-bold text-gray-500 uppercase mb-2">Internal Rate of Return</p>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <BarChart3 className="text-blue-600" size={20}/>
+                                        <p className="text-xs font-bold text-gray-500 uppercase">Internal Rate of Return</p>
+                                    </div>
                                     <p className={`text-2xl font-bold ${results.enterpriseROI.financial.irr >= 7 ? 'text-blue-600' : 'text-orange-600'}`}>
                                         {results.enterpriseROI.financial.irr.toFixed(1)}%
                                     </p>
                                     <p className="text-xs text-gray-600 mt-1">IRR over 10 years</p>
                                 </div>
                                 <div className="bg-white p-4 rounded-lg border-2 border-indigo-200 shadow-sm">
-                                    <p className="text-xs font-bold text-gray-500 uppercase mb-2">Payback Period</p>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <DollarSign className="text-indigo-600" size={20}/>
+                                        <p className="text-xs font-bold text-gray-500 uppercase">Payback Period</p>
+                                    </div>
                                     <p className="text-2xl font-bold text-indigo-600">
                                         {results.enterpriseROI.financial.paybackYears.toFixed(1)} yrs
                                     </p>
@@ -1448,7 +1458,10 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                     </p>
                                 </div>
                                 <div className="bg-white p-4 rounded-lg border-2 border-green-200 shadow-sm">
-                                    <p className="text-xs font-bold text-gray-500 uppercase mb-2">Benefit-Cost Ratio</p>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <TrendingDown className="text-green-600" size={20}/>
+                                        <p className="text-xs font-bold text-gray-500 uppercase">Benefit-Cost Ratio</p>
+                                    </div>
                                     <p className={`text-2xl font-bold ${results.enterpriseROI.financial.bcr >= 1 ? 'text-green-600' : 'text-red-600'}`}>
                                         {results.enterpriseROI.financial.bcr.toFixed(2)}:1
                                     </p>
@@ -1457,6 +1470,116 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                     </p>
                                 </div>
                             </div>
+
+                            {/* Investment Recommendation Box */}
+                            <div className={`p-4 rounded-lg border-2 mb-6 ${
+                                results.enterpriseROI.financial.npv >= 0 && results.enterpriseROI.financial.irr >= 7
+                                    ? 'bg-green-50 border-green-300' 
+                                    : 'bg-yellow-50 border-yellow-300'
+                            }`}>
+                                <div className="flex items-start gap-3">
+                                    {results.enterpriseROI.financial.npv >= 0 && results.enterpriseROI.financial.irr >= 7 ? (
+                                        <CheckCircle className="text-green-600 flex-shrink-0" size={24}/>
+                                    ) : (
+                                        <AlertCircle className="text-yellow-600 flex-shrink-0" size={24}/>
+                                    )}
+                                    <div>
+                                        <h4 className="font-bold text-gray-800 mb-2">Investment Recommendation</h4>
+                                        <p className="text-sm text-gray-700 mb-3">
+                                            {results.enterpriseROI.financial.npv >= 0 && results.enterpriseROI.financial.irr >= 7
+                                                ? "RECOMMENDED - Good returns with reasonable payback period"
+                                                : results.enterpriseROI.financial.npv >= 0
+                                                ? "ACCEPTABLE - Positive returns, consider strategic value"
+                                                : "MARGINAL - Low financial returns, justify with strategic benefits"}
+                                        </p>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                                            <div className="flex items-center gap-1">
+                                                {results.enterpriseROI.financial.npv >= 0 ? '✅' : '❌'}
+                                                <span>Positive NPV</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                {results.enterpriseROI.financial.irr >= 12 ? '✅' : '❌'}
+                                                <span>IRR &gt; 12% Hurdle</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                {results.enterpriseROI.financial.bcr >= 1 ? '✅' : '❌'}
+                                                <span>BCR &gt; 1.0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* CSV Scorecard */}
+                            <div className="bg-white p-4 rounded-lg border border-gray-200 mb-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="font-bold text-gray-800">Creating Shared Value (CSV) Scorecard</h4>
+                                    <div className="text-2xl font-bold text-indigo-600">{results.enterpriseROI.csv.score.toFixed(1)}/10</div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-32 text-sm text-gray-600">Carbon Reduction</div>
+                                        <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
+                                            <div 
+                                                className="bg-gradient-to-r from-blue-400 to-indigo-500 h-full rounded-full transition-all duration-500"
+                                                style={{ width: `${(8.5 / 10) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                        <div className="w-12 text-sm font-bold text-gray-700 text-right">8.5</div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-32 text-sm text-gray-600">Energy Efficiency</div>
+                                        <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
+                                            <div 
+                                                className="bg-gradient-to-r from-blue-400 to-indigo-500 h-full rounded-full transition-all duration-500"
+                                                style={{ width: `${(7.0 / 10) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                        <div className="w-12 text-sm font-bold text-gray-700 text-right">7.0</div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-32 text-sm text-gray-600">Sustainability</div>
+                                        <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
+                                            <div 
+                                                className="bg-gradient-to-r from-blue-400 to-indigo-500 h-full rounded-full transition-all duration-500"
+                                                style={{ width: `${(7.5 / 10) * 100}%` }}
+                                            ></div>
+                                        </div>
+                                        <div className="w-12 text-sm font-bold text-gray-700 text-right">7.5</div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-600">
+                                    <p><strong>CSV Score:</strong> {results.enterpriseROI.csv.score.toFixed(1)}/10 - 
+                                    Cold storage refrigeration with natural refrigerants provides strong environmental and operational benefits</p>
+                                </div>
+                            </div>
+
+                            {/* Show/Hide Detailed Financials */}
+                            <Button 
+                                variant="secondary" 
+                                onClick={() => setShowEnterpriseDetails(!showEnterpriseDetails)}
+                                className="w-full flex items-center justify-center gap-2"
+                            >
+                                {showEnterpriseDetails ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                                {showEnterpriseDetails ? 'Hide' : 'Show'} Detailed Financials
+                            </Button>
+
+                            {showEnterpriseDetails && (
+                                <div className="mt-4 pt-4 border-t border-purple-200 space-y-4">
+                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                        <div>
+                                            <p className="text-gray-600">Annual Benefit</p>
+                                            <p className="font-bold text-lg">₱{fmt(results.enterpriseROI.financial.annualBenefit)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-gray-600">Incremental Investment</p>
+                                            <p className="font-bold text-lg">₱{fmt(results.capex.delta_investment)}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -1506,12 +1629,64 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
 
                         {inputs.enableEnterpriseROI && (
                             <div className="mt-4 pt-4 border-t border-purple-200">
-                                <InputField 
-                                    label="WACC / Discount Rate (%)" 
-                                    value={inputs.enterpriseWACC * 100} 
-                                    onChange={(e) => setInputs(prev => ({ ...prev, enterpriseWACC: parseFloat(e.target.value) / 100 || 0.07 }))}
-                                    step="0.1"
-                                />
+                                {/* WACC REFERENCE GUIDE */}
+                                <div className="bg-white p-4 rounded-lg border border-purple-200 mb-4">
+                                    <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                        <AlertCircle size={18} className="text-purple-600"/>
+                                        WACC Reference Guide
+                                    </h4>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b-2 border-gray-300">
+                                                    <th className="text-left py-2 pr-4 font-semibold text-gray-700">Company Type</th>
+                                                    <th className="text-left py-2 pr-4 font-semibold text-gray-700">Typical WACC</th>
+                                                    <th className="text-left py-2 font-semibold text-gray-700">Why?</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="text-gray-600">
+                                                <tr className="border-b border-gray-200">
+                                                    <td className="py-2 pr-4 font-medium">Large Corps (Nestlé, P&G)</td>
+                                                    <td className="py-2 pr-4 text-blue-600 font-semibold">6-8%</td>
+                                                    <td className="py-2">Low risk, cheap debt, stable</td>
+                                                </tr>
+                                                <tr className="border-b border-gray-200">
+                                                    <td className="py-2 pr-4 font-medium">Mid-size Manufacturing</td>
+                                                    <td className="py-2 pr-4 text-blue-600 font-semibold">8-12%</td>
+                                                    <td className="py-2">Moderate risk</td>
+                                                </tr>
+                                                <tr className="border-b border-gray-200">
+                                                    <td className="py-2 pr-4 font-medium">Startups</td>
+                                                    <td className="py-2 pr-4 text-orange-600 font-semibold">15-25%+</td>
+                                                    <td className="py-2">High risk, expensive equity</td>
+                                                </tr>
+                                                <tr>
+                                                    <td className="py-2 pr-4 font-medium">Your customers (SMEs)</td>
+                                                    <td className="py-2 pr-4 text-green-600 font-semibold">10-15%</td>
+                                                    <td className="py-2">Bank loans at 8-12% + owner equity expectations</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <p className="text-xs text-gray-500 mt-3 italic">
+                                        💡 WACC = Weighted Average Cost of Capital. Use your customer's WACC to calculate NPV in their language.
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <InputField 
+                                        label="WACC / Discount Rate (%)" 
+                                        value={inputs.enterpriseWACC * 100} 
+                                        onChange={(e) => setInputs(prev => ({ ...prev, enterpriseWACC: parseFloat(e.target.value) / 100 || 0.07 }))}
+                                        step="0.1"
+                                    />
+                                    <InputField 
+                                        label="Annual Facility Revenue (optional)" 
+                                        value={inputs.annualRevenue || ''} 
+                                        onChange={(e) => setInputs(prev => ({ ...prev, annualRevenue: parseFloat(e.target.value) || 0 }))}
+                                        placeholder="Optional"
+                                    />
+                                </div>
                             </div>
                         )}
                     </div>
