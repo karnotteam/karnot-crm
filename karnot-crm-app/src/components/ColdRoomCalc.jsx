@@ -206,10 +206,13 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         doorOpenings: 20,
         electricityTariff: 12.00,
         dieselPrice: 60.00,
-        installationCost: 250000,
+        installationCost: 0, // Set to 0 as default
         projectLifespan: 10,
         discountRate: 8,
         implementationDelay: 6,
+        // Comparison scenario
+        comparisonScenario: 'new_installation', // 'new_installation' or 'replacement'
+        baselineSystemCost: 0, // Cost of alternative R22/R404A system (auto-calculated if 0)
         enableEnterpriseROI: false,
         enterpriseWACC: 0.07,
         operatingHoursPerDay: 24,
@@ -426,9 +429,26 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             return;
         }
 
-        // --- CAPEX (MUST BE CALCULATED BEFORE HEAT RECOVERY) ---
+        // --- CAPEX COMPARISON (INCREMENTAL INVESTMENT) ---
         const icoolSalePrice = selectedICool.salesPriceUSD * CONFIG.FX_USD_PHP;
-        const totalCapex = icoolSalePrice + installationCost;
+        const icool_total_capex = icoolSalePrice + installationCost;
+        
+        // Baseline system cost (R22/R404A typically 30% cheaper equipment, same installation)
+        const baseline_equipment_cost = inputs.baselineSystemCost > 0 
+            ? inputs.baselineSystemCost 
+            : icoolSalePrice * 0.70; // R22 systems typically 30% cheaper
+        const baseline_total_capex = baseline_equipment_cost + installationCost;
+        
+        // DELTA Investment (incremental cost for iCOOL vs baseline)
+        const delta_capex = icool_total_capex - baseline_total_capex;
+        
+        console.log('=== CAPEX COMPARISON ===');
+        console.log('iCOOL Total:', fmt(icool_total_capex));
+        console.log('Baseline R22 Total:', fmt(baseline_total_capex));
+        console.log('Delta (incremental):', fmt(delta_capex));
+        
+        // For ROI calculations, use DELTA CAPEX (incremental investment)
+        const totalCapex = delta_capex;
 
         // --- HEAT RECOVERY DETECTION & CALCULATIONS ---
         const hasHeatRecoveryPort = 
@@ -802,9 +822,17 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             },
             heatRecovery: heatRecovery,
             capex: {
+                icool_equipment: icoolSalePrice,
+                icool_installation: installationCost,
+                icool_total: icool_total_capex,
+                baseline_equipment: baseline_equipment_cost,
+                baseline_installation: installationCost,
+                baseline_total: baseline_total_capex,
+                delta_investment: delta_capex,
+                // Legacy compatibility
                 icool: icoolSalePrice,
                 installation: installationCost,
-                total: totalCapex
+                total: delta_capex // Use delta for ROI calcs!
             },
             tco: {
                 lifetime: totalLifetimeCost,
@@ -986,30 +1014,60 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                     <div className="mb-6">
                         <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
                             <DollarSign size={20} className="text-blue-600" />
-                            2. Financial Summary & Total Cost of Ownership
+                            2. Financial Summary & Investment Comparison
                         </h4>
                         <div className="bg-gray-50 rounded-lg p-4">
+                            <h5 className="font-semibold text-gray-700 mb-3">CAPEX Comparison (New Installation or Replacement)</h5>
+                            <table className="w-full text-sm mb-4">
+                                <thead>
+                                    <tr className="border-b-2 border-gray-300">
+                                        <th className="text-left py-2 text-gray-600">System</th>
+                                        <th className="text-right py-2 text-gray-600">Equipment</th>
+                                        <th className="text-right py-2 text-gray-600">Installation</th>
+                                        <th className="text-right py-2 text-gray-600">Total CAPEX</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr className="border-b">
+                                        <td className="py-2 text-gray-600">Baseline R22/R507/R404A</td>
+                                        <td className="text-right">₱ {fmt(results.capex.baseline_equipment)}</td>
+                                        <td className="text-right">₱ {fmt(results.capex.baseline_installation)}</td>
+                                        <td className="text-right font-semibold text-gray-700">₱ {fmt(results.capex.baseline_total)}</td>
+                                    </tr>
+                                    <tr className="border-b bg-green-50">
+                                        <td className="py-2 font-semibold text-green-800">Karnot iCOOL CO₂</td>
+                                        <td className="text-right text-green-700">₱ {fmt(results.capex.icool_equipment)}</td>
+                                        <td className="text-right text-green-700">₱ {fmt(results.capex.icool_installation)}</td>
+                                        <td className="text-right font-bold text-green-800">₱ {fmt(results.capex.icool_total)}</td>
+                                    </tr>
+                                    <tr className="bg-blue-100 border-b-2 border-blue-500">
+                                        <td className="py-3 font-bold text-blue-900">Incremental Investment (Delta)</td>
+                                        <td colSpan="2" className="text-right text-sm text-blue-700">Additional cost for CO₂ system</td>
+                                        <td className="text-right font-bold text-blue-900 text-lg">₱ {fmt(results.capex.delta_investment)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <h5 className="font-semibold text-gray-700 mb-3 mt-6">Operating Costs & Total Cost of Ownership</h5>
                             <table className="w-full">
                                 <tbody>
                                     <tr className="border-b">
-                                        <th className="text-left py-3 text-gray-600">iCOOL Unit Price</th>
-                                        <td className="text-right py-3">₱ {fmt(results.capex.icool)}</td>
+                                        <th className="text-left py-3 text-gray-600">Baseline Annual Cost (R22)</th>
+                                        <td className="text-right py-3 text-red-600">₱ {fmt(results.operating.baseline_annual_cost)}</td>
                                     </tr>
                                     <tr className="border-b">
-                                        <th className="text-left py-3 text-gray-600">Installation & Commissioning</th>
-                                        <td className="text-right py-3">₱ {fmt(results.capex.installation)}</td>
+                                        <th className="text-left py-3 text-gray-600">iCOOL Annual Cost (CO₂)</th>
+                                        <td className="text-right py-3 font-semibold text-green-600">₱ {fmt(results.operating.icool_annual_cost)}</td>
                                     </tr>
-                                    <tr className="border-b-2 border-blue-500">
-                                        <th className="text-left py-3 font-bold text-gray-900">Total Project Investment (CAPEX)</th>
-                                        <td className="text-right py-3 font-bold text-blue-600 text-lg">₱ {fmt(results.capex.total)}</td>
+                                    <tr className="border-b bg-blue-50">
+                                        <th className="text-left py-3 font-bold text-blue-900">Annual Savings</th>
+                                        <td className="text-right py-3 font-bold text-blue-900">₱ {fmt(results.operating.totalAnnualSavings)}</td>
                                     </tr>
-                                    <tr className="border-b">
-                                        <th className="text-left py-3 text-gray-600">Annual Operating Cost (Electricity)</th>
-                                        <td className="text-right py-3 font-bold text-orange-600">₱ {fmt(results.operating.annualCost)}</td>
-                                    </tr>
-                                    <tr className="border-b">
-                                        <th className="text-left py-3 text-gray-600">10-Year Total Cost of Ownership</th>
-                                        <td className="text-right py-3 font-bold text-purple-600">₱ {fmt(results.tco.lifetime)}</td>
+                                    <tr className="border-b-2 border-purple-500">
+                                        <th className="text-left py-3 font-bold text-gray-900">Simple Payback (Delta CAPEX / Annual Savings)</th>
+                                        <td className="text-right py-3 font-bold text-purple-600 text-lg">
+                                            {(results.capex.delta_investment / results.operating.totalAnnualSavings).toFixed(1)} years
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>
