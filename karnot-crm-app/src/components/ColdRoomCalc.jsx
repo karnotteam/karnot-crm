@@ -582,7 +582,7 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         const icool_annual_co2 = icool_annual_kWh * CONFIG.GRID_CO2_KG_PER_KWH;
         
         // Baseline System (Old R22/R507/R404A - COP 2.0)
-        const baseline_cop = 2.0;
+        const baseline_cop = 1.5;
         const baseline_electrical_kW = totalWithSafety_kW / baseline_cop;
         const baseline_annual_kWh = baseline_electrical_kW * annualOperatingHours;
         const baseline_annual_cost = baseline_annual_kWh * electricityTariff;
