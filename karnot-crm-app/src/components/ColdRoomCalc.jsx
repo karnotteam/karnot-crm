@@ -19,7 +19,30 @@ const CONFIG = {
     GRID_CO2_KG_PER_KWH: 0.7,
     FX_USD_PHP: 58.5,
     SAFETY_FACTOR: 1.10,
-    DEFAULT_COP: 2.5,
+    DEFAULT_COP: 2.5, // Legacy - replaced by temperature-dependent function
+    
+    // Temperature-dependent COP for CO₂ systems
+    getCOP_CO2: (evapTemp) => {
+        // CO₂ transcritical systems - COP varies dramatically with temperature
+        if (evapTemp >= 0) return 3.2;      // Chiller (+4°C): Excellent efficiency
+        if (evapTemp >= -5) return 2.8;     // Medium Temp (-2°C): Very good
+        if (evapTemp >= -10) return 2.3;    // Low Temp (-8°C): Good
+        if (evapTemp >= -18) return 1.8;    // Freezer (-18°C): Moderate
+        if (evapTemp >= -25) return 1.5;    // Deep Freeze (-25°C): Lower
+        if (evapTemp >= -35) return 1.2;    // Ultra Low (-35°C): Needs 2-stage
+        return 1.0;                         // -40°C+: Requires cascade system
+    },
+    
+    // Baseline R22/R507/R404A COP (always lower than CO₂)
+    getCOP_Baseline: (evapTemp) => {
+        if (evapTemp >= 0) return 2.5;      // 22% worse than CO₂
+        if (evapTemp >= -5) return 2.2;     
+        if (evapTemp >= -10) return 1.9;    
+        if (evapTemp >= -18) return 1.5;    // 20% worse
+        if (evapTemp >= -25) return 1.2;    
+        if (evapTemp >= -35) return 0.9;    
+        return 0.8;
+    },
     
     // Heat Recovery Constants
     WATER_SPECIFIC_HEAT_KJ_KGK: 4.186,
@@ -242,6 +265,17 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             const uValue = panelInfo.uValue;
             
             const pullDownTimeSeconds = 24 * 3600; // 24 hours
+            
+            // COP based on actual evaporator temperature (room temp - 10°C TD)
+            const evapTemp = roomTemp - 10; // Typical 10°C temperature difference
+            const icool_cop = CONFIG.getCOP_CO2(evapTemp);
+            const baseline_cop = CONFIG.getCOP_Baseline(evapTemp);
+            
+            console.log('=== COP CALCULATION ===');
+            console.log('Room temp:', roomTemp, '°C');
+            console.log('Evaporator temp:', evapTemp, '°C');
+            console.log('Karnot CO₂ COP:', icool_cop);
+            console.log('Baseline R22 COP:', baseline_cop);
 
             console.log('Basic calcs done. Room volume:', roomVolume_m3);
 
@@ -300,10 +334,12 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
             infiltrationLoad_kW + doorLoad_kW;
         const totalWithSafety_kW = totalThermalLoad_kW * CONFIG.SAFETY_FACTOR;
         
-        // Conversions
+        // Conversions - using temperature-dependent COP
         const totalWithSafety_TR = totalWithSafety_kW / CONFIG.KW_TO_TR;
-        const requiredElectrical_kW = totalWithSafety_kW / CONFIG.DEFAULT_COP;
+        const requiredElectrical_kW = totalWithSafety_kW / icool_cop; // Use actual CO₂ COP!
         const requiredElectrical_HP = requiredElectrical_kW * CONFIG.KW_TO_HP;
+
+        console.log('LOAD:', totalWithSafety_kW.toFixed(1), 'kW =', totalWithSafety_TR.toFixed(1), 'TR');
 
         // --- ICOOL SELECTION ---
         let selectedICool = null;
@@ -576,13 +612,12 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         // --- OPERATING COSTS (ADJUSTED FOR HEAT RECOVERY) ---
         const annualOperatingHours = operatingHoursPerDay * 365;
         
-        // Karnot iCOOL CO₂ Inverter System (COP 2.5)
+        // Karnot iCOOL CO₂ Inverter System
         const icool_annual_kWh = requiredElectrical_kW * annualOperatingHours;
         const icool_annual_cost = icool_annual_kWh * electricityTariff;
         const icool_annual_co2 = icool_annual_kWh * CONFIG.GRID_CO2_KG_PER_KWH;
         
-        // Baseline System (Old R22/R507/R404A - COP 2.0)
-        const baseline_cop = 1.5;
+        // Baseline System (Old R22/R507/R404A) - temperature-dependent COP
         const baseline_electrical_kW = totalWithSafety_kW / baseline_cop;
         const baseline_annual_kWh = baseline_electrical_kW * annualOperatingHours;
         const baseline_annual_cost = baseline_annual_kWh * electricityTariff;
@@ -592,6 +627,11 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         const refrig_savings_kWh = baseline_annual_kWh - icool_annual_kWh;
         const refrig_savings_cost = refrig_savings_kWh * electricityTariff;
         const refrig_savings_pct = (refrig_savings_kWh / baseline_annual_kWh) * 100;
+        
+        console.log('=== REFRIGERATION SAVINGS ===');
+        console.log('Baseline (R22 @ COP', baseline_cop.toFixed(2), '):', baseline_annual_kWh, 'kWh');
+        console.log('Karnot (CO₂ @ COP', icool_cop.toFixed(2), '):', icool_annual_kWh, 'kWh');
+        console.log('Savings:', refrig_savings_pct.toFixed(1), '%');
         
         // Keep old variable names for backward compatibility
         const annualElectricity_kWh = icool_annual_kWh;
@@ -675,11 +715,13 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                 icool_annual_kWh: icool_annual_kWh,
                 icool_annual_cost: icool_annual_cost,
                 icool_annual_co2: icool_annual_co2,
+                icool_cop: icool_cop,
                 // Baseline System
                 baseline_annual_kWh: baseline_annual_kWh,
                 baseline_annual_cost: baseline_annual_cost,
                 baseline_annual_co2: baseline_annual_co2,
                 baseline_cop: baseline_cop,
+                evapTemp: evapTemp,
                 // Savings
                 refrig_savings_kWh: refrig_savings_kWh,
                 refrig_savings_cost: refrig_savings_cost,
@@ -932,7 +974,7 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                             <br/>
                                             <span className="text-xs text-gray-500">(Old HFC systems)</span>
                                         </td>
-                                        <td className="text-right font-semibold">{fmt(results.operating.baseline_cop, 1)}</td>
+                                        <td className="text-right font-semibold">{fmt(results.operating.baseline_cop, 2)}</td>
                                         <td className="text-right">{fmt(results.operating.baseline_annual_kWh)}</td>
                                         <td className="text-right font-bold text-red-600">₱ {fmt(results.operating.baseline_annual_cost)}</td>
                                         <td className="text-right text-gray-600">{fmt(results.operating.baseline_annual_co2)} kg</td>
@@ -943,7 +985,7 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                             <br/>
                                             <span className="text-xs text-green-600">(Natural refrigerant, variable speed)</span>
                                         </td>
-                                        <td className="text-right font-bold text-green-700">{fmt(CONFIG.DEFAULT_COP, 1)}</td>
+                                        <td className="text-right font-bold text-green-700">{fmt(results.operating.icool_cop, 2)}</td>
                                         <td className="text-right text-green-700">{fmt(results.operating.icool_annual_kWh)}</td>
                                         <td className="text-right font-bold text-green-700">₱ {fmt(results.operating.icool_annual_cost)}</td>
                                         <td className="text-right text-green-600">{fmt(results.operating.icool_annual_co2)} kg</td>
