@@ -721,35 +721,37 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
         // --- ENTERPRISE ROI (if enabled) ---
         let enterpriseROI = null;
         if (inputs.enableEnterpriseROI) {
-            // For cold rooms, calculate as cost avoidance vs. product loss
-            const productValue_per_kg = 200; // PHP (adjustable)
-            const spoilageRate_without_cooling = 0.15; // 15% loss without proper cooling
-            const annualProductValue = (dailyTurnover * 365 * productValue_per_kg);
-            const annualSpoilageCost = annualProductValue * spoilageRate_without_cooling;
-            const annualNetBenefit = annualSpoilageCost - annualTCO;
-
+            // Use ACTUAL savings: refrigeration efficiency + heat recovery
+            const annualNetBenefit = totalAnnualSavings; // Real savings only!
+            
+            // NPV calculation with proper discount rate
             let npv_enterprise = -totalCapex;
             for (let year = 1; year <= projectLifespan; year++) {
-                npv_enterprise += annualNetBenefit / Math.pow(1 + inputs.enterpriseWACC, year);
+                npv_enterprise += annualNetBenefit / Math.pow(1 + (inputs.enterpriseWACC || 0.07), year);
             }
 
             const irr = calculateIRR(totalCapex, annualNetBenefit, projectLifespan);
+            const paybackYears = totalCapex / Math.max(1, annualNetBenefit);
             
-            const csvScore = 7.5; // Placeholder - cold storage is critical for food safety
-            const csvMultiplier = 1 + (csvScore / 20);
-            const strategicROI = irr * csvMultiplier;
+            // Benefit-Cost Ratio
+            let totalBenefitsPV = 0;
+            for (let year = 1; year <= projectLifespan; year++) {
+                totalBenefitsPV += annualNetBenefit / Math.pow(1 + (inputs.enterpriseWACC || 0.07), year);
+            }
+            const bcr = totalBenefitsPV / totalCapex;
 
             enterpriseROI = {
                 financial: {
                     npv: npv_enterprise,
                     irr: irr,
                     annualBenefit: annualNetBenefit,
-                    paybackYears: totalCapex / Math.max(1, annualNetBenefit)
+                    paybackYears: paybackYears,
+                    bcr: bcr
                 },
                 csv: {
-                    score: csvScore,
-                    multiplier: csvMultiplier,
-                    strategicROI: strategicROI
+                    score: 7.5, // Sustainability score
+                    multiplier: 1.0, // No artificial boost
+                    strategicROI: irr
                 }
             };
         }
@@ -1361,18 +1363,40 @@ const ColdRoomCalc = ({ setActiveView, user }) => {
                                 <h3 className="text-2xl font-bold text-purple-900">Enterprise ROI Analysis</h3>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                                 <div className="bg-white p-4 rounded-lg border-2 border-purple-200 shadow-sm">
-                                    <p className="text-xs font-bold text-gray-500 uppercase mb-2">NPV @ {(inputs.enterpriseWACC * 100).toFixed(1)}%</p>
-                                    <p className="text-2xl font-bold text-green-600">₱{fmt(results.enterpriseROI.financial.npv)}</p>
+                                    <p className="text-xs font-bold text-gray-500 uppercase mb-2">NPV @ {((inputs.enterpriseWACC || 0.07) * 100).toFixed(1)}%</p>
+                                    <p className={`text-2xl font-bold ${results.enterpriseROI.financial.npv >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        ₱{fmt(results.enterpriseROI.financial.npv)}
+                                    </p>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                        ${fmt(results.enterpriseROI.financial.npv / CONFIG.FX_USD_PHP)} USD
+                                    </p>
                                 </div>
                                 <div className="bg-white p-4 rounded-lg border-2 border-purple-200 shadow-sm">
                                     <p className="text-xs font-bold text-gray-500 uppercase mb-2">Internal Rate of Return</p>
-                                    <p className="text-2xl font-bold text-blue-600">{results.enterpriseROI.financial.irr.toFixed(1)}%</p>
+                                    <p className={`text-2xl font-bold ${results.enterpriseROI.financial.irr >= 7 ? 'text-blue-600' : 'text-orange-600'}`}>
+                                        {results.enterpriseROI.financial.irr.toFixed(1)}%
+                                    </p>
+                                    <p className="text-xs text-gray-600 mt-1">IRR over 10 years</p>
                                 </div>
                                 <div className="bg-white p-4 rounded-lg border-2 border-indigo-200 shadow-sm">
                                     <p className="text-xs font-bold text-gray-500 uppercase mb-2">Payback Period</p>
-                                    <p className="text-2xl font-bold text-indigo-600">{results.enterpriseROI.financial.paybackYears.toFixed(1)} yrs</p>
+                                    <p className="text-2xl font-bold text-indigo-600">
+                                        {results.enterpriseROI.financial.paybackYears.toFixed(1)} yrs
+                                    </p>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                        {(results.enterpriseROI.financial.paybackYears * 12).toFixed(0)} months
+                                    </p>
+                                </div>
+                                <div className="bg-white p-4 rounded-lg border-2 border-green-200 shadow-sm">
+                                    <p className="text-xs font-bold text-gray-500 uppercase mb-2">Benefit-Cost Ratio</p>
+                                    <p className={`text-2xl font-bold ${results.enterpriseROI.financial.bcr >= 1 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {results.enterpriseROI.financial.bcr.toFixed(2)}:1
+                                    </p>
+                                    <p className="text-xs text-gray-600 mt-1">
+                                        {results.enterpriseROI.financial.bcr >= 1 ? 'Good investment' : 'Poor returns'}
+                                    </p>
                                 </div>
                             </div>
                         </div>
