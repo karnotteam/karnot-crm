@@ -13,41 +13,45 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { 
     Plus, Trash2, GripVertical, CheckCircle, 
-    Briefcase, Sparkles, ArrowRight 
+    Briefcase, Sparkles, Filter, Layers 
 } from 'lucide-react';
 import { Button } from '../data/constants.jsx'; 
 
-// --- CAMBRIDGE COURSE STAGES ---
+// --- CAMBRIDGE COURSE STAGES (Generic for all rounds) ---
 const STAGES = [
-    { id: 'PREP', title: '1. Prep & Validation', color: 'bg-slate-50 border-slate-200', text: 'text-slate-700' },
+    { id: 'PREP', title: '1. Prep & Strategy', color: 'bg-slate-50 border-slate-200', text: 'text-slate-700' },
     { id: 'OUTREACH', title: '2. Investor Outreach', color: 'bg-blue-50 border-blue-200', text: 'text-blue-700' },
-    { id: 'NEGOTIATION', title: '3. Terms & Diligence', color: 'bg-amber-50 border-amber-200', text: 'text-amber-700' },
-    { id: 'CLOSING', title: '4. Closing & Funds', color: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700' }
+    { id: 'NEGOTIATION', title: '3. Terms & Due Diligence', color: 'bg-amber-50 border-amber-200', text: 'text-amber-700' },
+    { id: 'CLOSING', title: '4. Closing & Governance', color: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700' }
 ];
 
-// --- CAMBRIDGE TASKS TEMPLATE ---
-const CAMBRIDGE_TEMPLATE = [
-    // Stage 1: Prep
-    { title: "Build 18-Month Cash Flow Forecast", stage: "PREP", priority: "High" },
-    { title: "Clean up Cap Table (Pre-Note)", stage: "PREP", priority: "Critical" },
-    { title: "Decide Valuation Cap & Discount (e.g. 20%)", stage: "PREP", priority: "Critical" },
-    { title: "Draft 'Founder-Market Fit' Statement", stage: "PREP", priority: "Medium" },
-    
-    // Stage 2: Outreach
-    { title: "Draft Investor One-Pager (Teaser)", stage: "OUTREACH", priority: "High" },
-    { title: "Build Target List (30 Warm Intros)", stage: "OUTREACH", priority: "High" },
-    { title: "Send Pitch Deck (Tracked Links)", stage: "OUTREACH", priority: "Medium" },
-    
-    // Stage 3: Negotiation
-    { title: "Draft Convertible Loan Agreement (CLA)", stage: "NEGOTIATION", priority: "Critical" },
-    { title: "Populate Data Room (IP, Contracts)", stage: "NEGOTIATION", priority: "High" },
-    { title: "Legal Review: Qualifying Triggers", stage: "NEGOTIATION", priority: "Medium" },
-
-    // Stage 4: Closing
-    { title: "Gather Digital Signatures", stage: "CLOSING", priority: "High" },
-    { title: "Verify Wire Transfers", stage: "CLOSING", priority: "Critical" },
-    { title: "Issue Note Certificates", stage: "CLOSING", priority: "Medium" }
-];
+// --- FULL COURSE TEMPLATES (Pre-Seed to Series B) ---
+const CAMBRIDGE_TEMPLATES = {
+    'PRE_SEED': [
+        // Module 2: Pre-Seed (Convertible Loan Focus)
+        { title: "Build 18-Month Cash Flow Forecast", stage: "PREP", priority: "High" },
+        { title: "Clean up Cap Table (Pre-Note)", stage: "PREP", priority: "Critical" },
+        { title: "Decide Valuation Cap & Discount", stage: "PREP", priority: "Critical" },
+        { title: "Draft 'Founder-Market Fit' Statement", stage: "PREP", priority: "Medium" },
+        { title: "Draft Investor One-Pager (Teaser)", stage: "OUTREACH", priority: "High" },
+        { title: "Build Target List (30 Warm Intros)", stage: "OUTREACH", priority: "High" },
+        { title: "Draft Convertible Loan Agreement (CLA)", stage: "NEGOTIATION", priority: "Critical" },
+        { title: "Legal Review: Qualifying Triggers", stage: "NEGOTIATION", priority: "Medium" },
+        { title: "Issue Note Certificates", stage: "CLOSING", priority: "Medium" }
+    ],
+    'SERIES_A': [
+        // Module 4: Series A (Equity & Scaling Focus)
+        { title: "Update Business Model Canvas (Scaling)", stage: "PREP", priority: "Critical" },
+        { title: "Calculate Unit Economics (CAC, LTV, Churn)", stage: "PREP", priority: "Critical" },
+        { title: "Define 'Use of Funds' for Growth/Hiring", stage: "PREP", priority: "High" },
+        { title: "Target VCs & Corporate Investors (Strategics)", stage: "OUTREACH", priority: "High" },
+        { title: "Prepare Data Room (IP, Contracts, Audits)", stage: "NEGOTIATION", priority: "Critical" },
+        { title: "Negotiate Term Sheet: Liquidation Prefs", stage: "NEGOTIATION", priority: "High" },
+        { title: "Negotiate Board Seats & Control Rights", stage: "NEGOTIATION", priority: "High" },
+        { title: "Establish Formal Board of Directors", stage: "CLOSING", priority: "Critical" },
+        { title: "Setup Employee Stock Option Plan (ESOP)", stage: "CLOSING", priority: "High" }
+    ]
+};
 
 // --- DRAGGABLE CARD COMPONENT ---
 const SortableTaskCard = ({ task, onDelete }) => {
@@ -71,12 +75,19 @@ const SortableTaskCard = ({ task, onDelete }) => {
                     </button>
                     <div>
                         <p className="text-sm font-medium text-gray-800 leading-tight">{task.title}</p>
-                        {task.priority && (
-                            <span className={`text-[9px] font-black uppercase tracking-wider mt-1 inline-block px-1.5 py-0.5 rounded
-                                ${task.priority === 'Critical' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
-                                {task.priority}
-                            </span>
-                        )}
+                        <div className="flex gap-2 mt-1">
+                            {task.priority && (
+                                <span className={`text-[9px] font-black uppercase tracking-wider inline-block px-1.5 py-0.5 rounded
+                                    ${task.priority === 'Critical' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
+                                    {task.priority}
+                                </span>
+                            )}
+                            {task.round && (
+                                <span className="text-[9px] font-bold uppercase tracking-wider inline-block px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                                    {task.round.replace('_', ' ')}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
                 <button 
@@ -95,6 +106,7 @@ const FundraisingTaskBoard = ({ user }) => {
     const [tasks, setTasks] = useState([]);
     const [newTaskInput, setNewTaskInput] = useState('');
     const [isAddingTo, setIsAddingTo] = useState(null);
+    const [activeRound, setActiveRound] = useState('ALL'); // 'ALL', 'PRE_SEED', 'SERIES_A'
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -122,17 +134,12 @@ const FundraisingTaskBoard = ({ user }) => {
         // Determine new stage
         let newStage = overId;
         const overTask = tasks.find(t => t.id === overId);
-        if (overTask) newStage = overTask.stage; // If dropped on a task, take that task's stage
+        if (overTask) newStage = overTask.stage; 
 
-        // If dropped on a column (STAGE ID) or a task in a different stage
         if (STAGES.find(s => s.id === newStage) || (overTask && overTask.stage)) {
-             // Find current task
              const currentTask = tasks.find(t => t.id === activeId);
              if (currentTask && currentTask.stage !== newStage) {
-                 // Optimistic Update
                  setTasks(prev => prev.map(t => t.id === activeId ? { ...t, stage: newStage } : t));
-                 
-                 // Firebase Update
                  await updateDoc(doc(db, 'users', user.uid, 'fundraising_tasks', activeId), {
                      stage: newStage,
                      updatedAt: serverTimestamp()
@@ -148,6 +155,7 @@ const FundraisingTaskBoard = ({ user }) => {
             await addDoc(collection(db, 'users', user.uid, 'fundraising_tasks'), {
                 title: newTaskInput,
                 stage: stageId,
+                round: activeRound === 'ALL' ? 'PRE_SEED' : activeRound, // Default to current filter or Pre-seed
                 createdAt: serverTimestamp(),
                 priority: 'Normal'
             });
@@ -158,13 +166,16 @@ const FundraisingTaskBoard = ({ user }) => {
         }
     };
 
-    // Seed Cambridge Template
-    const seedCambridgeTasks = async () => {
-        if (!window.confirm("Load the 'Cambridge Pre-seed to Exit' checklist? This will add tasks to your board.")) return;
+    // Seed Cambridge Data (Intelligent Seeder)
+    const seedCambridgeTasks = async (roundKey) => {
+        const roundName = roundKey === 'PRE_SEED' ? 'Pre-Seed (Convertible Note)' : 'Series A (Equity)';
+        if (!window.confirm(`Load the Cambridge ${roundName} Checklist?`)) return;
         
-        const batchPromises = CAMBRIDGE_TEMPLATE.map(task => 
+        const template = CAMBRIDGE_TEMPLATES[roundKey];
+        const batchPromises = template.map(task => 
             addDoc(collection(db, 'users', user.uid, 'fundraising_tasks'), {
                 ...task,
+                round: roundKey,
                 createdAt: serverTimestamp()
             })
         );
@@ -177,22 +188,50 @@ const FundraisingTaskBoard = ({ user }) => {
         }
     };
 
+    // Filter tasks based on active round
+    const visibleTasks = tasks.filter(t => activeRound === 'ALL' || t.round === activeRound || !t.round);
+
     return (
         <div className="h-full flex flex-col bg-gray-50/50">
             {/* Header / Toolbar */}
-            <div className="flex justify-between items-center mb-6 px-1">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 px-1 gap-4">
                 <div>
                     <h2 className="text-xl font-black text-gray-800 flex items-center gap-2">
                         <Briefcase className="text-orange-600" size={24} />
                         Fundraising Roadmap
                     </h2>
                     <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">
-                        Based on Cambridge University "Pre-seed to Exit" Framework
+                        Cambridge "Pre-seed to Exit" Framework
                     </p>
                 </div>
-                <Button onClick={seedCambridgeTasks} variant="secondary" className="bg-white border-orange-200 text-orange-700 hover:bg-orange-50">
-                    <Sparkles size={16} className="mr-2" /> Load Course Template
-                </Button>
+                
+                {/* Round Filter & Load Buttons */}
+                <div className="flex flex-wrap gap-2 items-center">
+                    <div className="flex bg-white rounded-lg border border-gray-200 p-1 mr-2 shadow-sm">
+                        {['ALL', 'PRE_SEED', 'SERIES_A'].map(round => (
+                            <button
+                                key={round}
+                                onClick={() => setActiveRound(round)}
+                                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                                    activeRound === round 
+                                    ? 'bg-blue-100 text-blue-700' 
+                                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                                }`}
+                            >
+                                {round.replace('_', ' ')}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                        <Button onClick={() => seedCambridgeTasks('PRE_SEED')} variant="outline" className="text-[10px] h-8">
+                            <Sparkles size={12} className="mr-1" /> Load Pre-Seed
+                        </Button>
+                        <Button onClick={() => seedCambridgeTasks('SERIES_A')} variant="outline" className="text-[10px] h-8">
+                            <Layers size={12} className="mr-1" /> Load Series A
+                        </Button>
+                    </div>
+                </div>
             </div>
 
             {/* Kanban Board */}
@@ -206,7 +245,7 @@ const FundraisingTaskBoard = ({ user }) => {
                                     {stage.title}
                                 </span>
                                 <span className="text-[10px] font-bold bg-white px-2 py-0.5 rounded-full text-gray-400 shadow-sm">
-                                    {tasks.filter(t => t.stage === stage.id).length}
+                                    {visibleTasks.filter(t => t.stage === stage.id).length}
                                 </span>
                             </div>
 
@@ -214,10 +253,10 @@ const FundraisingTaskBoard = ({ user }) => {
                             <div className="flex-1 p-2 overflow-y-auto min-h-[100px]">
                                 <SortableContext 
                                     id={stage.id} 
-                                    items={tasks.filter(t => t.stage === stage.id).map(t => t.id)}
+                                    items={visibleTasks.filter(t => t.stage === stage.id).map(t => t.id)}
                                     strategy={verticalListSortingStrategy}
                                 >
-                                    {tasks.filter(t => t.stage === stage.id).map(task => (
+                                    {visibleTasks.filter(t => t.stage === stage.id).map(task => (
                                         <SortableTaskCard key={task.id} task={task} onDelete={handleDelete} />
                                     ))}
                                 </SortableContext>
