@@ -64,6 +64,7 @@ import PayrollManager from './pages/PayrollManager.jsx';
 // --- NEW: Investment Modules ---
 import CEOInvestmentDashboard from './components/CEOInvestmentDashboard.jsx';
 import InvestorEmailManager from './components/InvestorEmailManager.jsx';
+import FundraisingTaskBoard from './components/FundraisingTaskBoard.jsx'; // <--- NEW IMPORT HERE
 import InvestorsPage from './pages/InvestorsPage.jsx';
 import CallCentre from './pages/CallCentre.jsx';
 
@@ -73,7 +74,7 @@ import CallCentre from './pages/CallCentre.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
-import DatasheetLibrary from './components/DatasheetLibrary.jsx'; // <--- NEW IMPORT
+import DatasheetLibrary from './components/DatasheetLibrary.jsx'; 
 
 // ==========================================
 // 3. DATA & ACCOUNTING MODULES
@@ -92,32 +93,27 @@ import {
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
     UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload, Sparkles,
-    DollarSign, Mail, TrendingUp, Phone, Grid, Printer // <--- Added Printer Icon
+    DollarSign, Mail, TrendingUp, Phone, Grid, Printer, Map // <--- Added Map Icon
 } from 'lucide-react'; 
 
 // ==========================================
-// 5. DROPDOWN MENU COMPONENT (FIXED!)
+// 5. DROPDOWN MENU COMPONENT
 // ==========================================
 const DropdownMenu = ({ label, icon: Icon, items, activeView, setActiveView, variant = 'secondary' }) => {
     const [isOpen, setIsOpen] = useState(false);
     const isActive = items.some(item => item.view === activeView);
 
-    // Helper function for proper variant styling
     const getButtonClassName = () => {
         let baseClass = 'font-bold uppercase text-[10px] tracking-widest h-9';
-        
         if (isActive) {
             return baseClass;
         }
-        
         if (variant === 'orange') {
             return `${baseClass} !border-orange-200 !text-orange-700 !bg-orange-50 hover:!bg-orange-100`;
         }
-        
         if (variant === 'purple') {
             return `${baseClass} !border-purple-200 !text-purple-700 !bg-purple-50 hover:!bg-purple-100`;
         }
-        
         return baseClass;
     };
 
@@ -170,7 +166,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
     const salesMenu = [
         { view: 'funnel', label: 'Sales Funnel', icon: HardHat },
         { view: 'list', label: 'Quotes List', icon: ListIcon, badge: quoteCount },
-        { view: 'datasheets', label: 'Datasheet Library', icon: Printer, badge: 'NEW' }, // <--- ADDED HERE
+        { view: 'datasheets', label: 'Datasheet Library', icon: Printer, badge: 'NEW' },
         { view: 'companies', label: 'Companies', icon: Building },
         { view: 'contacts', label: 'Contacts', icon: Users },
         { view: 'suppliers', label: 'Suppliers', icon: Briefcase }
@@ -210,10 +206,11 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
     // Investment Menu
     const investmentMenu = [
+        { view: 'investmentPipeline', label: 'Command Center', icon: TrendingUp },
+        { view: 'fundraisingBoard', label: 'Cambridge Roadmap', icon: Map, badge: 'NEW' }, // <--- ADDED ROADMAP
         { view: 'investors', label: 'Investor Companies', icon: Building, badge: '43' },
         { view: 'investmentCallCentre', label: 'Call Centre', icon: Phone },
-        { view: 'investmentPipeline', label: 'Pipeline View', icon: TrendingUp },
-        { view: 'investmentTasks', label: 'Strategy & Tasks', icon: CheckCircle },
+        { view: 'investmentTasks', label: 'General Tasks', icon: CheckCircle },
         { view: 'investmentEmails', label: 'Email Templates', icon: Mail }
     ];
 
@@ -395,89 +392,83 @@ export default function App() {
             setLoadingData(true); 
             console.log("🚀 Starting Data Synchronization...");
             
-            // Safety Timer: Stops spinning after 4s even if DB hangs
+            // Safety Timer
             const safetyTimer = setTimeout(() => {
                 console.log("⚠️ Safety Timer Triggered: Forcing App Load");
                 setLoadingData(false);
             }, 4000);
 
-            // 1. QUOTES (Desc)
+            // 1. QUOTES
             const unsubQuotes = onSnapshot(
                 query(collection(db, "users", user.uid, "quotes"), orderBy("lastModified", "desc")), 
                 (snap) => setQuotes(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
                 (err) => console.warn("Quotes Error:", err)
             );
             
-            // 2. OPPORTUNITIES (Desc)
+            // 2. OPPORTUNITIES
             const unsubOpps = onSnapshot(
                 query(collection(db, "users", user.uid, "opportunities"), orderBy("createdAt", "desc")), 
                 (snap) => setOpportunities(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
                 (err) => console.warn("Opps Error:", err)
             );
             
-            // 3. COMPANIES (Ascending A-Z)
+            // 3. COMPANIES
             const unsubCompanies = onSnapshot(
                 query(collection(db, "users", user.uid, "companies"), orderBy("companyName", "asc")), 
                 (snap) => setCompanies(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
                 (err) => console.warn("Companies Error:", err)
             );
             
-            // 4. CONTACTS (Ascending A-Z)
+            // 4. CONTACTS
             const unsubContacts = onSnapshot(
                 query(collection(db, "users", user.uid, "contacts"), orderBy("lastName", "asc")), 
                 (snap) => setContacts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
                 (err) => console.warn("Contacts Error:", err)
             );
             
-            // 5. LEDGER (Desc)
+            // 5. LEDGER
             const unsubLedger = onSnapshot(
                 query(collection(db, "users", user.uid, "ledger"), orderBy("date", "desc")), 
                 (snap) => setLedgerEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
                 (err) => console.warn("Ledger Error:", err)
             );
             
-            // 6. MANPOWER (Desc)
+            // 6. MANPOWER
             const unsubManpower = onSnapshot(
                 query(collection(db, "users", user.uid, "manpower_logs"), orderBy("date", "desc")), 
                 (snap) => setManpowerLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
                 (err) => console.warn("Manpower Error:", err)
             );
             
-            // 7. SERVICE INVOICES (Desc)
+            // 7. SERVICE INVOICES
             const unsubServices = onSnapshot(
                 query(collection(db, "users", user.uid, "service_invoices"), orderBy("createdAt", "desc")), 
                 (snap) => setServiceInvoices(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => {
-                    console.warn("Service Invoices Error:", err.code);
-                    setServiceInvoices([]);
-                }
+                (err) => { console.warn("Service Invoices Error:", err.code); setServiceInvoices([]); }
             );
 
-            // 8. SERVICE CONTRACTS (Desc)
+            // 8. SERVICE CONTRACTS
             const unsubContracts = onSnapshot(
                 query(collection(db, "users", user.uid, "service_contracts"), orderBy("createdAt", "desc")),
                 (snap) => setServiceContracts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
-                (err) => {
-                    console.warn("Contracts Error:", err.code);
-                    setServiceContracts([]);
-                }
+                (err) => { console.warn("Contracts Error:", err.code); setServiceContracts([]); }
             );
             
-            // 9. TERRITORIES (Ascending A-Z)
+            // 9. TERRITORIES
             const unsubTerritories = onSnapshot(
                 query(collection(db, "users", user.uid, "territories"), orderBy("name", "asc")), 
                 (snap) => setTerritories(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
                 (err) => console.warn("Territories Error:", err)
             );
             
-            // 10. AGENTS (Ascending A-Z)
+            // 10. AGENTS
             const unsubAgents = onSnapshot(
                 query(collection(db, "users", user.uid, "agents"), orderBy("name", "asc")), 
                 (snap) => setAgents(snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))),
                 (err) => console.warn("Agents Error:", err)
             );
             
-            // 11. APPOINTMENTS (Ascending Date) - STOPS LOADING
+            // 11. APPOINTMENTS
             const unsubAppointments = onSnapshot(
                 query(collection(db, "users", user.uid, "appointments"), orderBy("appointmentDate", "asc")), 
                 (snap) => {
@@ -517,9 +508,7 @@ export default function App() {
                 status: newStatus, 
                 lastModified: serverTimestamp() 
             });
-        } catch (e) {
-            console.error("Status Update Failed", e);
-        }
+        } catch (e) { console.error("Status Update Failed", e); }
     };
 
     const handleSaveQuote = async (quoteData) => {
@@ -616,38 +605,38 @@ export default function App() {
                 
                 {/* 2. SALES FUNNEL */}
                 {activeView === 'funnel' && (
-    <FunnelPage 
-        opportunities={opportunities} 
-        user={user} 
-        quotes={quotes} 
-        onOpenQuote={handleEditQuote} 
-        onOpen={(opp) => { setSelectedOpportunity(opp); setActiveView('opportunityDetail'); }} 
-        companies={companies} 
-        contacts={contacts}
-        appointments={appointments}
-        initialEditOpportunity={selectedOpportunity}  // ✅ ADD THIS LINE
-    />
-)}
+                    <FunnelPage 
+                        opportunities={opportunities} 
+                        user={user} 
+                        quotes={quotes} 
+                        onOpenQuote={handleEditQuote} 
+                        onOpen={(opp) => { setSelectedOpportunity(opp); setActiveView('opportunityDetail'); }} 
+                        companies={companies} 
+                        contacts={contacts}
+                        appointments={appointments}
+                        initialEditOpportunity={selectedOpportunity} 
+                    />
+                )}
                 
-    {activeView === 'opportunityDetail' && (
-    <OpportunityDetailPage 
-        opportunity={selectedOpportunity} 
-        quotes={quotes} 
-        onBack={() => setActiveView('funnel')} 
-        onOpenQuote={handleEditQuote} 
-        user={user} 
-        companies={companies} 
-        contacts={contacts}  // ✅ ADD THIS LINE
-        onAddQuote={() => { 
-            setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); 
-            setActiveView('calculator'); 
-        }}
-        onEdit={(opp) => {  // ✅ ADD THIS BLOCK
-            setSelectedOpportunity(opp);
-            setActiveView('funnel');
-        }}
-    />
-)}
+                {activeView === 'opportunityDetail' && (
+                    <OpportunityDetailPage 
+                        opportunity={selectedOpportunity} 
+                        quotes={quotes} 
+                        onBack={() => setActiveView('funnel')} 
+                        onOpenQuote={handleEditQuote} 
+                        user={user} 
+                        companies={companies} 
+                        contacts={contacts}
+                        onAddQuote={() => { 
+                            setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); 
+                            setActiveView('calculator'); 
+                        }}
+                        onEdit={(opp) => {
+                            setSelectedOpportunity(opp);
+                            setActiveView('funnel');
+                        }}
+                    />
+                )}
 
                 {/* 4. OPERATIONS MODULES */}
                 {activeView === 'installEstimator' && (
@@ -684,7 +673,7 @@ export default function App() {
                     <BusinessTasksCalendar user={user} />
                 )}
                 
-                {/* 5. DATA MANAGEMENT - PHILIPPINES */}
+                {/* 5. DATA MANAGEMENT */}
                 {activeView === 'companies' && (
                     <CompaniesPage 
                         companies={companies} 
@@ -780,6 +769,11 @@ export default function App() {
                     <CEOInvestmentDashboard user={user} />
                 )}
 
+                {/* --- NEW ROADMAP VIEW --- */}
+                {activeView === 'fundraisingBoard' && (
+                    <FundraisingTaskBoard user={user} />
+                )}
+
                 {activeView === 'investmentTasks' && (
                     <BusinessTasksCalendar user={user} />
                 )}
@@ -811,7 +805,7 @@ export default function App() {
                     />
                 )}
 
-                {/* 8. DATASHEETS (NEW) */}
+                {/* 8. DATASHEETS */}
                 {activeView === 'datasheets' && (
                     <DatasheetLibrary />
                 )}
