@@ -628,7 +628,7 @@ export default function App() {
                     />
                 )}
                 
-                {activeView === 'opportunityDetail' && (
+     {activeView === 'opportunityDetail' && (
     <OpportunityDetailPage 
         opportunity={selectedOpportunity} 
         quotes={quotes} 
@@ -636,6 +636,7 @@ export default function App() {
         onOpenQuote={handleEditQuote} 
         user={user} 
         companies={companies} 
+        contacts={contacts}  // ✅ ADD THIS
         onAddQuote={() => { 
             setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); 
             setActiveView('calculator'); 
