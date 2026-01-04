@@ -75,7 +75,7 @@ const hpFromKW = (kw) => {
   return '10HP';
 };
 
-// If category is iCOOL (or product name contains iCOOL), ensure name includes “2HP/4HP/10HP”.
+// If category is iCOOL (or product name contains iCOOL), ensure name includes "2HP/4HP/10HP".
 const ensureHpInName = (productLike) => {
   const category = (productLike?.category || '').toLowerCase();
   const name = String(productLike?.name || '');
@@ -303,9 +303,8 @@ const ProductManager = ({ user }) => {
     Fan_Details: '',
     Air_Flow: '',
     Certificates: '',
-    // ✅ NEW FIELDS ADDED
-    Certificate_Detail: '', // Specific cert numbers (MCS HP0304 etc)
-    Image_URL: '',          // Direct image link for datasheets
+    Certificate_Detail: '',
+    Image_URL: '',
 
     max_temp_c: 75,
     isReversible: true,
@@ -346,7 +345,7 @@ const ProductManager = ({ user }) => {
 
     // ✅ iVOLT: INVERTER FIELDS
     inv_kW_Rated: 0,
-    inv_Phase: '', // 1P / 3P
+    inv_Phase: '',
     inv_MPPT_Count: 0,
     inv_Max_PV_Input_kW: 0,
     inv_Max_PV_Voltage_V: 0,
@@ -445,7 +444,7 @@ const ProductManager = ({ user }) => {
     setFormData({
       ...defaultFormData,
       ...product,
-      id: product.id, // keep doc id visible in form
+      id: product.id,
       costPriceUSD: parseFloat(product.costPriceUSD || 0),
       salesPriceUSD: parseFloat(product.salesPriceUSD || 0),
       kW_DHW_Nominal: parseFloat(product.kW_DHW_Nominal || 0),
@@ -460,11 +459,9 @@ const ProductManager = ({ user }) => {
       Gross_Weight: parseFloat(product.Gross_Weight || 0),
       isReversible: product.isReversible !== undefined ? product.isReversible : true,
 
-      // ✅ NEW FIELDS IN EDIT
       Certificate_Detail: product.Certificate_Detail || '',
       Image_URL: product.Image_URL || '',
 
-      // ✅ fan coil numeric normalize
       kW_Heating_Nominal: parseFloat(product.kW_Heating_Nominal || 0),
       Airflow_H_m3h: parseFloat(product.Airflow_H_m3h || 0),
       Airflow_M_m3h: parseFloat(product.Airflow_M_m3h || 0),
@@ -476,7 +473,6 @@ const ProductManager = ({ user }) => {
       WaterFlow_Cooling_m3h: parseFloat(product.WaterFlow_Cooling_m3h || 0),
       WaterFlow_Heating_m3h: parseFloat(product.WaterFlow_Heating_m3h || 0),
 
-      // ✅ iVOLT normalize
       pv_Watt_Rated: parseFloat(product.pv_Watt_Rated || 0),
       pv_Efficiency_pct: parseFloat(product.pv_Efficiency_pct || 0),
       pv_Voc_V: parseFloat(product.pv_Voc_V || 0),
@@ -516,8 +512,7 @@ const ProductManager = ({ user }) => {
     });
   };
 
-  // ✅ UPDATED: on Save, ensure iCOOL products get HP in product name
-  // ✅ FIXED: DO NOT delete createdAt
+  // ✅ OPTION 2: Smart ID Update with Auto-Migration
   const handleSave = async () => {
     if (!user) return;
 
@@ -528,12 +523,7 @@ const ProductManager = ({ user }) => {
 
     try {
       const normalizedName = ensureHpInName(formData);
-
-      // On edit: keep same doc id.
-      // On create: use System ID if provided, else name-based id.
-      const safeId = editId
-        ? editId
-        : makeSafeId(formData.id || normalizedName || `prod_${Date.now()}`);
+      const newSafeId = makeSafeId(formData.id || normalizedName || `prod_${Date.now()}`);
 
       const productData = {
         ...formData,
@@ -541,24 +531,35 @@ const ProductManager = ({ user }) => {
         lastModified: serverTimestamp(),
       };
 
-      // createdAt only on create (and keep it!)
       if (!editId) {
         productData.createdAt = serverTimestamp();
-      } else {
-        // keep existing createdAt if present
-        if (!productData.createdAt) {
-          delete productData.createdAt;
-        }
       }
 
-      // Never store id as a field in doc (doc id is the id)
       delete productData.id;
 
-      await setDoc(doc(db, "users", user.uid, "products", safeId), productData, { merge: true });
+      // ✅ Check if ID changed during edit
+      if (editId && editId !== newSafeId) {
+        const confirmMigration = window.confirm(
+          `⚠️ You're changing the System ID from:\n"${editId}"\n\nto:\n"${newSafeId}"\n\nThis will:\n1. Create a new product with the new ID\n2. Delete the old product\n\nContinue?`
+        );
+
+        if (!confirmMigration) return;
+
+        // Create new document
+        await setDoc(doc(db, "users", user.uid, "products", newSafeId), productData);
+        
+        // Delete old document
+        await deleteDoc(doc(db, "users", user.uid, "products", editId));
+        
+        alert(`✅ Product migrated successfully!\n\nOld ID: ${editId}\nNew ID: ${newSafeId}`);
+      } else {
+        // Normal save (no ID change)
+        await setDoc(doc(db, "users", user.uid, "products", newSafeId), productData, { merge: true });
+        alert("Product Saved!");
+      }
 
       setIsEditing(false);
       setEditId(null);
-      alert("Product Saved!");
     } catch (error) {
       console.error("Error saving:", error);
       alert("Failed to save product: " + error.message);
@@ -619,12 +620,10 @@ const ProductManager = ({ user }) => {
       'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current',
       'Sound_Power_Level', 'Net_Weight', 'Gross_Weight',
 
-      // ✅ FAN COIL numeric
       'kW_Heating_Nominal', 'Airflow_H_m3h', 'Airflow_M_m3h', 'Airflow_L_m3h',
       'Noise_H_dBA', 'Noise_M_dBA', 'Noise_L_dBA', 'PowerInput_W',
       'WaterFlow_Cooling_m3h', 'WaterFlow_Heating_m3h',
 
-      // ✅ iVOLT numeric
       'pv_Watt_Rated', 'pv_Efficiency_pct', 'pv_Voc_V', 'pv_Vmp_V', 'pv_Isc_A', 'pv_Imp_A', 'pv_Weight_kg', 'pv_Warranty_years',
       'inv_kW_Rated', 'inv_MPPT_Count', 'inv_Max_PV_Input_kW', 'inv_Max_PV_Voltage_V', 'inv_Warranty_years',
       'bat_kWh_Nominal', 'bat_Voltage_V', 'bat_Ah', 'bat_DoD_pct', 'bat_Cycle_Life', 'bat_Max_Discharge_kW', 'bat_Warranty_years'
@@ -753,7 +752,6 @@ const ProductManager = ({ user }) => {
       "Fan Details": p.Fan_Details,
       "Air Flow": p.Air_Flow,
       "Certificates": p.Certificates,
-      // ✅ EXPORT NEW FIELDS
       "Certificate_Detail": p.Certificate_Detail,
       "Image_URL": p.Image_URL,
 
@@ -763,7 +761,6 @@ const ProductManager = ({ user }) => {
       "Order Reference": p.Order_Reference,
       "Specs": p.specs,
 
-      // ✅ FAN COIL EXPORT FIELDS
       "Coil Type": p.coilType,
       "Mounting Type": p.mountingType,
       "kW_Heating_Nominal": p.kW_Heating_Nominal,
@@ -779,7 +776,6 @@ const ProductManager = ({ user }) => {
       "WaterFlow_Cooling_m3h": p.WaterFlow_Cooling_m3h,
       "WaterFlow_Heating_m3h": p.WaterFlow_Heating_m3h,
 
-      // ✅ iVOLT EXPORT FIELDS
       "pv_Watt_Rated": p.pv_Watt_Rated,
       "pv_Cell_Type": p.pv_Cell_Type,
       "pv_Efficiency_pct": p.pv_Efficiency_pct,
@@ -826,7 +822,6 @@ const ProductManager = ({ user }) => {
     fileInputRef.current?.click();
   };
 
-  // ✅ UPDATED: CSV Update/Insert Logic (CREATE new if not found)
   const handleFileChange = (event) => {
     if (!user) return;
 
@@ -877,7 +872,6 @@ const ProductManager = ({ user }) => {
           'fan details': 'Fan_Details',
           'air flow': 'Air_Flow',
           'certificates': 'Certificates',
-          // ✅ NEW FIELD MAPPINGS
           'certificate detail': 'Certificate_Detail',
           'certificate_detail': 'Certificate_Detail',
           'image url': 'Image_URL',
@@ -889,7 +883,6 @@ const ProductManager = ({ user }) => {
           'order reference': 'Order_Reference',
           'specs': 'specs',
 
-          // ✅ FAN COIL MAPPINGS
           'coiltype': 'coilType',
           'coil type': 'coilType',
           'mountingtype': 'mountingType',
@@ -911,7 +904,6 @@ const ProductManager = ({ user }) => {
           'waterconnection': 'WaterConnection',
           'drainconnection': 'DrainConnection',
 
-          // ✅ iVOLT MAPPINGS (accept both snake_case and your export headers)
           'pv_watt_rated': 'pv_Watt_Rated',
           'pv_cell_type': 'pv_Cell_Type',
           'pv_efficiency_pct': 'pv_Efficiency_pct',
@@ -946,12 +938,10 @@ const ProductManager = ({ user }) => {
           'COP_DHW', 'SCOP_DHW_Avg', 'max_temp_c', 'Rated_Power_Input', 'Max_Running_Current',
           'Sound_Power_Level', 'Net_Weight', 'Gross_Weight',
 
-          // ✅ FAN COIL numeric
           'kW_Heating_Nominal', 'Airflow_H_m3h', 'Airflow_M_m3h', 'Airflow_L_m3h',
           'Noise_H_dBA', 'Noise_M_dBA', 'Noise_L_dBA', 'PowerInput_W',
           'WaterFlow_Cooling_m3h', 'WaterFlow_Heating_m3h',
 
-          // ✅ iVOLT numeric
           'pv_Watt_Rated', 'pv_Efficiency_pct', 'pv_Voc_V', 'pv_Vmp_V', 'pv_Isc_A', 'pv_Imp_A', 'pv_Weight_kg', 'pv_Warranty_years',
           'inv_kW_Rated', 'inv_MPPT_Count', 'inv_Max_PV_Input_kW', 'inv_Max_PV_Voltage_V', 'inv_Warranty_years',
           'bat_kWh_Nominal', 'bat_Voltage_V', 'bat_Ah', 'bat_DoD_pct', 'bat_Cycle_Life', 'bat_Max_Discharge_kW', 'bat_Warranty_years',
@@ -977,7 +967,6 @@ const ProductManager = ({ user }) => {
             return;
           }
 
-          // Try to match by Firestore doc id or by name
           const match =
             (csvSystemId ? products.find(p => p.id === csvSystemId) : null) ||
             (csvProductName ? products.find(p => (p.name || '').toLowerCase().trim() === csvProductName.toLowerCase().trim()) : null);
@@ -1006,7 +995,6 @@ const ProductManager = ({ user }) => {
               }
             });
 
-            // Ensure HP in name for iCOOL
             if (data.name || data.category || data.kW_Cooling_Nominal || data.kW_DHW_Nominal) {
               data.name = ensureHpInName({
                 name: data.name || csvProductName || '',
@@ -1016,14 +1004,12 @@ const ProductManager = ({ user }) => {
               });
             }
 
-            // Never store id field inside doc
             delete data.id;
 
             return data;
           };
 
           if (match) {
-            // UPDATE EXISTING
             const ref = doc(productsRef, match.id);
             const updateData = buildDataFromRow();
 
@@ -1034,7 +1020,6 @@ const ProductManager = ({ user }) => {
               skippedCount++;
             }
           } else {
-            // CREATE NEW
             const createData = buildDataFromRow();
             createData.createdAt = serverTimestamp();
 
@@ -1174,9 +1159,22 @@ const ProductManager = ({ user }) => {
             </div>
 
             <Input label="Category" value={formData.category} onChange={handleInputChange('category')} />
-            <Input label="System ID (Unique)" value={formData.id} onChange={handleInputChange('id')} disabled={!!editId} />
+            
+            {/* ✅ SYSTEM ID NOW ALWAYS EDITABLE */}
+            <div>
+              <Input 
+                label="System ID (Unique)" 
+                value={formData.id} 
+                onChange={handleInputChange('id')} 
+                className={editId ? "border-yellow-400 bg-yellow-50" : ""}
+              />
+              {editId && (
+                <p className="text-xs text-yellow-700 mt-1 font-semibold">
+                  ⚠️ Changing ID will migrate product to new ID
+                </p>
+              )}
+            </div>
 
-            {/* ✅ NEW: Image URL Input */}
             <div className="md:col-span-4">
               <Input 
                 label="Image URL (For Datasheets)" 
@@ -1257,7 +1255,6 @@ const ProductManager = ({ user }) => {
               <Input label="Sound Power Level (dB(A))" type="number" value={formData.Sound_Power_Level} onChange={handleInputChange('Sound_Power_Level')} />
               <Input label="Certificates (General)" value={formData.Certificates} onChange={handleInputChange('Certificates')} placeholder="e.g. CE, TUV, RoHS" />
               
-              {/* ✅ NEW: Certificate Details Input */}
               <Input 
                 label="Certificate Details (MCS etc)" 
                 value={formData.Certificate_Detail} 
