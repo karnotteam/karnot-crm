@@ -237,7 +237,10 @@ const OpportunityDetailPage = ({
             </div>
         );
     }
-
+// Add this temporarily to debug
+console.log('Opportunity data:', opportunity);
+console.log('Contact Name:', opportunity.contactName);
+console.log('Contact Email:', opportunity.contactEmail);
     const relatedQuotes = (quotes || []).filter(q => 
         (q.customer?.name && q.customer.name.toLowerCase().includes(opportunity.customerName.toLowerCase())) || 
         (q.opportunityId === opportunity.id)
