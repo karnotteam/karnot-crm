@@ -11,9 +11,9 @@ import {
 } from 'lucide-react';
 
 // --- IMPORTS ---
-import FundraisingTaskBoard from './FundraisingTaskBoard'; // The new Cambridge Board
-import InvestorFunnel from './InvestorFunnel';             // Your existing Visual Funnel
-import InvestorEmailManager from './InvestorEmailManager'; // Your existing Email Tools
+import FundraisingTaskBoard from './FundraisingTaskBoard'; 
+import InvestorFunnel from './InvestorFunnel';             
+import InvestorEmailManager from './InvestorEmailManager'; 
 
 // ==========================================
 // 1. STRATEGY IMPORT MODAL (JSON)
@@ -25,7 +25,7 @@ const SimpleStrategyImportModal = ({ onClose, user, onImportComplete }) => {
     const handleImport = async () => {
         try {
             setLoading(true);
-            // Fix iPad "Smart Punctuation" (curly quotes) automatically
+            // Fix iPad "Smart Punctuation"
             const cleanJson = jsonInput
                 .replace(/[\u201C\u201D]/g, '"')
                 .replace(/[\u2018\u2019]/g, "'");
@@ -51,7 +51,7 @@ const SimpleStrategyImportModal = ({ onClose, user, onImportComplete }) => {
             onImportComplete();
             onClose();
         } catch (error) {
-            alert("Invalid JSON. Please check format. (iPad quotes fixed automatically)");
+            alert("Invalid JSON. Please check format.");
             console.error(error);
         } finally {
             setLoading(false);
@@ -69,7 +69,7 @@ const SimpleStrategyImportModal = ({ onClose, user, onImportComplete }) => {
                 </div>
                 <textarea 
                     className="w-full h-48 p-3 border border-gray-200 rounded-lg text-xs font-mono bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder='[{"title": "Series A Prep", "priority": "CRITICAL", "description": "..."}]'
+                    placeholder='[{"title": "Test Strategy", "priority": "HIGH", "description": "..."}]'
                     value={jsonInput}
                     onChange={(e) => setJsonInput(e.target.value)}
                 />
@@ -99,12 +99,7 @@ const StrategyFormModal = ({ strategy, onClose, onSave, user }) => {
             if (strategy?.id) {
                 await updateDoc(doc(db, 'investmentStrategies', strategy.id), formData);
             } else {
-                await addDoc(collection(db, 'investmentStrategies'), { 
-                    ...formData, 
-                    status: 'ACTIVE', 
-                    createdAt: serverTimestamp(), 
-                    createdBy: user.uid 
-                });
+                await addDoc(collection(db, 'investmentStrategies'), { ...formData, status: 'ACTIVE', createdAt: serverTimestamp(), createdBy: user.uid });
             }
             onSave();
         } catch (error) { console.error("Error saving strategy:", error); }
@@ -120,7 +115,7 @@ const StrategyFormModal = ({ strategy, onClose, onSave, user }) => {
                     <div><label className="text-xs font-bold text-gray-500">Description</label><textarea className="w-full p-2 border rounded" rows={3} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>
                     <div className="grid grid-cols-2 gap-4">
                         <div><label className="text-xs font-bold text-gray-500">Due Date</label><input type="date" className="w-full p-2 border rounded" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} /></div>
-                        <div><label className="text-xs font-bold text-gray-500">Owner (Delegate)</label><input className="w-full p-2 border rounded" value={formData.owner} onChange={e => setFormData({...formData, owner: e.target.value})} /></div>
+                        <div><label className="text-xs font-bold text-gray-500">Owner</label><input className="w-full p-2 border rounded" value={formData.owner} onChange={e => setFormData({...formData, owner: e.target.value})} /></div>
                     </div>
                     <div className="flex justify-end gap-2 pt-4"><button type="button" onClick={onClose} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded font-bold">Cancel</button><button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded font-bold">Save</button></div>
                 </form>
@@ -136,7 +131,7 @@ const CEOInvestmentDashboard = ({ user }) => {
   const [investors, setInvestors] = useState([]);
   const [strategies, setStrategies] = useState([]);
   const [activeTab, setActiveTab] = useState('pipeline');
-  const [pipelineView, setPipelineView] = useState('table'); // 'table' or 'funnel'
+  const [pipelineView, setPipelineView] = useState('table'); 
   
   // Modal States
   const [showAddInvestor, setShowAddInvestor] = useState(false);
@@ -182,11 +177,17 @@ const CEOInvestmentDashboard = ({ user }) => {
     setStrategies(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
   };
 
+  // --- DELETE FUNCTION ---
   const handleDelete = async (collectionName, id) => {
       if(window.confirm("Are you sure you want to delete this item?")) {
-          await deleteDoc(doc(db, collectionName, id));
-          if(collectionName === 'investors') loadInvestors();
-          if(collectionName === 'investmentStrategies') loadStrategies();
+          try {
+            await deleteDoc(doc(db, collectionName, id));
+            if(collectionName === 'investors') loadInvestors();
+            if(collectionName === 'investmentStrategies') loadStrategies();
+          } catch (e) {
+            console.error("Delete failed", e);
+            alert("Error deleting item. Check console.");
+          }
       }
   };
 
@@ -210,7 +211,7 @@ const CEOInvestmentDashboard = ({ user }) => {
     return true;
   });
 
-  // --- INTERNAL INVESTOR FORM ---
+  // --- INVESTOR FORM ---
   const InvestorForm = ({ investor, onSave, onCancel }) => {
     const [formData, setFormData] = useState(investor || {
       name: '', type: 'Venture Capital', region: 'Philippines', stage: 'RESEARCH',
@@ -237,7 +238,6 @@ const CEOInvestmentDashboard = ({ user }) => {
               <div><label className="text-xs font-bold text-gray-500">Region</label><select className="w-full p-2 border rounded" value={formData.region} onChange={e => setFormData({...formData, region: e.target.value})}>{REGIONS.map(r => <option key={r} value={r}>{r}</option>)}</select></div>
               <div><label className="text-xs font-bold text-gray-500">Stage</label><select className="w-full p-2 border rounded" value={formData.stage} onChange={e => setFormData({...formData, stage: e.target.value})}>{STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
               <div><label className="text-xs font-bold text-gray-500">Amount ($)</label><input type="number" className="w-full p-2 border rounded" value={formData.amount} onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})} /></div>
-              {/* Rest of fields */}
               <div><label className="text-xs font-bold text-gray-500">Contact</label><input className="w-full p-2 border rounded" value={formData.contactPerson} onChange={e => setFormData({...formData, contactPerson: e.target.value})} /></div>
               <div><label className="text-xs font-bold text-gray-500">Email</label><input className="w-full p-2 border rounded" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} /></div>
               <div><label className="text-xs font-bold text-gray-500">Phone</label><input className="w-full p-2 border rounded" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} /></div>
@@ -294,7 +294,7 @@ const CEOInvestmentDashboard = ({ user }) => {
           ))}
         </div>
 
-        {/* 1. PIPELINE TAB (List or Funnel) */}
+        {/* 1. PIPELINE TAB */}
         {activeTab === 'pipeline' && (
           <div className="p-6">
             <div className="flex justify-between items-center mb-4">
@@ -309,7 +309,6 @@ const CEOInvestmentDashboard = ({ user }) => {
               </button>
             </div>
             
-            {/* TOGGLE VIEW LOGIC */}
             {pipelineView === 'funnel' ? (
                 <div className="h-[600px] bg-slate-50 rounded border border-gray-200 overflow-hidden">
                     <InvestorFunnel investors={filteredInvestors} user={user} />
@@ -348,14 +347,14 @@ const CEOInvestmentDashboard = ({ user }) => {
           </div>
         )}
 
-        {/* 2. ROADMAP TAB (Kanban) */}
+        {/* 2. ROADMAP TAB */}
         {activeTab === 'roadmap' && (
              <div className="h-[600px] p-4 bg-slate-50">
                  <FundraisingTaskBoard user={user} />
              </div>
         )}
 
-        {/* 3. STRATEGIES TAB */}
+        {/* 3. STRATEGIES TAB - UPDATED WITH DELETE BUTTONS */}
         {activeTab === 'strategies' && (
           <div className="p-6 bg-slate-50 min-h-[500px]">
              <div className="flex justify-between items-center mb-4">
@@ -372,7 +371,8 @@ const CEOInvestmentDashboard = ({ user }) => {
                     <h3 className="font-bold text-lg text-gray-800">{strat.title}</h3>
                     <div className="flex items-center gap-2">
                          <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${strat.priority === 'CRITICAL' ? 'bg-red-100 text-red-700' : 'bg-blue-50 text-blue-700'}`}>{strat.priority}</span>
-                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                         {/* --- UPDATED: BUTTONS ALWAYS VISIBLE FOR IPAD --- */}
+                         <div className="flex gap-1">
                             <button onClick={() => { setSelectedStrategy(strat); setShowStrategyForm(true); }} className="p-1 hover:bg-gray-100 rounded text-blue-600"><Edit size={14}/></button>
                             <button onClick={() => handleDelete('investmentStrategies', strat.id)} className="p-1 hover:bg-gray-100 rounded text-red-500"><Trash2 size={14}/></button>
                          </div>
