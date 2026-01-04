@@ -2,296 +2,823 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { 
     collection, addDoc, updateDoc, deleteDoc, doc, 
-    onSnapshot, query, orderBy, serverTimestamp 
+    getDocs, query, orderBy, serverTimestamp 
 } from 'firebase/firestore';
-import { 
-    DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors 
-} from '@dnd-kit/core';
-import { 
-    SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable 
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { 
-    Plus, Trash2, GripVertical, CheckCircle, 
-    Briefcase, Sparkles, Filter, Layers 
-} from 'lucide-react';
-import { Button } from '../data/constants.jsx'; 
+import { Upload, X, CheckCircle } from 'lucide-react'; // Added icons for the modal
 
-// --- CAMBRIDGE COURSE STAGES (Generic for all rounds) ---
-const STAGES = [
-    { id: 'PREP', title: '1. Prep & Strategy', color: 'bg-slate-50 border-slate-200', text: 'text-slate-700' },
-    { id: 'OUTREACH', title: '2. Investor Outreach', color: 'bg-blue-50 border-blue-200', text: 'text-blue-700' },
-    { id: 'NEGOTIATION', title: '3. Terms & Due Diligence', color: 'bg-amber-50 border-amber-200', text: 'text-amber-700' },
-    { id: 'CLOSING', title: '4. Closing & Governance', color: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700' }
-];
+// --- NEW IMPORT: The Kanban Board we built ---
+import FundraisingTaskBoard from './FundraisingTaskBoard';
 
-// --- FULL COURSE TEMPLATES (Pre-Seed to Series B) ---
-const CAMBRIDGE_TEMPLATES = {
-    'PRE_SEED': [
-        // Module 2: Pre-Seed (Convertible Loan Focus)
-        { title: "Build 18-Month Cash Flow Forecast", stage: "PREP", priority: "High" },
-        { title: "Clean up Cap Table (Pre-Note)", stage: "PREP", priority: "Critical" },
-        { title: "Decide Valuation Cap & Discount", stage: "PREP", priority: "Critical" },
-        { title: "Draft 'Founder-Market Fit' Statement", stage: "PREP", priority: "Medium" },
-        { title: "Draft Investor One-Pager (Teaser)", stage: "OUTREACH", priority: "High" },
-        { title: "Build Target List (30 Warm Intros)", stage: "OUTREACH", priority: "High" },
-        { title: "Draft Convertible Loan Agreement (CLA)", stage: "NEGOTIATION", priority: "Critical" },
-        { title: "Legal Review: Qualifying Triggers", stage: "NEGOTIATION", priority: "Medium" },
-        { title: "Issue Note Certificates", stage: "CLOSING", priority: "Medium" }
-    ],
-    'SERIES_A': [
-        // Module 4: Series A (Equity & Scaling Focus)
-        { title: "Update Business Model Canvas (Scaling)", stage: "PREP", priority: "Critical" },
-        { title: "Calculate Unit Economics (CAC, LTV, Churn)", stage: "PREP", priority: "Critical" },
-        { title: "Define 'Use of Funds' for Growth/Hiring", stage: "PREP", priority: "High" },
-        { title: "Target VCs & Corporate Investors (Strategics)", stage: "OUTREACH", priority: "High" },
-        { title: "Prepare Data Room (IP, Contracts, Audits)", stage: "NEGOTIATION", priority: "Critical" },
-        { title: "Negotiate Term Sheet: Liquidation Prefs", stage: "NEGOTIATION", priority: "High" },
-        { title: "Negotiate Board Seats & Control Rights", stage: "NEGOTIATION", priority: "High" },
-        { title: "Establish Formal Board of Directors", stage: "CLOSING", priority: "Critical" },
-        { title: "Setup Employee Stock Option Plan (ESOP)", stage: "CLOSING", priority: "High" }
-    ]
-};
+// ==========================================
+// NEW COMPONENT: JSON STRATEGY IMPORTER
+// ==========================================
+const SimpleStrategyImportModal = ({ onClose, user, onImportComplete }) => {
+    const [jsonInput, setJsonInput] = useState('');
+    const [loading, setLoading] = useState(false);
 
-// --- DRAGGABLE CARD COMPONENT ---
-const SortableTaskCard = ({ task, onDelete }) => {
-    const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: task.id });
-    
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-    };
-
-    return (
-        <div 
-            ref={setNodeRef} 
-            style={style} 
-            className="mb-3 bg-white p-3 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all group touch-none"
-        >
-            <div className="flex justify-between items-start gap-2">
-                <div className="flex items-start gap-2">
-                    <button {...attributes} {...listeners} className="mt-1 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing">
-                        <GripVertical size={14} />
-                    </button>
-                    <div>
-                        <p className="text-sm font-medium text-gray-800 leading-tight">{task.title}</p>
-                        <div className="flex gap-2 mt-1">
-                            {task.priority && (
-                                <span className={`text-[9px] font-black uppercase tracking-wider inline-block px-1.5 py-0.5 rounded
-                                    ${task.priority === 'Critical' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
-                                    {task.priority}
-                                </span>
-                            )}
-                            {task.round && (
-                                <span className="text-[9px] font-bold uppercase tracking-wider inline-block px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
-                                    {task.round.replace('_', ' ')}
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <button 
-                    onClick={() => onDelete(task.id)}
-                    className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                    <Trash2 size={14} />
-                </button>
-            </div>
-        </div>
-    );
-};
-
-// --- MAIN BOARD COMPONENT ---
-const FundraisingTaskBoard = ({ user }) => {
-    const [tasks, setTasks] = useState([]);
-    const [newTaskInput, setNewTaskInput] = useState('');
-    const [isAddingTo, setIsAddingTo] = useState(null);
-    const [activeRound, setActiveRound] = useState('ALL'); // 'ALL', 'PRE_SEED', 'SERIES_A'
-
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-    );
-
-    // Fetch Tasks
-    useEffect(() => {
-        if (!user) return;
-        const q = query(collection(db, 'users', user.uid, 'fundraising_tasks'), orderBy('createdAt', 'desc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
-        return () => unsubscribe();
-    }, [user]);
-
-    // Handle Drag End
-    const handleDragEnd = async (event) => {
-        const { active, over } = event;
-        if (!over) return;
-
-        const activeId = active.id;
-        const overId = over.id;
-
-        // Determine new stage
-        let newStage = overId;
-        const overTask = tasks.find(t => t.id === overId);
-        if (overTask) newStage = overTask.stage; 
-
-        if (STAGES.find(s => s.id === newStage) || (overTask && overTask.stage)) {
-             const currentTask = tasks.find(t => t.id === activeId);
-             if (currentTask && currentTask.stage !== newStage) {
-                 setTasks(prev => prev.map(t => t.id === activeId ? { ...t, stage: newStage } : t));
-                 await updateDoc(doc(db, 'users', user.uid, 'fundraising_tasks', activeId), {
-                     stage: newStage,
-                     updatedAt: serverTimestamp()
-                 });
-             }
-        }
-    };
-
-    // Add New Task
-    const handleAddTask = async (stageId) => {
-        if (!newTaskInput.trim()) return;
+    const handleImport = async () => {
         try {
-            await addDoc(collection(db, 'users', user.uid, 'fundraising_tasks'), {
-                title: newTaskInput,
-                stage: stageId,
-                round: activeRound === 'ALL' ? 'PRE_SEED' : activeRound, // Default to current filter or Pre-seed
-                createdAt: serverTimestamp(),
-                priority: 'Normal'
+            setLoading(true);
+            const data = JSON.parse(jsonInput);
+            
+            // Handle both single object or array of strategies
+            const items = Array.isArray(data) ? data : [data];
+
+            const batchPromises = items.map(item => {
+                return addDoc(collection(db, 'investmentStrategies'), {
+                    title: item.title || "New Strategy",
+                    description: item.description || "",
+                    priority: item.priority || "MEDIUM", // CRITICAL, HIGH, MEDIUM
+                    status: 'ACTIVE',
+                    owner: user.email || 'CEO',
+                    dueDate: item.dueDate || "",
+                    category: "Fundraising",
+                    createdAt: serverTimestamp(),
+                    createdBy: user.uid
+                });
             });
-            setNewTaskInput('');
-            setIsAddingTo(null);
+
+            await Promise.all(batchPromises);
+            alert(`Successfully imported ${items.length} strategies!`);
+            onImportComplete();
+            onClose();
         } catch (error) {
-            console.error("Error adding task:", error);
+            alert("Invalid JSON. Please check the format.");
+            console.error(error);
+        } finally {
+            setLoading(false);
         }
     };
-
-    // Seed Cambridge Data (Intelligent Seeder)
-    const seedCambridgeTasks = async (roundKey) => {
-        const roundName = roundKey === 'PRE_SEED' ? 'Pre-Seed (Convertible Note)' : 'Series A (Equity)';
-        if (!window.confirm(`Load the Cambridge ${roundName} Checklist?`)) return;
-        
-        const template = CAMBRIDGE_TEMPLATES[roundKey];
-        const batchPromises = template.map(task => 
-            addDoc(collection(db, 'users', user.uid, 'fundraising_tasks'), {
-                ...task,
-                round: roundKey,
-                createdAt: serverTimestamp()
-            })
-        );
-        await Promise.all(batchPromises);
-    };
-
-    const handleDelete = async (id) => {
-        if(window.confirm("Delete this task?")) {
-            await deleteDoc(doc(db, 'users', user.uid, 'fundraising_tasks', id));
-        }
-    };
-
-    // Filter tasks based on active round
-    const visibleTasks = tasks.filter(t => activeRound === 'ALL' || t.round === activeRound || !t.round);
 
     return (
-        <div className="h-full flex flex-col bg-gray-50/50">
-            {/* Header / Toolbar */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 px-1 gap-4">
-                <div>
-                    <h2 className="text-xl font-black text-gray-800 flex items-center gap-2">
-                        <Briefcase className="text-orange-600" size={24} />
-                        Fundraising Roadmap
-                    </h2>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-wider">
-                        Cambridge "Pre-seed to Exit" Framework
-                    </p>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-gray-800 flex items-center">
+                        <Upload size={20} className="mr-2 text-blue-600"/> Import AI Strategy
+                    </h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
                 </div>
                 
-                {/* Round Filter & Load Buttons */}
-                <div className="flex flex-wrap gap-2 items-center">
-                    <div className="flex bg-white rounded-lg border border-gray-200 p-1 mr-2 shadow-sm">
-                        {['ALL', 'PRE_SEED', 'SERIES_A'].map(round => (
-                            <button
-                                key={round}
-                                onClick={() => setActiveRound(round)}
-                                className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${
-                                    activeRound === round 
-                                    ? 'bg-blue-100 text-blue-700' 
-                                    : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                                }`}
-                            >
-                                {round.replace('_', ' ')}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="flex gap-2">
-                        <Button onClick={() => seedCambridgeTasks('PRE_SEED')} variant="outline" className="text-[10px] h-8">
-                            <Sparkles size={12} className="mr-1" /> Load Pre-Seed
-                        </Button>
-                        <Button onClick={() => seedCambridgeTasks('SERIES_A')} variant="outline" className="text-[10px] h-8">
-                            <Layers size={12} className="mr-1" /> Load Series A
-                        </Button>
-                    </div>
+                <p className="text-sm text-gray-500 mb-2">Paste the JSON strategy block generated by Gemini here:</p>
+                <textarea 
+                    className="w-full h-48 p-3 border border-gray-200 rounded-lg text-xs font-mono bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder='[{"title": "Series A Prep", "priority": "CRITICAL", "description": "..."}]'
+                    value={jsonInput}
+                    onChange={(e) => setJsonInput(e.target.value)}
+                />
+                
+                <div className="flex justify-end gap-2 mt-4">
+                    <button onClick={onClose} className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-sm font-bold">Cancel</button>
+                    <button 
+                        onClick={handleImport} 
+                        disabled={loading || !jsonInput}
+                        className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+                    >
+                        {loading ? 'Importing...' : 'Import Strategies'}
+                    </button>
                 </div>
             </div>
-
-            {/* Kanban Board */}
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <div className="flex-1 flex gap-4 overflow-x-auto pb-4">
-                    {STAGES.map(stage => (
-                        <div key={stage.id} className={`flex-shrink-0 w-80 flex flex-col rounded-xl border ${stage.border} ${stage.color} h-full`}>
-                            {/* Column Header */}
-                            <div className="p-3 border-b border-black/5 flex justify-between items-center">
-                                <span className={`font-black text-xs uppercase tracking-wider ${stage.text}`}>
-                                    {stage.title}
-                                </span>
-                                <span className="text-[10px] font-bold bg-white px-2 py-0.5 rounded-full text-gray-400 shadow-sm">
-                                    {visibleTasks.filter(t => t.stage === stage.id).length}
-                                </span>
-                            </div>
-
-                            {/* Column Body */}
-                            <div className="flex-1 p-2 overflow-y-auto min-h-[100px]">
-                                <SortableContext 
-                                    id={stage.id} 
-                                    items={visibleTasks.filter(t => t.stage === stage.id).map(t => t.id)}
-                                    strategy={verticalListSortingStrategy}
-                                >
-                                    {visibleTasks.filter(t => t.stage === stage.id).map(task => (
-                                        <SortableTaskCard key={task.id} task={task} onDelete={handleDelete} />
-                                    ))}
-                                </SortableContext>
-
-                                {/* Add Task Input */}
-                                {isAddingTo === stage.id ? (
-                                    <div className="mt-2 bg-white p-2 rounded-lg shadow-sm border border-blue-200 animate-in fade-in slide-in-from-top-1">
-                                        <input 
-                                            autoFocus
-                                            className="w-full text-sm outline-none mb-2"
-                                            placeholder="Task name..." 
-                                            value={newTaskInput}
-                                            onChange={(e) => setNewTaskInput(e.target.value)}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleAddTask(stage.id)}
-                                        />
-                                        <div className="flex justify-end gap-2">
-                                            <button onClick={() => setIsAddingTo(null)} className="text-xs text-gray-400 hover:text-gray-600 font-bold uppercase">Cancel</button>
-                                            <button onClick={() => handleAddTask(stage.id)} className="text-xs bg-blue-600 text-white px-2 py-1 rounded font-bold uppercase">Add</button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <button 
-                                        onClick={() => setIsAddingTo(stage.id)}
-                                        className="w-full py-2 mt-2 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-black/5 rounded-lg transition-all text-xs font-bold uppercase tracking-wider border border-transparent hover:border-black/5"
-                                    >
-                                        <Plus size={14} className="mr-1"/> Add Task
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </DndContext>
         </div>
     );
 };
 
-export default FundraisingTaskBoard;
+// ==========================================
+// MAIN DASHBOARD COMPONENT
+// ==========================================
+const CEOInvestmentDashboard = ({ user }) => {
+  const [investors, setInvestors] = useState([]);
+  const [strategies, setStrategies] = useState([]);
+  const [activeTab, setActiveTab] = useState('pipeline');
+  const [showAddInvestor, setShowAddInvestor] = useState(false);
+  const [selectedInvestor, setSelectedInvestor] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false); // <--- New State for Modal
+  
+  // Filters
+  const [filterStage, setFilterStage] = useState('ALL');
+  const [filterRegion, setFilterRegion] = useState('ALL');
+  const [filterPriority, setFilterPriority] = useState('ALL');
+  
+  // Investment stages with progression
+  const STAGES = [
+    { id: 'RESEARCH', label: 'Research', color: 'bg-gray-200' },
+    { id: 'OUTREACH', label: 'Outreach', color: 'bg-blue-200' },
+    { id: 'MEETING', label: 'Meeting', color: 'bg-yellow-200' },
+    { id: 'DILIGENCE', label: 'Due Diligence', color: 'bg-orange-200' },
+    { id: 'TERM_SHEET', label: 'Term Sheet', color: 'bg-purple-200' },
+    { id: 'LEGAL', label: 'Legal/Closing', color: 'bg-green-200' },
+    { id: 'CLOSED', label: 'Closed Won', color: 'bg-green-500' },
+    { id: 'PASSED', label: 'Passed', color: 'bg-red-200' }
+  ];
+
+  const REGIONS = ['Philippines', 'United Kingdom', 'Malaysia', 'Southeast Asia', 'Global'];
+  const INVESTOR_TYPES = ['Venture Capital', 'Family Office', 'Strategic Corporate', 'Impact Investor', 'Revenue-Based Financing', 'Bank/Lender', 'Angel Investor'];
+
+  // Load investors from Firebase
+  useEffect(() => {
+    loadInvestors();
+    loadStrategies();
+  }, []);
+
+  const loadInvestors = async () => {
+    try {
+      const investorsRef = collection(db, 'investors');
+      const q = query(investorsRef, orderBy('lastContact', 'desc'));
+      const snapshot = await getDocs(q);
+      const investorData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setInvestors(investorData);
+    } catch (error) {
+      console.error('Error loading investors:', error);
+    }
+  };
+
+  const loadStrategies = async () => {
+    try {
+      const strategiesRef = collection(db, 'investmentStrategies');
+      const snapshot = await getDocs(strategiesRef);
+      const strategyData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setStrategies(strategyData);
+    } catch (error) {
+      console.error('Error loading strategies:', error);
+    }
+  };
+
+  // Calculate pipeline metrics
+  const metrics = {
+    totalPipeline: investors.reduce((sum, inv) => sum + (inv.amount || 0), 0),
+    weightedPipeline: investors.reduce((sum, inv) => {
+      const probability = getProbability(inv.stage);
+      return sum + (inv.amount || 0) * (probability / 100);
+    }, 0),
+    activeConversations: investors.filter(inv => 
+      ['OUTREACH', 'MEETING', 'DILIGENCE', 'TERM_SHEET', 'LEGAL'].includes(inv.stage)
+    ).length,
+    averageDaysInStage: calculateAvgDaysInStage(),
+    closedWon: investors.filter(inv => inv.stage === 'CLOSED').length,
+    closedAmount: investors.filter(inv => inv.stage === 'CLOSED')
+      .reduce((sum, inv) => sum + (inv.amount || 0), 0),
+    documentsShared: investors.reduce((sum, inv) => sum + (inv.documentsShared?.length || 0), 0)
+  };
+
+  function getProbability(stage) {
+    const probabilities = {
+      'RESEARCH': 5,
+      'OUTREACH': 10,
+      'MEETING': 25,
+      'DILIGENCE': 50,
+      'TERM_SHEET': 75,
+      'LEGAL': 90,
+      'CLOSED': 100,
+      'PASSED': 0
+    };
+    return probabilities[stage] || 0;
+  }
+
+  function calculateAvgDaysInStage() {
+    const active = investors.filter(inv => inv.stageEnteredDate);
+    if (active.length === 0) return 0;
+    
+    const totalDays = active.reduce((sum, inv) => {
+      const entered = new Date(inv.stageEnteredDate);
+      const now = new Date();
+      const days = Math.floor((now - entered) / (1000 * 60 * 60 * 24));
+      return sum + days;
+    }, 0);
+    
+    return Math.round(totalDays / active.length);
+  }
+
+  // Filter investors
+  const filteredInvestors = investors.filter(inv => {
+    if (filterStage !== 'ALL' && inv.stage !== filterStage) return false;
+    if (filterRegion !== 'ALL' && inv.region !== filterRegion) return false;
+    return true;
+  });
+
+  // Investor form component
+  const InvestorForm = ({ investor, onSave, onCancel }) => {
+    const [formData, setFormData] = useState(investor || {
+      name: '',
+      type: 'Venture Capital',
+      region: 'Philippines',
+      stage: 'RESEARCH',
+      amount: 0,
+      contactPerson: '',
+      email: '',
+      phone: '',
+      linkedin: '',
+      website: '',
+      notes: '',
+      focus: [],
+      ticketSize: '',
+      fit: 'MODERATE',
+      priority: 'MEDIUM',
+      lastContact: new Date().toISOString(),
+      stageEnteredDate: new Date().toISOString(),
+      documentsShared: [],
+      meetings: [],
+      nextAction: '',
+      nextActionDate: ''
+    });
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      try {
+        if (investor?.id) {
+          await updateDoc(doc(db, 'investors', investor.id), formData);
+        } else {
+          await addDoc(collection(db, 'investors'), formData);
+        }
+        loadInvestors();
+        onSave();
+      } catch (error) {
+        console.error('Error saving investor:', error);
+      }
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <h2 className="text-2xl font-bold mb-4">
+            {investor ? 'Edit Investor' : 'Add New Investor'}
+          </h2>
+          
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1">Investor Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Type *</label>
+                <select
+                  value={formData.type}
+                  onChange={(e) => setFormData({...formData, type: e.target.value})}
+                  className="w-full p-2 border rounded"
+                >
+                  {INVESTOR_TYPES.map(type => (
+                    <option key={type} value={type}>{type}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Region *</label>
+                <select
+                  value={formData.region}
+                  onChange={(e) => setFormData({...formData, region: e.target.value})}
+                  className="w-full p-2 border rounded"
+                >
+                  {REGIONS.map(region => (
+                    <option key={region} value={region}>{region}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Stage *</label>
+                <select
+                  value={formData.stage}
+                  onChange={(e) => setFormData({
+                    ...formData, 
+                    stage: e.target.value,
+                    stageEnteredDate: new Date().toISOString()
+                  })}
+                  className="w-full p-2 border rounded"
+                >
+                  {STAGES.map(stage => (
+                    <option key={stage.id} value={stage.id}>{stage.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Target Amount (USD)</label>
+                <input
+                  type="number"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({...formData, amount: parseFloat(e.target.value) || 0})}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Contact Person</label>
+                <input
+                  type="text"
+                  value={formData.contactPerson}
+                  onChange={(e) => setFormData({...formData, contactPerson: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">LinkedIn</label>
+                <input
+                  type="url"
+                  value={formData.linkedin}
+                  onChange={(e) => setFormData({...formData, linkedin: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Website</label>
+                <input
+                  type="url"
+                  value={formData.website}
+                  onChange={(e) => setFormData({...formData, website: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Ticket Size Range</label>
+                <input
+                  type="text"
+                  placeholder="e.g., $50k-$250k"
+                  value={formData.ticketSize}
+                  onChange={(e) => setFormData({...formData, ticketSize: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Fit Score</label>
+                <select
+                  value={formData.fit}
+                  onChange={(e) => setFormData({...formData, fit: e.target.value})}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="EXCELLENT">Excellent</option>
+                  <option value="VERY_GOOD">Very Good</option>
+                  <option value="GOOD">Good</option>
+                  <option value="MODERATE">Moderate</option>
+                  <option value="LOW">Low</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Priority</label>
+                <select
+                  value={formData.priority}
+                  onChange={(e) => setFormData({...formData, priority: e.target.value})}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="CRITICAL">Critical</option>
+                  <option value="HIGH">High</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LOW">Low</option>
+                </select>
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1">Next Action</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Send pitch deck, Schedule call"
+                  value={formData.nextAction}
+                  onChange={(e) => setFormData({...formData, nextAction: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Next Action Date</label>
+                <input
+                  type="date"
+                  value={formData.nextActionDate}
+                  onChange={(e) => setFormData({...formData, nextActionDate: e.target.value})}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-sm font-medium mb-1">Notes</label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                  rows={4}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Save Investor
+              </button>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
+  // Main dashboard render
+  return (
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold mb-2">CEO Investment Dashboard</h1>
+        <p className="text-gray-600">Target: $250k Convertible Note | Track investor pipeline and fundraising progress</p>
+      </div>
+
+      {/* Metrics Cards */}
+      <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="text-sm text-gray-600">Total Pipeline</div>
+          <div className="text-2xl font-bold">${metrics.totalPipeline.toLocaleString()}</div>
+          <div className="text-xs text-gray-500 mt-1">
+            Weighted: ${Math.round(metrics.weightedPipeline).toLocaleString()}
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="text-sm text-gray-600">Active Conversations</div>
+          <div className="text-2xl font-bold">{metrics.activeConversations}</div>
+          <div className="text-xs text-gray-500 mt-1">
+            Avg. {metrics.averageDaysInStage} days in stage
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="text-sm text-gray-600">Closed Won</div>
+          <div className="text-2xl font-bold text-green-600">
+            ${metrics.closedAmount.toLocaleString()}
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {metrics.closedWon} investor{metrics.closedWon !== 1 ? 's' : ''}
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg shadow">
+          <div className="text-sm text-gray-600">Documents Shared</div>
+          <div className="text-2xl font-bold">{metrics.documentsShared}</div>
+          <div className="text-xs text-gray-500 mt-1">
+            Across {investors.length} prospects
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white rounded-lg shadow mb-6">
+        <div className="flex border-b overflow-x-auto">
+          {['pipeline', 'roadmap', 'strategies', 'documents', 'analytics'].map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-3 font-medium capitalize whitespace-nowrap ${
+                activeTab === tab
+                  ? 'border-b-2 border-blue-600 text-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {tab === 'roadmap' ? 'Cambridge Roadmap' : tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Pipeline Tab */}
+        {activeTab === 'pipeline' && (
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex gap-4">
+                <select
+                  value={filterStage}
+                  onChange={(e) => setFilterStage(e.target.value)}
+                  className="p-2 border rounded"
+                >
+                  <option value="ALL">All Stages</option>
+                  {STAGES.map(stage => (
+                    <option key={stage.id} value={stage.id}>{stage.label}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={filterRegion}
+                  onChange={(e) => setFilterRegion(e.target.value)}
+                  className="p-2 border rounded"
+                >
+                  <option value="ALL">All Regions</option>
+                  {REGIONS.map(region => (
+                    <option key={region} value={region}>{region}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                onClick={() => setShowAddInvestor(true)}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                + Add Investor
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Name</th>
+                    <th className="px-4 py-2 text-left">Type</th>
+                    <th className="px-4 py-2 text-left">Region</th>
+                    <th className="px-4 py-2 text-left">Stage</th>
+                    <th className="px-4 py-2 text-right">Amount</th>
+                    <th className="px-4 py-2 text-left">Probability</th>
+                    <th className="px-4 py-2 text-left">Priority</th>
+                    <th className="px-4 py-2 text-left">Next Action</th>
+                    <th className="px-4 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredInvestors.map(investor => {
+                    const stage = STAGES.find(s => s.id === investor.stage);
+                    const probability = getProbability(investor.stage);
+                    
+                    return (
+                      <tr key={investor.id} className="border-t hover:bg-gray-50">
+                        <td className="px-4 py-3">
+                          <div className="font-medium">{investor.name}</div>
+                          <div className="text-sm text-gray-600">{investor.contactPerson}</div>
+                        </td>
+                        <td className="px-4 py-3 text-sm">{investor.type}</td>
+                        <td className="px-4 py-3 text-sm">{investor.region}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded text-xs ${stage?.color}`}>
+                            {stage?.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium">
+                          ${investor.amount?.toLocaleString() || 0}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full"
+                                style={{ width: `${probability}%` }}
+                              />
+                            </div>
+                            <span className="text-sm">{probability}%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            investor.priority === 'CRITICAL' ? 'bg-red-200' :
+                            investor.priority === 'HIGH' ? 'bg-orange-200' :
+                            investor.priority === 'MEDIUM' ? 'bg-yellow-200' :
+                            'bg-gray-200'
+                          }`}>
+                            {investor.priority}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="text-sm">{investor.nextAction}</div>
+                          <div className="text-xs text-gray-600">{investor.nextActionDate}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => {
+                              setSelectedInvestor(investor);
+                              setShowAddInvestor(true);
+                            }}
+                            className="text-blue-600 hover:underline text-sm"
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* --- NEW TAB: CAMBRIDGE ROADMAP --- */}
+        {activeTab === 'roadmap' && (
+             <div className="h-full min-h-[500px] p-4 bg-gray-50">
+                 <FundraisingTaskBoard user={user} />
+             </div>
+        )}
+
+        {/* Strategies Tab - WITH IMPORT BUTTON */}
+        {activeTab === 'strategies' && (
+          <div className="p-6">
+             <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-gray-700">Strategic Objectives</h3>
+                
+                {/* --- THE NEW IMPORT BUTTON --- */}
+                <button 
+                    onClick={() => setShowImportModal(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg text-sm font-bold transition-colors"
+                >
+                    <Upload size={16} /> Import from AI
+                </button>
+            </div>
+
+            <div className="grid gap-4">
+              {strategies.map(strategy => (
+                <div key={strategy.id} className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-all">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-lg text-gray-800">{strategy.title}</h3>
+                    <span className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-wider ${
+                      strategy.priority === 'CRITICAL' ? 'bg-red-100 text-red-700' :
+                      strategy.priority === 'HIGH' ? 'bg-orange-100 text-orange-700' :
+                      strategy.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-blue-50 text-blue-700'
+                    }`}>
+                      {strategy.priority}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3 leading-relaxed">{strategy.description}</p>
+                  <div className="flex gap-4 text-xs text-gray-400 font-medium border-t pt-3">
+                    <span>Category: {strategy.category}</span>
+                    <span>Due: {strategy.dueDate || 'No Date'}</span>
+                    <span>Owner: {strategy.owner}</span>
+                  </div>
+                </div>
+              ))}
+              {strategies.length === 0 && (
+                <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                    <p className="text-gray-400 font-medium">No strategies defined yet.</p>
+                    <button onClick={() => setShowImportModal(true)} className="text-blue-600 text-sm font-bold mt-2 hover:underline">
+                        Import one now
+                    </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Documents Tab */}
+        {activeTab === 'documents' && (
+          <div className="p-6">
+            <div className="mb-4">
+              <h3 className="font-bold mb-2">Investor Data Room</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Track which documents have been shared with each investor
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="border rounded-lg p-4">
+                <h4 className="font-medium mb-2">📊 Core Documents</h4>
+                <ul className="space-y-2 text-sm">
+                  <li>✅ Pitch Deck (v6.0)</li>
+                  <li>✅ Financial Model (R6)</li>
+                  <li>✅ Convertible Note Term Sheet</li>
+                  <li>✅ Cap Table</li>
+                  <li>⏳ Technical Whitepaper (draft)</li>
+                </ul>
+              </div>
+
+              <div className="border rounded-lg p-4">
+                <h4 className="font-medium mb-2">📋 Compliance & Legal</h4>
+                <ul className="space-y-2 text-sm">
+                  <li>✅ BOI-SIPP Certificate</li>
+                  <li>✅ UK Companies House Filing</li>
+                  <li>✅ PH SEC Registration</li>
+                  <li>⏳ Intercompany Agreement (pending)</li>
+                  <li>⏳ Due Diligence Package</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' && (
+          <div className="p-6">
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <h3 className="font-bold mb-4">Pipeline by Stage</h3>
+                {STAGES.filter(s => s.id !== 'PASSED').map(stage => {
+                  const count = investors.filter(inv => inv.stage === stage.id).length;
+                  const amount = investors
+                    .filter(inv => inv.stage === stage.id)
+                    .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+                  
+                  return (
+                    <div key={stage.id} className="mb-3">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>{stage.label}</span>
+                        <span className="font-medium">${amount.toLocaleString()}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-blue-600 h-2 rounded-full"
+                          style={{ width: `${(count / (investors.length || 1)) * 100}%` }}
+                        />
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1">{count} investor{count !== 1 ? 's' : ''}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div>
+                <h3 className="font-bold mb-4">Pipeline by Region</h3>
+                {REGIONS.map(region => {
+                  const count = investors.filter(inv => inv.region === region).length;
+                  const amount = investors
+                    .filter(inv => inv.region === region)
+                    .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+                  
+                  if (count === 0) return null;
+                  
+                  return (
+                    <div key={region} className="mb-3">
+                      <div className="flex justify-between text-sm mb-1">
+                        <span>{region}</span>
+                        <span className="font-medium">${amount.toLocaleString()}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-green-600 h-2 rounded-full"
+                          style={{ width: `${(count / investors.length) * 100}%` }}
+                        />
+                      </div>
+                      <div className="text-xs text-gray-600 mt-1">{count} investor{count !== 1 ? 's' : ''}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Investor Form Modal */}
+      {showAddInvestor && (
+        <InvestorForm
+          investor={selectedInvestor}
+          onSave={() => {
+            setShowAddInvestor(false);
+            setSelectedInvestor(null);
+          }}
+          onCancel={() => {
+            setShowAddInvestor(false);
+            setSelectedInvestor(null);
+          }}
+        />
+      )}
+
+      {/* --- NEW STRATEGY IMPORT MODAL --- */}
+      {showImportModal && (
+        <SimpleStrategyImportModal 
+            user={user} 
+            onClose={() => setShowImportModal(false)}
+            onImportComplete={() => {
+                loadStrategies(); // Reloads the strategy list
+            }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default CEOInvestmentDashboard;
