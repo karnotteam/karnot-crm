@@ -628,21 +628,24 @@ export default function App() {
                     />
                 )}
                 
-                {/* 3. OPPORTUNITY DETAIL */}
                 {activeView === 'opportunityDetail' && (
-                    <OpportunityDetailPage 
-                        opportunity={selectedOpportunity} 
-                        quotes={quotes} 
-                        onBack={() => setActiveView('funnel')} 
-                        onOpenQuote={handleEditQuote} 
-                        user={user} 
-                        companies={companies} 
-                        onAddQuote={() => { 
-                            setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); 
-                            setActiveView('calculator'); 
-                        }} 
-                    />
-                )}
+    <OpportunityDetailPage 
+        opportunity={selectedOpportunity} 
+        quotes={quotes} 
+        onBack={() => setActiveView('funnel')} 
+        onOpenQuote={handleEditQuote} 
+        user={user} 
+        companies={companies} 
+        onAddQuote={() => { 
+            setQuoteToEdit({ customer: { name: selectedOpportunity.customerName }, opportunityId: selectedOpportunity.id }); 
+            setActiveView('calculator'); 
+        }}
+        onEdit={(opp) => {  // ✅ ADD THIS
+            setSelectedOpportunity(opp);
+            setActiveView('funnel');
+        }}
+    />
+)}
 
                 {/* 4. OPERATIONS MODULES */}
                 {activeView === 'installEstimator' && (
