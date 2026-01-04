@@ -616,17 +616,18 @@ export default function App() {
                 
                 {/* 2. SALES FUNNEL */}
                 {activeView === 'funnel' && (
-                    <FunnelPage 
-                        opportunities={opportunities} 
-                        user={user} 
-                        quotes={quotes} 
-                        onOpenQuote={handleEditQuote} 
-                        onOpen={(opp) => { setSelectedOpportunity(opp); setActiveView('opportunityDetail'); }} 
-                        companies={companies} 
-                        contacts={contacts}
-                        appointments={appointments}
-                    />
-                )}
+    <FunnelPage 
+        opportunities={opportunities} 
+        user={user} 
+        quotes={quotes} 
+        onOpenQuote={handleEditQuote} 
+        onOpen={(opp) => { setSelectedOpportunity(opp); setActiveView('opportunityDetail'); }} 
+        companies={companies} 
+        contacts={contacts}
+        appointments={appointments}
+        initialEditOpportunity={selectedOpportunity}  // ✅ ADD THIS
+    />
+)}
                 
      {activeView === 'opportunityDetail' && (
     <OpportunityDetailPage 
