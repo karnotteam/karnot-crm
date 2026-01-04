@@ -437,53 +437,53 @@ console.log('Contact Email:', opportunity.contactEmail);
                 {/* RIGHT COLUMN - SIDEBAR */}
                 <div className="space-y-6">
                     
-                    {/* ✅ DECISION MAKER CARD - FIXED TO SHOW CONTACT INFO */}
-                    <Card className="bg-slate-900 text-white">
-                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-orange-400 mb-4 flex items-center gap-2">
-                            <User size={14}/> Decision Maker
-                        </h3>
-                        <div className="space-y-4">
-                            <div>
-                                <p className="text-lg font-black leading-none">
-                                    {opportunity.contactName || 'Contact Not Assigned'}
-                                </p>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-                                    Primary Contact
-                                </p>
-                            </div>
-                            <div className="pt-4 border-t border-slate-800 space-y-3">
-                                {opportunity.contactEmail ? (
-                                    <a 
-                                        href={`mailto:${opportunity.contactEmail}`} 
-                                        className="flex items-center gap-3 text-sm hover:text-orange-400 transition-colors"
-                                    >
-                                        <Mail size={16} className="text-slate-500"/>
-                                        <span className="truncate">{opportunity.contactEmail}</span>
-                                    </a>
-                                ) : (
-                                    <div className="flex items-center gap-3 text-sm text-slate-600">
-                                        <Mail size={16} className="text-slate-700"/>
-                                        <span className="italic">No Email Assigned</span>
-                                    </div>
-                                )}
-                                
-                                {opportunity.contactPhone ? (
-                                    <a 
-                                        href={`tel:${opportunity.contactPhone}`}
-                                        className="flex items-center gap-3 text-sm hover:text-orange-400 transition-colors"
-                                    >
-                                        <Phone size={16} className="text-slate-500"/>
-                                        <span>{opportunity.contactPhone}</span>
-                                    </a>
-                                ) : (
-                                    <div className="flex items-center gap-3 text-sm text-slate-600">
-                                        <Phone size={16} className="text-slate-700"/>
-                                        <span className="italic">No Phone Number</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </Card>
+                   {/* ✅ DECISION MAKER CARD - FIXED TEXT COLOR */}
+<Card className="bg-slate-900 text-white">
+    <h3 className="text-xs font-black uppercase tracking-[0.2em] text-orange-400 mb-4 flex items-center gap-2">
+        <User size={14}/> Decision Maker
+    </h3>
+    <div className="space-y-4">
+        <div>
+            <p className="text-lg font-black leading-none text-white">
+                {opportunity.contactName || 'Contact Not Assigned'}
+            </p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                Primary Contact
+            </p>
+        </div>
+        <div className="pt-4 border-t border-slate-800 space-y-3">
+            {opportunity.contactEmail ? (
+                <a 
+                    href={`mailto:${opportunity.contactEmail}`} 
+                    className="flex items-center gap-3 text-sm hover:text-orange-400 transition-colors text-slate-300"
+                >
+                    <Mail size={16} className="text-slate-500"/>
+                    <span className="truncate">{opportunity.contactEmail}</span>
+                </a>
+            ) : (
+                <div className="flex items-center gap-3 text-sm text-slate-500">
+                    <Mail size={16} className="text-slate-700"/>
+                    <span className="italic">No Email Assigned</span>
+                </div>
+            )}
+            
+            {opportunity.contactPhone ? (
+                <a 
+                    href={`tel:${opportunity.contactPhone}`}
+                    className="flex items-center gap-3 text-sm hover:text-orange-400 transition-colors text-slate-300"
+                >
+                    <Phone size={16} className="text-slate-500"/>
+                    <span>{opportunity.contactPhone}</span>
+                </a>
+            ) : (
+                <div className="flex items-center gap-3 text-sm text-slate-500">
+                    <Phone size={16} className="text-slate-700"/>
+                    <span className="italic">No Phone Number</span>
+                </div>
+            )}
+        </div>
+    </div>
+</Card>>
 
                     {/* ACTIVITY LOG */}
                     <Card className="max-h-[600px] flex flex-col">
