@@ -1,21 +1,22 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, orderBy } from 'firebase/firestore';
 
-const CEOInvestmentDashboard = () => {
+// --- NEW IMPORT: The Kanban Board we built ---
+import FundraisingTaskBoard from './FundraisingTaskBoard';
+
+const CEOInvestmentDashboard = ({ user }) => {
   const [investors, setInvestors] = useState([]);
   const [strategies, setStrategies] = useState([]);
   const [activeTab, setActiveTab] = useState('pipeline');
   const [showAddInvestor, setShowAddInvestor] = useState(false);
   const [selectedInvestor, setSelectedInvestor] = useState(null);
+  
+  // Filters
   const [filterStage, setFilterStage] = useState('ALL');
   const [filterRegion, setFilterRegion] = useState('ALL');
   const [filterPriority, setFilterPriority] = useState('ALL');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState('priority'); // priority, date, amount, name
-  const [selectedInvestors, setSelectedInvestors] = useState([]); // for bulk actions
-  const [viewMode, setViewMode] = useState('table'); // table or kanban
-
+  
   // Investment stages with progression
   const STAGES = [
     { id: 'RESEARCH', label: 'Research', color: 'bg-gray-200' },
@@ -422,18 +423,19 @@ const CEOInvestmentDashboard = () => {
 
       {/* Tabs */}
       <div className="bg-white rounded-lg shadow mb-6">
-        <div className="flex border-b">
-          {['pipeline', 'strategies', 'documents', 'analytics'].map(tab => (
+        <div className="flex border-b overflow-x-auto">
+          {/* --- ADDED 'roadmap' TAB HERE --- */}
+          {['pipeline', 'roadmap', 'strategies', 'documents', 'analytics'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-6 py-3 font-medium capitalize ${
+              className={`px-6 py-3 font-medium capitalize whitespace-nowrap ${
                 activeTab === tab
                   ? 'border-b-2 border-blue-600 text-blue-600'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              {tab}
+              {tab === 'roadmap' ? 'Cambridge Roadmap' : tab}
             </button>
           ))}
         </div>
@@ -555,6 +557,13 @@ const CEOInvestmentDashboard = () => {
           </div>
         )}
 
+        {/* --- NEW TAB: CAMBRIDGE ROADMAP --- */}
+        {activeTab === 'roadmap' && (
+             <div className="h-full min-h-[500px] p-4 bg-gray-50">
+                 <FundraisingTaskBoard user={user} />
+             </div>
+        )}
+
         {/* Strategies Tab */}
         {activeTab === 'strategies' && (
           <div className="p-6">
@@ -580,6 +589,9 @@ const CEOInvestmentDashboard = () => {
                   </div>
                 </div>
               ))}
+              {strategies.length === 0 && (
+                <p className="text-gray-500 text-center py-4">No strategies loaded.</p>
+              )}
             </div>
           </div>
         )}
@@ -641,7 +653,7 @@ const CEOInvestmentDashboard = () => {
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
                           className="bg-blue-600 h-2 rounded-full"
-                          style={{ width: `${(count / investors.length) * 100}%` }}
+                          style={{ width: `${(count / (investors.length || 1)) * 100}%` }}
                         />
                       </div>
                       <div className="text-xs text-gray-600 mt-1">{count} investor{count !== 1 ? 's' : ''}</div>
