@@ -11,7 +11,16 @@ import {
 } from "firebase/firestore";
 import { Card, Button, Section, Input, Textarea } from '../data/constants.jsx';
 
-const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, onOpenQuote, user, companies = [] }) => {
+const OpportunityDetailPage = ({ 
+    opportunity, 
+    quotes = [], 
+    onBack, 
+    onAddQuote, 
+    onOpenQuote, 
+    user, 
+    companies = [],
+    onEdit // ✅ NEW: Add onEdit prop to trigger the edit modal
+}) => {
     
     const [notes, setNotes] = useState(opportunity?.notes || []); 
     const [newNoteText, setNewNoteText] = useState('');
@@ -240,7 +249,12 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                 <Button onClick={onBack} variant="secondary" className="group">
                     <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform"/> Back to Funnel
                 </Button>
-                <Button onClick={() => alert('Edit feature coming soon!')} variant="primary" className="shadow-lg shadow-orange-100">
+                {/* ✅ FIXED: Now calls onEdit instead of showing alert */}
+                <Button 
+                    onClick={() => onEdit && onEdit(opportunity)} 
+                    variant="primary" 
+                    className="shadow-lg shadow-orange-100"
+                >
                     <Edit size={16} className="mr-2"/> Edit Lead Details
                 </Button>
             </div>
@@ -420,14 +434,50 @@ const OpportunityDetailPage = ({ opportunity, quotes = [], onBack, onAddQuote, o
                 {/* RIGHT COLUMN - SIDEBAR */}
                 <div className="space-y-6">
                     
-                    {/* DECISION MAKER CARD */}
+                    {/* ✅ DECISION MAKER CARD - FIXED TO SHOW CONTACT INFO */}
                     <Card className="bg-slate-900 text-white">
-                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-orange-400 mb-4 flex items-center gap-2"><User size={14}/> Decision Maker</h3>
+                        <h3 className="text-xs font-black uppercase tracking-[0.2em] text-orange-400 mb-4 flex items-center gap-2">
+                            <User size={14}/> Decision Maker
+                        </h3>
                         <div className="space-y-4">
-                            <div><p className="text-lg font-black leading-none">{opportunity.contactName || 'Unassigned'}</p><p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Primary Contact</p></div>
+                            <div>
+                                <p className="text-lg font-black leading-none">
+                                    {opportunity.contactName || 'Contact Not Assigned'}
+                                </p>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                                    Primary Contact
+                                </p>
+                            </div>
                             <div className="pt-4 border-t border-slate-800 space-y-3">
-                                <a href={`mailto:${opportunity.contactEmail}`} className="flex items-center gap-3 text-sm hover:text-orange-400 transition-colors"><Mail size={16} className="text-slate-500"/><span className="truncate">{opportunity.contactEmail || 'No Email'}</span></a>
-                                <div className="flex items-center gap-3 text-sm"><Phone size={16} className="text-slate-500"/><span>{opportunity.contactPhone || 'No Phone'}</span></div>
+                                {opportunity.contactEmail ? (
+                                    <a 
+                                        href={`mailto:${opportunity.contactEmail}`} 
+                                        className="flex items-center gap-3 text-sm hover:text-orange-400 transition-colors"
+                                    >
+                                        <Mail size={16} className="text-slate-500"/>
+                                        <span className="truncate">{opportunity.contactEmail}</span>
+                                    </a>
+                                ) : (
+                                    <div className="flex items-center gap-3 text-sm text-slate-600">
+                                        <Mail size={16} className="text-slate-700"/>
+                                        <span className="italic">No Email Assigned</span>
+                                    </div>
+                                )}
+                                
+                                {opportunity.contactPhone ? (
+                                    <a 
+                                        href={`tel:${opportunity.contactPhone}`}
+                                        className="flex items-center gap-3 text-sm hover:text-orange-400 transition-colors"
+                                    >
+                                        <Phone size={16} className="text-slate-500"/>
+                                        <span>{opportunity.contactPhone}</span>
+                                    </a>
+                                ) : (
+                                    <div className="flex items-center gap-3 text-sm text-slate-600">
+                                        <Phone size={16} className="text-slate-700"/>
+                                        <span className="italic">No Phone Number</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </Card>
