@@ -129,11 +129,11 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
                 ...initialData.commercial 
             });
             setDocControl({ 
-    revision: 'A', 
-    paymentTerms: '50% Down Payment upon Order Confirmation\n40% upon Delivery to Site\n10% upon Commissioning or 45 days after delivery (whichever comes sooner)', 
-    ...initialData.docControl, 
-    quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber 
-});
+                revision: 'A', 
+                paymentTerms: '50% Down Payment upon Order Confirmation\n40% upon Delivery to Site\n10% upon Commissioning or 45 days after delivery (whichever comes sooner)', 
+                ...initialData.docControl, 
+                quoteNumber: initialData.docControl?.quoteNumber || nextQuoteNumber 
+            });
             setCosting({ 
                 forexRate: 58.50, 
                 transportCost: 0, 
@@ -374,14 +374,20 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
             </div>
         </div>`;
 
-        // Line Items HTML
+        // ✅ FIXED: Line Items HTML with proper formatting for manual items
         let lineItemsHTML = allItems.map(p => {
             const unitPrice = docGeneration.generateInPHP ? (p.salesPriceUSD || p.priceUSD || 0) * costing.forexRate : (p.salesPriceUSD || p.priceUSD || 0);
             const lineTotal = unitPrice * (p.quantity || 1);
+            
+            // Title always bold
             let description = `<strong>${p.name}</strong>`;
-            if (p.specs) {
-                description += `<br><span style="color:#666; font-size:12px; font-style:italic;">${p.specs.replace(/\n/g, "<br>")}</span>`;
+            
+            // Add specs/description in italic if they exist
+            const specsText = p.specs || '';
+            if (specsText && specsText.trim()) {
+                description += `<br><span style="color:#666; font-size:12px; font-style:italic;">${specsText.replace(/\n/g, "<br>")}</span>`;
             }
+            
             return `<tr>
                 <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb;">${description}</td>
                 <td style="padding:12px 8px; border-bottom:1px solid #e5e7eb; text-align:center;">${p.quantity || 1}</td>
@@ -546,30 +552,30 @@ const QuoteCalculator = ({ onSaveQuote, nextQuoteNumber, initialData = null, com
         const companyId = customer.id || (companies?.find(c => c.companyName === customer.name)?.id) || '';
 
         const newQuote = {
-    id: quoteId,
-    customer: { ...customer, id: companyId },
-    commercial,
-    docControl,
-    costing,
-    docGeneration,
-    selectedProducts,
-    manualItems,
-    finalSalesPrice: quoteTotals.finalSalesPrice,
-    totalCost: quoteTotals.costSubtotalUSD, 
-    grossMarginAmount: quoteTotals.grossMarginAmount,
-    grossMarginPercentage: quoteTotals.grossMarginPercentage,
-    status: initialData?.status || 'DRAFT',
-    createdAt: initialData?.createdAt || new Date().toISOString(),
-    lastModified: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
-    opportunityId: opportunityId || null, 
-    companyId: companyId,
-    customerName: customer.name,
-   boiActivity: true // ← BOI REGISTERED ACTIVITY (Natural Refrigerant Systems)
-};
+            id: quoteId,
+            customer: { ...customer, id: companyId },
+            commercial,
+            docControl,
+            costing,
+            docGeneration,
+            selectedProducts,
+            manualItems,
+            finalSalesPrice: quoteTotals.finalSalesPrice,
+            totalCost: quoteTotals.costSubtotalUSD, 
+            grossMarginAmount: quoteTotals.grossMarginAmount,
+            grossMarginPercentage: quoteTotals.grossMarginPercentage,
+            status: initialData?.status || 'DRAFT',
+            createdAt: initialData?.createdAt || new Date().toISOString(),
+            lastModified: serverTimestamp ? serverTimestamp() : new Date().toISOString(),
+            opportunityId: opportunityId || null, 
+            companyId: companyId,
+            customerName: customer.name,
+            boiActivity: true
+        };
 
-console.log("Saving quote:", newQuote);
-onSaveQuote(newQuote);
-};  // ← This closes the handleSave function
+        console.log("Saving quote:", newQuote);
+        onSaveQuote(newQuote);
+    };
 
     const productCategories = useMemo(() => {
         return filteredProducts.reduce((acc, p) => {
@@ -965,18 +971,29 @@ onSaveQuote(newQuote);
                 </Section>
             </div>
 
-            {/* MANUAL ITEMS (UPDATED WITH HIDDEN COST) */}
+            {/* ✅ UPDATED: MANUAL ITEMS - NOW WITH SPECS FIELD */}
             <div className="mt-12 bg-slate-900 p-8 rounded-[3rem] text-white">
                 <h3 className="text-xl font-black uppercase tracking-tighter mb-6 flex items-center gap-2">
                     <PlusCircle className="text-orange-500"/> Custom Line Items
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div className="md:col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                    <div>
                         <Input 
-                            label={<span className="text-gray-400">Description</span>} 
+                            label={<span className="text-gray-400">Item Title</span>} 
                             value={manualItemInput.name} 
                             onChange={e => setManualItemInput({...manualItemInput, name: e.target.value})} 
                             className="bg-slate-800 border-slate-700 text-white" 
+                            placeholder="e.g., Custom AHU"
+                        />
+                    </div>
+                    <div className="md:col-span-2">
+                        <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block">Description (Optional)</label>
+                        <textarea
+                            rows="2"
+                            value={manualItemInput.specs}
+                            onChange={e => setManualItemInput({...manualItemInput, specs: e.target.value})}
+                            className="w-full p-2 bg-slate-800 border border-slate-700 rounded-xl text-white text-sm resize-none"
+                            placeholder="Details about this item..."
                         />
                     </div>
                     <div>
@@ -988,7 +1005,6 @@ onSaveQuote(newQuote);
                             className="bg-slate-800 border-slate-700 text-white" 
                         />
                     </div>
-                    {/* NEW HIDDEN COST INPUT */}
                     <div>
                         <Input 
                             label={<span className="text-gray-400">USD Cost (Hidden)</span>} 
@@ -1008,8 +1024,13 @@ onSaveQuote(newQuote);
                 {manualItems.length > 0 && (
                     <div className="mt-8 space-y-3">
                         {manualItems.map((item, index) => (
-                            <div key={item.id} className="flex justify-between items-center bg-slate-800 p-4 rounded-2xl border border-slate-700">
-                                <span className="font-bold">{item.name}</span>
+                            <div key={item.id} className="flex justify-between items-start bg-slate-800 p-4 rounded-2xl border border-slate-700">
+                                <div className="flex-1">
+                                    <p className="font-bold">{item.name}</p>
+                                    {item.specs && (
+                                        <p className="text-xs text-gray-400 mt-1 italic">{item.specs}</p>
+                                    )}
+                                </div>
                                 <div className="flex items-center gap-4">
                                     <span className="font-mono text-orange-400">$ {item.priceUSD.toLocaleString()}</span>
                                     <span className="text-xs text-gray-500">(Cost: ${item.costPriceUSD?.toLocaleString()})</span>
