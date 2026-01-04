@@ -701,14 +701,15 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
 // ==========================================
 // MAIN FUNNEL PAGE COMPONENT
 // ==========================================
-const FunnelPage = ({ opportunities, user, onOpen, companies, contacts, appointments = [] }) => { 
-    const [showModal, setShowModal] = useState(false);
-    const [editingOpportunity, setEditingOpportunity] = useState(null);
-    const [quotes, setQuotes] = useState([]);
-    const [loadingQuotes, setLoadingQuotes] = useState(true);
-    const [showEmailModal, setShowEmailModal] = useState(false);
-    const [emailOpportunity, setEmailOpportunity] = useState(null);
-    const [showDuplicateCleaner, setShowDuplicateCleaner] = useState(false);
+const FunnelPage = ({ 
+    opportunities, 
+    user, 
+    onOpen, 
+    companies, 
+    contacts, 
+    appointments = [],
+    initialEditOpportunity = null  // ✅ ADD THIS
+}) => {
     
     const STAGES = STAGE_ORDER;
 
