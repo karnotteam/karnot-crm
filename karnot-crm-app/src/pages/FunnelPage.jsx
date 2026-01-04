@@ -580,35 +580,35 @@ const NewOpportunityModal = ({ onClose, onSave, opportunityToEdit, companies, co
     };
 
     const handleSave = async () => {
-    const selectedCompany = companies.find(c => c.id === companyId);
-    const selectedContact = contacts.find(c => c.id === contactId);
+        const selectedCompany = companies.find(c => c.id === companyId);
+        const selectedContact = contacts.find(c => c.id === contactId);
 
-    if (!selectedCompany) {
-        alert('Please select a valid company.');
-        return;
-    }
-    
-    if (!selectedContact) {
-        alert('Please select a valid contact.');
-        return;
-    }
-    
-    const oppData = {
-        companyId: selectedCompany.id,
-        customerName: selectedCompany.companyName,
-        customerAddress: selectedCompany.address || '',
-        customerTIN: selectedCompany.tin || '',
-        project,
-        estimatedValue: Number(estimatedValue),
-        probability: Number(probability),
-        contactId: selectedContact.id,
-        contactName: `${selectedContact.firstName} ${selectedContact.lastName}`,
-        contactEmail: selectedContact.email,
-        contactPhone: selectedContact.phone || selectedContact.mobile || '', // ✅ ADD THIS LINE
+        if (!selectedCompany) {
+            alert('Please select a valid company.');
+            return;
+        }
+        
+        if (!selectedContact) {
+            alert('Please select a valid contact.');
+            return;
+        }
+        
+        const oppData = {
+            companyId: selectedCompany.id,
+            customerName: selectedCompany.companyName,
+            customerAddress: selectedCompany.address || '',
+            customerTIN: selectedCompany.tin || '',
+            project,
+            estimatedValue: Number(estimatedValue),
+            probability: Number(probability),
+            contactId: selectedContact.id,
+            contactName: `${selectedContact.firstName} ${selectedContact.lastName}`,
+            contactEmail: selectedContact.email,
+            contactPhone: selectedContact.phone || selectedContact.mobile || '',
+        };
+        
+        onSave(oppData);
     };
-    
-    onSave(oppData);
-};
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 flex justify-center items-center p-4">
@@ -708,8 +708,15 @@ const FunnelPage = ({
     companies, 
     contacts, 
     appointments = [],
-    initialEditOpportunity = null  // ✅ ADD THIS
-}) => {
+    initialEditOpportunity = null
+}) => { 
+    const [showModal, setShowModal] = useState(false);
+    const [editingOpportunity, setEditingOpportunity] = useState(null);
+    const [quotes, setQuotes] = useState([]);
+    const [loadingQuotes, setLoadingQuotes] = useState(true);
+    const [showEmailModal, setShowEmailModal] = useState(false);
+    const [emailOpportunity, setEmailOpportunity] = useState(null);
+    const [showDuplicateCleaner, setShowDuplicateCleaner] = useState(false);
     
     const STAGES = STAGE_ORDER;
 
@@ -736,6 +743,13 @@ const FunnelPage = ({
 
         fetchQuotes();
     }, [user]);
+
+    // ✅ AUTO-OPEN EDIT MODAL IF COMING FROM DETAIL VIEW
+    useEffect(() => {
+        if (initialEditOpportunity) {
+            handleOpenEditModal(initialEditOpportunity);
+        }
+    }, [initialEditOpportunity]);
 
     const getQuotesForOpportunity = (opportunityId) => {
         return quotes.filter(quote => quote.opportunityId === opportunityId);
@@ -819,13 +833,13 @@ const FunnelPage = ({
         }
     };
 
-   const handleSave = (oppDataFromModal) => {
-    if (editingOpportunity) {
-        handleUpdateFullOpportunity(oppDataFromModal);
-    } else {
-        handleSaveOpportunity(oppDataFromModal);
-    }
-};
+    const handleSave = (oppDataFromModal) => {
+        if (editingOpportunity) {
+            handleUpdateFullOpportunity(oppDataFromModal);
+        } else {
+            handleSaveOpportunity(oppDataFromModal);
+        }
+    };
 
     const handleOpenNewModal = () => {
         setEditingOpportunity(null);
