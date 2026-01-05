@@ -624,6 +624,22 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
             {/* Results Report */}
             {showReport && results && (
                 <div id="proposal-report" className="bg-white rounded-xl shadow-lg border-2 border-orange-500 p-8 mb-6">
+                    {/* PDF-specific styling */}
+                    <style>{`
+                        @media print {
+                            .no-print { display: none !important; }
+                            .page-break-after { page-break-after: always !important; }
+                            .page-break-before { page-break-before: always !important; }
+                            .no-break { page-break-inside: avoid !important; }
+                            #proposal-report { 
+                                box-shadow: none !important; 
+                                border: none !important;
+                                margin: 0 !important;
+                                padding: 20px !important;
+                            }
+                        }
+                    `}</style>
+
                     <h3 className="text-2xl font-bold text-center text-gray-800 mb-6 border-b-2 border-orange-500 pb-3">
                         Project Proposal: Warm Room Electrification
                     </h3>
@@ -741,7 +757,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                             <Button 
                                 variant="secondary" 
                                 onClick={() => setShowEnterpriseDetails(!showEnterpriseDetails)}
-                                className="w-full flex items-center justify-center gap-2"
+                                className="w-full flex items-center justify-center gap-2 no-print"
                             >
                                 {showEnterpriseDetails ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
                                 {showEnterpriseDetails ? 'Hide' : 'Show'} Detailed Financials
@@ -811,7 +827,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                                 <Button 
                                     variant="secondary" 
                                     onClick={() => setShowCalculations(!showCalculations)}
-                                    className="ml-4 text-sm flex items-center gap-1"
+                                    className="ml-4 text-sm flex items-center gap-1 no-print"
                                 >
                                     {showCalculations ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                                     {showCalculations ? 'Hide' : 'Show'} Math
@@ -1017,7 +1033,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="mt-6 flex gap-3 justify-end">
+                    <div className="mt-6 flex gap-3 justify-end no-print">
                         <Button
                             onClick={downloadPDF}
                             variant="secondary"
@@ -1036,7 +1052,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                 </div>
             )}
 
-            {/* Input Form - CONTINUES EXACTLY AS BEFORE... */}
+            {/* Input Form */}
             {!showReport && (
                 <div className="bg-white rounded-xl shadow-lg p-8">
                     {/* ENTERPRISE ROI TOGGLE */}
@@ -1310,7 +1326,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
 };
 
 // Helper Input Component
-const InputField = ({ label, value, onChange, type = "number", step = "1", disabled = false }) => (
+const InputField = ({ label, value, onChange, type = "number", step = "1", disabled = false, min, max }) => (
     <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
         <input
@@ -1319,6 +1335,8 @@ const InputField = ({ label, value, onChange, type = "number", step = "1", disab
             onChange={onChange}
             step={step}
             disabled={disabled}
+            min={min}
+            max={max}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:bg-gray-200 disabled:text-gray-600"
         />
     </div>
