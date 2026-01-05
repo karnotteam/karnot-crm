@@ -3,6 +3,7 @@ import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { Button } from '../data/constants.jsx';
 import { ArrowLeft, Calculator, Flame, AlertCircle, CheckCircle, Download, TrendingUp, DollarSign, Leaf, Award, Target, BarChart3, ChevronDown, ChevronUp } from 'lucide-react';
+import html2pdf from 'html2pdf.js';
 
 const CONFIG = {
     AIR_DENSITY_KG_M3: 1.2,
@@ -544,6 +545,40 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
+    const downloadPDF = () => {
+        const element = document.getElementById('proposal-report');
+        
+        if (!element) {
+            alert('Please generate a proposal first!');
+            return;
+        }
+        
+        const opt = {
+            margin: [10, 10, 10, 10],
+            filename: `Nestle_Warm_Room_Proposal_${new Date().toISOString().split('T')[0]}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { 
+                scale: 2,
+                useCORS: true,
+                letterRendering: true
+            },
+            jsPDF: { 
+                unit: 'mm', 
+                format: 'a4', 
+                orientation: 'portrait',
+                compress: true
+            },
+            pagebreak: { 
+                mode: ['avoid-all', 'css', 'legacy'],
+                before: '.page-break-before',
+                after: '.page-break-after',
+                avoid: ['tr', '.no-break']
+            }
+        };
+        
+        html2pdf().set(opt).from(element).save();
+    };
+
     const fmt = (n, decimals = 0) => {
         if (n === null || n === undefined || isNaN(n)) return '0';
         return Number(n).toLocaleString(undefined, { 
@@ -588,7 +623,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
 
             {/* Results Report */}
             {showReport && results && (
-                <div className="bg-white rounded-xl shadow-lg border-2 border-orange-500 p-8 mb-6">
+                <div id="proposal-report" className="bg-white rounded-xl shadow-lg border-2 border-orange-500 p-8 mb-6">
                     <h3 className="text-2xl font-bold text-center text-gray-800 mb-6 border-b-2 border-orange-500 pb-3">
                         Project Proposal: Warm Room Electrification
                     </h3>
@@ -615,7 +650,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
 
                     {/* ENTERPRISE ROI RESULTS */}
                     {results.enterpriseROI && (
-                        <div className="mb-6 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-300">
+                        <div className="mb-6 bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-xl border-2 border-blue-300 page-break-after">
                             <div className="flex items-center gap-2 mb-4">
                                 <Target className="text-blue-600" size={28}/>
                                 <h3 className="text-2xl font-bold text-blue-900">Enterprise ROI Analysis</h3>
@@ -730,7 +765,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                     )}
 
                     {/* System Summary */}
-                    <div className="mb-6">
+                    <div className="mb-6 page-break-before">
                         <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
                             <Calculator size={20} className="text-orange-600" />
                             1. Recommended System & Heating Loads
@@ -875,7 +910,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                     </div>
 
                     {/* Financial Summary */}
-                    <div className="mb-6">
+                    <div className="mb-6 no-break">
                         <h4 className="text-xl font-semibold text-gray-800 mb-4 flex items-center gap-2">
                             <DollarSign size={20} className="text-orange-600" />
                             2. Financial Summary & ROI
@@ -984,12 +1019,12 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                     {/* Action Buttons */}
                     <div className="mt-6 flex gap-3 justify-end">
                         <Button
-                            onClick={() => window.print()}
+                            onClick={downloadPDF}
                             variant="secondary"
                             className="flex items-center gap-2"
                         >
                             <Download size={16} />
-                            Print / Save PDF
+                            Download PDF
                         </Button>
                         <Button
                             onClick={() => setShowReport(false)}
@@ -1001,7 +1036,7 @@ const WarmRoomCalc = ({ setActiveView, user }) => {
                 </div>
             )}
 
-            {/* Input Form */}
+            {/* Input Form - CONTINUES EXACTLY AS BEFORE... */}
             {!showReport && (
                 <div className="bg-white rounded-xl shadow-lg p-8">
                     {/* ENTERPRISE ROI TOGGLE */}
