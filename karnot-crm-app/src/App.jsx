@@ -215,13 +215,14 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'investmentEmails', label: 'Email Templates', icon: Mail }
     ];
 
-    // Calculators Menu
-    const calculatorsMenu = [
-        { view: 'calculatorsHub', label: 'Calculator Hub', icon: Calculator },
-        { view: 'heatPumpCalc', label: 'Heat Pump ROI', icon: Calculator },
-        { view: 'warmRoomCalc', label: 'Warm Room', icon: Calculator },
-        { view: 'coldRoomCalc', label: 'Cold Room', icon: Calculator } 
-    ];
+   // Calculators Menu
+const calculatorsMenu = [
+    { view: 'calculatorsHub', label: 'Calculator Hub', icon: Calculator },
+    { view: 'heatPumpCalc', label: 'Heat Pump ROI', icon: Calculator },
+    { view: 'warmRoomCalc', label: 'Warm Room', icon: Calculator },
+    { view: 'coldRoomCalc', label: 'Cold Room', icon: Calculator },
+    { view: 'rsrhCalc', label: 'RSRH Cattle', icon: Target, badge: 'NEW' }  // ← ADD THIS LINE
+];
 
     return (
         <header className="bg-white shadow-md sticky top-0 z-50 border-b-2 border-orange-500">
