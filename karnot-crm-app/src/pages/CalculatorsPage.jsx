@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '../data/constants.jsx';
-import { Calculator, Sun, Droplets, Wind, Zap, Flame, ArrowRight, Snowflake } from 'lucide-react';
+import { Calculator, Sun, Droplets, Wind, Zap, Flame, ArrowRight, Snowflake, Target } from 'lucide-react';
 
 const CalculatorsPage = ({ setActiveView }) => {
     const tools = [
@@ -26,11 +26,14 @@ const CalculatorsPage = ({ setActiveView }) => {
             status: 'Ready'
         },
         {
-            id: 'solarCalc',
-            title: 'Solar PV Sizing',
-            description: 'Estimate panel count and inverter size based on roof area and daily load.',
-            icon: <Sun className="text-yellow-500" size={32} />,
-            status: 'Coming Soon'
+            {
+    id: 'rsrhCalc',
+    title: 'RSRH Cattle Finishing',
+    description: 'Joint venture ROI calculator for HydroGreen fodder production and pre-slaughter cattle conditioning in Philippines.',
+    icon: <Target className="text-green-600" size={32} />,
+    status: 'Ready',
+    badge: 'Philippines'
+}
         },
         {
             id: 'poolCalc',
