@@ -52,9 +52,9 @@ const RSRHCalculator = () => {
 
   // ==================== CONSTANTS ====================
   const CLIMATE_DATA = {
-    pangasinan: { name: 'Pangasinan', lowC: 24, highC: 34 },
-    bulacan: { name: 'Bulacan', lowC: 23, highC: 35 },
-    pampanga: { name: 'Pampanga', lowC: 23, highC: 36 }
+    pangasinan: { name: 'Pangasinan', lowC: 24, highC: 34, hr_low_gr_lb: 120, hr_high_gr_lb: 180 },
+    bulacan: { name: 'Bulacan', lowC: 23, highC: 35, hr_low_gr_lb: 115, hr_high_gr_lb: 185 },
+    pampanga: { name: 'Pampanga', lowC: 23, highC: 36, hr_low_gr_lb: 115, hr_high_gr_lb: 190 }
   };
 
   const CATTLE_PERFORMANCE = {
@@ -77,6 +77,17 @@ const RSRHCalculator = () => {
       Auger: 0.96,
       Pumps: 3.36,
       Misc: 1.2
+    },
+    THERMAL: {
+      INSIDE_TEMP_F: 70, // 21°C target
+      INSIDE_RH_PERCENT: 75, // 75% RH target (CRITICAL!)
+      HEATING_COP: 3.5,
+      COOLING_COP: 2.8,
+      SAFETY_FACTOR: 1.1,
+      HRV_EFFICIENCY: 0.75, // Heat recovery
+      U_VALUE_WALLS_BTU: 0.042, // Well-insulated
+      U_VALUE_CEILING_BTU: 0.042,
+      AIR_CHANGES_PER_HOUR: 0.5
     }
   };
 
@@ -114,40 +125,114 @@ const RSRHCalculator = () => {
     ];
   };
 
+  // ==================== PSYCHROMETRIC CALCULATIONS ====================
+  const getPsat_F = (T_F) => {
+    // Antoine equation for saturation pressure
+    const T_C = (T_F - 32) * 5 / 9;
+    const P_mmHg = Math.pow(10, 8.07131 - (1730.63 / (233.426 + T_C)));
+    return P_mmHg / 51.715; // Convert mmHg to psi
+  };
+
+  const getW_gr_lb = (T_F, RH_percent) => {
+    // Calculate humidity ratio in grains/lb at given temp and RH
+    const P_atm_psi = 14.696;
+    const P_sat = getPsat_F(T_F);
+    const P_v = P_sat * (RH_percent / 100);
+    if (P_v >= P_atm_psi) return getW_gr_lb(T_F, 99.9);
+    const W_lb_lb = 0.622 * (P_v / (P_atm_psi - P_v));
+    return W_lb_lb * 7000; // Convert to grains/lb
+  };
+
+  const C_to_F = (c) => (c * 9 / 5) + 32;
+  const F_to_C = (f) => (f - 32) * 5 / 9;
+
   // ==================== ENGINEERING CALCULATIONS ====================
   const calculateHeatLoad = () => {
     const W = buildingWidth;
     const L = buildingLength;
     const H = buildingHeight;
     
-    // Surface area
-    const wallArea = (L * H * 2) + (W * H * 2);
-    const roofArea = L * W;
-    const totalArea = wallArea + roofArea;
+    // Convert to imperial for calculations (industry standard)
+    const W_ft = W * 3.28084;
+    const L_ft = L * 3.28084;
+    const H_ft = H * 3.28084;
     
-    // Temperature differential
-    const deltaT = targetTemp - lowTemp;
+    // Surface areas
+    const wallArea_ft2 = (L_ft * H_ft * 2) + (W_ft * H_ft * 2);
+    const roofArea_ft2 = L_ft * W_ft;
+    const volume_ft3 = L_ft * W_ft * H_ft;
     
-    // Conduction load (simplified)
-    // U-value assumed ~0.3 W/m²K for insulated structure
-    const conductionLoadW = totalArea * 0.3 * deltaT * 1.2; // 20% safety factor
+    // Temperature differentials (°F)
+    const insideTemp_F = SPECS.THERMAL.INSIDE_TEMP_F;
+    const lowTemp_F = C_to_F(lowTemp);
+    const highTemp_F = C_to_F(highTemp);
+    const deltaT_heat = insideTemp_F - lowTemp_F;
+    const deltaT_cool = highTemp_F - insideTemp_F;
     
-    // Ventilation load
-    const cfmFresh = dgsUnits * 500; // CFM per unit
-    const m3hFresh = cfmFresh * 1.699; // Convert to m³/h
-    const ventLoadW = (m3hFresh / 3.6) * 1.2 * 1005 * deltaT; // Air density * Cp * deltaT
+    // HEATING LOAD CALCULATION
+    // 1. Conduction through walls/roof
+    const conductionHeat_BTUhr = (wallArea_ft2 * SPECS.THERMAL.U_VALUE_WALLS_BTU + 
+                                   roofArea_ft2 * SPECS.THERMAL.U_VALUE_CEILING_BTU) * deltaT_heat;
     
-    // Internal gains (offset)
-    const processGainW = dgsUnits * 6000; // ~20,000 BTU/hr = 6kW
+    // 2. Fresh air ventilation (sensible)
+    const freshAirCFM = (volume_ft3 * SPECS.THERMAL.AIR_CHANGES_PER_HOUR) / 60;
+    const ventHeatLoad_BTUhr = freshAirCFM * 1.08 * deltaT_heat * (1 - SPECS.THERMAL.HRV_EFFICIENCY);
     
-    // Net heating load
-    const totalHeatLoadW = Math.max(0, (conductionLoadW + ventLoadW) - (processGainW * 0.5));
-    const totalHeatLoadKW = totalHeatLoadW / 1000;
+    // 3. Total heating load
+    const totalHeatLoad_BTUhr = (conductionHeat_BTUhr + ventHeatLoad_BTUhr) * SPECS.THERMAL.SAFETY_FACTOR;
+    const totalHeatLoad_kW = totalHeatLoad_BTUhr * 0.000293071;
+    
+    // COOLING LOAD CALCULATION
+    // 1. Sensible cooling (conduction + ventilation + internal gains)
+    const conductionCool_BTUhr = (wallArea_ft2 * SPECS.THERMAL.U_VALUE_WALLS_BTU + 
+                                   roofArea_ft2 * SPECS.THERMAL.U_VALUE_CEILING_BTU) * deltaT_cool;
+    
+    const ventCoolLoad_BTUhr = freshAirCFM * 1.08 * deltaT_cool * (1 - SPECS.THERMAL.HRV_EFFICIENCY);
+    
+    // Internal gains from HydroGreen process (~21,000 BTU/hr)
+    const processGain_BTUhr = dgsUnits * 21327;
+    
+    const sensibleCoolLoad_BTUhr = conductionCool_BTUhr + ventCoolLoad_BTUhr + processGain_BTUhr;
+    
+    // 2. LATENT COOLING (Dehumidification)
+    // Get humidity ratios
+    const insideW_gr_lb = getW_gr_lb(insideTemp_F, SPECS.THERMAL.INSIDE_RH_PERCENT);
+    const climate = CLIMATE_DATA[location];
+    const outdoorW_high_gr_lb = climate.hr_high_gr_lb || 180; // Summer humidity
+    const outdoorW_low_gr_lb = climate.hr_low_gr_lb || 120; // Winter humidity
+    
+    // Latent load = CFM × 0.68 × ΔW (grains/lb)
+    const latentCoolLoad_BTUhr = freshAirCFM * 0.68 * Math.max(0, outdoorW_high_gr_lb - insideW_gr_lb);
+    
+    // 3. Total cooling load
+    const totalCoolLoad_BTUhr = (sensibleCoolLoad_BTUhr + latentCoolLoad_BTUhr) * SPECS.THERMAL.SAFETY_FACTOR;
+    const totalCoolLoad_kW = totalCoolLoad_BTUhr * 0.000293071;
+    const totalCoolLoad_Tons = totalCoolLoad_BTUhr / 12000;
+    
+    // HUMIDIFICATION LOAD (Winter)
+    const humidification_lbs_hr = (freshAirCFM * 4.5 * Math.max(0, insideW_gr_lb - outdoorW_low_gr_lb)) / 7000;
+    
+    // DEHUMIDIFICATION LOAD (Summer)
+    const dehumidification_lbs_hr = (freshAirCFM * 4.5 * Math.max(0, outdoorW_high_gr_lb - insideW_gr_lb)) / 7000;
     
     return {
-      totalKW: totalHeatLoadKW,
-      conductionKW: conductionLoadW / 1000,
-      ventilationKW: ventLoadW / 1000
+      totalKW_heating: totalHeatLoad_kW,
+      totalKW_cooling: totalCoolLoad_kW,
+      totalTons_cooling: totalCoolLoad_Tons,
+      totalBTUhr_heating: totalHeatLoad_BTUhr,
+      totalBTUhr_cooling: totalCoolLoad_BTUhr,
+      sensibleBTUhr: sensibleCoolLoad_BTUhr,
+      latentBTUhr: latentCoolLoad_BTUhr,
+      conductionKW_heat: conductionHeat_BTUhr * 0.000293071,
+      ventilationKW_heat: ventHeatLoad_BTUhr * 0.000293071,
+      conductionKW_cool: conductionCool_BTUhr * 0.000293071,
+      ventilationKW_cool: ventCoolLoad_BTUhr * 0.000293071,
+      freshAirCFM,
+      humidification_lbs_hr,
+      dehumidification_lbs_hr,
+      insideW_gr_lb,
+      outdoorW_high_gr_lb,
+      outdoorW_low_gr_lb
     };
   };
 
@@ -168,8 +253,8 @@ const RSRHCalculator = () => {
       }
     }
     
-    // Auto-select: N+1 redundancy, 3 active units
-    const targetUnitSize = loadKW / 3;
+    // Auto-select: Find most economical solution
+    const targetUnitSize = loadKW / 3; // Prefer 3-unit systems
     const selected = heatPumps.find(hp => hp.kw >= targetUnitSize) || heatPumps[heatPumps.length - 1];
     
     const activeUnits = Math.max(3, Math.ceil(loadKW / selected.kw));
