@@ -116,12 +116,11 @@ const RSRHCalculator = () => {
   const getDefaultHeatPumps = () => {
     return [
       { name: "Karnot iHEAT R290 - 9.5kW", kw: 9.5, cost: 3944, id: 'hp1' },
-      { name: "Karnot iHEAT R290 - 15.5kW", kw: 15.5, cost: 5140, id: 'hp2' },
-      { name: "Karnot iHEAT R290 - 18.5kW", kw: 18.5, cost: 5434, id: 'hp3' },
-      { name: "Karnot iHEAT R290 25kW", kw: 25, cost: 5492, id: 'hp4' },
-      { name: "Karnot iHEAT R290 30kW", kw: 30, cost: 6856, id: 'hp5' },
-      { name: "Karnot iHEAT R290 50kW", kw: 50, cost: 10300, id: 'hp6' },
-      { name: "Karnot iHEAT ClimaPro R32 - 35kW", kw: 35, cost: 7680, id: 'hp7' }
+      { name: "Karnot iHEAT R290 - 11.5kW", kw: 11.5, cost: 4100, id: 'hp2' },
+      { name: "Karnot iHEAT R290 - 15.5kW", kw: 15.5, cost: 5140, id: 'hp3' },
+      { name: "Karnot iHEAT R290 - 18.5kW", kw: 18.5, cost: 5434, id: 'hp4' },
+      { name: "Karnot iHEAT R290 - 25kW", kw: 25, cost: 6500, id: 'hp5' },
+      { name: "Karnot iHEAT R290 - 30kW", kw: 30, cost: 7500, id: 'hp6' }
     ];
   };
 
@@ -377,7 +376,8 @@ const RSRHCalculator = () => {
     
     const calculatedResults = {
       heatLoad,
-      hpSelection,
+      hpHeating,
+      hpCooling,
       capEx: {
         machine: capExMachine,
         heatPumps: capExHP,
@@ -1269,8 +1269,8 @@ const RSRHCalculator = () => {
                 </tbody>
               </table>
               <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-600">
-                <strong>HVAC Engineering:</strong> {fmt(results.heatLoad.totalKW, 1)} kW Peak Load<br/>
-                <strong>Configuration:</strong> {results.hpSelection.activeUnits} Active + {results.hpSelection.standbyUnits} Standby
+                <strong>Thermal Engineering:</strong> {fmt(results.heatLoad.totalKW_heating, 1)} kW Heating / {fmt(results.heatLoad.totalKW_cooling, 1)} kW Cooling<br/>
+                <strong>Heat Pumps:</strong> {results.hpHeating.totalUnits}x Heating + {results.hpCooling.totalUnits}x Cooling
               </div>
             </div>
 
