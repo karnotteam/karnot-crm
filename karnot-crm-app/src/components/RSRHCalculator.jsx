@@ -309,18 +309,20 @@ const RSRHCalculator = () => {
 
   // ==================== FINANCIAL CALCULATIONS ====================
   const runCalculation = () => {
-    // 1. Heat Load & Equipment
+    // 1. Heat Load & Equipment Selection
     const heatLoad = calculateHeatLoad();
-    const hpSelection = selectHeatPump(heatLoad.totalKW);
+    const hpHeating = selectHeatPump(heatLoad.totalKW_heating);
+    const hpCooling = selectHeatPump(heatLoad.totalKW_cooling);
     
     // 2. CapEx
     const capExMachine = dgsUnits * machineCostUSD * fxRate;
-    const capExHP = hpSelection.totalUnits * hpSelection.model.cost * fxRate;
+    const capExHP_heat = hpHeating.totalUnits * hpHeating.model.cost * fxRate;
+    const capExHP_cool = hpCooling.totalUnits * hpCooling.model.cost * fxRate;
     const capExAnc = dgsUnits * (SPECS.ANCILLARY.AHU + SPECS.ANCILLARY.RingMain + 
                                   SPECS.ANCILLARY.Dehum + SPECS.ANCILLARY.CO2) * fxRate;
     const capExBuilding = (buildingWidth * buildingLength) * buildCost;
     const capExLogistics = dgsUnits * 250000; // ₱250k per unit shipping/install
-    const totalCapEx = capExMachine + capExHP + capExAnc + capExBuilding + capExLogistics;
+    const totalCapEx = capExMachine + capExHP_heat + capExHP_cool + capExAnc + capExBuilding + capExLogistics;
     
     // 3. Financing Calculations
     const financedAmount = totalCapEx * (financeAmount / 100);
@@ -1087,6 +1089,104 @@ const RSRHCalculator = () => {
             </div>
           </div>
 
+          {/* Thermal Load Breakdown */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 border-b-2 border-gray-200 pb-2">
+              🌡️ Thermal Load Analysis (Per DGS 66 System)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Heating Load */}
+              <div className="bg-red-50 rounded-lg p-4 border-2 border-red-200">
+                <h4 className="text-lg font-bold text-red-800 mb-3 flex items-center">
+                  🔥 Heating Requirements
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Total Heating Load:</span>
+                    <span className="font-bold text-red-700">
+                      {fmt(results.heatLoad.totalKW_heating, 1)} kW ({fmt(results.heatLoad.totalBTUhr_heating, 0)} BTU/hr)
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-red-200 pt-2">
+                    <span className="text-gray-600">• Conduction Loss:</span>
+                    <span className="font-semibold">{fmt(results.heatLoad.conductionKW_heat, 1)} kW</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">• Ventilation Load:</span>
+                    <span className="font-semibold">{fmt(results.heatLoad.ventilationKW_heat, 1)} kW</span>
+                  </div>
+                  <div className="flex justify-between mt-3 pt-3 border-t-2 border-red-300 bg-red-100 -mx-4 px-4 py-2">
+                    <span className="font-bold text-red-800">Heat Pumps Required:</span>
+                    <span className="font-bold text-red-800">
+                      {results.hpHeating.totalUnits}x {results.hpHeating.model.name}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cooling Load */}
+              <div className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+                <h4 className="text-lg font-bold text-blue-800 mb-3 flex items-center">
+                  ❄️ Cooling Requirements
+                </h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Total Cooling Load:</span>
+                    <span className="font-bold text-blue-700">
+                      {fmt(results.heatLoad.totalKW_cooling, 1)} kW ({fmt(results.heatLoad.totalTons_cooling, 1)} Tons)
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-t border-blue-200 pt-2">
+                    <span className="text-gray-600">• Sensible Load:</span>
+                    <span className="font-semibold">{fmt(results.heatLoad.sensibleBTUhr * 0.000293071, 1)} kW</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">• Latent Load (Dehumid):</span>
+                    <span className="font-semibold">{fmt(results.heatLoad.latentBTUhr * 0.000293071, 1)} kW</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">• Conduction Gain:</span>
+                    <span className="font-semibold">{fmt(results.heatLoad.conductionKW_cool, 1)} kW</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">• Fresh Air Ventilation:</span>
+                    <span className="font-semibold">{fmt(results.heatLoad.ventilationKW_cool, 1)} kW</span>
+                  </div>
+                  <div className="flex justify-between mt-3 pt-3 border-t-2 border-blue-300 bg-blue-100 -mx-4 px-4 py-2">
+                    <span className="font-bold text-blue-800">Heat Pumps Required:</span>
+                    <span className="font-bold text-blue-800">
+                      {results.hpCooling.totalUnits}x {results.hpCooling.model.name}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Additional Climate Control Info */}
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="font-bold text-gray-800 mb-2">Climate Control Details:</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <div className="text-gray-600">Fresh Air Rate:</div>
+                  <div className="font-semibold">{fmt(results.heatLoad.freshAirCFM, 0)} CFM</div>
+                </div>
+                <div>
+                  <div className="text-gray-600">Target: 70°F / 21°C</div>
+                  <div className="font-semibold">@ 75% RH</div>
+                </div>
+                <div>
+                  <div className="text-gray-600">Humidification:</div>
+                  <div className="font-semibold">{fmt(results.heatLoad.humidification_lbs_hr, 1)} lbs/hr</div>
+                </div>
+                <div>
+                  <div className="text-gray-600">Dehumidification:</div>
+                  <div className="font-semibold">{fmt(results.heatLoad.dehumidification_lbs_hr, 1)} lbs/hr</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Detailed Breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
@@ -1109,12 +1209,21 @@ const RSRHCalculator = () => {
                   </tr>
                   <tr className="border-b">
                     <td className="py-3 px-2">
-                      Karnot HVAC System<br/>
+                      🔥 Heating Heat Pumps<br/>
                       <span className="text-xs text-gray-500">
-                        {results.hpSelection.totalUnits}x {results.hpSelection.model.name}
+                        {results.hpHeating.totalUnits}x {results.hpHeating.model.name}
                       </span>
                     </td>
-                    <td className="py-3 px-2 text-right">{fmtCurrency(results.capEx.heatPumps)}</td>
+                    <td className="py-3 px-2 text-right">{fmtCurrency(results.capEx.heatPumpsHeat)}</td>
+                  </tr>
+                  <tr className="border-b">
+                    <td className="py-3 px-2">
+                      ❄️ Cooling Heat Pumps<br/>
+                      <span className="text-xs text-gray-500">
+                        {results.hpCooling.totalUnits}x {results.hpCooling.model.name}
+                      </span>
+                    </td>
+                    <td className="py-3 px-2 text-right">{fmtCurrency(results.capEx.heatPumpsCool)}</td>
                   </tr>
                   <tr className="border-b">
                     <td className="py-3 px-2">Ancillaries & Controls</td>
