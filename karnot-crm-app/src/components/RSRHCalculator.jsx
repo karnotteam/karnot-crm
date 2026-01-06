@@ -33,16 +33,22 @@ const RSRHCalculator = () => {
   // Cattle Performance
   const [herdSize, setHerdSize] = useState(200); // heads per cycle
   const [targetWeightGain, setTargetWeightGain] = useState(110); // kg per head
-  const [liveWeightPrice, setLiveWeightPrice] = useState(220); // ₱ per kg
+  const [liveWeightPrice, setLiveWeightPrice] = useState(189); // ₱ per kg (~$3.20/kg at ₱59)
   const [dailyYield, setDailyYield] = useState(850); // kg wet fodder per day per unit
   
   // Partnership Structure
-  const [karnotShare, setKarnotShare] = useState(20); // %
-  const [contractYears, setContractYears] = useState(10);
+  const [karnotShare, setKarnotShare] = useState(80); // % FIXED: Karnot gets 80%
+  const [contractYears, setContractYears] = useState(5);
+  
+  // Financing
+  const [financeAmount, setFinanceAmount] = useState(100); // % of CapEx to finance
+  const [interestRate, setInterestRate] = useState(12); // % annual interest
+  const [loanTermYears, setLoanTermYears] = useState(5);
   
   // Calculated Results
   const [results, setResults] = useState(null);
   const [showResults, setShowResults] = useState(false);
+  const [displayCurrency, setDisplayCurrency] = useState('PHP'); // 'PHP' or 'USD'
 
   // ==================== CONSTANTS ====================
   const CLIMATE_DATA = {
@@ -231,10 +237,21 @@ const RSRHCalculator = () => {
     const capExLogistics = dgsUnits * 250000; // ₱250k per unit shipping/install
     const totalCapEx = capExMachine + capExHP + capExAnc + capExBuilding + capExLogistics;
     
-    // 3. Cattle Performance
+    // 3. Financing Calculations
+    const financedAmount = totalCapEx * (financeAmount / 100);
+    const equityAmount = totalCapEx - financedAmount;
+    const monthlyRate = interestRate / 100 / 12;
+    const numPayments = loanTermYears * 12;
+    const monthlyPayment = financedAmount > 0 
+      ? (financedAmount * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / 
+        (Math.pow(1 + monthlyRate, numPayments) - 1)
+      : 0;
+    const annualDebtService = monthlyPayment * 12;
+    
+    // 4. Cattle Performance
     const cattlePerf = calculateCattlePerformance();
     
-    // 4. OpEx Calculation
+    // 5. OpEx Calculation
     const annualFodderKg = dailyYield * 365 * dgsUnits;
     const annualGrainKg = annualFodderKg * 0.16; // 16% grain input
     const annualGrainCost = annualGrainKg * grainCost;
@@ -246,27 +263,28 @@ const RSRHCalculator = () => {
     const annualElecCost = totalKW * 24 * 365 * elecRate;
     
     const annualLaborCost = laborCost * 12;
-    const totalOpEx = annualGrainCost + annualElecCost + annualLaborCost;
+    const totalOpEx = annualGrainCost + annualElecCost + annualLaborCost + annualDebtService;
     
-    // 5. Revenue Calculation (HydroGreen scenario)
+    // 6. Revenue Calculation (HydroGreen scenario)
     const hydroHeads = cattlePerf.hydrogreen.annualHeads;
     const saleValuePerHead = targetWeightGain * liveWeightPrice;
     const annualRevenue = hydroHeads * saleValuePerHead;
     
-    // 6. Cost per head (feed only)
-    const fodderCostPerKg = totalOpEx / annualFodderKg;
+    // 7. Cost per head (feed only)
+    const fodderCostPerKg = (annualGrainCost + annualElecCost + annualLaborCost) / annualFodderKg;
     const feedCostPerHead = (cattlePerf.hydrogreen.feedPerHead * 0.7 * fodderCostPerKg) + 
                             (cattlePerf.hydrogreen.feedPerHead * 0.3 * grainCost);
     
-    // 7. Net Profit
+    // 8. Net Profit (BEFORE partnership split)
     const totalFeedCost = feedCostPerHead * hydroHeads;
-    const netProfit = annualRevenue - totalFeedCost - totalOpEx;
+    const grossProfit = annualRevenue - totalFeedCost - annualGrainCost - annualElecCost - annualLaborCost;
+    const netProfit = grossProfit - annualDebtService;
     
-    // 8. ROI
-    const paybackYears = totalCapEx / netProfit;
-    const annualROI = (netProfit / totalCapEx) * 100;
+    // 9. ROI
+    const paybackYears = equityAmount / netProfit;
+    const annualROI = (netProfit / equityAmount) * 100;
     
-    // 9. Partnership Split
+    // 10. Partnership Split - FIXED: Karnot gets 80%
     const karnotAnnualShare = netProfit * (karnotShare / 100);
     const rsrhAnnualShare = netProfit * ((100 - karnotShare) / 100);
     
@@ -281,11 +299,21 @@ const RSRHCalculator = () => {
         logistics: capExLogistics,
         total: totalCapEx
       },
+      financing: {
+        totalCapEx,
+        financedAmount,
+        equityAmount,
+        interestRate,
+        loanTermYears,
+        monthlyPayment,
+        annualDebtService
+      },
       cattlePerf,
       opEx: {
         grain: annualGrainCost,
         electricity: annualElecCost,
         labor: annualLaborCost,
+        debtService: annualDebtService,
         total: totalOpEx
       },
       revenue: {
@@ -295,6 +323,7 @@ const RSRHCalculator = () => {
       },
       profitability: {
         feedCostPerHead,
+        grossProfit,
         netProfit,
         paybackYears,
         annualROI,
@@ -307,26 +336,207 @@ const RSRHCalculator = () => {
     setShowResults(true);
   };
 
-  // ==================== SAVE TO FIREBASE ====================
-  const saveCalculation = async () => {
+  // ==================== PDF EXPORT ====================
+  const generatePDF = () => {
     if (!results) return;
     
-    try {
-      await addDoc(collection(db, 'rsrhCalculations'), {
-        projectName,
-        timestamp: new Date(),
-        inputs: {
-          dgsUnits, herdSize, targetWeightGain, liveWeightPrice,
-          fxRate, karnotShare, contractYears
-        },
-        results,
-        status: 'draft'
-      });
-      alert('Calculation saved successfully!');
-    } catch (error) {
-      console.error('Error saving:', error);
-      alert('Error saving calculation');
+    const d = results;
+    const projectInfo = {
+      name: projectName,
+      date: new Date().toLocaleDateString('en-PH'),
+      location: CLIMATE_DATA[location].name,
+      currency: getCurrencyLabel()
+    };
+    
+    const proposalHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>RSRH Joint Venture Proposal - ${projectInfo.name}</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; color: #333; padding: 40px; max-width: 900px; margin: 0 auto; }
+    .header { border-bottom: 4px solid #00695c; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; }
+    h1 { color: #00695c; margin: 0; font-size: 2.2em; }
+    .header-right { text-align: right; }
+    .summary-box { background: #e0f2f1; border-left: 5px solid #00695c; padding: 20px; margin: 20px 0; border-radius: 8px; }
+    .summary-box h3 { color: #00695c; margin-top: 0; }
+    .big-number { font-size: 2.5em; font-weight: bold; color: #00695c; }
+    table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+    th { background: #f5f5f5; font-weight: 600; color: #00695c; }
+    .total-row { background: #e0f2f1; font-weight: bold; border-top: 2px solid #00695c; }
+    .section { margin: 40px 0; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .comparison { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 8px; }
+    .advantage { background: #d4edda; border: 1px solid #28a745; padding: 15px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>KARNOT</h1>
+      <p style="color: #666; margin: 5px 0;">Energy Solutions Inc.</p>
+    </div>
+    <div class="header-right">
+      <p><strong>Date:</strong> ${projectInfo.date}</p>
+      <p><strong>Project:</strong> ${projectInfo.name}</p>
+      <p><strong>Location:</strong> ${projectInfo.location}</p>
+    </div>
+  </div>
+
+  <div class="summary-box">
+    <h3>Executive Summary</h3>
+    <p>Joint venture proposal for HydroGreen fodder production to support RSRH Livestock Corporation's cattle finishing operations at ${projectInfo.location}.</p>
+    <div class="grid-2" style="margin-top: 20px;">
+      <div>
+        <div style="color: #666; font-size: 0.9em;">Total Investment Required</div>
+        <div class="big-number">${fmtCurrency(d.financing.totalCapEx)}</div>
+      </div>
+      <div>
+        <div style="color: #666; font-size: 0.9em;">Annual Net Profit (After Debt Service)</div>
+        <div class="big-number">${fmtCurrency(d.profitability.netProfit)}</div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top: 20px;">
+      <div>
+        <div style="color: #666; font-size: 0.9em;">Payback Period</div>
+        <div style="font-size: 1.8em; font-weight: bold;">${fmt(d.profitability.paybackYears, 1)} Years</div>
+      </div>
+      <div>
+        <div style="color: #666; font-size: 0.9em;">Annual ROI</div>
+        <div style="font-size: 1.8em; font-weight: bold;">${fmt(d.profitability.annualROI, 1)}%</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Investment Breakdown</h2>
+    <table>
+      <thead>
+        <tr><th>Item</th><th style="text-align: right;">Amount (${projectInfo.currency})</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>HydroGreen Fodder Systems (${dgsUnits} units)</td><td align="right">${fmtCurrency(d.capEx.machine)}</td></tr>
+        <tr><td>Karnot HVAC Climate Control (${d.hpSelection.totalUnits} units)</td><td align="right">${fmtCurrency(d.capEx.heatPumps)}</td></tr>
+        <tr><td>Mechanical Ancillaries & Controls</td><td align="right">${fmtCurrency(d.capEx.ancillary)}</td></tr>
+        <tr><td>Building Construction</td><td align="right">${fmtCurrency(d.capEx.building)}</td></tr>
+        <tr><td>Logistics & Installation</td><td align="right">${fmtCurrency(d.capEx.logistics)}</td></tr>
+        <tr class="total-row"><td><strong>TOTAL CAPITAL EXPENDITURE</strong></td><td align="right"><strong>${fmtCurrency(d.capEx.total)}</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Financing Structure</h2>
+    <table>
+      <tbody>
+        <tr><td>Total Investment</td><td align="right">${fmtCurrency(d.financing.totalCapEx)}</td></tr>
+        <tr><td>Financed Amount (${financeAmount}%)</td><td align="right">${fmtCurrency(d.financing.financedAmount)}</td></tr>
+        <tr><td>Equity Required (${100 - financeAmount}%)</td><td align="right">${fmtCurrency(d.financing.equityAmount)}</td></tr>
+        <tr><td>Interest Rate</td><td align="right">${interestRate}% per annum</td></tr>
+        <tr><td>Loan Term</td><td align="right">${loanTermYears} years</td></tr>
+        <tr class="total-row"><td><strong>Annual Debt Service</strong></td><td align="right"><strong>${fmtCurrency(d.financing.annualDebtService)}</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Annual Operating Performance</h2>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th style="text-align: right;">Value</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Cattle Finished per Year</td><td align="right">${fmt(d.revenue.annualHeads, 0)} heads</td></tr>
+        <tr><td>Average Sale Value per Head</td><td align="right">${fmtCurrency(d.revenue.salePerHead)}</td></tr>
+        <tr class="total-row"><td><strong>Gross Annual Revenue</strong></td><td align="right"><strong>${fmtCurrency(d.revenue.totalAnnual)}</strong></td></tr>
+      </tbody>
+    </table>
+    
+    <h3 style="margin-top: 30px;">Operating Costs</h3>
+    <table>
+      <tbody>
+        <tr><td>Grain Input Costs</td><td align="right">${fmtCurrency(d.opEx.grain)}</td></tr>
+        <tr><td>Electricity</td><td align="right">${fmtCurrency(d.opEx.electricity)}</td></tr>
+        <tr><td>Labor & Operations</td><td align="right">${fmtCurrency(d.opEx.labor)}</td></tr>
+        <tr><td>Debt Service</td><td align="right">${fmtCurrency(d.opEx.debtService)}</td></tr>
+        <tr class="total-row"><td><strong>Total Operating Costs</strong></td><td align="right"><strong>${fmtCurrency(d.opEx.total)}</strong></td></tr>
+        <tr style="background: #d4edda;"><td><strong>NET ANNUAL PROFIT</strong></td><td align="right"><strong>${fmtCurrency(d.profitability.netProfit)}</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Partnership Structure</h2>
+    <div class="grid-2">
+      <div class="advantage">
+        <h4 style="margin-top: 0; color: #00695c;">Karnot Energy Solutions (${karnotShare}%)</h4>
+        <p><strong>Provides:</strong> Equipment, Technology, Training</p>
+        <p><strong>Annual Share:</strong> ${fmtCurrency(d.profitability.karnotShare)}</p>
+        <p><strong>${contractYears}-Year Total:</strong> ${fmtCurrency(d.profitability.karnotShare * contractYears)}</p>
+      </div>
+      <div class="comparison">
+        <h4 style="margin-top: 0; color: #856404;">RSRH Livestock (${100 - karnotShare}%)</h4>
+        <p><strong>Provides:</strong> Land, Operations, Cattle</p>
+        <p><strong>Annual Share:</strong> ${fmtCurrency(d.profitability.rsrhShare)}</p>
+        <p><strong>${contractYears}-Year Total:</strong> ${fmtCurrency(d.profitability.rsrhShare * contractYears)}</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Cattle Performance: Traditional vs HydroGreen</h2>
+    <table>
+      <thead>
+        <tr><th>Metric</th><th>Traditional Feed</th><th>HydroGreen Supplemented</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Days to Market</td>
+          <td>${d.cattlePerf.traditional.daysToMarket} days</td>
+          <td>${d.cattlePerf.hydrogreen.daysToMarket} days</td>
+        </tr>
+        <tr>
+          <td>Cycles per Year</td>
+          <td>${d.cattlePerf.traditional.cyclesPerYear} cycles</td>
+          <td>${d.cattlePerf.hydrogreen.cyclesPerYear} cycles</td>
+        </tr>
+        <tr>
+          <td>Annual Throughput</td>
+          <td>${fmt(d.cattlePerf.traditional.annualHeads)} heads</td>
+          <td>${fmt(d.cattlePerf.hydrogreen.annualHeads)} heads</td>
+        </tr>
+        <tr class="total-row">
+          <td><strong>Advantage</strong></td>
+          <td colspan="2"><strong>${d.cattlePerf.hydrogreen.annualHeads - d.cattlePerf.traditional.annualHeads} MORE heads finished per year</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top: 60px; padding: 20px; background: #f5f5f5; border-radius: 8px; text-align: center;">
+    <p style="margin: 0; color: #666; font-size: 0.9em;">
+      This proposal is valid for 60 days from issue date.<br>
+      For inquiries: Stuart Cox, CEO | stuart@karnot.energy | +63 917 123 4567
+    </p>
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() { window.print(); }, 500);
+    };
+  </script>
+</body>
+</html>`;
+    
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('Popup blocked! Please allow popups for this site.');
+      return;
     }
+    win.document.write(proposalHTML);
+    win.document.close();
   };
 
   // ==================== HELPER FUNCTIONS ====================
@@ -337,8 +547,16 @@ const RSRHCalculator = () => {
     });
   };
 
-  const fmtCurrency = (num) => {
-    return `${currency}${fmt(num, 0)}`;
+  const fmtCurrency = (numPHP) => {
+    if (displayCurrency === 'USD') {
+      const numUSD = numPHP / fxRate;
+      return `$${fmt(numUSD, 0)}`;
+    }
+    return `₱${fmt(numPHP, 0)}`;
+  };
+  
+  const getCurrencyLabel = () => {
+    return displayCurrency === 'USD' ? 'USD' : 'PHP';
   };
 
   // ==================== RENDER ====================
@@ -359,14 +577,14 @@ const RSRHCalculator = () => {
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-700">Project Settings</h3>
           <div className="flex gap-4 items-center">
-            <label className="text-sm font-medium">Currency:</label>
+            <label className="text-sm font-medium">Display Currency:</label>
             <select 
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="border rounded px-3 py-1"
+              value={displayCurrency}
+              onChange={(e) => setDisplayCurrency(e.target.value)}
+              className="border rounded px-3 py-1 font-bold"
             >
-              <option value="₱">Philippine Peso (₱)</option>
-              <option value="$">US Dollar ($)</option>
+              <option value="PHP">Philippine Peso (₱)</option>
+              <option value="USD">US Dollar ($)</option>
             </select>
             <label className="text-sm font-medium">FX Rate (USD→PHP):</label>
             <input
@@ -381,7 +599,7 @@ const RSRHCalculator = () => {
       </div>
 
       {/* Main Input Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         
         {/* Project Basics */}
         <div className="bg-white rounded-lg shadow-md p-6">
@@ -604,7 +822,7 @@ const RSRHCalculator = () => {
         {/* Cattle & Partnership */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-lg font-semibold text-teal-600 mb-4 border-b-2 border-teal-200 pb-2">
-            4. Cattle & Partnership
+            4. Cattle Performance
           </h3>
           <div className="space-y-4">
             <div>
@@ -639,6 +857,9 @@ const RSRHCalculator = () => {
                 onChange={(e) => setLiveWeightPrice(parseFloat(e.target.value))}
                 className="w-full border rounded px-3 py-2"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Current: ₱{liveWeightPrice}/kg ≈ ${fmt(liveWeightPrice / fxRate, 2)}/kg
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -651,6 +872,51 @@ const RSRHCalculator = () => {
                 className="w-full border rounded px-3 py-2"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Financing & Partnership */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-teal-600 mb-4 border-b-2 border-teal-200 pb-2">
+            5. Financing & Deal Structure
+          </h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Finance (% of CapEx)
+              </label>
+              <input
+                type="number"
+                value={financeAmount}
+                onChange={(e) => setFinanceAmount(parseFloat(e.target.value))}
+                className="w-full border rounded px-3 py-2"
+                min="0"
+                max="100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Interest Rate (% p.a.)
+              </label>
+              <input
+                type="number"
+                value={interestRate}
+                onChange={(e) => setInterestRate(parseFloat(e.target.value))}
+                className="w-full border rounded px-3 py-2"
+                step="0.1"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Loan Term (years)
+              </label>
+              <input
+                type="number"
+                value={loanTermYears}
+                onChange={(e) => setLoanTermYears(parseInt(e.target.value))}
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Karnot Profit Share (%)
@@ -659,10 +925,14 @@ const RSRHCalculator = () => {
                 type="number"
                 value={karnotShare}
                 onChange={(e) => setKarnotShare(parseFloat(e.target.value))}
-                className="w-full border rounded px-3 py-2"
+                className="w-full border rounded px-3 py-2 bg-teal-50"
                 min="0"
                 max="100"
+                readOnly
               />
+              <p className="text-xs text-gray-500 mt-1">
+                RSRH gets {100 - karnotShare}% (land, operations, cattle management)
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -904,23 +1174,43 @@ const RSRHCalculator = () => {
           {/* Partnership Summary */}
           <div className="bg-gradient-to-r from-teal-600 to-teal-700 rounded-lg shadow-lg p-6 text-white">
             <h3 className="text-2xl font-bold mb-4">Joint Venture Summary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
               <div>
-                <h4 className="font-semibold text-teal-100 mb-2">Karnot Energy Solutions</h4>
+                <h4 className="font-semibold text-teal-100 mb-2">Karnot Energy Solutions ({karnotShare}%)</h4>
                 <div className="space-y-2 text-sm">
                   <div>Provides: Equipment, Technology, Training</div>
                   <div>Annual Share: <span className="text-2xl font-bold">{fmtCurrency(results.profitability.karnotShare)}</span></div>
-                  <div>Percentage: {karnotShare}% of net profit</div>
-                  <div>Term: {contractYears} years</div>
+                  <div>Over {contractYears} years: <span className="font-bold">{fmtCurrency(results.profitability.karnotShare * contractYears)}</span></div>
                 </div>
               </div>
               <div>
-                <h4 className="font-semibold text-teal-100 mb-2">RSRH Livestock Corporation</h4>
+                <h4 className="font-semibold text-teal-100 mb-2">RSRH Livestock Corporation ({100 - karnotShare}%)</h4>
                 <div className="space-y-2 text-sm">
                   <div>Provides: Land, Operations, Cattle Management</div>
                   <div>Annual Share: <span className="text-2xl font-bold">{fmtCurrency(results.profitability.rsrhShare)}</span></div>
-                  <div>Percentage: {100 - karnotShare}% of net profit</div>
-                  <div>Total Investment: {fmtCurrency(results.capEx.total)}</div>
+                  <div>Over {contractYears} years: <span className="font-bold">{fmtCurrency(results.profitability.rsrhShare * contractYears)}</span></div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="border-t border-teal-500 pt-4 mt-4">
+              <h4 className="font-semibold text-teal-100 mb-2">Financing Structure</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <div className="text-teal-200 text-xs">Total Investment</div>
+                  <div className="font-bold">{fmtCurrency(results.financing.totalCapEx)}</div>
+                </div>
+                <div>
+                  <div className="text-teal-200 text-xs">Financed ({financeAmount}%)</div>
+                  <div className="font-bold">{fmtCurrency(results.financing.financedAmount)}</div>
+                </div>
+                <div>
+                  <div className="text-teal-200 text-xs">Interest Rate</div>
+                  <div className="font-bold">{interestRate}% p.a.</div>
+                </div>
+                <div>
+                  <div className="text-teal-200 text-xs">Annual Debt Service</div>
+                  <div className="font-bold">{fmtCurrency(results.financing.annualDebtService)}</div>
                 </div>
               </div>
             </div>
@@ -928,18 +1218,24 @@ const RSRHCalculator = () => {
 
           {/* Action Buttons */}
           <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <button
-                onClick={saveCalculation}
-                className="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                onClick={generatePDF}
+                className="bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
               >
-                💾 Save Calculation
+                🖨️ Export PDF Proposal
               </button>
               <button
                 onClick={() => window.print()}
-                className="flex-1 bg-gray-700 hover:bg-gray-800 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
               >
-                🖨️ Print Proposal
+                🖨️ Print Results
+              </button>
+              <button
+                onClick={() => setShowResults(false)}
+                className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+              >
+                ← Back to Inputs
               </button>
             </div>
           </div>
