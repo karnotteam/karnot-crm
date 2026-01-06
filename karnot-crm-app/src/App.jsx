@@ -74,7 +74,8 @@ import CallCentre from './pages/CallCentre.jsx';
 import QuoteCalculator from './components/QuoteCalculator.jsx';
 import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
-import DatasheetLibrary from './components/DatasheetLibrary.jsx'; 
+import DatasheetLibrary from './components/DatasheetLibrary.jsx';
+import RSRHCalculator from './components/RSRHCalculator.jsx';
 
 // ==========================================
 // 3. DATA & ACCOUNTING MODULES
@@ -753,6 +754,15 @@ export default function App() {
                 {activeView === 'escoImport' && (
                     <ESCOImportEnrichmentTool user={user} />
                 )}
+                
+                {activeView === 'rsrhCalc' && (
+    <div className="max-w-7xl mx-auto">
+        <Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">
+            ← Back to Calculators
+        </Button>
+        <RSRHCalculator />
+    </div>
+)}
 
                 {/* ====================================== */}
                 {/* 6C. INVESTMENT MODULES                 */}
