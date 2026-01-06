@@ -505,13 +505,38 @@ const RSRHCalculator = () => {
       </thead>
       <tbody>
         <tr><td>HydroGreen Fodder Systems (${dgsUnits} units)</td><td align="right">${fmtCurrency(d.capEx.machine)}</td></tr>
-        <tr><td>Karnot HVAC Climate Control (${d.hpSelection.totalUnits} units)</td><td align="right">${fmtCurrency(d.capEx.heatPumps)}</td></tr>
+        <tr><td>Karnot Heating Heat Pumps (${d.hpHeating.totalUnits}x ${d.hpHeating.model.name})</td><td align="right">${fmtCurrency(d.capEx.heatPumpsHeat)}</td></tr>
+        <tr><td>Karnot Cooling Heat Pumps (${d.hpCooling.totalUnits}x ${d.hpCooling.model.name})</td><td align="right">${fmtCurrency(d.capEx.heatPumpsCool)}</td></tr>
         <tr><td>Mechanical Ancillaries & Controls</td><td align="right">${fmtCurrency(d.capEx.ancillary)}</td></tr>
         <tr><td>Building Construction</td><td align="right">${fmtCurrency(d.capEx.building)}</td></tr>
         <tr><td>Logistics & Installation</td><td align="right">${fmtCurrency(d.capEx.logistics)}</td></tr>
         <tr class="total-row"><td><strong>TOTAL CAPITAL EXPENDITURE</strong></td><td align="right"><strong>${fmtCurrency(d.capEx.total)}</strong></td></tr>
       </tbody>
     </table>
+  </div>
+
+  <div class="section">
+    <h2>Thermal Load Analysis</h2>
+    <div class="grid-2">
+      <div class="comparison">
+        <h4 style="margin-top: 0; color: #c62828;">🔥 Heating Requirements</h4>
+        <p><strong>Total Heating Load:</strong> ${fmt(d.heatLoad.totalKW_heating, 1)} kW (${fmt(d.heatLoad.totalBTUhr_heating, 0)} BTU/hr)</p>
+        <p style="margin-left: 15px; font-size: 0.9em;">• Conduction Loss: ${fmt(d.heatLoad.conductionKW_heat, 1)} kW</p>
+        <p style="margin-left: 15px; font-size: 0.9em;">• Ventilation Load: ${fmt(d.heatLoad.ventilationKW_heat, 1)} kW</p>
+        <p><strong>Heat Pumps Selected:</strong> ${d.hpHeating.totalUnits}x ${d.hpHeating.model.name}</p>
+      </div>
+      <div class="advantage">
+        <h4 style="margin-top: 0; color: #1565c0;">❄️ Cooling Requirements</h4>
+        <p><strong>Total Cooling Load:</strong> ${fmt(d.heatLoad.totalKW_cooling, 1)} kW (${fmt(d.heatLoad.totalTons_cooling, 1)} Tons)</p>
+        <p style="margin-left: 15px; font-size: 0.9em;">• Sensible Load: ${fmt(d.heatLoad.sensibleBTUhr * 0.000293071, 1)} kW</p>
+        <p style="margin-left: 15px; font-size: 0.9em;">• Latent Load: ${fmt(d.heatLoad.latentBTUhr * 0.000293071, 1)} kW</p>
+        <p><strong>Heat Pumps Selected:</strong> ${d.hpCooling.totalUnits}x ${d.hpCooling.model.name}</p>
+      </div>
+    </div>
+    <p style="font-size: 0.9em; margin-top: 15px; color: #666;">
+      <strong>Climate Control:</strong> Target conditions 70°F (21°C) @ 75% RH | 
+      Fresh Air: ${fmt(d.heatLoad.freshAirCFM, 0)} CFM with heat recovery
+    </p>
   </div>
 
   <div class="section">
