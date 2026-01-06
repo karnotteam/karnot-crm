@@ -33,7 +33,6 @@ const CalculatorsPage = ({ setActiveView }) => {
     icon: <Target className="text-green-600" size={32} />,
     status: 'Ready',
     badge: 'Philippines'
-}
         },
         {
             id: 'poolCalc',
