@@ -593,13 +593,27 @@ const RSRHCalculator = () => {
     <div class="grid-2">
       <div class="advantage">
         <h4 style="margin-top: 0; color: #00695c;">Karnot Energy Solutions (${karnotShare}%)</h4>
-        <p><strong>Provides:</strong> Equipment, Technology, Training</p>
+        <p><strong>Provides:</strong></p>
+        <ul style="font-size: 0.9em; margin-left: 20px;">
+          <li>Land & Facility (Cosmos Farm, Pangasinan)</li>
+          <li>HydroGreen Equipment & Technology</li>
+          <li>Climate Control (Karnot HVAC)</li>
+          <li>Daily Operations & Management</li>
+          <li>Working Capital</li>
+        </ul>
         <p><strong>Annual Share:</strong> ${fmtCurrency(d.profitability.karnotShare)}</p>
         <p><strong>${contractYears}-Year Total:</strong> ${fmtCurrency(d.profitability.karnotShare * contractYears)}</p>
       </div>
       <div class="comparison">
         <h4 style="margin-top: 0; color: #856404;">RSRH Livestock (${100 - karnotShare}%)</h4>
-        <p><strong>Provides:</strong> Land, Operations, Cattle</p>
+        <p><strong>Receives:</strong></p>
+        <ul style="font-size: 0.9em; margin-left: 20px;">
+          <li>Daily fresh vacuum-packed fodder</li>
+          <li>Delivery to feedlots (Bulacan region)</li>
+          <li>Cattle management optimization</li>
+          <li><strong>NO capital investment</strong></li>
+          <li><strong>20% profit from Day 1</strong></li>
+        </ul>
         <p><strong>Annual Share:</strong> ${fmtCurrency(d.profitability.rsrhShare)}</p>
         <p><strong>${contractYears}-Year Total:</strong> ${fmtCurrency(d.profitability.rsrhShare * contractYears)}</p>
       </div>
@@ -1390,34 +1404,80 @@ const RSRHCalculator = () => {
             
             {/* Advantage Summary */}
             <div className="mt-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
-              <h4 className="font-bold text-blue-800 mb-2">The HydroGreen Advantage:</h4>
-              <ul className="text-sm text-blue-900 space-y-1">
-                <li>✓ <strong>{results.cattlePerf.traditional.daysToMarket - results.cattlePerf.hydrogreen.daysToMarket} days faster</strong> to market per head</li>
-                <li>✓ <strong>{results.cattlePerf.hydrogreen.annualHeads - results.cattlePerf.traditional.annualHeads} more heads</strong> finished annually</li>
-                <li>✓ <strong>{fmt(((results.cattlePerf.traditional.feedPerHead - results.cattlePerf.hydrogreen.feedPerHead) / results.cattlePerf.traditional.feedPerHead * 100), 1)}% better</strong> feed conversion ratio</li>
-                <li>✓ Improved cattle health, reduced stress, better meat quality</li>
-              </ul>
+              <h4 className="font-bold text-blue-800 mb-3">The HydroGreen Advantage for RSRH:</h4>
+              
+              <div className="space-y-3 text-sm text-blue-900">
+                <div>
+                  <strong className="text-blue-800">🎯 Solving the "450kg Target" Problem:</strong>
+                  <ul className="list-disc ml-6 mt-1 space-y-1">
+                    <li><strong>{results.cattlePerf.traditional.daysToMarket - results.cattlePerf.hydrogreen.daysToMarket} days faster</strong> to 450kg target weight</li>
+                    <li>ADG maintained at <strong>1.4-1.6 kg/day</strong> even in Philippine heat (35°C)</li>
+                    <li><strong>90% moisture content</strong> keeps cattle eating during heat stress when dry feed fails</li>
+                    <li>Acts as digestive catalyst - improves grain/hay utilization by <strong>15-20%</strong></li>
+                  </ul>
+                </div>
+
+                <div className="pt-2 border-t border-blue-200">
+                  <strong className="text-blue-800">💰 Hidden Profit: Liver Health & Carcass Quality:</strong>
+                  <ul className="list-disc ml-6 mt-1 space-y-1">
+                    <li><strong>Dramatically reduced liver abscesses</strong> (high-grain finishing causes 30% condemnation)</li>
+                    <li>Healthy liver = <strong>faster growth in critical final 30 days</strong></li>
+                    <li><strong>Higher hot carcass weight (HCW)</strong> and dressing percentage</li>
+                    <li><strong>Improved marbling scores</strong> = premium pricing for RSRH retail</li>
+                    <li><strong>Larger ribeye area (REA)</strong> = more saleable meat per head</li>
+                  </ul>
+                </div>
+
+                <div className="pt-2 border-t border-blue-200">
+                  <strong className="text-blue-800">📊 RSRH Operational Benefits:</strong>
+                  <ul className="list-disc ml-6 mt-1 space-y-1">
+                    <li><strong>{results.cattlePerf.hydrogreen.annualHeads - results.cattlePerf.traditional.annualHeads} more heads</strong> finished per year (faster turnover)</li>
+                    <li><strong>Narrower weight spreads</strong> entering slaughter = better planning</li>
+                    <li><strong>Reduced trim losses</strong> and carcass downgrades</li>
+                    <li><strong>Supply consistency</strong> regardless of drought/weather</li>
+                    <li><strong>Better FCR</strong> = {fmt(((results.cattlePerf.traditional.feedPerHead - results.cattlePerf.hydrogreen.feedPerHead) / results.cattlePerf.traditional.feedPerHead * 100), 1)}% less feed per kg gain</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Partnership Summary */}
           <div className="bg-gradient-to-r from-teal-600 to-teal-700 rounded-lg shadow-lg p-6 text-white">
-            <h3 className="text-2xl font-bold mb-4">Joint Venture Summary</h3>
+            <h3 className="text-2xl font-bold mb-4">Joint Venture Partnership Structure</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
               <div>
                 <h4 className="font-semibold text-teal-100 mb-2">Karnot Energy Solutions ({karnotShare}%)</h4>
                 <div className="space-y-2 text-sm">
-                  <div>Provides: Equipment, Technology, Training</div>
-                  <div>Annual Share: <span className="text-2xl font-bold">{fmtCurrency(results.profitability.karnotShare)}</span></div>
-                  <div>Over {contractYears} years: <span className="font-bold">{fmtCurrency(results.profitability.karnotShare * contractYears)}</span></div>
+                  <div><strong>Provides:</strong></div>
+                  <ul className="list-disc ml-4 space-y-1">
+                    <li>Land & Facility (Cosmos Farm, Pangasinan)</li>
+                    <li>HydroGreen Equipment & Technology</li>
+                    <li>Climate Control Systems (Karnot HVAC)</li>
+                    <li>Daily Operations & Production Management</li>
+                    <li>Working Capital</li>
+                  </ul>
+                  <div className="mt-3 pt-3 border-t border-teal-400">
+                    <div>Annual Share: <span className="text-2xl font-bold">{fmtCurrency(results.profitability.karnotShare)}</span></div>
+                    <div>Over {contractYears} years: <span className="font-bold">{fmtCurrency(results.profitability.karnotShare * contractYears)}</span></div>
+                  </div>
                 </div>
               </div>
               <div>
                 <h4 className="font-semibold text-teal-100 mb-2">RSRH Livestock Corporation ({100 - karnotShare}%)</h4>
                 <div className="space-y-2 text-sm">
-                  <div>Provides: Land, Operations, Cattle Management</div>
-                  <div>Annual Share: <span className="text-2xl font-bold">{fmtCurrency(results.profitability.rsrhShare)}</span></div>
-                  <div>Over {contractYears} years: <span className="font-bold">{fmtCurrency(results.profitability.rsrhShare * contractYears)}</span></div>
+                  <div><strong>Receives:</strong></div>
+                  <ul className="list-disc ml-4 space-y-1">
+                    <li>Daily vacuum-packed fresh HydroGreen fodder</li>
+                    <li>Delivery to feedlots (3-4 hour radius to Bulacan)</li>
+                    <li>Cattle management & finishing optimization</li>
+                    <li><strong>NO capital investment required</strong></li>
+                    <li><strong>20% profit share from Day 1</strong></li>
+                  </ul>
+                  <div className="mt-3 pt-3 border-t border-teal-400">
+                    <div>Annual Share: <span className="text-2xl font-bold">{fmtCurrency(results.profitability.rsrhShare)}</span></div>
+                    <div>Over {contractYears} years: <span className="font-bold">{fmtCurrency(results.profitability.rsrhShare * contractYears)}</span></div>
+                  </div>
                 </div>
               </div>
             </div>
