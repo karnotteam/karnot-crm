@@ -380,7 +380,8 @@ const RSRHCalculator = () => {
       hpCooling,
       capEx: {
         machine: capExMachine,
-        heatPumps: capExHP,
+        heatPumpsHeat: capExHP_heat,
+        heatPumpsCool: capExHP_cool,
         ancillary: capExAnc,
         building: capExBuilding,
         logistics: capExLogistics,
