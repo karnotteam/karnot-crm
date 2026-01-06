@@ -25,7 +25,6 @@ const CalculatorsPage = ({ setActiveView }) => {
             icon: <Snowflake className="text-blue-600" size={32} />,
             status: 'Ready'
         },
-        {
             {
     id: 'rsrhCalc',
     title: 'RSRH Cattle Finishing',
