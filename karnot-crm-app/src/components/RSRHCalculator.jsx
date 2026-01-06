@@ -626,7 +626,8 @@ const RSRHCalculator = () => {
 
   // ==================== HELPER FUNCTIONS ====================
   const fmt = (num, decimals = 0) => {
-    return num.toLocaleString('en-PH', {
+    if (num === null || num === undefined || isNaN(num)) return '0';
+    return Number(num).toLocaleString('en-PH', {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals
     });
