@@ -34,7 +34,7 @@ const RSRHCalculator = () => {
   const [herdSize, setHerdSize] = useState(200); // heads per cycle
   const [targetWeightGain, setTargetWeightGain] = useState(110); // kg per head
   const [liveWeightPrice, setLiveWeightPrice] = useState(189); // ₱ per kg (~$3.20/kg at ₱59)
-  const [dailyYield, setDailyYield] = useState(850); // kg wet fodder per day per unit
+  const [dailyYield, setDailyYield] = useState(2500); // kg wet fodder per day per unit (ACTUAL: 2-3 metric tons/day per HydroGreen spec)
   
   // Partnership Structure
   const [karnotShare, setKarnotShare] = useState(80); // % FIXED: Karnot gets 80%
@@ -323,33 +323,38 @@ const RSRHCalculator = () => {
     const capExLogistics = dgsUnits * 250000; // ₱250k per unit shipping/install
     const totalCapEx = capExMachine + capExHP_heat + capExHP_cool + capExAnc + capExBuilding + capExLogistics;
     
-    // 3. Financing Calculations
-    const financedAmount = totalCapEx * (financeAmount / 100);
-    const equityAmount = totalCapEx - financedAmount;
-    const monthlyRate = interestRate / 100 / 12;
-    const numPayments = loanTermYears * 12;
-    const monthlyPayment = financedAmount > 0 
-      ? (financedAmount * monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / 
-        (Math.pow(1 + monthlyRate, numPayments) - 1)
-      : 0;
-    const annualDebtService = monthlyPayment * 12;
-    
-    // 4. Cattle Performance
+    // 3. Cattle Performance (calculate early, needed for OpEx)
     const cattlePerf = calculateCattlePerformance();
     
-    // 5. OpEx Calculation
+    // 4. OpEx Calculation (needed to calculate working capital requirement)
     const annualFodderKg = dailyYield * 365 * dgsUnits;
     const annualGrainKg = annualFodderKg * 0.16; // 16% grain input
     const annualGrainCost = annualGrainKg * grainCost;
     
     // Electrical load
     const processLoadKW = Object.values(SPECS.LOADS).reduce((a, b) => a + b) * dgsUnits;
-    const hvacLoadKW = heatLoad.totalKW / 3.5; // Assume COP 3.5
-    const totalKW = processLoadKW + hvacLoadKW;
+    const hvacHeatingLoadKW = heatLoad.totalKW_heating / SPECS.THERMAL.HEATING_COP;
+    const hvacCoolingLoadKW = heatLoad.totalKW_cooling / SPECS.THERMAL.COOLING_COP;
+    const peakHVACLoadKW = Math.max(hvacHeatingLoadKW, hvacCoolingLoadKW);
+    const totalKW = processLoadKW + peakHVACLoadKW;
     const annualElecCost = totalKW * 24 * 365 * elecRate;
     
     const annualLaborCost = laborCost * 12;
-    const totalOpEx = annualGrainCost + annualElecCost + annualLaborCost + annualDebtService;
+    const annualOpExBeforeDebt = annualGrainCost + annualElecCost + annualLaborCost;
+    
+    // 5. Financing Structure (CapEx + 12 months working capital)
+    const workingCapital = annualOpExBeforeDebt; // 12 months of operating costs
+    const totalProjectCost = totalCapEx + workingCapital;
+    const financedAmount = totalProjectCost * (financeAmount / 100);
+    const equityAmount = totalProjectCost - financedAmount;
+    
+    // Loan repayment over 3 years from revenue (not standard amortization)
+    const loanRepaymentYears = 3;
+    const annualLoanRepayment = financedAmount / loanRepaymentYears;
+    const annualInterestCost = financedAmount * (interestRate / 100) * 0.5; // Average over 3 years
+    const annualDebtService = annualLoanRepayment + annualInterestCost;
+    
+    const totalOpEx = annualOpExBeforeDebt + annualDebtService;
     
     // 6. Revenue Calculation (HydroGreen scenario)
     const hydroHeads = cattlePerf.hydrogreen.annualHeads;
@@ -357,13 +362,13 @@ const RSRHCalculator = () => {
     const annualRevenue = hydroHeads * saleValuePerHead;
     
     // 7. Cost per head (feed only)
-    const fodderCostPerKg = (annualGrainCost + annualElecCost + annualLaborCost) / annualFodderKg;
+    const fodderCostPerKg = annualOpExBeforeDebt / annualFodderKg;
     const feedCostPerHead = (cattlePerf.hydrogreen.feedPerHead * 0.7 * fodderCostPerKg) + 
                             (cattlePerf.hydrogreen.feedPerHead * 0.3 * grainCost);
     
-    // 8. Net Profit (BEFORE partnership split)
+    // 8. Net Profit (AFTER all costs including debt service)
     const totalFeedCost = feedCostPerHead * hydroHeads;
-    const grossProfit = annualRevenue - totalFeedCost - annualGrainCost - annualElecCost - annualLaborCost;
+    const grossProfit = annualRevenue - annualOpExBeforeDebt;
     const netProfit = grossProfit - annualDebtService;
     
     // 9. ROI
@@ -389,11 +394,14 @@ const RSRHCalculator = () => {
       },
       financing: {
         totalCapEx,
+        workingCapital,
+        totalProjectCost,
         financedAmount,
         equityAmount,
         interestRate,
-        loanTermYears,
-        monthlyPayment,
+        loanRepaymentYears,
+        annualLoanRepayment,
+        annualInterestCost,
         annualDebtService
       },
       cattlePerf,
