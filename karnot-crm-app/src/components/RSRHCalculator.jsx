@@ -540,7 +540,6 @@ const RSRHCalculator = () => {
         utilizationRate
       },
       profitability: {
-        feedCostPerHead,
         grossProfit,
         netProfit,
         paybackYears,
