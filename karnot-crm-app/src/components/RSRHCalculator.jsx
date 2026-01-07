@@ -310,18 +310,21 @@ const RSRHCalculator = () => {
   const runCalculation = () => {
     // 1. Heat Load & Equipment Selection
     const heatLoad = calculateHeatLoad();
-    const hpHeating = selectHeatPump(heatLoad.totalKW_heating);
-    const hpCooling = selectHeatPump(heatLoad.totalKW_cooling);
+    
+    // Heat pumps are REVERSIBLE - size for the larger load
+    const peakLoad = Math.max(heatLoad.totalKW_heating, heatLoad.totalKW_cooling);
+    
+    // Standard Karnot configuration: 4 units total (2+2 for redundancy)
+    const hpSystem = selectHeatPump(peakLoad);
     
     // 2. CapEx
     const capExMachine = dgsUnits * machineCostUSD * fxRate;
-    const capExHP_heat = hpHeating.totalUnits * hpHeating.model.cost * fxRate;
-    const capExHP_cool = hpCooling.totalUnits * hpCooling.model.cost * fxRate;
+    const capExHP = hpSystem.totalUnits * hpSystem.model.cost * fxRate; // Single system!
     const capExAnc = dgsUnits * (SPECS.ANCILLARY.AHU + SPECS.ANCILLARY.RingMain + 
                                   SPECS.ANCILLARY.Dehum + SPECS.ANCILLARY.CO2) * fxRate;
     const capExBuilding = (buildingWidth * buildingLength) * buildCost;
     const capExLogistics = dgsUnits * 250000; // ₱250k per unit shipping/install
-    const totalCapEx = capExMachine + capExHP_heat + capExHP_cool + capExAnc + capExBuilding + capExLogistics;
+    const totalCapEx = capExMachine + capExHP + capExAnc + capExBuilding + capExLogistics;
     
     // 3. Cattle Performance (calculate early, needed for OpEx)
     const cattlePerf = calculateCattlePerformance();
@@ -333,9 +336,12 @@ const RSRHCalculator = () => {
     
     // Electrical load
     const processLoadKW = Object.values(SPECS.LOADS).reduce((a, b) => a + b) * dgsUnits;
+    
+    // HVAC electrical load - use the LARGER of heating or cooling (can't run both simultaneously)
     const hvacHeatingLoadKW = heatLoad.totalKW_heating / SPECS.THERMAL.HEATING_COP;
     const hvacCoolingLoadKW = heatLoad.totalKW_cooling / SPECS.THERMAL.COOLING_COP;
     const peakHVACLoadKW = Math.max(hvacHeatingLoadKW, hvacCoolingLoadKW);
+    
     const totalKW = processLoadKW + peakHVACLoadKW;
     const annualElecCost = totalKW * 24 * 365 * elecRate;
     
@@ -356,18 +362,23 @@ const RSRHCalculator = () => {
     
     const totalOpEx = annualOpExBeforeDebt + annualDebtService;
     
-    // 6. Revenue Calculation (HydroGreen scenario)
-    const hydroHeads = cattlePerf.hydrogreen.annualHeads;
-    const saleValuePerHead = targetWeightGain * liveWeightPrice;
-    const annualRevenue = hydroHeads * saleValuePerHead;
+    // 6. Revenue Calculation - SELLING FODDER (not cattle!)
+    // Your revenue is FIXED by production capacity, not herd size
+    const annualFodderProduced = dailyYield * 365 * dgsUnits; // kg/year
+    const fodderSalePrice = feedPrice; // Price per kg (set by user)
+    const annualRevenue = annualFodderProduced * fodderSalePrice;
     
-    // 7. Cost per head (feed only)
-    const fodderCostPerKg = annualOpExBeforeDebt / annualFodderKg;
-    const feedCostPerHead = (cattlePerf.hydrogreen.feedPerHead * 0.7 * fodderCostPerKg) + 
-                            (cattlePerf.hydrogreen.feedPerHead * 0.3 * grainCost);
+    // 7. Cattle metrics (for reference only - doesn't affect revenue)
+    const dailyFeedPerHead = 12; // kg fresh fodder per head per day
+    const maxCattleCapacity = Math.floor((dailyYield * dgsUnits) / dailyFeedPerHead);
+    const cattlePerf = calculateCattlePerformance();
+    
+    // Show what % of production capacity is being used
+    const dailyFeedNeeded = herdSize * dailyFeedPerHead;
+    const dailyProduction = dailyYield * dgsUnits;
+    const utilizationRate = Math.min(100, (dailyFeedNeeded / dailyProduction) * 100);
     
     // 8. Net Profit (AFTER all costs including debt service)
-    const totalFeedCost = feedCostPerHead * hydroHeads;
     const grossProfit = annualRevenue - annualOpExBeforeDebt;
     const netProfit = grossProfit - annualDebtService;
     
@@ -381,12 +392,11 @@ const RSRHCalculator = () => {
     
     const calculatedResults = {
       heatLoad,
-      hpHeating,
-      hpCooling,
+      hpSystem, // Single reversible system
+      peakLoad,
       capEx: {
         machine: capExMachine,
-        heatPumpsHeat: capExHP_heat,
-        heatPumpsCool: capExHP_cool,
+        heatPumps: capExHP, // Single system cost
         ancillary: capExAnc,
         building: capExBuilding,
         logistics: capExLogistics,
@@ -413,9 +423,12 @@ const RSRHCalculator = () => {
         total: totalOpEx
       },
       revenue: {
-        annualHeads: hydroHeads,
-        salePerHead: saleValuePerHead,
-        totalAnnual: annualRevenue
+        annualFodderProduced,
+        fodderSalePrice,
+        totalAnnual: annualRevenue,
+        maxCattleCapacity,
+        currentHerdSize: herdSize,
+        utilizationRate
       },
       profitability: {
         feedCostPerHead,
@@ -514,8 +527,7 @@ const RSRHCalculator = () => {
       </thead>
       <tbody>
         <tr><td>HydroGreen Fodder Systems (${dgsUnits} units)</td><td align="right">${fmtCurrency(d.capEx.machine)}</td></tr>
-        <tr><td>Karnot Heating Heat Pumps (${d.hpHeating.totalUnits}x ${d.hpHeating.model.name})</td><td align="right">${fmtCurrency(d.capEx.heatPumpsHeat)}</td></tr>
-        <tr><td>Karnot Cooling Heat Pumps (${d.hpCooling.totalUnits}x ${d.hpCooling.model.name})</td><td align="right">${fmtCurrency(d.capEx.heatPumpsCool)}</td></tr>
+        <tr><td>Karnot R290 Heat Pumps - Reversible (${d.hpSystem.totalUnits}x ${d.hpSystem.model.name})</td><td align="right">${fmtCurrency(d.capEx.heatPumps)}</td></tr>
         <tr><td>Mechanical Ancillaries & Controls</td><td align="right">${fmtCurrency(d.capEx.ancillary)}</td></tr>
         <tr><td>Building Construction</td><td align="right">${fmtCurrency(d.capEx.building)}</td></tr>
         <tr><td>Logistics & Installation</td><td align="right">${fmtCurrency(d.capEx.logistics)}</td></tr>
@@ -532,15 +544,17 @@ const RSRHCalculator = () => {
         <p><strong>Total Heating Load:</strong> ${fmt(d.heatLoad.totalKW_heating, 1)} kW (${fmt(d.heatLoad.totalBTUhr_heating, 0)} BTU/hr)</p>
         <p style="margin-left: 15px; font-size: 0.9em;">• Conduction Loss: ${fmt(d.heatLoad.conductionKW_heat, 1)} kW</p>
         <p style="margin-left: 15px; font-size: 0.9em;">• Ventilation Load: ${fmt(d.heatLoad.ventilationKW_heat, 1)} kW</p>
-        <p><strong>Heat Pumps Selected:</strong> ${d.hpHeating.totalUnits}x ${d.hpHeating.model.name}</p>
       </div>
       <div class="advantage">
         <h4 style="margin-top: 0; color: #1565c0;">❄️ Cooling Requirements</h4>
         <p><strong>Total Cooling Load:</strong> ${fmt(d.heatLoad.totalKW_cooling, 1)} kW (${fmt(d.heatLoad.totalTons_cooling, 1)} Tons)</p>
         <p style="margin-left: 15px; font-size: 0.9em;">• Sensible Load: ${fmt(d.heatLoad.sensibleBTUhr * 0.000293071, 1)} kW</p>
         <p style="margin-left: 15px; font-size: 0.9em;">• Latent Load: ${fmt(d.heatLoad.latentBTUhr * 0.000293071, 1)} kW</p>
-        <p><strong>Heat Pumps Selected:</strong> ${d.hpCooling.totalUnits}x ${d.hpCooling.model.name}</p>
       </div>
+    </div>
+    <div style="margin-top: 15px; padding: 15px; background: #e8f5e9; border-radius: 8px;">
+      <p style="margin: 0;"><strong>Heat Pump System (Reversible R290):</strong> ${d.hpSystem.totalUnits}x ${d.hpSystem.model.name}</p>
+      <p style="margin: 5px 0 0 0; font-size: 0.9em;">Sized for peak load: ${fmt(d.peakLoad, 1)} kW | Standard Karnot 4-unit configuration (2+2 redundancy)</p>
     </div>
     <p style="font-size: 0.9em; margin-top: 15px; color: #666;">
       <strong>Climate Control:</strong> Target conditions 70°F (21°C) @ 75% RH | 
@@ -569,8 +583,9 @@ const RSRHCalculator = () => {
         <tr><th>Metric</th><th style="text-align: right;">Value</th></tr>
       </thead>
       <tbody>
-        <tr><td>Cattle Finished per Year</td><td align="right">${fmt(d.revenue.annualHeads, 0)} heads</td></tr>
-        <tr><td>Average Sale Value per Head</td><td align="right">${fmtCurrency(d.revenue.salePerHead)}</td></tr>
+        <tr><td>Annual Fodder Production</td><td align="right">${fmt(d.revenue.annualFodderProduced, 0)} kg</td></tr>
+        <tr><td>Fodder Sale Price</td><td align="right">${fmtCurrency(d.revenue.fodderSalePrice, 2)}/kg</td></tr>
+        <tr><td>Maximum Cattle Capacity</td><td align="right">${fmt(d.revenue.maxCattleCapacity, 0)} heads (at 12kg/day)</td></tr>
         <tr class="total-row"><td><strong>Gross Annual Revenue</strong></td><td align="right"><strong>${fmtCurrency(d.revenue.totalAnnual)}</strong></td></tr>
       </tbody>
     </table>
@@ -1164,12 +1179,6 @@ const RSRHCalculator = () => {
                     <span className="text-gray-600">• Ventilation Load:</span>
                     <span className="font-semibold">{fmt(results.heatLoad.ventilationKW_heat, 1)} kW</span>
                   </div>
-                  <div className="flex justify-between mt-3 pt-3 border-t-2 border-red-300 bg-red-100 -mx-4 px-4 py-2">
-                    <span className="font-bold text-red-800">Heat Pumps Required:</span>
-                    <span className="font-bold text-red-800">
-                      {results.hpHeating.totalUnits}x {results.hpHeating.model.name}
-                    </span>
-                  </div>
                 </div>
               </div>
 
@@ -1201,13 +1210,30 @@ const RSRHCalculator = () => {
                     <span className="text-gray-600">• Fresh Air Ventilation:</span>
                     <span className="font-semibold">{fmt(results.heatLoad.ventilationKW_cool, 1)} kW</span>
                   </div>
-                  <div className="flex justify-between mt-3 pt-3 border-t-2 border-blue-300 bg-blue-100 -mx-4 px-4 py-2">
-                    <span className="font-bold text-blue-800">Heat Pumps Required:</span>
-                    <span className="font-bold text-blue-800">
-                      {results.hpCooling.totalUnits}x {results.hpCooling.model.name}
-                    </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Heat Pump System - Single Reversible System */}
+            <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-teal-50 rounded-lg border-2 border-green-300">
+              <h4 className="font-bold text-green-800 mb-3">🔄 Karnot R290 Reversible Heat Pump System:</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <div className="text-gray-700">Heat Pump Configuration:</div>
+                  <div className="font-bold text-green-800">{results.hpSystem.totalUnits}x {results.hpSystem.model.name}</div>
+                  <div className="text-xs text-gray-600 mt-1">Standard 4-unit setup (2+2 redundancy)</div>
+                </div>
+                <div>
+                  <div className="text-gray-700">Sized For Peak Load:</div>
+                  <div className="font-bold text-green-800">{fmt(results.peakLoad, 1)} kW</div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    {results.heatLoad.totalKW_heating > results.heatLoad.totalKW_cooling ? 'Heating dominant' : 'Cooling dominant'}
                   </div>
                 </div>
+              </div>
+              <div className="mt-3 pt-3 border-t border-green-200 text-xs text-gray-600">
+                <strong>Reversible Operation:</strong> Same units handle heating in winter, cooling in summer. 
+                Proprietary R290 (propane) refrigerant - PFAS-free, natural, low-GWP.
               </div>
             </div>
 
@@ -1257,21 +1283,12 @@ const RSRHCalculator = () => {
                   </tr>
                   <tr className="border-b">
                     <td className="py-3 px-2">
-                      🔥 Heating Heat Pumps<br/>
+                      🔄 Karnot R290 Heat Pumps (Reversible)<br/>
                       <span className="text-xs text-gray-500">
-                        {results.hpHeating.totalUnits}x {results.hpHeating.model.name}
+                        {results.hpSystem.totalUnits}x {results.hpSystem.model.name} | 4-unit standard config
                       </span>
                     </td>
-                    <td className="py-3 px-2 text-right">{fmtCurrency(results.capEx.heatPumpsHeat)}</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="py-3 px-2">
-                      ❄️ Cooling Heat Pumps<br/>
-                      <span className="text-xs text-gray-500">
-                        {results.hpCooling.totalUnits}x {results.hpCooling.model.name}
-                      </span>
-                    </td>
-                    <td className="py-3 px-2 text-right">{fmtCurrency(results.capEx.heatPumpsCool)}</td>
+                    <td className="py-3 px-2 text-right">{fmtCurrency(results.capEx.heatPumps)}</td>
                   </tr>
                   <tr className="border-b">
                     <td className="py-3 px-2">Ancillaries & Controls</td>
@@ -1293,7 +1310,7 @@ const RSRHCalculator = () => {
               </table>
               <div className="mt-4 p-3 bg-gray-50 rounded text-xs text-gray-600">
                 <strong>Thermal Engineering:</strong> {fmt(results.heatLoad.totalKW_heating, 1)} kW Heating / {fmt(results.heatLoad.totalKW_cooling, 1)} kW Cooling<br/>
-                <strong>Heat Pumps:</strong> {results.hpHeating.totalUnits}x Heating + {results.hpCooling.totalUnits}x Cooling
+                <strong>Heat Pumps:</strong> {results.hpSystem.totalUnits}x {results.hpSystem.model.name} (Reversible, sized for {fmt(results.peakLoad, 1)} kW peak)
               </div>
             </div>
 
@@ -1332,9 +1349,9 @@ const RSRHCalculator = () => {
                   </tr>
                   <tr className="border-b text-green-700 font-semibold">
                     <td className="py-3 px-2">
-                      Gross Revenue (Feed Sales)<br/>
+                      Gross Revenue (Fodder Sales)<br/>
                       <span className="text-xs text-gray-500 font-normal">
-                        {fmt(results.revenue.annualHeads)} heads/year × {fmtCurrency(results.revenue.salePerHead)}/head
+                        {fmt(results.revenue.annualFodderProduced, 0)} kg/year × {fmtCurrency(results.revenue.fodderSalePrice, 2)}/kg
                       </span>
                     </td>
                     <td className="py-3 px-2 text-right">{fmtCurrency(results.revenue.totalAnnual)}</td>
