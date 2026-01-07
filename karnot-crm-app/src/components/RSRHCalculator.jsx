@@ -446,15 +446,39 @@ const RSRHCalculator = () => {
 
   // ==================== PDF EXPORT ====================
   const generatePDF = () => {
-    if (!results) return;
+    if (!results) {
+      console.error('PDF Error: No results available');
+      alert('Please run calculations first before generating PDF');
+      return;
+    }
     
-    const d = results;
-    const projectInfo = {
-      name: projectName,
-      date: new Date().toLocaleDateString('en-PH'),
-      location: CLIMATE_DATA[location].name,
-      currency: getCurrencyLabel()
-    };
+    try {
+      const d = results;
+      
+      // Validate all required data exists
+      if (!d.hpSystem) {
+        console.error('PDF Error: Missing hpSystem in results');
+        alert('Error: Heat pump system data missing');
+        return;
+      }
+      if (!d.cattlePerf) {
+        console.error('PDF Error: Missing cattlePerf in results');
+        alert('Error: Cattle performance data missing');
+        return;
+      }
+      
+      const projectInfo = {
+        name: projectName,
+        date: new Date().toLocaleDateString('en-PH'),
+        location: CLIMATE_DATA[location].name,
+        currency: getCurrencyLabel()
+      };
+      
+      console.log('Generating PDF with data:', {
+        hpSystem: d.hpSystem.model.name,
+        peakLoad: d.peakLoad,
+        cattlePerf: d.cattlePerf.hydrogreen.daysToMarket
+      });
     
     const proposalHTML = `
 <!DOCTYPE html>
@@ -679,13 +703,28 @@ const RSRHCalculator = () => {
 </body>
 </html>`;
     
-    const win = window.open('', '_blank');
-    if (!win) {
-      alert('Popup blocked! Please allow popups for this site.');
-      return;
+    try {
+      const win = window.open('', '_blank');
+      if (!win) {
+        alert('Popup blocked! Please allow popups for this site.');
+        console.error('PDF Error: Popup was blocked');
+        return;
+      }
+      
+      win.document.write(proposalHTML);
+      win.document.close();
+      console.log('PDF generated successfully');
+      
+    } catch (pdfError) {
+      console.error('PDF Generation Error:', pdfError);
+      alert(`Error generating PDF: ${pdfError.message}\n\nPlease check console for details.`);
     }
-    win.document.write(proposalHTML);
-    win.document.close();
+    
+    } catch (error) {
+      console.error('Fatal PDF Error:', error);
+      console.error('Error stack:', error.stack);
+      alert(`Unable to generate PDF: ${error.message}\n\nError details logged to console.`);
+    }
   };
 
   // ==================== HELPER FUNCTIONS ====================
