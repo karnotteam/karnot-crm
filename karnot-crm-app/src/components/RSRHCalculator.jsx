@@ -43,7 +43,12 @@ const RSRHCalculator = () => {
   // Financing
   const [financeAmount, setFinanceAmount] = useState(100); // % of CapEx to finance
   const [interestRate, setInterestRate] = useState(12); // % annual interest
-  const [loanTermYears, setLoanTermYears] = useState(5);
+  const [loanTermYears, setLoanTermYears] = useState(10); // Amortize over 10 years
+  const [convertibleTerm, setConvertibleTerm] = useState(3); // Convert after 3 years or take equity
+  
+  // Solar + Storage
+  const [includeSolar, setIncludeSolar] = useState(true); // Include solar + PCM
+  const [solarReduction, setSolarReduction] = useState(80); // % reduction in grid electricity
   
   // Calculated Results
   const [results, setResults] = useState(null);
@@ -437,7 +442,17 @@ const RSRHCalculator = () => {
     const peakHVACLoadKW = Math.max(hvacHeatingLoadKW, hvacCoolingLoadKW);
     
     const totalKW = processLoadKW + peakHVACLoadKW;
-    const annualElecCost = totalKW * 24 * 365 * elecRate;
+    const gridElectricityCost = totalKW * 24 * 365 * elecRate;
+    const solarSavings = includeSolar ? gridElectricityCost * (solarReduction / 100) : 0;
+    const annualElecCost = gridElectricityCost - solarSavings;
+    
+    console.log('Electricity costs:', {
+      totalKW,
+      gridElectricityCost,
+      solarReduction: solarReduction + '%',
+      solarSavings,
+      netElecCost: annualElecCost
+    });
     
     const annualLaborCost = laborCost * 12;
     const annualOpExBeforeDebt = annualGrainCost + annualElecCost + annualLaborCost;
@@ -448,11 +463,20 @@ const RSRHCalculator = () => {
     const financedAmount = totalProjectCost * (financeAmount / 100);
     const equityAmount = totalProjectCost - financedAmount;
     
-    // Loan repayment over 3 years from revenue (not standard amortization)
-    const loanRepaymentYears = 3;
-    const annualLoanRepayment = financedAmount / loanRepaymentYears;
-    const annualInterestCost = financedAmount * (interestRate / 100) * 0.5; // Average over 3 years
+    // Loan repayment over 10 years (amortized)
+    const annualLoanRepayment = financedAmount / loanTermYears;
+    const annualInterestCost = financedAmount * (interestRate / 100) * 0.5; // Average over term
     const annualDebtService = annualLoanRepayment + annualInterestCost;
+    
+    console.log('Financing structure:', {
+      totalProjectCost,
+      financedAmount,
+      equityAmount,
+      loanTermYears,
+      convertibleTerm,
+      annualDebtService,
+      note: `Convertible note: Convert to equity after ${convertibleTerm} years or continue as debt`
+    });
     
     const totalOpEx = annualOpExBeforeDebt + annualDebtService;
     console.log('OpEx calculated:', {
@@ -491,9 +515,35 @@ const RSRHCalculator = () => {
     const grossProfit = annualRevenue - annualOpExBeforeDebt;
     const netProfit = grossProfit - annualDebtService;
     
-    // 9. ROI
-    const paybackYears = equityAmount / netProfit;
-    const annualROI = (netProfit / equityAmount) * 100;
+    console.log('Profit calculated:', {
+      annualRevenue,
+      annualOpExBeforeDebt,
+      grossProfit,
+      annualDebtService,
+      netProfit
+    });
+    
+    // 9. ROI - Calculate based on total project cost if fully financed
+    const investmentBase = equityAmount > 0 ? equityAmount : totalProjectCost;
+    const paybackYears = (netProfit > 0 && investmentBase > 0) ? investmentBase / netProfit : 0;
+    const annualROI = (netProfit > 0 && investmentBase > 0) ? (netProfit / investmentBase) * 100 : 0;
+    
+    // Validate calculations
+    if (isNaN(paybackYears) || !isFinite(paybackYears)) {
+      console.error('Invalid paybackYears calculation:', { investmentBase, netProfit });
+    }
+    if (isNaN(annualROI) || !isFinite(annualROI)) {
+      console.error('Invalid annualROI calculation:', { investmentBase, netProfit });
+    }
+    
+    console.log('ROI calculated:', {
+      equityAmount,
+      totalProjectCost,
+      investmentBase,
+      netProfit,
+      paybackYears: isNaN(paybackYears) ? 'NaN' : paybackYears,
+      annualROI: isNaN(annualROI) ? 'NaN' : annualROI
+    });
     
     // 10. Partnership Split - FIXED: Karnot gets 80%
     const karnotAnnualShare = netProfit * (karnotShare / 100);
@@ -518,7 +568,8 @@ const RSRHCalculator = () => {
         financedAmount,
         equityAmount,
         interestRate,
-        loanRepaymentYears,
+        loanTermYears,
+        convertibleTerm,
         annualLoanRepayment,
         annualInterestCost,
         annualDebtService
@@ -1263,7 +1314,7 @@ const RSRHCalculator = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Loan Term (years)
+                Loan Term (years amortization)
               </label>
               <input
                 type="number"
@@ -1271,6 +1322,51 @@ const RSRHCalculator = () => {
                 onChange={(e) => setLoanTermYears(parseInt(e.target.value))}
                 className="w-full border rounded px-3 py-2"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Convertible Term (years to equity option)
+              </label>
+              <input
+                type="number"
+                value={convertibleTerm}
+                onChange={(e) => setConvertibleTerm(parseInt(e.target.value))}
+                className="w-full border rounded px-3 py-2 bg-yellow-50"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Note converts to equity after {convertibleTerm} years or continues as debt
+              </p>
+            </div>
+            <div className="pt-3 border-t border-gray-200">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={includeSolar}
+                  onChange={(e) => setIncludeSolar(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Include Solar + PCM Storage System
+                </span>
+              </label>
+              {includeSolar && (
+                <div className="mt-2 ml-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Grid Electricity Reduction (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={solarReduction}
+                    onChange={(e) => setSolarReduction(parseFloat(e.target.value))}
+                    className="w-full border rounded px-3 py-2 bg-green-50"
+                    min="0"
+                    max="100"
+                  />
+                  <p className="text-xs text-green-600 mt-1">
+                    Reduces grid electricity costs by {solarReduction}%
+                  </p>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
