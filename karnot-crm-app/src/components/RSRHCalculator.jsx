@@ -363,15 +363,39 @@ const RSRHCalculator = () => {
 
   // ==================== FINANCIAL CALCULATIONS ====================
   const runCalculation = () => {
-    // 1. Heat Load & Equipment Selection
-    const heatLoad = calculateHeatLoad();
+    console.log('=== CALCULATION STARTED ===');
+    console.log('Input values:', {
+      dgsUnits,
+      machineCostUSD,
+      fxRate,
+      dailyYield,
+      herdSize,
+      feedPrice,
+      location
+    });
+    
+    try {
+      console.log('Step 1: Calculating heat load...');
+      // 1. Heat Load & Equipment Selection
+      const heatLoad = calculateHeatLoad();
+      console.log('Heat load calculated:', {
+        heating_kW: heatLoad.totalKW_heating,
+        cooling_kW: heatLoad.totalKW_cooling
+      });
     
     // Heat pumps are REVERSIBLE - size for the larger load
     const peakLoad = Math.max(heatLoad.totalKW_heating, heatLoad.totalKW_cooling);
+    console.log('Step 2: Selecting heat pumps for peak load:', peakLoad, 'kW');
     
     // Standard Karnot configuration: 4 units total (2+2 for redundancy)
     const hpSystem = selectHeatPump(peakLoad);
+    console.log('Heat pump selected:', {
+      model: hpSystem.model.name,
+      totalUnits: hpSystem.totalUnits,
+      cost: hpSystem.totalUnits * hpSystem.model.cost
+    });
     
+    console.log('Step 3: Calculating CapEx...');
     // 2. CapEx
     const capExMachine = dgsUnits * machineCostUSD * fxRate;
     const capExHP = hpSystem.totalUnits * hpSystem.model.cost * fxRate; // Single system!
@@ -380,10 +404,25 @@ const RSRHCalculator = () => {
     const capExBuilding = (buildingWidth * buildingLength) * buildCost;
     const capExLogistics = dgsUnits * 250000; // ₱250k per unit shipping/install
     const totalCapEx = capExMachine + capExHP + capExAnc + capExBuilding + capExLogistics;
+    console.log('CapEx calculated:', {
+      machine: capExMachine,
+      heatPumps: capExHP,
+      ancillary: capExAnc,
+      building: capExBuilding,
+      logistics: capExLogistics,
+      total: totalCapEx
+    });
     
+    console.log('Step 4: Calculating cattle performance...');
     // 3. Cattle Performance (calculate early, needed for OpEx)
     const cattlePerf = calculateCattlePerformance();
+    console.log('Cattle performance:', {
+      traditional_days: cattlePerf.traditional.daysToMarket,
+      hydrogreen_days: cattlePerf.hydrogreen.daysToMarket,
+      annual_heads: cattlePerf.hydrogreen.annualHeads
+    });
     
+    console.log('Step 5: Calculating OpEx...');
     // 4. OpEx Calculation (needed to calculate working capital requirement)
     const annualFodderKg = dailyYield * 365 * dgsUnits;
     const annualGrainKg = annualFodderKg * 0.16; // 16% grain input
@@ -416,7 +455,15 @@ const RSRHCalculator = () => {
     const annualDebtService = annualLoanRepayment + annualInterestCost;
     
     const totalOpEx = annualOpExBeforeDebt + annualDebtService;
+    console.log('OpEx calculated:', {
+      grain: annualGrainCost,
+      electricity: annualElecCost,
+      labor: annualLaborCost,
+      debtService: annualDebtService,
+      total: totalOpEx
+    });
     
+    console.log('Step 6: Calculating revenue (fodder sales)...');
     // 6. Revenue Calculation - SELLING FODDER (not cattle!)
     // Your revenue is FIXED by production capacity, not herd size
     const annualFodderProduced = dailyYield * 365 * dgsUnits; // kg/year
@@ -431,7 +478,15 @@ const RSRHCalculator = () => {
     const dailyFeedNeeded = herdSize * dailyFeedPerHead;
     const dailyProduction = dailyYield * dgsUnits;
     const utilizationRate = Math.min(100, (dailyFeedNeeded / dailyProduction) * 100);
+    console.log('Revenue calculated:', {
+      annualFodderProduced,
+      fodderSalePrice,
+      annualRevenue,
+      maxCattleCapacity,
+      utilizationRate: utilizationRate.toFixed(1) + '%'
+    });
     
+    console.log('Step 7: Calculating profitability...');
     // 8. Net Profit (AFTER all costs including debt service)
     const grossProfit = annualRevenue - annualOpExBeforeDebt;
     const netProfit = grossProfit - annualDebtService;
@@ -495,8 +550,24 @@ const RSRHCalculator = () => {
       }
     };
     
+    console.log('Step 10: Setting results...');
     setResults(calculatedResults);
     setShowResults(true);
+    console.log('=== CALCULATION COMPLETED SUCCESSFULLY ===');
+    console.log('Results summary:', {
+      totalInvestment: calculatedResults.capEx.total,
+      netProfit: calculatedResults.profitability.netProfit,
+      payback: calculatedResults.profitability.paybackYears,
+      hpSystem: calculatedResults.hpSystem.model.name
+    });
+    
+    } catch (error) {
+      console.error('=== CALCULATION FAILED ===');
+      console.error('Error type:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      alert(`Calculation failed: ${error.message}\n\nCheck debug console for details.`);
+    }
   };
 
   // ==================== PDF EXPORT ====================
