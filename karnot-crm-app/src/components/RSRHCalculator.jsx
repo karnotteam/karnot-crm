@@ -371,7 +371,6 @@ const RSRHCalculator = () => {
     // 7. Cattle metrics (for reference only - doesn't affect revenue)
     const dailyFeedPerHead = 12; // kg fresh fodder per head per day
     const maxCattleCapacity = Math.floor((dailyYield * dgsUnits) / dailyFeedPerHead);
-    const cattlePerf = calculateCattlePerformance();
     
     // Show what % of production capacity is being used
     const dailyFeedNeeded = herdSize * dailyFeedPerHead;
