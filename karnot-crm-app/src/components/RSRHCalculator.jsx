@@ -47,8 +47,8 @@ const RSRHCalculator = () => {
   const [convertibleTerm, setConvertibleTerm] = useState(3); // Convert after 3 years or take equity
   
   // Solar + Storage
-  const [includeSolar, setIncludeSolar] = useState(true); // Include solar + PCM
-  const [solarReduction, setSolarReduction] = useState(80); // % reduction in grid electricity
+  const [includeSolar, setIncludeSolar] = useState(false); // Default OFF - show full grid cost
+  const [solarReduction, setSolarReduction] = useState(80); // % reduction in grid electricity when enabled
   
   // Calculated Results
   const [results, setResults] = useState(null);
@@ -447,11 +447,13 @@ const RSRHCalculator = () => {
     const annualElecCost = gridElectricityCost - solarSavings;
     
     console.log('Electricity costs:', {
-      totalKW,
-      gridElectricityCost,
+      totalKW: totalKW.toFixed(2) + ' kW',
+      fullGridCost: 'PHP ' + gridElectricityCost.toFixed(0),
+      solarEnabled: includeSolar,
       solarReduction: solarReduction + '%',
-      solarSavings,
-      netElecCost: annualElecCost
+      solarSavings: 'PHP ' + solarSavings.toFixed(0),
+      netElecCost: 'PHP ' + annualElecCost.toFixed(0),
+      savingsAmount: includeSolar ? 'SAVING PHP ' + solarSavings.toFixed(0) + '/year' : 'No solar - full grid cost'
     });
     
     const annualLaborCost = laborCost * 12;
