@@ -48,7 +48,62 @@ const RSRHCalculator = () => {
   // Calculated Results
   const [results, setResults] = useState(null);
   const [showResults, setShowResults] = useState(false);
-  const [displayCurrency, setDisplayCurrency] = useState('PHP'); // 'PHP' or 'USD'
+  const [displayCurrency, setDisplayCurrency] = useState('PHP');
+  
+  // Console viewer for iPad debugging
+  const [showConsole, setShowConsole] = useState(false);
+  const [consoleLogs, setConsoleLogs] = useState([]);
+  
+  // Capture console logs for debugging
+  useEffect(() => {
+    const originalLog = console.log;
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    
+    console.log = (...args) => {
+      const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      setConsoleLogs(prev => [...prev.slice(-100), { 
+        type: 'log', 
+        message, 
+        time: new Date().toLocaleTimeString() 
+      }]);
+      originalLog.apply(console, args);
+    };
+    
+    console.error = (...args) => {
+      const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      setConsoleLogs(prev => [...prev.slice(-100), { 
+        type: 'error', 
+        message, 
+        time: new Date().toLocaleTimeString() 
+      }]);
+      originalError.apply(console, args);
+    };
+    
+    console.warn = (...args) => {
+      const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      setConsoleLogs(prev => [...prev.slice(-100), { 
+        type: 'warn', 
+        message, 
+        time: new Date().toLocaleTimeString() 
+      }]);
+      originalWarn.apply(console, args);
+    };
+    
+    console.log('Console logger initialized');
+    
+    return () => {
+      console.log = originalLog;
+      console.error = originalError;
+      console.warn = originalWarn;
+    };
+  }, []);
 
   // ==================== CONSTANTS ====================
   const CLIMATE_DATA = {
@@ -765,7 +820,7 @@ const RSRHCalculator = () => {
       <div className="bg-white rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-gray-700">Project Settings</h3>
-          <div className="flex gap-4 items-center">
+          <div className="flex gap-4 items-center flex-wrap">
             <label className="text-sm font-medium">Display Currency:</label>
             <select 
               value={displayCurrency}
@@ -783,9 +838,50 @@ const RSRHCalculator = () => {
               className="border rounded px-3 py-1 w-20"
               step="0.01"
             />
+            <button
+              onClick={() => setShowConsole(!showConsole)}
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700 transition"
+            >
+              {showConsole ? '✖ Hide' : '🐛 Debug'} Console
+            </button>
           </div>
         </div>
       </div>
+
+      {/* Console Viewer */}
+      {showConsole && (
+        <div className="bg-black text-green-400 rounded-lg shadow-lg p-4 font-mono text-xs max-h-96 overflow-y-auto">
+          <div className="flex justify-between items-center mb-2 border-b border-green-700 pb-2">
+            <div className="text-white font-bold">📱 Debug Console ({consoleLogs.length} logs)</div>
+            <button 
+              onClick={() => setConsoleLogs([])}
+              className="bg-red-600 text-white px-3 py-1 rounded text-xs"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="space-y-1">
+            {consoleLogs.length === 0 ? (
+              <div className="text-gray-500">No logs yet...</div>
+            ) : (
+              consoleLogs.slice().reverse().map((log, i) => (
+                <div 
+                  key={i} 
+                  className={`py-1 border-b border-gray-800 ${
+                    log.type === 'error' ? 'text-red-400' : 
+                    log.type === 'warn' ? 'text-yellow-400' : 
+                    'text-green-400'
+                  }`}
+                >
+                  <span className="text-gray-500">[{log.time}]</span> 
+                  <span className="ml-2">{log.type.toUpperCase()}:</span> 
+                  <span className="ml-2 whitespace-pre-wrap">{log.message}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main Input Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
