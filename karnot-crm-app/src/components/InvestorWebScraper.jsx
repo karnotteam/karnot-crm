@@ -1,272 +1,334 @@
-// netlify/functions/scrape-investor.js
-const axios = require('axios');
-const cheerio = require('cheerio');
+import React, { useState } from 'react';
+import { Globe, Search, AlertCircle, CheckCircle, TrendingUp, MapPin, DollarSign, Building } from 'lucide-react';
+import { calculateInvestorScore } from '../utils/investorScoring';
+import { detectFlags } from '../utils/redFlagDetection';
 
-// Helper: Extract clean text from HTML
-const cleanText = (text) => {
-  return text
-    .replace(/\s+/g, ' ')
-    .replace(/\n+/g, ' ')
-    .trim();
-};
+const InvestorWebScraper = ({ investor, onUpdateInvestor }) => {
+  const [scraping, setScraping] = useState(false);
+  const [results, setResults] = useState(null);
+  const [error, setError] = useState(null);
 
-// Helper: Detect sectors from text
-const detectSectors = (text) => {
-  const lowerText = text.toLowerCase();
-  const sectors = new Set();
-  
-  const sectorKeywords = {
-    'cleantech': ['cleantech', 'clean tech', 'clean energy', 'renewable'],
-    'climate': ['climate', 'carbon', 'decarbonization', 'net zero'],
-    'energy': ['energy', 'power', 'electricity', 'solar', 'wind'],
-    'fintech': ['fintech', 'financial technology', 'payments', 'banking'],
-    'healthcare': ['healthcare', 'health', 'medical', 'biotech', 'pharma'],
-    'saas': ['saas', 'software', 'cloud', 'enterprise software'],
-    'ecommerce': ['ecommerce', 'e-commerce', 'retail', 'marketplace'],
-    'edtech': ['edtech', 'education', 'learning', 'online courses'],
-    'agtech': ['agtech', 'agriculture', 'farming', 'food tech'],
-    'proptech': ['proptech', 'real estate', 'property technology'],
-    'infrastructure': ['infrastructure', 'construction', 'built environment'],
-    'mobility': ['mobility', 'transportation', 'automotive', 'ev', 'electric vehicle'],
-    'hardware': ['hardware', 'manufacturing', 'iot', 'robotics'],
-    'ai': ['artificial intelligence', 'machine learning', 'ai', 'ml']
-  };
-
-  Object.entries(sectorKeywords).forEach(([sector, keywords]) => {
-    if (keywords.some(keyword => lowerText.includes(keyword))) {
-      sectors.add(sector);
+  const handleScrape = async () => {
+    if (!investor.website) {
+      setError('No website URL found for this investor. Please add a website first.');
+      return;
     }
-  });
 
-  return Array.from(sectors);
-};
+    setScraping(true);
+    setError(null);
+    setResults(null);
 
-// Helper: Detect geography from text
-const detectGeography = (text) => {
-  const lowerText = text.toLowerCase();
-  const regions = new Set();
-  
-  const geoKeywords = {
-    'Philippines': ['philippines', 'philippine', 'manila', 'cebu', 'davao'],
-    'Southeast Asia': ['southeast asia', 'asean', 'sea region'],
-    'Singapore': ['singapore'],
-    'Malaysia': ['malaysia', 'kuala lumpur'],
-    'Thailand': ['thailand', 'bangkok'],
-    'Vietnam': ['vietnam', 'hanoi', 'ho chi minh'],
-    'Indonesia': ['indonesia', 'jakarta'],
-    'India': ['india', 'bangalore', 'mumbai', 'delhi'],
-    'China': ['china', 'beijing', 'shanghai'],
-    'Japan': ['japan', 'tokyo'],
-    'United Kingdom': ['uk', 'united kingdom', 'london', 'britain'],
-    'Europe': ['europe', 'european'],
-    'United States': ['usa', 'united states', 'us', 'silicon valley', 'new york', 'san francisco'],
-    'Global': ['global', 'worldwide', 'international']
-  };
+    try {
+      // Call the Netlify function
+      const response = await fetch('/.netlify/functions/scrape-investor', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: investor.website,
+          investorName: investor.name
+        })
+      });
 
-  Object.entries(geoKeywords).forEach(([region, keywords]) => {
-    if (keywords.some(keyword => lowerText.includes(keyword))) {
-      regions.add(region);
-    }
-  });
+      const data = await response.json();
 
-  return Array.from(regions);
-};
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Scraping failed');
+      }
 
-// Helper: Extract portfolio companies
-const extractPortfolio = ($) => {
-  const portfolio = [];
-  
-  // Common selectors for portfolio sections
-  const portfolioSelectors = [
-    '.portfolio-item',
-    '.company-card',
-    '[class*="portfolio"]',
-    '[class*="company"]',
-    'article',
-    '.investment'
-  ];
+      // Analyze the scraped data
+      const flagAnalysis = detectFlags(
+        data.websiteText || '',
+        data.metaDescription || ''
+      );
 
-  portfolioSelectors.forEach(selector => {
-    $(selector).each((i, elem) => {
-      const $elem = $(elem);
-      const companyName = $elem.find('h1, h2, h3, h4, .title, .name').first().text().trim();
-      const description = $elem.find('p, .description').first().text().trim();
-      
-      if (companyName && companyName.length > 2 && companyName.length < 100) {
-        portfolio.push({
-          company: cleanText(companyName),
-          description: cleanText(description).substring(0, 200),
-          sector: detectSectors(description)[0] || 'Unknown'
+      const scoring = calculateInvestorScore({
+        ...investor,
+        sectors: data.sectors.join(', '),
+        geography: data.geography[0] || investor.region
+      });
+
+      const enrichedResults = {
+        ...data,
+        flagAnalysis,
+        scoring,
+        scrapedAt: new Date().toISOString()
+      };
+
+      setResults(enrichedResults);
+
+      // Update investor record with scraped data
+      if (onUpdateInvestor) {
+        await onUpdateInvestor(investor.id, {
+          scrapedData: enrichedResults,
+          lastScraped: new Date().toISOString(),
+          fitScore: scoring.score,
+          riskLevel: flagAnalysis.risk
         });
       }
-    });
-  });
 
-  // Limit to first 20 companies
-  return portfolio.slice(0, 20);
-};
-
-// Helper: Extract investment thesis
-const extractThesis = ($, fullText) => {
-  const thesis = [];
-  
-  // Look for common thesis sections
-  const thesisSelectors = [
-    'section:contains("thesis")',
-    'section:contains("approach")',
-    'section:contains("focus")',
-    'div:contains("invest in")',
-    'div:contains("we believe")',
-    '.mission',
-    '.vision',
-    '.about'
-  ];
-
-  thesisSelectors.forEach(selector => {
-    try {
-      $(selector).each((i, elem) => {
-        const text = $(elem).text();
-        if (text.length > 50 && text.length < 1000) {
-          thesis.push(cleanText(text));
-        }
-      });
-    } catch (e) {
-      // Ignore selector errors
+    } catch (err) {
+      console.error('Scraping error:', err);
+      setError(err.message || 'Failed to scrape website');
+    } finally {
+      setScraping(false);
     }
-  });
-
-  // If no thesis found, use meta description
-  if (thesis.length === 0) {
-    const metaDesc = $('meta[name="description"]').attr('content');
-    if (metaDesc) {
-      thesis.push(cleanText(metaDesc));
-    }
-  }
-
-  return thesis.slice(0, 3); // Return top 3 thesis statements
-};
-
-// Main scraping function
-exports.handler = async (event, context) => {
-  // Enable CORS
-  const headers = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Content-Type': 'application/json'
   };
 
-  // Handle preflight
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
-  }
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="bg-white border-2 border-blue-200 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Globe className="text-blue-600" size={20} />
+            <h3 className="font-black text-gray-800">WEB RESEARCH AGENT</h3>
+          </div>
+          <button
+            onClick={handleScrape}
+            disabled={scraping || !investor.website}
+            className={`px-4 py-2 rounded-lg font-bold text-sm uppercase tracking-wider flex items-center gap-2 transition-all ${
+              scraping || !investor.website
+                ? 'bg-gray-300 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            <Search size={16} />
+            {scraping ? 'Scraping...' : 'Research'}
+          </button>
+        </div>
 
-  // Only accept POST
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
-  }
+        {investor.website && (
+          <div className="text-sm text-gray-600">
+            <span className="font-bold">Target:</span>{' '}
+            <a href={investor.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+              {investor.website}
+            </a>
+          </div>
+        )}
 
-  try {
-    const { url, investorName } = JSON.parse(event.body);
+        {!investor.website && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+            <AlertCircle size={16} className="inline mr-2" />
+            No website URL found. Please add a website to this investor first.
+          </div>
+        )}
+      </div>
 
-    if (!url) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'URL is required' })
-      };
-    }
+      {/* Loading State */}
+      {scraping && (
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-8 text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600 mx-auto mb-4"></div>
+          <p className="font-bold text-blue-800">Scraping investor website...</p>
+          <p className="text-sm text-blue-600 mt-1">Analyzing portfolio, sectors, and geography</p>
+        </div>
+      )}
 
-    console.log(`Scraping: ${url}`);
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+          <div className="flex items-center gap-2 text-red-800 mb-2">
+            <AlertCircle size={20} />
+            <span className="font-bold">Error:</span>
+          </div>
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
 
-    // Fetch the website
-    const response = await axios.get(url, {
-      timeout: 15000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1'
-      }
-    });
+      {/* Results */}
+      {results && (
+        <div className="space-y-4">
+          {/* Risk Assessment */}
+          <div className={`border-2 rounded-xl p-4 ${
+            results.flagAnalysis.risk === 'CRITICAL' ? 'bg-red-50 border-red-300' :
+            results.flagAnalysis.risk === 'HIGH' ? 'bg-orange-50 border-orange-300' :
+            results.flagAnalysis.risk === 'MEDIUM' ? 'bg-yellow-50 border-yellow-300' :
+            'bg-green-50 border-green-300'
+          }`}>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-black text-gray-800">RISK ASSESSMENT</h4>
+              <span className={`px-3 py-1 rounded-full font-black text-xs ${
+                results.flagAnalysis.risk === 'CRITICAL' ? 'bg-red-600 text-white' :
+                results.flagAnalysis.risk === 'HIGH' ? 'bg-orange-600 text-white' :
+                results.flagAnalysis.risk === 'MEDIUM' ? 'bg-yellow-600 text-white' :
+                'bg-green-600 text-white'
+              }`}>
+                {results.flagAnalysis.risk} RISK
+              </span>
+            </div>
 
-    const html = response.data;
-    const $ = cheerio.load(html);
+            {/* Red Flags */}
+            {results.flagAnalysis.redFlags.length > 0 && (
+              <div className="mb-3">
+                <div className="font-bold text-red-800 mb-2">🚨 Red Flags Detected:</div>
+                {results.flagAnalysis.redFlags.map((flag, idx) => (
+                  <div key={idx} className="bg-white border border-red-200 rounded-lg p-3 mb-2">
+                    <div className="font-bold text-red-700">{flag.type.replace(/_/g, ' ')}</div>
+                    <div className="text-sm text-gray-700 mt-1">
+                      <strong>Action:</strong> {flag.action}
+                    </div>
+                    <div className="text-xs text-gray-600 mt-1 italic">
+                      💡 {flag.lesson}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Matches: {flag.matches.join(', ')}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-    // Remove script and style tags
-    $('script, style, noscript').remove();
+            {/* Green Flags */}
+            {results.flagAnalysis.greenFlags.length > 0 && (
+              <div>
+                <div className="font-bold text-green-800 mb-2">✅ Positive Signals:</div>
+                {results.flagAnalysis.greenFlags.map((flag, idx) => (
+                  <div key={idx} className="bg-white border border-green-200 rounded-lg p-3 mb-2">
+                    <div className="font-bold text-green-700">{flag.type.replace(/_/g, ' ')}</div>
+                    <div className="text-sm text-gray-700">{flag.why}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-    // Get full text
-    const fullText = $('body').text();
-    const cleanedText = cleanText(fullText);
+          {/* Fit Score */}
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="text-blue-600" size={20} />
+                <h4 className="font-black text-gray-800">FIT SCORE</h4>
+              </div>
+              <div className="text-right">
+                <div className="text-3xl font-black text-blue-600">{results.scoring.score}/100</div>
+                <div className="text-sm font-bold text-blue-700">{results.scoring.grade}</div>
+              </div>
+            </div>
+            
+            <div className="mb-3">
+              <div className="font-bold text-sm text-gray-700 mb-1">Reasons:</div>
+              {results.scoring.reasons.map((reason, idx) => (
+                <div key={idx} className="text-sm text-gray-600">• {reason}</div>
+              ))}
+            </div>
 
-    // Extract data
-    const sectors = detectSectors(cleanedText);
-    const geography = detectGeography(cleanedText);
-    const portfolio = extractPortfolio($);
-    const thesis = extractThesis($, cleanedText);
+            {results.scoring.warnings.length > 0 && (
+              <div>
+                <div className="font-bold text-sm text-orange-700 mb-1">Warnings:</div>
+                {results.scoring.warnings.map((warning, idx) => (
+                  <div key={idx} className="text-sm text-orange-600">⚠️ {warning}</div>
+                ))}
+              </div>
+            )}
 
-    // Extract basic info
-    const title = $('title').text() || investorName;
-    const metaDescription = $('meta[name="description"]').attr('content') || '';
+            <div className={`mt-3 px-3 py-2 rounded-lg font-black text-center ${
+              results.scoring.recommendation === 'HIGH PRIORITY' ? 'bg-green-100 text-green-800' :
+              results.scoring.recommendation === 'MEDIUM PRIORITY' ? 'bg-yellow-100 text-yellow-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>
+              {results.scoring.recommendation}
+            </div>
+          </div>
 
-    // Look for check size mentions
-    let checkSize = null;
-    const checkSizeRegex = /\$?\d+[kmb]?\s*-?\s*\$?\d+[kmb]?/gi;
-    const matches = cleanedText.match(checkSizeRegex);
-    if (matches && matches.length > 0) {
-      checkSize = matches[0];
-    }
+          {/* Extracted Data */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Sectors */}
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Building className="text-purple-600" size={18} />
+                <h4 className="font-black text-gray-800 text-sm">SECTORS</h4>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {results.sectors.map((sector, idx) => (
+                  <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs font-bold">
+                    {sector}
+                  </span>
+                ))}
+              </div>
+            </div>
 
-    // Compile results
-    const results = {
-      success: true,
-      url,
-      investorName: title.substring(0, 100),
-      scrapedAt: new Date().toISOString(),
-      
-      // Structured data
-      sectors: sectors.length > 0 ? sectors : ['Unknown'],
-      geography: geography.length > 0 ? geography : ['Unknown'],
-      checkSize: checkSize || 'Not specified',
-      
-      // Portfolio
-      portfolio: portfolio.length > 0 ? portfolio : [],
-      portfolioCount: portfolio.length,
-      
-      // Thesis
-      investmentThesis: thesis.length > 0 ? thesis : [metaDescription],
-      
-      // Raw data for analysis
-      websiteText: cleanedText.substring(0, 5000), // First 5000 chars
-      metaDescription: metaDescription.substring(0, 500)
-    };
+            {/* Geography */}
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <MapPin className="text-green-600" size={18} />
+                <h4 className="font-black text-gray-800 text-sm">GEOGRAPHY</h4>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {results.geography.map((geo, idx) => (
+                  <span key={idx} className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold">
+                    {geo}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
 
-    console.log(`Successfully scraped ${url}: ${sectors.length} sectors, ${portfolio.length} companies`);
+          {/* Check Size */}
+          {results.checkSize && results.checkSize !== 'Not specified' && (
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="text-green-600" size={18} />
+                <h4 className="font-black text-gray-800 text-sm">CHECK SIZE</h4>
+              </div>
+              <div className="text-lg font-bold text-green-700">{results.checkSize}</div>
+            </div>
+          )}
 
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify(results)
-    };
+          {/* Portfolio Companies */}
+          {results.portfolio && results.portfolio.length > 0 && (
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
+              <h4 className="font-black text-gray-800 mb-3">
+                PORTFOLIO COMPANIES ({results.portfolioCount})
+              </h4>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {results.portfolio.map((company, idx) => (
+                  <div key={idx} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="font-bold text-gray-800">{company.company}</div>
+                    {company.description && (
+                      <div className="text-xs text-gray-600 mt-1">{company.description}</div>
+                    )}
+                    {company.sector && (
+                      <div className="mt-1">
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-bold">
+                          {company.sector}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-  } catch (error) {
-    console.error('Scraping error:', error.message);
-    
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        success: false,
-        error: error.message,
-        details: error.code || 'Unknown error'
-      })
-    };
-  }
+          {/* Investment Thesis */}
+          {results.investmentThesis && results.investmentThesis.length > 0 && (
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-4">
+              <h4 className="font-black text-gray-800 mb-3">INVESTMENT THESIS</h4>
+              <div className="space-y-2">
+                {results.investmentThesis.map((thesis, idx) => (
+                  <div key={idx} className="text-sm text-gray-700 italic bg-gray-50 p-3 rounded-lg border-l-4 border-blue-500">
+                    "{thesis}"
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Success Message */}
+          <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-green-800">
+              <CheckCircle size={20} />
+              <span className="font-bold">Research Complete!</span>
+            </div>
+            <div className="text-sm text-green-700 mt-1">
+              Data has been saved to the investor record. You can now proceed to Due Diligence or Email Generator tabs.
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
+
+export default InvestorWebScraper;
