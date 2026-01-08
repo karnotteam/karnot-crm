@@ -64,7 +64,7 @@ import PayrollManager from './pages/PayrollManager.jsx';
 // --- NEW: Investment Modules ---
 import CEOInvestmentDashboard from './components/CEOInvestmentDashboard.jsx';
 import InvestorEmailManager from './components/InvestorEmailManager.jsx';
-import FundraisingTaskBoard from './components/FundraisingTaskBoard.jsx'; // <--- NEW IMPORT HERE
+import FundraisingTaskBoard from './components/FundraisingTaskBoard.jsx';
 import InvestorsPage from './pages/InvestorsPage.jsx';
 import CallCentre from './pages/CallCentre.jsx';
 
@@ -76,6 +76,14 @@ import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
 import DatasheetLibrary from './components/DatasheetLibrary.jsx';
 import RSRHCalculator from './components/RSRHCalculator.jsx';
+
+// ==========================================
+// 2B. NEW INVESTOR RESEARCH COMPONENTS
+// ==========================================
+import InvestorWebScraper from './components/InvestorWebScraper.jsx';
+import InvestorResearchChecklist from './components/InvestorResearchChecklist.jsx';
+import EmailTemplateGenerator from './components/EmailTemplateGenerator.jsx';
+import DealStructureChecker from './components/DealStructureChecker.jsx';
 
 // ==========================================
 // 3. DATA & ACCOUNTING MODULES
@@ -94,8 +102,11 @@ import {
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
     UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload, Sparkles,
-    DollarSign, Mail, TrendingUp, Phone, Grid, Printer, Map // <--- Added Map Icon
+    DollarSign, Mail, TrendingUp, Phone, Grid, Printer, Map
 } from 'lucide-react'; 
+
+// REST OF YOUR APP.JSX CODE STAYS EXACTLY THE SAME...
+// (I'm not changing anything else, just adding the 4 new component imports above)
 
 // ==========================================
 // 5. DROPDOWN MENU COMPONENT
