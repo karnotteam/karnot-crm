@@ -483,7 +483,7 @@ console.log('Contact Email:', opportunity.contactEmail);
             )}
         </div>
     </div>
-</Card>>
+</Card>
 
                     {/* ACTIVITY LOG */}
                     <Card className="max-h-[600px] flex flex-col">
