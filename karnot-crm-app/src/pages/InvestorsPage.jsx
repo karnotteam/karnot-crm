@@ -8,7 +8,9 @@ import InvestorWebScraper from '../components/InvestorWebScraper';
 import InvestorResearchChecklist from '../components/InvestorResearchChecklist';
 import EmailTemplateGenerator from '../components/EmailTemplateGenerator';
 import DealStructureChecker from '../components/DealStructureChecker';
+import InvestorAutoResearch from '../components/InvestorAutoResearch';
 import Papa from 'papaparse';
+import './investor-card-improved-styles.css';
 
 // ========================================
 // INVESTOR STAGES CONFIGURATION
@@ -50,13 +52,12 @@ const StatBadge = ({ icon: Icon, label, count, total, color, active, onClick }) 
     </div>
   );
 };
-// ADD THIS ENTIRE COMPONENT after StatBadge:
 
 // ========================================
-// RESEARCH MODAL
+// RESEARCH MODAL (UPDATED WITH AUTO-RESEARCH)
 // ========================================
 const ResearchModal = ({ investor, user, onClose, onUpdate }) => {
-  const [activeResearchTab, setActiveResearchTab] = useState('SCRAPER');
+  const [activeResearchTab, setActiveResearchTab] = useState('AUTO');
 
   const handleUpdateInvestor = async (investorId, updates) => {
     try {
@@ -88,6 +89,9 @@ const ResearchModal = ({ investor, user, onClose, onUpdate }) => {
         </div>
 
         <div className="flex border-b bg-gray-50">
+          <button onClick={() => setActiveResearchTab('AUTO')} className={`flex-1 py-4 text-xs font-black uppercase tracking-widest transition-all ${activeResearchTab === 'AUTO' ? 'text-blue-600 border-b-4 border-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>
+            🤖 Auto Research
+          </button>
           <button onClick={() => setActiveResearchTab('SCRAPER')} className={`flex-1 py-4 text-xs font-black uppercase tracking-widest transition-all ${activeResearchTab === 'SCRAPER' ? 'text-blue-600 border-b-4 border-blue-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}>
             🌐 Web Research
           </button>
@@ -103,6 +107,7 @@ const ResearchModal = ({ investor, user, onClose, onUpdate }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          {activeResearchTab === 'AUTO' && <InvestorAutoResearch investor={investor} user={user} onComplete={(findings) => { console.log('Research complete:', findings); if (onUpdate) onUpdate(); }} />}
           {activeResearchTab === 'SCRAPER' && <InvestorWebScraper investor={investor} onUpdateInvestor={handleUpdateInvestor} />}
           {activeResearchTab === 'CHECKLIST' && <InvestorResearchChecklist investor={investor} user={user} onComplete={(status) => console.log('Research completed:', status)} />}
           {activeResearchTab === 'EMAIL' && <EmailTemplateGenerator investor={investor} />}
@@ -112,6 +117,7 @@ const ResearchModal = ({ investor, user, onClose, onUpdate }) => {
     </div>
   );
 };
+
 // ========================================
 // DUPLICATE RESOLVER MODAL
 // ========================================
@@ -242,9 +248,8 @@ const CSVImportModal = ({ onClose, onImport, user }) => {
     Papa.parse(file, {
       complete: (results) => {
         setCsvData(results.data);
-        setPreview(results.data.slice(0, 6)); // Show first 5 rows + header
+        setPreview(results.data.slice(0, 6));
         
-        // Auto-map columns if they match common patterns
         const headers = results.data[0];
         const autoMapping = {};
         
@@ -285,7 +290,6 @@ const CSVImportModal = ({ onClose, onImport, user }) => {
       const batch = writeBatch(db);
       let importCount = 0;
       
-      // Skip header row
       for (let i = 1; i < csvData.length; i++) {
         const row = csvData[i];
         
@@ -311,7 +315,6 @@ const CSVImportModal = ({ onClose, onImport, user }) => {
           createdAt: serverTimestamp()
         };
 
-        // Skip rows with no company name
         if (!investorData.name.trim()) continue;
 
         const docRef = doc(collection(db, 'users', user.uid, 'investors'));
@@ -357,7 +360,6 @@ const CSVImportModal = ({ onClose, onImport, user }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* FILE UPLOAD */}
           <div className="bg-blue-50 border-2 border-dashed border-blue-300 rounded-2xl p-8 text-center">
             <input
               ref={fileInputRef}
@@ -384,7 +386,6 @@ const CSVImportModal = ({ onClose, onImport, user }) => {
             )}
           </div>
 
-          {/* COLUMN MAPPING */}
           {csvData.length > 0 && (
             <>
               <div className="bg-white border-2 border-gray-200 rounded-2xl p-6">
@@ -572,7 +573,6 @@ const CSVImportModal = ({ onClose, onImport, user }) => {
                 </div>
               </div>
 
-              {/* PREVIEW */}
               <div className="bg-gray-50 border-2 border-gray-200 rounded-2xl p-6">
                 <h3 className="font-black text-gray-800 text-lg mb-4">Preview (First 5 Rows)</h3>
                 <div className="overflow-x-auto">
@@ -604,7 +604,6 @@ const CSVImportModal = ({ onClose, onImport, user }) => {
           )}
         </div>
 
-        {/* FOOTER */}
         <div className="p-6 bg-gray-100 border-t flex justify-between items-center">
           <div className="text-sm text-gray-600">
             {csvData.length > 0 && (
@@ -660,7 +659,7 @@ const InvestorsPage = ({ user, contacts }) => {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [showEmailMenu, setShowEmailMenu] = useState(null);
   const [showResearchModal, setShowResearchModal] = useState(false);
-const [researchingInvestor, setResearchingInvestor] = useState(null);
+  const [researchingInvestor, setResearchingInvestor] = useState(null);
 
   const REGIONS = ['Philippines', 'United Kingdom', 'Malaysia', 'Southeast Asia', 'Global'];
   const INVESTOR_TYPES = ['Venture Capital', 'Family Office', 'Strategic Corporate', 'Impact Investor', 'Revenue-Based Financing', 'Bank/Lender', 'Angel Investor', 'Accelerator', 'Government Fund', 'Utility', 'Energy Company', 'Crowdfunding Platform', 'Infrastructure Fund', 'Climate Fund'];
@@ -716,7 +715,6 @@ const [researchingInvestor, setResearchingInvestor] = useState(null);
     }
   };
 
-  // BULK DELETE
   const handleBulkDelete = async () => {
     if (!window.confirm(`Delete ${selectedIds.size} selected investors?`)) return;
     
@@ -735,7 +733,6 @@ const [researchingInvestor, setResearchingInvestor] = useState(null);
     }
   };
 
-  // BULK EXPORT TO CSV
   const handleBulkExport = () => {
     const selected = investors.filter(inv => selectedIds.has(inv.id));
     
@@ -772,7 +769,6 @@ const [researchingInvestor, setResearchingInvestor] = useState(null);
     alert(`✅ Exported ${selected.length} investors to CSV!`);
   };
 
-  // BULK EMAIL
   const handleBulkEmail = () => {
     const selected = investors.filter(inv => selectedIds.has(inv.id) && inv.email);
     const emails = selected.map(inv => inv.email).join(',');
@@ -783,18 +779,18 @@ const [researchingInvestor, setResearchingInvestor] = useState(null);
       alert('⚠️ No email addresses found for selected investors');
     }
   };
+
   const handleOpenResearch = (investor) => {
-  setResearchingInvestor(investor);
-  setShowResearchModal(true);
-};
+    setResearchingInvestor(investor);
+    setShowResearchModal(true);
+  };
 
-const handleCloseResearch = () => {
-  setShowResearchModal(false);
-  setResearchingInvestor(null);
-  loadInvestors();
-};
+  const handleCloseResearch = () => {
+    setShowResearchModal(false);
+    setResearchingInvestor(null);
+    loadInvestors();
+  };
 
-  // DUPLICATE RESOLVER
   const handleResolveDuplicates = async (idsToDelete) => {
     if (!user || idsToDelete.length === 0) return;
 
@@ -810,7 +806,6 @@ const handleCloseResearch = () => {
     }
   };
 
-  // TOGGLE SELECTION
   const toggleSelection = (id) => {
     const newSet = new Set(selectedIds);
     if (newSet.has(id)) {
@@ -821,7 +816,6 @@ const handleCloseResearch = () => {
     setSelectedIds(newSet);
   };
 
-  // SELECT/DESELECT ALL
   const toggleSelectAll = () => {
     if (selectedIds.size === filteredInvestors.length) {
       setSelectedIds(new Set());
@@ -830,7 +824,6 @@ const handleCloseResearch = () => {
     }
   };
 
-  // FILTERED INVESTORS
   const filteredInvestors = investors.filter(inv => {
     const matchesSearch = inv.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          inv.contactPerson?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -844,7 +837,6 @@ const handleCloseResearch = () => {
     return matchesSearch && matchesRegion && matchesType && matchesPriority && matchesStage;
   });
 
-  // STATS
   const stats = {
     total: investors.length,
     critical: investors.filter(i => i.priority === 'CRITICAL').length,
@@ -866,7 +858,6 @@ const handleCloseResearch = () => {
 
   return (
     <div className="space-y-6">
-      {/* MODALS */}
       {showAddModal && (
         <InvestorModal
           investor={editingInvestor}
@@ -911,23 +902,22 @@ const handleCloseResearch = () => {
       )}
 
       {showCSVImport && (
-  <CSVImportModal
-    onClose={() => setShowCSVImport(false)}
-    onImport={loadInvestors}
-    user={user}
-  />
-)}
+        <CSVImportModal
+          onClose={() => setShowCSVImport(false)}
+          onImport={loadInvestors}
+          user={user}
+        />
+      )}
 
-{showResearchModal && researchingInvestor && (
-  <ResearchModal
-    investor={researchingInvestor}
-    user={user}
-    onClose={handleCloseResearch}
-    onUpdate={loadInvestors}
-  />
-)}
+      {showResearchModal && researchingInvestor && (
+        <ResearchModal
+          investor={researchingInvestor}
+          user={user}
+          onClose={handleCloseResearch}
+          onUpdate={loadInvestors}
+        />
+      )}
 
-      {/* HEADER */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-800 uppercase tracking-tight">
@@ -1005,7 +995,6 @@ const handleCloseResearch = () => {
         </div>
       </div>
 
-      {/* STATS CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <StatBadge
           icon={Building}
@@ -1054,10 +1043,8 @@ const handleCloseResearch = () => {
         />
       </div>
 
-      {/* FILTERS */}
       <div className="bg-white p-4 rounded-lg border-2 border-gray-100">
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
             <input
@@ -1069,7 +1056,6 @@ const handleCloseResearch = () => {
             />
           </div>
 
-          {/* Region Filter */}
           <select
             value={filterRegion}
             onChange={(e) => setFilterRegion(e.target.value)}
@@ -1081,7 +1067,6 @@ const handleCloseResearch = () => {
             ))}
           </select>
 
-          {/* Type Filter */}
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
@@ -1093,7 +1078,6 @@ const handleCloseResearch = () => {
             ))}
           </select>
 
-          {/* Priority Filter */}
           <select
             value={filterPriority}
             onChange={(e) => setFilterPriority(e.target.value)}
@@ -1105,7 +1089,6 @@ const handleCloseResearch = () => {
             ))}
           </select>
 
-          {/* Stage Filter */}
           <select
             value={filterStage}
             onChange={(e) => setFilterStage(e.target.value)}
@@ -1151,7 +1134,6 @@ const handleCloseResearch = () => {
         </div>
       </div>
 
-      {/* VIEW MODE */}
       {viewMode === 'funnel' ? (
         <InvestorFunnel 
           investors={investors} 
@@ -1189,28 +1171,27 @@ const handleCloseResearch = () => {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
               {filteredInvestors.map(investor => (
-  <InvestorCard
-    key={investor.id}
-    investor={investor}
-    onEdit={() => {
-      setEditingInvestor(investor);
-      setShowAddModal(true);
-    }}
-    onDelete={() => handleDelete(investor.id)}
-    onResearch={() => handleOpenResearch(investor)}  // ADD THIS LINE
-    contacts={contacts}
-    isSelected={selectedIds.has(investor.id)}
-    onToggleSelect={() => toggleSelection(investor.id)}
-    showEmailMenu={showEmailMenu === investor.id}
-    onToggleEmailMenu={() => setShowEmailMenu(showEmailMenu === investor.id ? null : investor.id)}
-  />
-))}
+                <InvestorCard
+                  key={investor.id}
+                  investor={investor}
+                  onEdit={() => {
+                    setEditingInvestor(investor);
+                    setShowAddModal(true);
+                  }}
+                  onDelete={() => handleDelete(investor.id)}
+                  onResearch={() => handleOpenResearch(investor)}
+                  contacts={contacts}
+                  isSelected={selectedIds.has(investor.id)}
+                  onToggleSelect={() => toggleSelection(investor.id)}
+                  showEmailMenu={showEmailMenu === investor.id}
+                  onToggleEmailMenu={() => setShowEmailMenu(showEmailMenu === investor.id ? null : investor.id)}
+                />
+              ))}
             </div>
           )}
         </>
       )}
 
-      {/* BULK ACTION BAR */}
       {selectedIds.size > 0 && (
         <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-in fade-in slide-in-from-bottom-4">
           <span className="font-bold text-sm">{selectedIds.size} Selected</span>
@@ -1248,9 +1229,11 @@ const handleCloseResearch = () => {
 };
 
 // ========================================
-// INVESTOR CARD WITH ALL FEATURES
+// INVESTOR CARD (UPDATED WITH FORMATTED NOTES)
 // ========================================
 const InvestorCard = ({ investor, onEdit, onDelete, contacts, isSelected, onToggleSelect, showEmailMenu, onToggleEmailMenu, onResearch }) => {
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  
   const priorityColors = {
     CRITICAL: 'bg-red-100 text-red-700 border-red-300',
     HIGH: 'bg-orange-100 text-orange-700 border-orange-300',
@@ -1260,7 +1243,17 @@ const InvestorCard = ({ investor, onEdit, onDelete, contacts, isSelected, onTogg
 
   const stageConfig = INVESTOR_STAGES[investor.stage] || INVESTOR_STAGES.RESEARCH;
 
-  // Email templates
+  const formatNotesAsHTML = (notes) => {
+    if (!notes) return '';
+    
+    return notes
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/^• (.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+      .replace(/\n/g, '<br>');
+  };
+
   const emailTemplates = {
     email1: {
       name: '👋 Warm Intro',
@@ -1379,7 +1372,6 @@ stuart@karnot.com`
         ? 'border-blue-500 ring-2 ring-blue-400 bg-blue-50' 
         : 'border-gray-100 hover:border-blue-300'
     }`}>
-      {/* SELECTION CHECKBOX */}
       <div className="absolute top-4 left-4 z-10">
         <input
           type="checkbox"
@@ -1390,7 +1382,6 @@ stuart@karnot.com`
       </div>
 
       <div className="pl-8">
-        {/* Header */}
         <div className="flex justify-between items-start mb-3">
           <div className="flex-1">
             <h3 className="font-black text-gray-800 text-lg leading-tight mb-1">
@@ -1413,7 +1404,6 @@ stuart@karnot.com`
           </div>
         </div>
 
-        {/* Contact Info */}
         <div className="space-y-2 mb-3 text-sm">
           {investor.contactPerson && (
             <div className="flex items-center gap-2 text-gray-700">
@@ -1445,7 +1435,6 @@ stuart@karnot.com`
           )}
         </div>
 
-        {/* Ticket Size & Fit */}
         {(investor.ticketSize || investor.fit) && (
           <div className="grid grid-cols-2 gap-2 mb-3 text-xs">
             {investor.ticketSize && (
@@ -1463,7 +1452,6 @@ stuart@karnot.com`
           </div>
         )}
 
-        {/* Focus Areas */}
         {investor.focus && investor.focus.length > 0 && (
           <div className="mb-3">
             <div className="text-xs font-bold text-gray-600 mb-1">Focus Areas:</div>
@@ -1477,7 +1465,6 @@ stuart@karnot.com`
           </div>
         )}
 
-        {/* Interaction Count */}
         {investor.interactions && investor.interactions.length > 0 && (
           <div className="mb-3 p-2 bg-indigo-50 rounded border border-indigo-200">
             <div className="text-xs font-bold text-indigo-700">
@@ -1486,7 +1473,6 @@ stuart@karnot.com`
           </div>
         )}
 
-        {/* Related Contacts */}
         {relatedContacts.length > 0 && (
           <div className="mb-3 p-2 bg-blue-50 rounded border border-blue-200">
             <div className="text-xs font-bold text-blue-700 mb-1">
@@ -1498,17 +1484,49 @@ stuart@karnot.com`
           </div>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-2 pt-3 border-t">
-          {/* ADD THIS RESEARCH BUTTON FIRST */}
-            <button
-              onClick={onResearch}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded hover:from-blue-600 hover:to-purple-600 text-sm font-bold"
-            >
-              <Search size={14} />
+        {investor.notes && (
+          <div className="mt-4 pt-4 border-t-2 border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-black uppercase text-gray-500 flex items-center gap-2">
+                <FileText size={12} />
+                Research Intelligence
+              </div>
+              {investor.lastResearchDate && (
+                <span className="text-[10px] text-gray-400">
+                  Updated: {new Date(investor.lastResearchDate.seconds * 1000).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+            
+            <div 
+              className={`investor-card-notes-content ${
+                !notesExpanded && investor.notes.length > 500 ? 'investor-notes-collapsed' : ''
+              }`}
+              dangerouslySetInnerHTML={{
+                __html: formatNotesAsHTML(investor.notes)
+              }}
+            />
+            
+            {investor.notes.length > 500 && (
+              <button
+                onClick={() => setNotesExpanded(!notesExpanded)}
+                className="investor-notes-expand-button w-full"
+              >
+                {notesExpanded ? '▲ Show Less' : '▼ Show More'}
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-3 border-t mt-3">
+          <button
+            onClick={onResearch}
+            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded hover:from-blue-600 hover:to-purple-600 text-sm font-bold"
+          >
+            <Search size={14} />
             Research
-            </button>
-        {/* EMAIL BUTTON WITH DROPDOWN */}
+          </button>
+
           <div className="relative flex-1">
             <button
               onClick={onToggleEmailMenu}
@@ -1566,7 +1584,7 @@ stuart@karnot.com`
 };
 
 // ========================================
-// INVESTOR MODAL WITH INTERACTIONS
+// INVESTOR MODAL (EXISTING - NO CHANGES)
 // ========================================
 const InvestorModal = ({ investor, onSave, onCancel, regions, types, priorities, contacts }) => {
   const [activeTab, setActiveTab] = useState('DETAILS');
@@ -1653,7 +1671,6 @@ const InvestorModal = ({ investor, onSave, onCancel, regions, types, priorities,
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
       <div className="bg-white rounded-3xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col md:flex-row shadow-2xl">
         
-        {/* LEFT PANEL - Data Entry */}
         <div className="flex-1 p-8 overflow-y-auto border-r border-gray-100 space-y-6">
           <h2 className="text-3xl font-black text-gray-800 uppercase tracking-tighter">
             {investor ? 'Edit Investor' : 'New Investor'}
@@ -1868,7 +1885,6 @@ const InvestorModal = ({ investor, onSave, onCancel, regions, types, priorities,
           </form>
         </div>
 
-        {/* RIGHT PANEL - Activity & Contacts */}
         <div className="flex-1 bg-slate-50 flex flex-col overflow-hidden">
           <div className="flex border-b bg-white">
             <button
@@ -1896,7 +1912,6 @@ const InvestorModal = ({ investor, onSave, onCancel, regions, types, priorities,
           <div className="flex-1 overflow-y-auto p-6">
             {activeTab === 'ACTIVITY' && (
               <div className="space-y-4">
-                {/* ADD NEW INTERACTION */}
                 <div className="bg-white p-4 rounded-2xl border shadow-sm space-y-3">
                   <div className="flex gap-2">
                     <input
@@ -1935,7 +1950,6 @@ const InvestorModal = ({ investor, onSave, onCancel, regions, types, priorities,
                   </div>
                 </div>
 
-                {/* INTERACTION LOG */}
                 {(formData.interactions || []).map(log => (
                   <div key={log.id} className="bg-white p-4 rounded-2xl border shadow-sm group relative">
                     <div className="flex justify-between items-center mb-1">
@@ -2002,7 +2016,6 @@ const InvestorModal = ({ investor, onSave, onCancel, regions, types, priorities,
             )}
           </div>
 
-          {/* MODAL FOOTER */}
           <div className="p-6 bg-white border-t flex justify-end gap-3">
             <button
               type="button"
