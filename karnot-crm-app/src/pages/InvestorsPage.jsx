@@ -10,7 +10,7 @@ import EmailTemplateGenerator from '../components/EmailTemplateGenerator';
 import DealStructureChecker from '../components/DealStructureChecker';
 import InvestorAutoResearch from '../components/InvestorAutoResearch';
 import Papa from 'papaparse';
-import './investor-card-improved-styles.css';
+import '../investor-card-improved-styles.css';
 
 // ========================================
 // INVESTOR STAGES CONFIGURATION
