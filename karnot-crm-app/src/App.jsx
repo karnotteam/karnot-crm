@@ -84,6 +84,7 @@ import InvestorWebScraper from './components/InvestorWebScraper.jsx';
 import InvestorResearchChecklist from './components/InvestorResearchChecklist.jsx';
 import EmailTemplateGenerator from './components/EmailTemplateGenerator.jsx';
 import DealStructureChecker from './components/DealStructureChecker.jsx';
+import InvestorAutoResearch from './components/InvestorAutoResearch.jsx';
 
 // ==========================================
 // 3. DATA & ACCOUNTING MODULES
@@ -104,9 +105,6 @@ import {
     UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload, Sparkles,
     DollarSign, Mail, TrendingUp, Phone, Grid, Printer, Map
 } from 'lucide-react'; 
-
-// REST OF YOUR APP.JSX CODE STAYS EXACTLY THE SAME...
-// (I'm not changing anything else, just adding the 4 new component imports above)
 
 // ==========================================
 // 5. DROPDOWN MENU COMPONENT
@@ -219,7 +217,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
     // Investment Menu
     const investmentMenu = [
         { view: 'investmentPipeline', label: 'Command Center', icon: TrendingUp },
-        { view: 'fundraisingBoard', label: 'Cambridge Roadmap', icon: Map, badge: 'NEW' }, // <--- ADDED ROADMAP
+        { view: 'fundraisingBoard', label: 'Cambridge Roadmap', icon: Map, badge: 'NEW' },
         { view: 'investors', label: 'Investor Companies', icon: Building, badge: '43' },
         { view: 'investmentCallCentre', label: 'Call Centre', icon: Phone },
         { view: 'investmentTasks', label: 'General Tasks', icon: CheckCircle },
@@ -232,7 +230,7 @@ const calculatorsMenu = [
     { view: 'heatPumpCalc', label: 'Heat Pump ROI', icon: Calculator },
     { view: 'warmRoomCalc', label: 'Warm Room', icon: Calculator },
     { view: 'coldRoomCalc', label: 'Cold Room', icon: Calculator },
-    { view: 'rsrhCalc', label: 'RSRH Cattle', icon: Target, badge: 'NEW' }  // ← ADD THIS LINE
+    { view: 'rsrhCalc', label: 'RSRH Cattle', icon: Target, badge: 'NEW' }
 ];
 
     return (
@@ -768,13 +766,13 @@ export default function App() {
                 )}
                 
                 {activeView === 'rsrhCalc' && (
-    <div className="max-w-7xl mx-auto">
-        <Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">
-            ← Back to Calculators
-        </Button>
-        <RSRHCalculator />
-    </div>
-)}
+                    <div className="max-w-7xl mx-auto">
+                        <Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">
+                            ← Back to Calculators
+                        </Button>
+                        <RSRHCalculator />
+                    </div>
+                )}
 
                 {/* ====================================== */}
                 {/* 6C. INVESTMENT MODULES                 */}
@@ -791,7 +789,6 @@ export default function App() {
                     <CEOInvestmentDashboard user={user} />
                 )}
 
-                {/* --- NEW ROADMAP VIEW --- */}
                 {activeView === 'fundraisingBoard' && (
                     <FundraisingTaskBoard user={user} />
                 )}
