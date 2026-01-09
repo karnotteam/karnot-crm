@@ -10,7 +10,7 @@ import EmailTemplateGenerator from '../components/EmailTemplateGenerator';
 import DealStructureChecker from '../components/DealStructureChecker';
 import InvestorAutoResearch from '../components/InvestorAutoResearch';
 import Papa from 'papaparse';
-import '../investor-card-improved-styles.css';
+import './investor-card-improved-styles.css';
 
 // ========================================
 // INVESTOR STAGES CONFIGURATION
@@ -1485,36 +1485,21 @@ stuart@karnot.com`
         )}
 
         {investor.notes && (
-          <div className="mt-4 pt-4 border-t-2 border-gray-100">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs font-black uppercase text-gray-500 flex items-center gap-2">
-                <FileText size={12} />
-                Research Intelligence
+          <div className="mt-3 p-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs">
+                <FileText size={12} className="text-blue-600" />
+                <span className="font-bold text-blue-800">Research Intelligence</span>
               </div>
               {investor.lastResearchDate && (
-                <span className="text-[10px] text-gray-400">
-                  Updated: {new Date(investor.lastResearchDate.seconds * 1000).toLocaleDateString()}
+                <span className="text-[9px] text-blue-600 font-bold">
+                  {new Date(investor.lastResearchDate.seconds * 1000).toLocaleDateString()}
                 </span>
               )}
             </div>
-            
-            <div 
-              className={`investor-card-notes-content ${
-                !notesExpanded && investor.notes.length > 500 ? 'investor-notes-collapsed' : ''
-              }`}
-              dangerouslySetInnerHTML={{
-                __html: formatNotesAsHTML(investor.notes)
-              }}
-            />
-            
-            {investor.notes.length > 500 && (
-              <button
-                onClick={() => setNotesExpanded(!notesExpanded)}
-                className="investor-notes-expand-button w-full"
-              >
-                {notesExpanded ? '▲ Show Less' : '▼ Show More'}
-              </button>
-            )}
+            <p className="text-xs text-gray-700 mt-1 line-clamp-2">
+              {investor.notes.substring(0, 120).replace(/##|•|\*\*/g, '')}...
+            </p>
           </div>
         )}
 
@@ -1912,6 +1897,36 @@ const InvestorModal = ({ investor, onSave, onCancel, regions, types, priorities,
           <div className="flex-1 overflow-y-auto p-6">
             {activeTab === 'ACTIVITY' && (
               <div className="space-y-4">
+                {/* RESEARCH INTELLIGENCE SECTION */}
+                {formData.notes && formData.intelligence && (
+                  <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6 border-2 border-blue-200 mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-2">
+                        <FileText size={20} className="text-blue-600" />
+                        <h3 className="font-black text-blue-800 uppercase text-sm">Research Intelligence</h3>
+                      </div>
+                      {formData.lastResearchDate && (
+                        <span className="text-xs text-blue-600 font-bold">
+                          Updated: {new Date(formData.lastResearchDate.seconds * 1000).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div 
+                      className="investor-notes prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{
+                        __html: formData.notes
+                          .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/^• (.+)$/gm, '<li>$1</li>')
+                          .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+                          .replace(/\n/g, '<br>')
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* INTERACTION LOG */}
                 <div className="bg-white p-4 rounded-2xl border shadow-sm space-y-3">
                   <div className="flex gap-2">
                     <input
