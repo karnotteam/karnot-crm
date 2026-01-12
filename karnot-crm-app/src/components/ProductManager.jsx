@@ -50,7 +50,7 @@ const CATEGORY_MAP = {
 
   // ✅ iZONE / Fan Coil families (optional categories you may use)
   'iZONE': { icon: Wind, color: 'blue' },
-  'Fan Coil': { icon: Wind, color: 'blue' },
+
 
   // ✅ iVOLT categories
   'iVOLT – Solar Panel': { icon: Sun, color: 'yellow' },
