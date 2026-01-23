@@ -1,274 +1,265 @@
-import React, { useState, useEffect } from 'react';
-import { db } from '../firebase'; 
-import { collection, onSnapshot, query, orderBy, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { Plus, Search, FileText, Eye, Trash2, Edit, ExternalLink, RefreshCw, AlertTriangle } from 'lucide-react';
-import { Card, Button } from '../data/constants.jsx';
-import QuoteCalculator from '../components/QuoteCalculator.jsx';
+import React, { useState, useMemo } from 'react';
+import { 
+    Trash2, Edit, Eye, CheckCircle, XCircle, FileText, 
+    Search, ArrowUpRight, Clock, ShieldCheck, Target, Briefcase, 
+    Send, ThumbsUp, RotateCcw
+} from 'lucide-react';
+import { Card, Button, Input } from '../data/constants.jsx';
 
-const QuotesListPage = () => {
-    // --- STATE MANAGEMENT ---
-    const [quotes, setQuotes] = useState([]);
-    const [companies, setCompanies] = useState([]);
-    const [contacts, setContacts] = useState([]);
-    const [opportunities, setOpportunities] = useState([]);
-    
-    const [loading, setLoading] = useState(true);
-    const [showCalculator, setShowCalculator] = useState(false);
-    const [editingQuote, setEditingQuote] = useState(null);
+const QuotesListPage = ({ quotes = [], onDeleteQuote, onEditQuote, onUpdateQuoteStatus, onOpenQuote, opportunities = [] }) => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('ALL');
 
-    // --- 1. DATA SYNCHRONIZATION ---
-    useEffect(() => {
-        setLoading(true);
+    // --- 1. DATA ENRICHMENT & CALCULATIONS ---
+    const processedQuotes = useMemo(() => {
+        return quotes.map(q => {
+            // A. LINK TO FUNNEL (Win Probability)
+            const linkedOpp = opportunities.find(o => o.id === q.opportunityId || o.id === q.leadId);
+            const winChance = linkedOpp?.probability || 0;
+            
+            // B. LIVE MARGIN CALCULATION
+            const salesPrice = Number(q.finalSalesPrice || 0);
+            const costPrice = Number(q.totalCost || 0); 
+            const marginAmount = salesPrice - costPrice;
+            const liveMarginPct = salesPrice > 0 ? (marginAmount / salesPrice) * 100 : 0;
 
-        // A. Fetch Quotes
-        const quotesQuery = query(collection(db, "quotes"), orderBy("createdAt", "desc"));
-        const unsubQuotes = onSnapshot(quotesQuery, (snapshot) => {
-            setQuotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            // C. FOREX & CURRENCY
+            const rate = q.costing?.forexRate || 58.5;
+            const grossPHP = salesPrice * rate;
+
+            // D. TAX STATUS
+            const isExport = q.customer?.saleType === 'Export';
+
+            return { 
+                ...q, 
+                winChance, 
+                liveMarginPct, 
+                grossPHP, 
+                forexUsed: rate,
+                isExport,
+                hasProjectLink: !!q.opportunityId 
+            };
         });
+    }, [quotes, opportunities]);
 
-        // B. Fetch Companies (For Calculator Dropdowns)
-        const unsubCompanies = onSnapshot(collection(db, "companies"), (snapshot) => {
-            setCompanies(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    // --- 2. FILTERING LOGIC ---
+    const filteredQuotes = useMemo(() => {
+        return processedQuotes.filter(q => {
+            const searchLower = searchTerm.toLowerCase();
+            const matchesSearch = 
+                q.id.toLowerCase().includes(searchLower) ||
+                q.customer?.name?.toLowerCase().includes(searchLower) ||
+                (q.customerName || '').toLowerCase().includes(searchLower);
+                
+            const matchesStatus = statusFilter === 'ALL' || q.status === statusFilter;
+            
+            return matchesSearch && matchesStatus;
         });
+    }, [processedQuotes, searchTerm, statusFilter]);
 
-        // C. Fetch Contacts (For Calculator Dropdowns)
-        const unsubContacts = onSnapshot(collection(db, "contacts"), (snapshot) => {
-            setContacts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        });
+    // --- 3. STATS HEADER MATH ---
+    const stats = useMemo(() => {
+        const activeProFormas = quotes.filter(q => q.status === 'APPROVED').length;
+        const officialInvoices = quotes.filter(q => q.status === 'INVOICED').length;
+        const wonDeals = quotes.filter(q => q.status === 'WON').length;
+        
+        const weightedValue = processedQuotes
+            .filter(q => ['DRAFT', 'APPROVED', 'INVOICED'].includes(q.status))
+            .reduce((sum, q) => sum + (q.finalSalesPrice * (q.winChance / 100)), 0);
 
-        // D. Fetch Opportunities (For Pipeline Linking)
-        const unsubOpportunities = onSnapshot(collection(db, "opportunities"), (snapshot) => {
-            setOpportunities(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setLoading(false); // Done loading when all listeners attached
-        });
+        return { activeProFormas, officialInvoices, wonDeals, weightedValue };
+    }, [quotes, processedQuotes]);
 
-        // Cleanup listeners on unmount
-        return () => {
-            unsubQuotes();
-            unsubCompanies();
-            unsubContacts();
-            unsubOpportunities();
-        };
-    }, []);
+    return (
+        <div className="space-y-8 pb-20">
+            {/* STATS DASHBOARD */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className="p-5 border-l-4 border-blue-500 bg-white shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Pro-Formas</p>
+                    <p className="text-3xl font-black text-gray-800">{stats.activeProFormas}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Awaiting Payment</p>
+                </Card>
+                <Card className="p-5 border-l-4 border-green-600 bg-white shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">BIR Invoiced</p>
+                    <p className="text-3xl font-black text-gray-800">{stats.officialInvoices}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Tax Liability Active</p>
+                </Card>
+                <Card className="p-5 border-l-4 border-orange-500 bg-white shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Weighted Pipeline</p>
+                    <p className="text-3xl font-black text-orange-600">${stats.weightedValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Risk-Adjusted Value</p>
+                </Card>
+                <Card className="p-5 border-l-4 border-slate-800 bg-white shadow-sm">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Proposals</p>
+                    <p className="text-3xl font-black text-gray-800">{quotes.length}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">All Time Volume</p>
+                </Card>
+            </div>
 
-    // --- 2. SAVE HANDLER ---
-    const handleSaveQuote = async (quoteData) => {
-        try {
-            await setDoc(doc(db, "quotes", quoteData.id), quoteData);
-            setShowCalculator(false);
-            setEditingQuote(null);
-            // Optional: Show a toast notification here
-        } catch (error) {
-            console.error("Error saving quote:", error);
-            alert("Error saving to database: " + error.message);
-        }
-    };
-
-    // --- 3. DELETE HANDLER ---
-    const handleDelete = async (id) => {
-        if (window.confirm("Are you sure you want to delete this quote? This cannot be undone.")) {
-            try {
-                await deleteDoc(doc(db, "quotes", id));
-            } catch (error) {
-                console.error("Error deleting quote:", error);
-                alert("Failed to delete quote.");
-            }
-        }
-    };
-
-    // --- 4. VIEW DOCUMENT HANDLER ---
-    const handleViewDocument = (url) => {
-        if (url) {
-            window.open(url, '_blank');
-        } else {
-            alert("No digital document found. Please Edit and Save this quote again to generate the file.");
-        }
-    };
-
-    // --- 5. UTILITY: GENERATE NEXT QUOTE NUMBER ---
-    const getNextQuoteNumber = () => {
-        if (quotes.length === 0) return 1001;
-        const numbers = quotes.map(q => {
-            const match = q.id.match(/QN(\d+)/);
-            return match ? parseInt(match[1]) : 0;
-        });
-        return Math.max(...numbers) + 1;
-    };
-
-    // --- FILTERING ---
-    const filteredQuotes = quotes.filter(q => 
-        (q.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (q.customerName || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // --- RENDER: CALCULATOR MODE ---
-    if (showCalculator) {
-        return (
-            <div className="p-2 md:p-6 bg-gray-50 min-h-screen">
-                <div className="max-w-7xl mx-auto mb-6">
-                    <Button 
-                        variant="secondary" 
-                        onClick={() => { setShowCalculator(false); setEditingQuote(null); }}
-                        className="mb-4"
-                    >
-                        ← Back to Quote List
-                    </Button>
-                    <QuoteCalculator 
-                        onSaveQuote={handleSaveQuote}
-                        nextQuoteNumber={getNextQuoteNumber()}
-                        initialData={editingQuote}
-                        // ✅ PASSING REAL DATA SO DROPDOWNS WORK
-                        companies={companies} 
-                        contacts={contacts} 
-                        opportunities={opportunities}
+            {/* CONTROL BAR */}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-white p-6 rounded-[35px] shadow-sm border border-gray-100">
+                <div className="relative flex-1 w-full">
+                    <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-300" size={20} />
+                    <Input 
+                        placeholder="Search Quote ID, Customer Name..." 
+                        value={searchTerm} 
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-14 py-5 rounded-[25px] border-gray-100 bg-gray-50/50 text-lg"
                     />
                 </div>
-            </div>
-        );
-    }
-
-    // --- RENDER: LIST MODE ---
-    return (
-        <div className="max-w-7xl mx-auto p-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-800 uppercase tracking-tight">
-                        Quote <span className="text-orange-600">Manager</span>
-                    </h1>
-                    <p className="text-gray-500 font-medium mt-1">
-                        Track, manage, and issue sales quotations.
-                    </p>
+                <div className="w-full md:w-auto">
+                    <select 
+                        value={statusFilter} 
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full p-4 bg-white border-2 border-gray-100 rounded-[20px] font-black text-[11px] uppercase tracking-widest outline-none focus:border-orange-500 transition-all cursor-pointer"
+                    >
+                        <option value="ALL">Show All Statuses</option>
+                        <option value="DRAFT">Drafts (Editing)</option>
+                        <option value="APPROVED">Pro-Forma Issued</option>
+                        <option value="INVOICED">BIR Invoiced</option>
+                        <option value="WON">Closed Won</option>
+                        <option value="LOST">Closed Lost</option>
+                    </select>
                 </div>
-                <Button 
-                    onClick={() => { setEditingQuote(null); setShowCalculator(true); }} 
-                    className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-200 transition-all"
-                >
-                    <Plus size={20} /> Create New Quote
-                </Button>
             </div>
 
-            {/* Search Bar */}
-            <div className="mb-6 relative">
-                <input 
-                    type="text" 
-                    placeholder="Search by Quote ID, Customer Name..." 
-                    className="w-full pl-12 pr-4 py-4 bg-white border border-gray-200 rounded-2xl shadow-sm outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-50 transition-all text-gray-700 font-medium"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            </div>
-
-            {/* Content Area */}
-            {loading ? (
-                <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-                    <RefreshCw className="animate-spin mb-4" size={32} />
-                    <p className="font-medium">Syncing Quote Database...</p>
-                </div>
-            ) : filteredQuotes.length === 0 ? (
-                <div className="text-center p-16 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
-                        <FileText size={32} />
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-700 mb-2">No Quotes Found</h3>
-                    <p className="text-gray-500">
-                        {searchTerm ? "No results match your search." : "Get started by creating your first quote."}
-                    </p>
-                </div>
-            ) : (
-                <div className="bg-white rounded-3xl shadow-xl shadow-gray-100 border border-gray-100 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="bg-gray-50 border-b border-gray-100">
-                                    <th className="text-left p-5 text-[11px] font-black uppercase text-gray-400 tracking-wider">Quote ID</th>
-                                    <th className="text-left p-5 text-[11px] font-black uppercase text-gray-400 tracking-wider">Customer</th>
-                                    <th className="text-left p-5 text-[11px] font-black uppercase text-gray-400 tracking-wider">Date</th>
-                                    <th className="text-right p-5 text-[11px] font-black uppercase text-gray-400 tracking-wider">Total (USD)</th>
-                                    <th className="text-center p-5 text-[11px] font-black uppercase text-gray-400 tracking-wider">Margin</th>
-                                    <th className="text-center p-5 text-[11px] font-black uppercase text-gray-400 tracking-wider">Status</th>
-                                    <th className="text-center p-5 text-[11px] font-black uppercase text-gray-400 tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {filteredQuotes.map((quote) => (
-                                    <tr key={quote.id} className="hover:bg-orange-50/50 transition-colors group">
-                                        <td className="p-5 font-bold text-gray-800 font-mono text-sm">
-                                            {quote.id}
-                                        </td>
-                                        <td className="p-5">
-                                            <div className="font-bold text-gray-800">{quote.customerName || "Unknown"}</div>
-                                            {quote.customer?.contactName && (
-                                                <div className="text-xs text-gray-400 mt-0.5">{quote.customer.contactName}</div>
-                                            )}
-                                        </td>
-                                        <td className="p-5 text-sm text-gray-500 font-medium">
-                                            {quote.createdAt ? new Date(quote.createdAt).toLocaleDateString() : '-'}
-                                        </td>
-                                        <td className="p-5 text-right font-black text-gray-800 font-mono">
-                                            ${quote.finalSalesPrice?.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                        </td>
-                                        <td className="p-5 text-center">
-                                            <span className={`px-2 py-1 rounded-md text-xs font-bold ${
-                                                (quote.grossMarginPercentage || 0) < 30 
-                                                    ? 'bg-red-100 text-red-700' 
-                                                    : 'bg-green-100 text-green-700'
-                                            }`}>
-                                                {quote.grossMarginPercentage?.toFixed(1)}%
-                                            </span>
-                                        </td>
-                                        <td className="p-5 text-center">
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide border ${
-                                                quote.status === 'APPROVED' ? 'bg-green-50 border-green-200 text-green-600' :
-                                                quote.status === 'SENT' ? 'bg-blue-50 border-blue-200 text-blue-600' :
-                                                'bg-gray-100 border-gray-200 text-gray-500'
-                                            }`}>
-                                                {quote.status || 'DRAFT'}
-                                            </span>
-                                        </td>
-                                        <td className="p-5">
-                                            <div className="flex justify-center gap-2">
-                                                {/* 1. VIEW PDF BUTTON */}
-                                                <button 
-                                                    onClick={() => handleViewDocument(quote.documentUrl)}
-                                                    className={`p-2 rounded-lg transition-all ${
-                                                        quote.documentUrl 
-                                                            ? 'text-blue-600 hover:bg-blue-50 hover:shadow-sm' 
-                                                            : 'text-gray-300 cursor-not-allowed'
-                                                    }`}
-                                                    title={quote.documentUrl ? "Open PDF Document" : "No Document Saved"}
-                                                >
-                                                    <ExternalLink size={18} />
-                                                </button>
-
-                                                {/* 2. EDIT BUTTON */}
-                                                <button 
-                                                    onClick={() => { setEditingQuote(quote); setShowCalculator(true); }}
-                                                    className="p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all"
-                                                    title="Edit Quote"
-                                                >
-                                                    <Edit size={18} />
-                                                </button>
-
-                                                {/* 3. DELETE BUTTON */}
-                                                <button 
-                                                    onClick={() => handleDelete(quote.id)}
-                                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                    title="Delete Quote"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
+            {/* DATA TABLE */}
+            <Card className="rounded-[40px] border-none shadow-xl overflow-hidden p-0 bg-white">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Proposal & Project</th>
+                                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Customer / Pipeline</th>
+                                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-right">Value & Margin</th>
+                                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Current Status</th>
+                                <th className="p-6 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50 bg-white">
+                            {filteredQuotes.map((q) => (
+                                <tr key={q.id} className="hover:bg-orange-50/20 transition-all group">
+                                    {/* COL 1: ID & PROJECT LINK */}
+                                    <td className="p-6 align-top">
+                                        <div className="flex items-start gap-3">
+                                            <div className={`p-2.5 rounded-2xl mt-1 ${q.hasProjectLink ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                                                <Briefcase size={18}/>
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                            <div>
+                                                <p className="font-black text-gray-800 uppercase tracking-tighter leading-none mb-1 text-sm">{q.id}</p>
+                                                {q.hasProjectLink ? (
+                                                    <span className="text-[9px] font-black text-green-600 uppercase flex items-center gap-1 tracking-wider">
+                                                        <ShieldCheck size={10}/> Linked to ROI
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[9px] font-black text-gray-400 uppercase italic tracking-wider">Stand-alone Quote</span>
+                                                )}
+                                                <div className="mt-2 text-[9px] text-gray-400 font-bold flex items-center gap-1">
+                                                    <Clock size={10}/> {new Date(q.createdAt).toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    {/* COL 2: CUSTOMER & FUNNEL */}
+                                    <td className="p-6 align-top">
+                                        <p className="font-bold text-gray-800 uppercase text-xs mb-2">{q.customer?.name}</p>
+                                        <div className="flex flex-col gap-2">
+                                            <span className={`text-[8px] font-black px-2 py-1 rounded-lg border w-fit ${q.isExport ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-orange-50 text-orange-700 border-orange-100'}`}>
+                                                {q.isExport ? 'ZERO-RATED EXPORT' : 'DOMESTIC VAT'}
+                                            </span>
+                                            {q.winChance > 0 ? (
+                                                <p className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg border border-blue-100 w-fit">
+                                                    <Target size={12}/> {q.winChance}% Probability
+                                                </p>
+                                            ) : (
+                                                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400 flex items-center gap-1 px-2">
+                                                    <Target size={12}/> No Funnel Link
+                                                </p>
+                                            )}
+                                        </div>
+                                    </td>
+
+                                    {/* COL 3: MONEY & MARGIN */}
+                                    <td className="p-6 text-right align-top">
+                                        <p className="font-black text-xl text-gray-900 leading-none">₱{q.grossPHP.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                                            $ {Number(q.finalSalesPrice).toLocaleString()} USD
+                                        </p>
+                                        <div className="mt-3 flex justify-end items-center gap-2">
+                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded ${q.liveMarginPct < 30 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                                {q.liveMarginPct.toFixed(1)}% MARGIN
+                                            </span>
+                                            <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                                                <div className={`h-full ${q.liveMarginPct < 30 ? 'bg-red-500' : 'bg-green-500'}`} style={{width: `${Math.min(q.liveMarginPct, 100)}%`}}></div>
+                                            </div>
+                                        </div>
+                                    </td>
+
+                                    {/* COL 4: STATUS CONTROL */}
+                                    <td className="p-6 text-center align-middle">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <span className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-sm border
+                                                ${q.status === 'INVOICED' ? 'bg-green-100 text-green-700 border-green-200' : 
+                                                  q.status === 'APPROVED' ? 'bg-blue-100 text-blue-700 border-blue-200' : 
+                                                  q.status === 'WON' ? 'bg-orange-100 text-orange-700 border-orange-200' : 
+                                                  q.status === 'LOST' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-gray-100 text-gray-500 border-gray-200'}
+                                            `}>
+                                                {q.status === 'APPROVED' ? 'PRO-FORMA' : q.status}
+                                            </span>
+                                            
+                                            {/* --- STATUS CHANGE BUTTONS --- */}
+                                            {q.status === 'DRAFT' && (
+                                                <button 
+                                                    onClick={() => onUpdateQuoteStatus(q.id, 'APPROVED')}
+                                                    className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-600 hover:text-white transition-all border border-blue-200"
+                                                >
+                                                    <ThumbsUp size={12}/> APPROVE / SEND
+                                                </button>
+                                            )}
+
+                                            {q.status === 'APPROVED' && (
+                                                <div className="flex flex-col gap-1 w-full">
+                                                    <button 
+                                                        onClick={() => {
+                                                            if(confirm("Confirm: Issue Official Sales Invoice? This triggers VAT liability.")) {
+                                                                onUpdateQuoteStatus(q.id, 'INVOICED');
+                                                            }
+                                                        }}
+                                                        className="flex items-center justify-center gap-1.5 text-[9px] font-black text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-600 hover:text-white transition-all border border-orange-200"
+                                                    >
+                                                        <ArrowUpRight size={12}/> ISSUE INVOICE
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => onUpdateQuoteStatus(q.id, 'DRAFT')}
+                                                        className="flex items-center justify-center gap-1.5 text-[9px] font-black text-gray-500 hover:text-gray-800"
+                                                    >
+                                                        <RotateCcw size={10}/> Revert to Draft
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </td>
+
+                                    {/* COL 5: ACTIONS */}
+                                    <td className="p-6 align-middle">
+                                        <div className="flex justify-center gap-2 opacity-60 group-hover:opacity-100 transition-all duration-300">
+                                            <button onClick={() => onOpenQuote(q)} className="p-2.5 bg-gray-50 text-gray-500 hover:bg-blue-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Preview PDF"><Eye size={16}/></button>
+                                            <button onClick={() => onEditQuote(q)} className="p-2.5 bg-gray-50 text-gray-500 hover:bg-orange-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Edit Quote"><Edit size={16}/></button>
+                                            
+                                            <div className="h-8 w-[1px] bg-gray-200 mx-2 self-center"></div>
+                                            
+                                            <button onClick={() => onUpdateQuoteStatus(q.id, 'WON')} className="p-2.5 bg-gray-50 text-gray-500 hover:bg-green-500 hover:text-white rounded-xl transition-colors shadow-sm" title="Mark Won"><CheckCircle size={16}/></button>
+                                            <button onClick={() => onUpdateQuoteStatus(q.id, 'LOST')} className="p-2.5 bg-gray-50 text-gray-500 hover:bg-red-400 hover:text-white rounded-xl transition-colors shadow-sm" title="Mark Lost"><XCircle size={16}/></button>
+                                            <button onClick={() => onDeleteQuote(q.id)} className="p-2.5 bg-gray-50 text-gray-500 hover:bg-red-700 hover:text-white rounded-xl transition-colors shadow-sm" title="Delete"><Trash2 size={16}/></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
-            )}
+            </Card>
         </div>
     );
 };
