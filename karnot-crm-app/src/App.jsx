@@ -67,6 +67,7 @@ import InvestorEmailManager from './components/InvestorEmailManager.jsx';
 import FundraisingTaskBoard from './components/FundraisingTaskBoard.jsx';
 import InvestorsPage from './pages/InvestorsPage.jsx';
 import CallCentre from './pages/CallCentre.jsx';
+import DocumentsPage from './pages/DocumentsPage.jsx';
 
 // ==========================================
 // 2. COMPONENT IMPORTS
@@ -217,6 +218,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
     // Investment Menu
     const investmentMenu = [
         { view: 'investmentPipeline', label: 'Command Center', icon: TrendingUp },
+        { view: 'documents', label: 'Deck Library', icon: FileText, badge: 'PDF' }
         { view: 'fundraisingBoard', label: 'Cambridge Roadmap', icon: Map, badge: 'NEW' },
         { view: 'investors', label: 'Investor Companies', icon: Building, badge: '43' },
         { view: 'investmentCallCentre', label: 'Call Centre', icon: Phone },
@@ -798,8 +800,13 @@ export default function App() {
                 )}
 
                 {activeView === 'investmentEmails' && (
-                    <InvestorEmailManager user={user} />
-                )}
+    <InvestorEmailManager user={user} />
+)}
+
+{/* ADD THIS BLOCK */}
+{activeView === 'documents' && (
+    <DocumentsPage />
+)}
                 
                 {/* 7. QUOTING */}
                 {activeView === 'calculator' && (
