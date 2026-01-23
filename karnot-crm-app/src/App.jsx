@@ -218,8 +218,9 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
     // Investment Menu
     const investmentMenu = [
         { view: 'investmentPipeline', label: 'Command Center', icon: TrendingUp },
-        { view: 'documents', label: 'Deck Library', icon: FileText, badge: 'PDF' }
-        { view: 'fundraisingBoard', label: 'Cambridge Roadmap', icon: Map, badge: 'NEW' },
+        // Added the comma 👇
+{ view: 'documents', label: 'Deck Library', icon: FileText, badge: 'PDF' },
+{ view: 'fundraisingBoard', label: 'Cambridge Roadmap', icon: Map, badge: 'NEW' },
         { view: 'investors', label: 'Investor Companies', icon: Building, badge: '43' },
         { view: 'investmentCallCentre', label: 'Call Centre', icon: Phone },
         { view: 'investmentTasks', label: 'General Tasks', icon: CheckCircle },
