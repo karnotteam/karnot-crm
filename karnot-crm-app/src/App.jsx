@@ -220,7 +220,6 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'investmentPipeline', label: 'Command Center', icon: TrendingUp },
         // Added the comma 👇
 { view: 'documents', label: 'Deck Library', icon: FileText, badge: 'PDF' },
-{ view: 'webResearch', label: 'Web Research Agent', icon: Globe, badge: 'AI' },
 { view: 'fundraisingBoard', label: 'Cambridge Roadmap', icon: Map, badge: 'NEW' },
         { view: 'investors', label: 'Investor Companies', icon: Building, badge: '43' },
         { view: 'investmentCallCentre', label: 'Call Centre', icon: Phone },
@@ -784,22 +783,6 @@ export default function App() {
                 {activeView === 'investors' && (
                     <InvestorsPage user={user} contacts={contacts} />
                 )}
-
-                {activeView === 'webResearch' && (
-    <div className="max-w-4xl mx-auto">
-        <h2 className="text-2xl font-black text-gray-800 mb-6 uppercase">Web Research Agent</h2>
-        
-        {/* If you want the Bulk/Auto Researcher main page: */}
-        <InvestorAutoResearch user={user} />
-        
-        {/* OR: If you want to show the scraper for a specific test/demo: */}
-        {/* <InvestorWebScraper investor={{name: 'Test Fund', website: 'https://example.com'}} /> */}
-    </div>
-)}
-
-{activeView === 'investors' && (
-    <InvestorsPage user={user} contacts={contacts} />
-)}
 
                 {activeView === 'investmentCallCentre' && (
                     <CallCentre user={user} mode="investor" />
