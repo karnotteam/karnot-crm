@@ -231,14 +231,14 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
 
    // Calculators Menu
 // Calculators Menu
-    const calculatorsMenu = [
+      const calculatorsMenu = [
         { view: 'calculatorsHub', label: 'Calculator Hub', icon: Calculator },
         { view: 'heatPumpCalc', label: 'Heat Pump ROI', icon: Calculator },
-        { view: 'aquaHeroCalc', label: 'AquaHERO Global', icon: Droplets, badge: 'NEW' }, // <--- ADD THIS
+        { view: 'aquaHeroCalc', label: 'AquaHERO Global', icon: Droplets, badge: 'NEW' },
         { view: 'warmRoomCalc', label: 'Warm Room', icon: Calculator },
         { view: 'coldRoomCalc', label: 'Cold Room', icon: Calculator },
-        { view: 'rsrhCalc', label: 'RSRH Cattle', icon: Target, badge: 'NEW' }
-        { view: 'officeHvacCalc', label: 'Office HVAC', icon: Thermometer, badge: 'NEW' },
+        { view: 'rsrhCalc', label: 'RSRH Cattle', icon: Target, badge: 'NEW' }, // <--- Add this comma
+        { view: 'officeHvacCalc', label: 'Office HVAC', icon: Thermometer, badge: 'NEW' }
     ];
 
     return (
