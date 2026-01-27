@@ -25,13 +25,21 @@ const CalculatorsPage = ({ setActiveView }) => {
             icon: <Snowflake className="text-blue-600" size={32} />,
             status: 'Ready'
         },
-            {
-    id: 'rsrhCalc',
-    title: 'RSRH Cattle Finishing',
-    description: 'Joint venture ROI calculator for HydroGreen fodder production and pre-slaughter cattle conditioning in Philippines.',
-    icon: <Target className="text-green-600" size={32} />,
-    status: 'Ready',
-    badge: 'Philippines'
+        {
+            id: 'aquaHeroCalc',
+            title: 'AquaHERO Global ROI',
+            description: 'R290 Heat Pump Water Heater savings calculator. Includes UK Smart Tariffs, Philippines LPG comparisons, and NA 120V upgrade costs.',
+            icon: <Droplets className="text-blue-500" size={32} />,
+            status: 'Ready',
+            badge: 'Global'
+        },
+        {
+            id: 'rsrhCalc',
+            title: 'RSRH Cattle Finishing',
+            description: 'Joint venture ROI calculator for HydroGreen fodder production and pre-slaughter cattle conditioning in Philippines.',
+            icon: <Target className="text-green-600" size={32} />,
+            status: 'Ready',
+            badge: 'Philippines'
         },
         {
             id: 'poolCalc',
@@ -68,8 +76,15 @@ const CalculatorsPage = ({ setActiveView }) => {
                         className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow flex flex-col justify-between"
                     >
                         <div>
-                            <div className="mb-4 p-3 bg-gray-50 rounded-full w-fit">
-                                {tool.icon}
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="p-3 bg-gray-50 rounded-full w-fit">
+                                    {tool.icon}
+                                </div>
+                                {tool.badge && (
+                                    <span className="bg-orange-100 text-orange-700 text-[10px] font-black uppercase px-2 py-1 rounded-full tracking-wider">
+                                        {tool.badge}
+                                    </span>
+                                )}
                             </div>
                             <h3 className="text-xl font-bold text-gray-800 mb-2">{tool.title}</h3>
                             <p className="text-gray-600 text-sm mb-6 leading-relaxed">
