@@ -881,6 +881,16 @@ export default function App() {
                     </div>
                 )}
                 
+                {activeView === 'officeHvacCalc' && (
+                    <div className="max-w-7xl mx-auto">
+                        <Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">
+                            ← Back to Calculators
+                        </Button>
+                        {/* THIS IS THE CHANGE 👇 */}
+                        <OfficeHVACCalculator user={user} />
+                    </div>
+                )}
+                
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
                 {/* ======================= */}
