@@ -852,6 +852,27 @@ export default function App() {
                 
                 {activeView === 'warmRoomCalc' && <WarmRoomCalc setActiveView={setActiveView} user={user} />}
                 {activeView === 'coldRoomCalc' && <ColdRoomCalc setActiveView={setActiveView} user={user} />}
+                {/* ... other calculators ... */}
+
+{activeView === 'aquaHeroCalc' && (
+    <div className="max-w-7xl mx-auto">
+        <Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">
+            ← Back to Calculators
+        </Button>
+        <AquaHeroCalculator />
+    </div>
+)}
+
+{activeView === 'rsrhCalc' && (
+    <div className="max-w-7xl mx-auto">
+        <Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">
+            ← Back to Calculators
+        </Button>
+        <RSRHCalculator />
+    </div>
+)}
+
+{activeView === 'admin' && <AdminPage user={user} />}
                 
                 {activeView === 'admin' && <AdminPage user={user} />}
                 
