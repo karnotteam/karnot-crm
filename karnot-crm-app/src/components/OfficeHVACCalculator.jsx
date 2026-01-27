@@ -31,15 +31,28 @@ const INSULATION_PRESETS = {
 
 const CONFIG = {
     SAFETY_FACTOR: 1.15,
-    INTERNAL_GAIN_W_M2: 35, // Office Equipment + People
-    CEILING_HEIGHT: 3.0, // meters
+    INTERNAL_GAIN_W_M2: 35, 
+    CEILING_HEIGHT: 3.0, 
     INSIDE_TEMP_C: 22,
     LITHIUM_EFFICIENCY: 0.90,
-    // Fallbacks if DB is empty
     DEFAULT_HEATING_COP: 3.8,
     DEFAULT_COOLING_EER: 3.5,
     DEFAULT_COST_LITHIUM_KWH: 115,
     DEFAULT_COST_SOLAR_WATT: 0.70
+};
+
+// HELPER: Extract kW from Product Name if DB field is missing
+const extractKwFromName = (name) => {
+    if (!name) return 0;
+    // Looks for "12kW", "12.5 kW", "12-kW"
+    const match = name.match(/(\d+(\.\d+)?)\s*k[Ww]/i);
+    if (match) return parseFloat(match[1]);
+    
+    // Fallback: Look for "10HP" (Approx 28kW thermal for CO2, varies heavily, using conservative 2.5x multiplier for HP->kW thermal)
+    const hpMatch = name.match(/(\d+(\.\d+)?)\s*HP/i);
+    if (hpMatch) return parseFloat(hpMatch[1]) * 2.8; 
+    
+    return 0;
 };
 
 const OfficeHVACCalculator = ({ user }) => {
@@ -48,15 +61,15 @@ const OfficeHVACCalculator = ({ user }) => {
     const [loadingProducts, setLoadingProducts] = useState(true);
 
     const [project, setProject] = useState({ name: 'New Office Project', location: 'manila' });
-    const [units, setUnits] = useState('metric'); // 'metric' or 'imperial'
+    const [units, setUnits] = useState('metric'); 
     const [building, setBuilding] = useState({
         insulation: 'good',
-        glazingRatio: 40, // %
-        airChanges: 0.8, // ACH
+        glazingRatio: 40, 
+        airChanges: 0.8, 
         highTemp: 34,
         lowTemp: 21
     });
-    const [zones, setZones] = useState([{ id: 1, area: 100 }]); // area in m2 always internally
+    const [zones, setZones] = useState([{ id: 1, area: 100 }]); 
     const [financials, setFinancials] = useState({
         systemType: 'on-grid',
         heatPumpType: 'all',
@@ -69,13 +82,12 @@ const OfficeHVACCalculator = ({ user }) => {
         sunHours: 5.5
     });
 
-    // --- EFFECT: FETCH PRODUCTS FROM FIREBASE ---
+    // --- EFFECT: FETCH PRODUCTS ---
     useEffect(() => {
         if (!user) {
             setLoadingProducts(false);
             return;
         }
-
         const unsub = onSnapshot(collection(db, "users", user.uid, "products"), (snapshot) => {
             const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setDbProducts(list);
@@ -84,7 +96,6 @@ const OfficeHVACCalculator = ({ user }) => {
             console.error("Error fetching products:", error);
             setLoadingProducts(false);
         });
-
         return () => unsub();
     }, [user]);
 
@@ -102,8 +113,8 @@ const OfficeHVACCalculator = ({ user }) => {
 
     // --- HELPERS ---
     const toF = (c) => (c * 9/5) + 32;
-    const toSqFt = (m2) => m2 * 10.764;
     const toM2 = (sqft) => sqft / 10.764;
+    const toSqFt = (m2) => m2 * 10.764;
     const toBtu = (kw) => kw * 3412;
     
     // --- CALCULATION ENGINE ---
@@ -111,8 +122,6 @@ const OfficeHVACCalculator = ({ user }) => {
         // 1. Loads Calculation
         const { insulation, glazingRatio, airChanges, highTemp, lowTemp } = building;
         const u = INSULATION_PRESETS[insulation];
-        
-        // Deltas
         const deltaHeat = Math.max(0, CONFIG.INSIDE_TEMP_C - lowTemp);
         const deltaCool = Math.max(0, highTemp - CONFIG.INSIDE_TEMP_C);
 
@@ -121,10 +130,8 @@ const OfficeHVACCalculator = ({ user }) => {
         let totalAreaM2 = 0;
 
         const zoneAnalysis = zones.map(z => {
-            const area = z.area; // m2
+            const area = z.area; 
             totalAreaM2 += area;
-            
-            // Geometry
             const perimeter = Math.sqrt(area) * 4; 
             const wallAreaTotal = perimeter * CONFIG.CEILING_HEIGHT;
             const glassArea = wallAreaTotal * (glazingRatio / 100);
@@ -132,22 +139,16 @@ const OfficeHVACCalculator = ({ user }) => {
             const roofArea = area;
             const volume = area * CONFIG.CEILING_HEIGHT;
 
-            // Heating Load (Transmission + Vent)
             const qTransHeat = (opaqueWallArea * u.wall + roofArea * u.roof + glassArea * u.glass) * deltaHeat;
             const qVentHeat = (volume * airChanges / 3600) * 1210 * deltaHeat;
             const heatLoad = qTransHeat + qVentHeat;
 
-            // Cooling Load
             const qTransCool = (opaqueWallArea * u.wall + roofArea * u.roof + glassArea * u.glass) * deltaCool;
             const qVentCool = (volume * airChanges / 3600) * 1210 * deltaCool;
             const qInternal = area * CONFIG.INTERNAL_GAIN_W_M2;
             const coolLoad = qTransCool + qVentCool + qInternal;
 
-            return {
-                ...z,
-                heatLoadW: heatLoad,
-                coolLoadW: coolLoad
-            };
+            return { ...z, heatLoadW: heatLoad, coolLoadW: coolLoad };
         });
 
         zoneAnalysis.forEach(z => {
@@ -155,7 +156,6 @@ const OfficeHVACCalculator = ({ user }) => {
             totalCoolingW += z.coolLoadW;
         });
 
-        // Apply Safety Factor & Convert to kW
         const totalHeatKW = (totalHeatingW / 1000) * CONFIG.SAFETY_FACTOR;
         const totalCoolKW = (totalCoolingW / 1000) * CONFIG.SAFETY_FACTOR;
         
@@ -164,41 +164,55 @@ const OfficeHVACCalculator = ({ user }) => {
 
         // 2. DYNAMIC EQUIPMENT SELECTION (FROM DB)
         
-        // A. Filter Heat Pumps
+        // Step A: Find relevant products (Loose matching)
+        // Checks 'category' OR 'name' for keywords
         let candidateHPs = dbProducts.filter(p => {
-            const cat = (p.category || '').toLowerCase();
-            return cat.includes('iheat') || cat.includes('icool') || cat.includes('heat pump');
+            const str = ((p.category || '') + ' ' + (p.name || '')).toLowerCase();
+            return str.includes('iheat') || str.includes('icool') || str.includes('heat pump') || str.includes('heatpump');
         });
 
-        // Filter by Type (R32 / R290)
+        // Step B: Filter by Refrigerant Type if specified
         if (financials.heatPumpType !== 'all') {
             candidateHPs = candidateHPs.filter(p => {
                 const ref = (p.Refrigerant || '').toLowerCase();
+                // 'r32' or 'r290'
                 return ref.includes(financials.heatPumpType);
             });
         }
 
-        // B. Select Best Heat Pump Logic
+        // Step C: Select Best Heat Pump Logic with Fallback Extraction
         let selectedPlant = { units: 0, model: null, cost: Infinity, capacity: 0 };
+        let debugMatchCount = 0;
 
         if (candidateHPs.length > 0) {
             candidateHPs.forEach(model => {
-                // Determine capacity based on SEASON
-                // If heating season, use Heating KW. If missing, fallback to Cooling or DHW.
+                // Determine capacity
                 let capacity = 0;
+                
+                // 1. Try DB Fields first
                 if (peakSeason.includes('Heating')) {
                     capacity = parseFloat(model.kW_Heating_Nominal) || parseFloat(model.kW_DHW_Nominal) || 0;
                 } else {
                     capacity = parseFloat(model.kW_Cooling_Nominal) || 0;
                 }
 
-                // If this model can't do the job (e.g. heating only unit in cooling season), skip
+                // 2. Fallback: Parse from Name if DB fields are 0/missing
+                if (capacity <= 0) {
+                    capacity = extractKwFromName(model.name);
+                }
+
+                // If still 0, skip
                 if (capacity <= 0) return;
+                
+                debugMatchCount++;
 
                 const price = parseFloat(model.salesPriceUSD) || 99999;
+                
+                // Simple sizing: can we do it with 1 unit? or multiples?
                 const unitsNeeded = Math.ceil(peakLoadKW / capacity);
                 const totalCost = unitsNeeded * price;
                 
+                // Optimization: Prefer lowest cost
                 if (totalCost < selectedPlant.cost) {
                     selectedPlant = {
                         units: unitsNeeded,
@@ -208,9 +222,10 @@ const OfficeHVACCalculator = ({ user }) => {
                     };
                 }
             });
-        } else {
-            // Fallback if no products
-            selectedPlant.model = { name: "No Matching Database Products" };
+        } 
+        
+        if (selectedPlant.cost === Infinity) {
+            selectedPlant.model = { name: "No Matching Products Found" };
             selectedPlant.cost = 0;
         }
 
@@ -219,53 +234,45 @@ const OfficeHVACCalculator = ({ user }) => {
         let solarCost = 0;
         let storageSpecs = null;
 
-        // C. Calculate Solar/Battery Pricing from DB
         let avgSolarPricePerWatt = CONFIG.DEFAULT_COST_SOLAR_WATT;
         let avgBatteryPricePerKWh = CONFIG.DEFAULT_COST_LITHIUM_KWH;
 
-        const solarProducts = dbProducts.filter(p => (p.category || '').toLowerCase().includes('panel'));
-        const batteryProducts = dbProducts.filter(p => (p.category || '').toLowerCase().includes('battery'));
+        // Try to find pricing from iVOLT products
+        const solarProducts = dbProducts.filter(p => ((p.category||'').toLowerCase().includes('panel') || (p.name||'').toLowerCase().includes('panel')));
+        const batteryProducts = dbProducts.filter(p => ((p.category||'').toLowerCase().includes('battery') || (p.name||'').toLowerCase().includes('battery')));
 
         if (solarProducts.length > 0) {
-            // Calculate avg price per Watt from inventory
-            const validSolar = solarProducts.filter(p => p.salesPriceUSD > 0 && p.pv_Watt_Rated > 0);
-            if (validSolar.length > 0) {
-                const totalPerWatt = validSolar.reduce((acc, p) => acc + (p.salesPriceUSD / p.pv_Watt_Rated), 0);
-                avgSolarPricePerWatt = totalPerWatt / validSolar.length;
+            const valid = solarProducts.filter(p => p.salesPriceUSD > 0 && p.pv_Watt_Rated > 0);
+            if (valid.length > 0) {
+                const totalPerWatt = valid.reduce((acc, p) => acc + (p.salesPriceUSD / p.pv_Watt_Rated), 0);
+                avgSolarPricePerWatt = totalPerWatt / valid.length;
             }
         }
 
         if (batteryProducts.length > 0) {
-            // Calculate avg price per kWh from inventory
-            const validBat = batteryProducts.filter(p => p.salesPriceUSD > 0 && p.bat_kWh_Nominal > 0);
-            if (validBat.length > 0) {
-                const totalPerKWh = validBat.reduce((acc, p) => acc + (p.salesPriceUSD / p.bat_kWh_Nominal), 0);
-                avgBatteryPricePerKWh = totalPerKWh / validBat.length;
+            const valid = batteryProducts.filter(p => p.salesPriceUSD > 0 && p.bat_kWh_Nominal > 0);
+            if (valid.length > 0) {
+                const totalPerKWh = valid.reduce((acc, p) => acc + (p.salesPriceUSD / p.bat_kWh_Nominal), 0);
+                avgBatteryPricePerKWh = totalPerKWh / valid.length;
             }
         }
 
         if (financials.systemType === 'off-grid') {
-            // Use selected Heat Pump specs if available, else defaults
             const efficiency = peakSeason.includes('Heating') 
                 ? (parseFloat(selectedPlant.model?.COP_DHW) || CONFIG.DEFAULT_HEATING_COP)
-                : 3.0; // Cooling EER estimate if not in DB
+                : 3.0; 
 
             const peakElecLoad = peakLoadKW / efficiency;
             const batteryKWh = (peakElecLoad * financials.batteryHours) / CONFIG.LITHIUM_EFFICIENCY;
-            
             const directEnergy = peakElecLoad * Math.max(0, financials.operatingHours - financials.batteryHours);
-            const batteryChargeEnergy = batteryKWh; 
-            const totalEnergy = directEnergy + batteryChargeEnergy;
+            const totalEnergy = directEnergy + batteryKWh;
             const solarKW = (totalEnergy / financials.sunHours) * 1.3; 
 
             batteryCost = batteryKWh * avgBatteryPricePerKWh;
             solarCost = solarKW * 1000 * avgSolarPricePerWatt;
             
             storageSpecs = { 
-                batteryKWh, 
-                solarKW, 
-                solarRate: avgSolarPricePerWatt,
-                batRate: avgBatteryPricePerKWh 
+                batteryKWh, solarKW, solarRate: avgSolarPricePerWatt, batRate: avgBatteryPricePerKWh 
             };
         }
 
@@ -282,7 +289,8 @@ const OfficeHVACCalculator = ({ user }) => {
             loads: { heatKW: totalHeatKW, coolKW: totalCoolKW, peakKW: peakLoadKW, season: peakSeason },
             plant: selectedPlant,
             offgrid: { batteryCost, solarCost, specs: storageSpecs },
-            financials: { equipmentSubtotal, landedCost, vat, duties }
+            financials: { equipmentSubtotal, landedCost, vat, duties },
+            debug: { candidates: candidateHPs.length, validMatches: debugMatchCount, dbTotal: dbProducts.length }
         };
 
     }, [building, zones, financials, project.location, dbProducts]);
@@ -324,11 +332,15 @@ const OfficeHVACCalculator = ({ user }) => {
                         <Thermometer className="text-blue-300" size={32} />
                         <h2 className="text-3xl font-black uppercase tracking-tighter">Office HVAC Estimator</h2>
                     </div>
-                    <div className="flex items-center gap-2 text-blue-200 text-sm font-medium">
+                    <div className="flex items-center gap-2 text-blue-200 text-xs font-medium">
                         {loadingProducts ? (
-                            <><span className="animate-spin">⏳</span> Connecting to CRM Database...</>
+                            <><span className="animate-spin">⏳</span> Connecting...</>
                         ) : (
-                            <><Database size={16} className="text-green-400" /> Connected to {dbProducts.length} Products</>
+                            <>
+                                <Database size={12} className="text-green-400" /> DB: {results.debug.dbTotal} | 
+                                Candidates: {results.debug.candidates} | 
+                                Valid Cap: {results.debug.validMatches}
+                            </>
                         )}
                     </div>
                 </div>
@@ -501,7 +513,7 @@ const OfficeHVACCalculator = ({ user }) => {
                         <div className="bg-blue-900 text-white p-6 rounded-2xl">
                             <p className="text-blue-300 text-[10px] font-bold uppercase tracking-widest mb-2">Recommended Plant (From Inventory)</p>
                             <h4 className="text-xl font-bold mb-1">
-                                {results.plant.units} x {results.plant.model?.name || "N/A"}
+                                {results.plant.units} x {results.plant.model?.name || "No Matching Product Found"}
                             </h4>
                             <div className="flex justify-between items-end mt-4">
                                 <div className="text-xs text-blue-200">
