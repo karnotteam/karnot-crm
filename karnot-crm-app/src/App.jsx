@@ -78,6 +78,7 @@ import WarmRoomCalc from './components/WarmRoomCalc.jsx';
 import DatasheetLibrary from './components/DatasheetLibrary.jsx';
 import RSRHCalculator from './components/RSRHCalculator.jsx';
 import AquaHeroCalculator from './components/AquaHeroCalculator.jsx';
+import OfficeHVACCalculator from './components/OfficeHVACCalculator.jsx';
 
 // ==========================================
 // 2B. NEW INVESTOR RESEARCH COMPONENTS
@@ -105,7 +106,7 @@ import {
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
     UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload, Sparkles,
-    DollarSign, Mail, TrendingUp, Phone, Grid, Printer, Map, Droplets // <--- Added Droplets here
+    DollarSign, Mail, TrendingUp, Phone, Grid, Printer, Map, Droplets, Thermometer // <--- Added Droplets here
 } from 'lucide-react';
 
 // ==========================================
@@ -237,6 +238,7 @@ const Header = ({ activeView, setActiveView, quoteCount, onLogout, onNewQuote, u
         { view: 'warmRoomCalc', label: 'Warm Room', icon: Calculator },
         { view: 'coldRoomCalc', label: 'Cold Room', icon: Calculator },
         { view: 'rsrhCalc', label: 'RSRH Cattle', icon: Target, badge: 'NEW' }
+        { view: 'officeHvacCalc', label: 'Office HVAC', icon: Thermometer, badge: 'NEW' },
     ];
 
     return (
@@ -779,6 +781,14 @@ export default function App() {
                         <RSRHCalculator />
                     </div>
                 )}
+                {activeView === 'officeHvacCalc' && (
+    <div className="max-w-7xl mx-auto">
+        <Button onClick={() => setActiveView('calculatorsHub')} variant="secondary" className="mb-4">
+            ← Back to Calculators
+        </Button>
+        <OfficeHVACCalculator />
+    </div>
+)}
 
                 {/* ====================================== */}
                 {/* 6C. INVESTMENT MODULES                 */}
