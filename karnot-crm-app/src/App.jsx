@@ -874,8 +874,6 @@ export default function App() {
 
 {activeView === 'admin' && <AdminPage user={user} />}
                 
-                {activeView === 'admin' && <AdminPage user={user} />}
-                
                 {/* ======================= */}
                 {/* 10. ACCOUNTS HUB (ADMIN) */}
                 {/* ======================= */}
