@@ -77,6 +77,7 @@ import HeatPumpCalculator from './components/HeatPumpCalculator.jsx';
 import WarmRoomCalc from './components/WarmRoomCalc.jsx';
 import DatasheetLibrary from './components/DatasheetLibrary.jsx';
 import RSRHCalculator from './components/RSRHCalculator.jsx';
+import AquaHeroCalculator from './components/AquaHeroCalculator.jsx';
 
 // ==========================================
 // 2B. NEW INVESTOR RESEARCH COMPONENTS
