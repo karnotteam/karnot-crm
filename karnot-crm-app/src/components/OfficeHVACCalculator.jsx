@@ -9,7 +9,7 @@ import { Card, Button, Input, Section } from '../data/constants.jsx';
 // --- FIREBASE IMPORTS ---
 import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { getAuth } from "firebase/auth"; // Added to fix auth detection
+import { getAuth } from "firebase/auth"; 
 
 // --- CONSTANTS ---
 const CLIMATE_DATA = {
@@ -74,7 +74,7 @@ const OfficeHVACCalculator = ({ user: propUser }) => {
     const [zones, setZones] = useState([{ id: 1, area: 100 }]); 
     const [financials, setFinancials] = useState({
         systemType: 'on-grid',
-        heatPumpType: 'all',
+        heatPumpType: 'all', // 'all', 'r32', 'r290', 'co2'
         gridPeak: 0.22,
         gridOffPeak: 0.12,
         vat: 12,
@@ -86,7 +86,6 @@ const OfficeHVACCalculator = ({ user: propUser }) => {
 
     // --- EFFECT: FETCH PRODUCTS ---
     useEffect(() => {
-        // Try prop user first, then auth current user
         const auth = getAuth();
         const currentUser = propUser || auth.currentUser;
 
@@ -95,11 +94,8 @@ const OfficeHVACCalculator = ({ user: propUser }) => {
             return;
         }
 
-        console.log("Fetching products for user:", currentUser.uid);
-
         const unsub = onSnapshot(collection(db, "users", currentUser.uid, "products"), (snapshot) => {
             const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            console.log("Loaded products:", list.length);
             setDbProducts(list);
             setLoadingProducts(false);
         }, (error) => {
@@ -176,7 +172,6 @@ const OfficeHVACCalculator = ({ user: propUser }) => {
         // 2. DYNAMIC EQUIPMENT SELECTION (FROM DB)
         
         // Step A: Find relevant products (Loose matching)
-        // Checks 'category' OR 'name' for keywords
         let candidateHPs = dbProducts.filter(p => {
             const str = ((p.category || '') + ' ' + (p.name || '')).toLowerCase();
             return str.includes('iheat') || str.includes('icool') || str.includes('heat pump') || str.includes('heatpump');
@@ -186,8 +181,14 @@ const OfficeHVACCalculator = ({ user: propUser }) => {
         if (financials.heatPumpType !== 'all') {
             candidateHPs = candidateHPs.filter(p => {
                 const ref = (p.Refrigerant || '').toLowerCase();
-                // 'r32' or 'r290'
-                return ref.includes(financials.heatPumpType);
+                const target = financials.heatPumpType.toLowerCase();
+                
+                // Special handling for CO2 which is often labeled R744
+                if (target === 'co2') {
+                    return ref.includes('co2') || ref.includes('r744');
+                }
+                
+                return ref.includes(target);
             });
         }
 
@@ -198,24 +199,22 @@ const OfficeHVACCalculator = ({ user: propUser }) => {
 
         if (candidateHPs.length > 0) {
             candidateHPs.forEach(model => {
-                // Determine capacity
+                // Determine capacity based on Season
                 let capacity = 0;
                 let source = "DB";
                 
-                // 1. Try DB Fields first
                 if (peakSeason.includes('Heating')) {
                     capacity = parseFloat(model.kW_Heating_Nominal) || parseFloat(model.kW_DHW_Nominal) || 0;
                 } else {
                     capacity = parseFloat(model.kW_Cooling_Nominal) || 0;
                 }
 
-                // 2. Fallback: Parse from Name if DB fields are 0/missing
+                // Fallback: Parse from Name if DB fields are 0/missing
                 if (capacity <= 0) {
                     capacity = extractKwFromName(model.name);
                     source = "Name Parse";
                 }
 
-                // If still 0, skip
                 if (capacity <= 0) {
                     debugList.push({ name: model.name, status: 'Skipped (0 Capacity)', cap: 0 });
                     return;
@@ -224,13 +223,12 @@ const OfficeHVACCalculator = ({ user: propUser }) => {
                 debugMatchCount++;
                 const price = parseFloat(model.salesPriceUSD) || 99999;
                 
-                // Simple sizing: can we do it with 1 unit? or multiples?
+                // Sizing Logic
                 const unitsNeeded = Math.ceil(peakLoadKW / capacity);
                 const totalCost = unitsNeeded * price;
                 
                 debugList.push({ name: model.name, status: 'Valid Candidate', cap: capacity, src: source, cost: totalCost });
 
-                // Optimization: Prefer lowest cost
                 if (totalCost < selectedPlant.cost) {
                     selectedPlant = {
                         units: unitsNeeded,
@@ -473,14 +471,31 @@ const OfficeHVACCalculator = ({ user: propUser }) => {
                     </Section>
 
                     <Section title="4. System Config">
-                        <select 
-                            className="w-full p-3 bg-white rounded-xl border-2 border-gray-100 font-bold text-gray-700 mb-4"
-                            value={financials.systemType}
-                            onChange={(e) => setFinancials({...financials, systemType: e.target.value})}
-                        >
-                            <option value="on-grid">On-Grid (Standard)</option>
-                            <option value="off-grid">Off-Grid (Solar + Battery)</option>
-                        </select>
+                        <div className="mb-4">
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Configuration</label>
+                            <select 
+                                className="w-full p-3 bg-white rounded-xl border-2 border-gray-100 font-bold text-gray-700 mb-4"
+                                value={financials.systemType}
+                                onChange={(e) => setFinancials({...financials, systemType: e.target.value})}
+                            >
+                                <option value="on-grid">On-Grid (Standard)</option>
+                                <option value="off-grid">Off-Grid (Solar + Battery)</option>
+                            </select>
+                        </div>
+
+                        <div className="mb-4">
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Refrigerant / Tech</label>
+                            <select 
+                                className="w-full p-3 bg-white rounded-xl border-2 border-gray-100 font-bold text-gray-700"
+                                value={financials.heatPumpType}
+                                onChange={(e) => setFinancials({...financials, heatPumpType: e.target.value})}
+                            >
+                                <option value="all">Auto-Select Best Value</option>
+                                <option value="r32">R32 (Standard)</option>
+                                <option value="r290">R290 (Natural / High Temp)</option>
+                                <option value="co2">CO2 (R744 / Industrial)</option>
+                            </select>
+                        </div>
                         
                         {financials.systemType === 'off-grid' && (
                             <div className="grid grid-cols-2 gap-4 bg-yellow-50 p-4 rounded-xl border border-yellow-100">
