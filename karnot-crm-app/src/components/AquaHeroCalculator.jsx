@@ -11,15 +11,15 @@ const REGIONAL_DEFAULTS = {
         currency: '£',
         currencyCode: 'GBP',
         gridPeak: 0.28,    // Standard/Peak
-        gridOffPeak: 0.12, // Octopus Cosy/Go
-        gasPrice: 0.06,    // Updated to 6p per kWh
-        gasStandingCharge: 128, // £ per year (approx 35p/day)
+        gridOffPeak: 0.12, // Octopus Cosy/Go (Visible now!)
+        gasPrice: 0.06,    // 6p per kWh
+        gasStandingCharge: 128, // £ per year
         upgradeCost: 0,    
         avgGroundWater: 10, 
         targetTemp: 60,
         volumeUnit: 'Liters',
-        co2Grid: 0.21,     // kg CO2 per kWh
-        co2Gas: 0.21       // kg CO2 per kWh (thermal)
+        co2Grid: 0.21,     
+        co2Gas: 0.21       
     },
     PH: {
         currency: '₱',
@@ -27,12 +27,12 @@ const REGIONAL_DEFAULTS = {
         gridPeak: 14.00,
         gridOffPeak: 14.00, 
         gasPrice: 6.50,     
-        gasStandingCharge: 0, // Usually bottled LPG, no standing charge
+        gasStandingCharge: 0, 
         upgradeCost: 0,     
         avgGroundWater: 26,
         targetTemp: 60,
         volumeUnit: 'Liters',
-        co2Grid: 0.70,     // Coal heavy
+        co2Grid: 0.70,     
         co2Gas: 0.23
     },
     CA: {
@@ -41,12 +41,12 @@ const REGIONAL_DEFAULTS = {
         gridPeak: 0.14,
         gridOffPeak: 0.14, 
         gasPrice: 0.05,    
-        gasStandingCharge: 150, // Fixed connection fees
+        gasStandingCharge: 150, 
         upgradeCost: 1500, 
         avgGroundWater: 8,
         targetTemp: 60,
         volumeUnit: 'Gallons',
-        co2Grid: 0.03,     // Hydro heavy (BC/QC)
+        co2Grid: 0.03,     
         co2Gas: 0.18
     },
     MX: {
@@ -55,7 +55,7 @@ const REGIONAL_DEFAULTS = {
         gridPeak: 5.50,    
         gridOffPeak: 1.00, 
         gasPrice: 2.00,    
-        gasStandingCharge: 0, // Often LPG
+        gasStandingCharge: 0, 
         upgradeCost: 6000, 
         avgGroundWater: 18,
         targetTemp: 60,
@@ -80,8 +80,8 @@ const AquaHeroCalculator = ({ onBack }) => {
         dailyVolume: 200, 
         competitorType: 'gas',
         smartStrategy: true, 
-        solarAssist: false, // New Solar Toggle
-        removeGasMeter: false, // New Gas Meter Toggle
+        solarAssist: false, 
+        removeGasMeter: false, 
         needsElectricalUpgrade: false,
         karnotUnitCost: 2500, 
         competitorUnitCost: 1200 
@@ -97,7 +97,6 @@ const AquaHeroCalculator = ({ onBack }) => {
             ...prev,
             needsElectricalUpgrade: (region === 'CA' || region === 'MX'),
             dailyVolume: region === 'UK' || region === 'PH' ? 200 : 60,
-            // Reset toggles on region change
             removeGasMeter: false,
             solarAssist: false
         }));
@@ -128,20 +127,19 @@ const AquaHeroCalculator = ({ onBack }) => {
         // 2. Competitor Costs & CO2
         const compSpecs = COMPETITORS[inputs.competitorType];
         let compAnnualCost = 0;
-        let compAnnualCO2 = 0; // kg
+        let compAnnualCO2 = 0; 
 
         if (compSpecs.type === 'gas') {
             const gasKWh = annualEnergyKWh / compSpecs.efficiency;
             compAnnualCost = gasKWh * financials.gasPrice;
             compAnnualCO2 = gasKWh * financials.co2Gas;
             
-            // Add Standing Charge if they HAVE a meter (and we assume they pay it currently)
             if (financials.gasStandingCharge > 0) {
                 compAnnualCost += financials.gasStandingCharge; 
             }
         } else {
             const eleKWh = annualEnergyKWh / compSpecs.efficiency;
-            compAnnualCost = eleKWh * financials.gridPeak;
+            compAnnualCost = eleKWh * financials.gridPeak; // Competitor pays peak
             compAnnualCO2 = eleKWh * financials.co2Grid;
         }
 
@@ -150,46 +148,27 @@ const AquaHeroCalculator = ({ onBack }) => {
         const karnotTotalKWh = annualEnergyKWh / karnotCOP;
         
         // --- SOLAR & STRATEGY LOGIC ---
-        // Base Assumption: 
-        // If Smart Strategy: 90% Off-Peak, 10% Peak.
-        // If Solar Assist: We assume 2 hours of free charging (approx 25% of daily need) during the day.
-        
         let chargeableKWh = karnotTotalKWh;
         let solarSavingsKWh = 0;
 
         if (inputs.solarAssist) {
-            // "Two hours of solar... for free"
-            // Assume the heat pump runs ~6-8 hours a day. 2 hours is roughly 25-30% of load.
-            const solarFraction = 0.30; 
+            const solarFraction = 0.30; // 30% Free
             solarSavingsKWh = karnotTotalKWh * solarFraction;
             chargeableKWh = karnotTotalKWh - solarSavingsKWh;
         }
 
+        // EFFECTIVE RATE CALCULATION (Crucial fix for your Smart Strategy)
         const effectiveRate = inputs.smartStrategy 
-            ? (financials.gridOffPeak * 0.9) + (financials.gridPeak * 0.1) 
+            ? (financials.gridOffPeak * 0.9) + (financials.gridPeak * 0.1) // 90% Off-Peak
             : financials.gridPeak;
 
         let karnotAnnualCost = chargeableKWh * effectiveRate;
         
-        // If they keep the gas meter (and competitor was gas), they might still pay standing charge?
-        // Logic: We assume Karnot is fully electric.
-        // If they checked "Remove Gas Meter", we already accounted for the saving by NOT adding it to Karnot cost 
-        // but including it in Competitor cost.
-        // If they keep the gas meter (inputs.removeGasMeter === false) and the competitor was gas, 
-        // strictly speaking, the standing charge is a wash (paid in both scenarios).
-        // HOWEVER, if competitor was Electric, standing charge is irrelevant.
-        
-        // Simplified Logic:
-        // Competitor Cost includes Standing Charge (if Gas).
-        // Karnot Cost is pure electricity.
-        // If !removeGasMeter && competitor==Gas, we must ADD standing charge to Karnot too (since they still pay it).
-        
+        // Add standing charge if applicable (if they keep gas meter)
         if (compSpecs.type === 'gas' && !inputs.removeGasMeter && financials.gasStandingCharge > 0) {
             karnotAnnualCost += financials.gasStandingCharge;
         }
 
-        // CO2 for Karnot
-        // Solar energy has 0 operational CO2
         const karnotAnnualCO2 = chargeableKWh * financials.co2Grid;
 
         // 4. ROI Logic
@@ -199,8 +178,6 @@ const AquaHeroCalculator = ({ onBack }) => {
         const netCapexDelta = totalKarnotCapex - parseFloat(inputs.competitorUnitCost);
         const paybackYears = annualSavings > 0 ? netCapexDelta / annualSavings : 0;
         const fiveYearSavings = (annualSavings * 5) - netCapexDelta;
-        
-        // CO2 Stats
         const co2SavedTons = (compAnnualCO2 - karnotAnnualCO2) / 1000;
 
         return {
@@ -291,7 +268,7 @@ const AquaHeroCalculator = ({ onBack }) => {
                         </div>
                     </Section>
 
-                    <Section title="2. Usage Profile">
+                    <Section title="2. Usage & Rates">
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase">Comparison</label>
@@ -313,13 +290,29 @@ const AquaHeroCalculator = ({ onBack }) => {
                                 onChange={(e) => handleInput('dailyVolume', parseFloat(e.target.value))} 
                             />
 
-                             <Input 
-                                label={`Grid Price (${financials.currency}/kWh)`} 
-                                type="number" 
-                                step="0.01"
-                                value={financials.gridPeak} 
-                                onChange={(e) => handleFinancial('gridPeak', e.target.value)} 
-                            />
+                            {/* GRID PRICES - NOW WITH OFF-PEAK */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <Input 
+                                    label={`Std Rate (${financials.currency}/kWh)`} 
+                                    type="number" 
+                                    step="0.01"
+                                    value={financials.gridPeak} 
+                                    onChange={(e) => handleFinancial('gridPeak', e.target.value)} 
+                                />
+                                <Input 
+                                    label={`Off-Peak (${financials.currency}/kWh)`} 
+                                    type="number" 
+                                    step="0.01"
+                                    value={financials.gridOffPeak} 
+                                    onChange={(e) => handleFinancial('gridOffPeak', e.target.value)} 
+                                    className={inputs.smartStrategy ? "border-green-400 bg-green-50" : ""}
+                                />
+                            </div>
+                            {inputs.smartStrategy && (
+                                <p className="text-[10px] text-green-600 font-bold text-right -mt-2">
+                                    Targeting Off-Peak Rate for 90% of load
+                                </p>
+                            )}
                         </div>
                     </Section>
                 </div>
