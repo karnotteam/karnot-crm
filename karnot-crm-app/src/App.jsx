@@ -105,8 +105,8 @@ import {
     Users, Settings, Calculator, Plus, Landmark, ChevronDown,
     MapPin, Wrench, Briefcase, FileText, Target, Package, 
     UserCheck, Calendar as CalendarIcon, CheckCircle, Globe, Upload, Sparkles,
-    DollarSign, Mail, TrendingUp, Phone, Grid, Printer, Map
-} from 'lucide-react'; 
+    DollarSign, Mail, TrendingUp, Phone, Grid, Printer, Map, Droplets // <--- Added Droplets here
+} from 'lucide-react';
 
 // ==========================================
 // 5. DROPDOWN MENU COMPONENT
