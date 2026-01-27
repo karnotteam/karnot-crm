@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '../data/constants.jsx';
-import { Calculator, Sun, Droplets, Wind, Zap, Flame, ArrowRight, Snowflake, Target } from 'lucide-react';
+import { Calculator, Sun, Droplets, Wind, Zap, Flame, ArrowRight, Snowflake, Target, Thermometer } from 'lucide-react';
 
 const CalculatorsPage = ({ setActiveView }) => {
     const tools = [
@@ -42,6 +42,14 @@ const CalculatorsPage = ({ setActiveView }) => {
             badge: 'Philippines'
         },
         {
+            id: 'officeHvacCalc',
+            title: 'Office HVAC & Solar',
+            description: 'Precise heating/cooling loads for Summer/Winter climates (London, Manila, Toronto, etc) with Off-Grid Solar sizing.',
+            icon: <Thermometer className="text-red-500" size={32} />,
+            status: 'Ready',
+            badge: 'New'
+        },
+        {
             id: 'poolCalc',
             title: 'Pool Heating',
             description: 'Calculate thermal loss and heat pump sizing for commercial swimming pools.',
@@ -62,14 +70,7 @@ const CalculatorsPage = ({ setActiveView }) => {
             icon: <Zap className="text-purple-500" size={32} />,
             status: 'Coming Soon'
         }
-    ];{
-            id: 'officeHvacCalc',
-            title: 'Office HVAC & Solar',
-            description: 'Precise heating/cooling loads for Summer/Winter climates (London, Manila, Toronto, etc) with Off-Grid Solar sizing.',
-            icon: <Thermometer className="text-red-500" size={32} />,
-            status: 'Ready',
-            badge: 'New'
-        },
+    ];
 
     return (
         <div className="max-w-6xl mx-auto">
