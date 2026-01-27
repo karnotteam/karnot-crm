@@ -2,13 +2,14 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
     Thermometer, Sun, Wind, Layout, Printer, 
     Save, Plus, Trash2, Globe, DollarSign, 
-    Activity, ArrowRight, Zap, Battery, CheckCircle, Database, AlertCircle
+    Activity, ArrowRight, Zap, Battery, CheckCircle, Database, AlertCircle, Search
 } from 'lucide-react';
 import { Card, Button, Input, Section } from '../data/constants.jsx';
 
 // --- FIREBASE IMPORTS ---
 import { db } from '../firebase';
 import { collection, onSnapshot } from 'firebase/firestore';
+import { getAuth } from "firebase/auth"; // Added to fix auth detection
 
 // --- CONSTANTS ---
 const CLIMATE_DATA = {
@@ -48,17 +49,18 @@ const extractKwFromName = (name) => {
     const match = name.match(/(\d+(\.\d+)?)\s*k[Ww]/i);
     if (match) return parseFloat(match[1]);
     
-    // Fallback: Look for "10HP" (Approx 28kW thermal for CO2, varies heavily, using conservative 2.5x multiplier for HP->kW thermal)
+    // Fallback: Look for "10HP" (Approx 2.8kW thermal per HP for rough sizing fallback)
     const hpMatch = name.match(/(\d+(\.\d+)?)\s*HP/i);
     if (hpMatch) return parseFloat(hpMatch[1]) * 2.8; 
     
     return 0;
 };
 
-const OfficeHVACCalculator = ({ user }) => {
+const OfficeHVACCalculator = ({ user: propUser }) => {
     // --- STATE ---
     const [dbProducts, setDbProducts] = useState([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
+    const [showDebug, setShowDebug] = useState(false);
 
     const [project, setProject] = useState({ name: 'New Office Project', location: 'manila' });
     const [units, setUnits] = useState('metric'); 
@@ -84,20 +86,29 @@ const OfficeHVACCalculator = ({ user }) => {
 
     // --- EFFECT: FETCH PRODUCTS ---
     useEffect(() => {
-        if (!user) {
+        // Try prop user first, then auth current user
+        const auth = getAuth();
+        const currentUser = propUser || auth.currentUser;
+
+        if (!currentUser) {
             setLoadingProducts(false);
             return;
         }
-        const unsub = onSnapshot(collection(db, "users", user.uid, "products"), (snapshot) => {
+
+        console.log("Fetching products for user:", currentUser.uid);
+
+        const unsub = onSnapshot(collection(db, "users", currentUser.uid, "products"), (snapshot) => {
             const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            console.log("Loaded products:", list.length);
             setDbProducts(list);
             setLoadingProducts(false);
         }, (error) => {
             console.error("Error fetching products:", error);
             setLoadingProducts(false);
         });
+
         return () => unsub();
-    }, [user]);
+    }, [propUser]);
 
     // --- EFFECT: Update Temps on Location Change ---
     useEffect(() => {
@@ -183,11 +194,13 @@ const OfficeHVACCalculator = ({ user }) => {
         // Step C: Select Best Heat Pump Logic with Fallback Extraction
         let selectedPlant = { units: 0, model: null, cost: Infinity, capacity: 0 };
         let debugMatchCount = 0;
+        let debugList = [];
 
         if (candidateHPs.length > 0) {
             candidateHPs.forEach(model => {
                 // Determine capacity
                 let capacity = 0;
+                let source = "DB";
                 
                 // 1. Try DB Fields first
                 if (peakSeason.includes('Heating')) {
@@ -199,19 +212,24 @@ const OfficeHVACCalculator = ({ user }) => {
                 // 2. Fallback: Parse from Name if DB fields are 0/missing
                 if (capacity <= 0) {
                     capacity = extractKwFromName(model.name);
+                    source = "Name Parse";
                 }
 
                 // If still 0, skip
-                if (capacity <= 0) return;
+                if (capacity <= 0) {
+                    debugList.push({ name: model.name, status: 'Skipped (0 Capacity)', cap: 0 });
+                    return;
+                }
                 
                 debugMatchCount++;
-
                 const price = parseFloat(model.salesPriceUSD) || 99999;
                 
                 // Simple sizing: can we do it with 1 unit? or multiples?
                 const unitsNeeded = Math.ceil(peakLoadKW / capacity);
                 const totalCost = unitsNeeded * price;
                 
+                debugList.push({ name: model.name, status: 'Valid Candidate', cap: capacity, src: source, cost: totalCost });
+
                 // Optimization: Prefer lowest cost
                 if (totalCost < selectedPlant.cost) {
                     selectedPlant = {
@@ -290,7 +308,7 @@ const OfficeHVACCalculator = ({ user }) => {
             plant: selectedPlant,
             offgrid: { batteryCost, solarCost, specs: storageSpecs },
             financials: { equipmentSubtotal, landedCost, vat, duties },
-            debug: { candidates: candidateHPs.length, validMatches: debugMatchCount, dbTotal: dbProducts.length }
+            debug: { candidates: candidateHPs.length, validMatches: debugMatchCount, dbTotal: dbProducts.length, list: debugList }
         };
 
     }, [building, zones, financials, project.location, dbProducts]);
@@ -550,6 +568,33 @@ const OfficeHVACCalculator = ({ user }) => {
                                 <AlertCircle size={10} /> Using default solar/battery pricing (No iVOLT products found).
                             </div>
                         )}
+
+                        {/* DEBUG TOGGLE */}
+                        <div className="mt-4 border-t pt-2">
+                            <button 
+                                onClick={() => setShowDebug(!showDebug)} 
+                                className="text-[10px] text-gray-400 underline hover:text-blue-500"
+                            >
+                                {showDebug ? "Hide Candidate Analysis" : "Show Candidate Analysis"}
+                            </button>
+                            {showDebug && (
+                                <div className="mt-2 h-40 overflow-y-auto bg-gray-50 border p-2 text-[9px] font-mono">
+                                    <table className="w-full text-left">
+                                        <thead><tr><th>Product</th><th>Cap</th><th>Src</th><th>Status</th></tr></thead>
+                                        <tbody>
+                                            {results.debug.list.map((item, i) => (
+                                                <tr key={i} className={item.cap > 0 ? "text-green-700" : "text-red-400"}>
+                                                    <td>{item.name.substring(0,20)}...</td>
+                                                    <td>{item.cap.toFixed(1)}kW</td>
+                                                    <td>{item.src}</td>
+                                                    <td>{item.status}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
