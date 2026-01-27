@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
     Zap, Flame, Droplets, Globe, DollarSign, 
     ArrowRight, Activity, TrendingUp, AlertTriangle, 
-    CheckCircle, BatteryCharging 
+    CheckCircle, BatteryCharging, Sun, Leaf, Trash2
 } from 'lucide-react';
 import { Card, Button, Input, Section } from '../data/constants.jsx';
 
@@ -10,46 +10,58 @@ const REGIONAL_DEFAULTS = {
     UK: {
         currency: '£',
         currencyCode: 'GBP',
-        gridPeak: 0.29,    // Standard/Peak
+        gridPeak: 0.28,    // Standard/Peak
         gridOffPeak: 0.12, // Octopus Cosy/Go
-        gasPrice: 0.07,    // per kWh
-        upgradeCost: 0,    // Usually 240V standard
-        avgGroundWater: 10, // Celsius
+        gasPrice: 0.06,    // Updated to 6p per kWh
+        gasStandingCharge: 128, // £ per year (approx 35p/day)
+        upgradeCost: 0,    
+        avgGroundWater: 10, 
         targetTemp: 60,
-        volumeUnit: 'Liters'
+        volumeUnit: 'Liters',
+        co2Grid: 0.21,     // kg CO2 per kWh
+        co2Gas: 0.21       // kg CO2 per kWh (thermal)
     },
     PH: {
         currency: '₱',
         currencyCode: 'PHP',
         gridPeak: 14.00,
-        gridOffPeak: 14.00, // Flat rate usually, unless industrial
-        gasPrice: 6.50,     // LPG equiv per kWh
-        upgradeCost: 0,     // 220V standard
+        gridOffPeak: 14.00, 
+        gasPrice: 6.50,     
+        gasStandingCharge: 0, // Usually bottled LPG, no standing charge
+        upgradeCost: 0,     
         avgGroundWater: 26,
         targetTemp: 60,
-        volumeUnit: 'Liters'
+        volumeUnit: 'Liters',
+        co2Grid: 0.70,     // Coal heavy
+        co2Gas: 0.23
     },
     CA: {
         currency: '$',
         currencyCode: 'CAD',
         gridPeak: 0.14,
-        gridOffPeak: 0.14, // BC/QC Hydro often flat or tiered
-        gasPrice: 0.05,    // Cheap natural gas
-        upgradeCost: 1500, // Panel/Wiring upgrade 120->240V
+        gridOffPeak: 0.14, 
+        gasPrice: 0.05,    
+        gasStandingCharge: 150, // Fixed connection fees
+        upgradeCost: 1500, 
         avgGroundWater: 8,
         targetTemp: 60,
-        volumeUnit: 'Gallons'
+        volumeUnit: 'Gallons',
+        co2Grid: 0.03,     // Hydro heavy (BC/QC)
+        co2Gas: 0.18
     },
     MX: {
         currency: '$',
         currencyCode: 'MXN',
-        gridPeak: 5.50,    // DAC Rate (High consumption)
-        gridOffPeak: 1.00, // Subsidized (Low consumption)
-        gasPrice: 2.00,    // Natural gas/LPG mix
-        upgradeCost: 6000, // Wiring upgrade
+        gridPeak: 5.50,    
+        gridOffPeak: 1.00, 
+        gasPrice: 2.00,    
+        gasStandingCharge: 0, // Often LPG
+        upgradeCost: 6000, 
         avgGroundWater: 18,
         targetTemp: 60,
-        volumeUnit: 'Gallons'
+        volumeUnit: 'Gallons',
+        co2Grid: 0.45,
+        co2Gas: 0.20
     }
 };
 
@@ -57,7 +69,7 @@ const COMPETITORS = {
     electric: { name: 'Standard Electric (Rheem/A.O. Smith)', efficiency: 0.95, type: 'electric' },
     gas: { name: 'Natural Gas / LPG (Standard)', efficiency: 0.65, type: 'gas' },
     gasHigh: { name: 'Gas Condensing / Tankless', efficiency: 0.90, type: 'gas' },
-    hybrid: { name: 'Hybrid Heat Pump (Generic)', efficiency: 3.0, type: 'electric_hybrid' } // Often fails to run purely off-peak
+    hybrid: { name: 'Hybrid Heat Pump (Generic)', efficiency: 3.0, type: 'electric_hybrid' } 
 };
 
 const AquaHeroCalculator = ({ onBack }) => {
@@ -65,12 +77,14 @@ const AquaHeroCalculator = ({ onBack }) => {
     const [region, setRegion] = useState('UK');
     const [inputs, setInputs] = useState({
         people: 4,
-        dailyVolume: 200, // Liters default
+        dailyVolume: 200, 
         competitorType: 'gas',
-        smartStrategy: true, // "The Karnot Strategy"
+        smartStrategy: true, 
+        solarAssist: false, // New Solar Toggle
+        removeGasMeter: false, // New Gas Meter Toggle
         needsElectricalUpgrade: false,
-        karnotUnitCost: 2500, // Hardware cost
-        competitorUnitCost: 1200 // Replacement cost of competitor
+        karnotUnitCost: 2500, 
+        competitorUnitCost: 1200 
     });
     
     // Load defaults on region change
@@ -79,11 +93,13 @@ const AquaHeroCalculator = ({ onBack }) => {
     useEffect(() => {
         const defaults = REGIONAL_DEFAULTS[region];
         setFinancials(prev => ({ ...defaults }));
-        // Auto-set upgrade need for NA
         setInputs(prev => ({
             ...prev,
             needsElectricalUpgrade: (region === 'CA' || region === 'MX'),
-            dailyVolume: region === 'UK' || region === 'PH' ? 200 : 60 // 200L vs 60 Gal
+            dailyVolume: region === 'UK' || region === 'PH' ? 200 : 60,
+            // Reset toggles on region change
+            removeGasMeter: false,
+            solarAssist: false
         }));
     }, [region]);
 
@@ -99,67 +115,103 @@ const AquaHeroCalculator = ({ onBack }) => {
     const results = useMemo(() => {
         const { currency } = financials;
         
-        // 1. Energy Demand Calculation
-        // Q = m * c * deltaT
-        // Water specific heat = 4.186 kJ/kg°C = 0.001163 kWh/kg°C
-        
+        // 1. Energy Demand
         let volumeLiters = inputs.dailyVolume;
         if (region === 'CA' || region === 'MX') {
-            volumeLiters = inputs.dailyVolume * 3.785; // Gallons to Liters
+            volumeLiters = inputs.dailyVolume * 3.785; 
         }
 
         const deltaT = financials.targetTemp - financials.avgGroundWater;
         const dailyEnergyKWh = volumeLiters * deltaT * 0.001163;
         const annualEnergyKWh = dailyEnergyKWh * 365;
 
-        // 2. Competitor Running Costs
+        // 2. Competitor Costs & CO2
         const compSpecs = COMPETITORS[inputs.competitorType];
         let compAnnualCost = 0;
+        let compAnnualCO2 = 0; // kg
 
         if (compSpecs.type === 'gas') {
-            // Gas Price / Efficiency
-            compAnnualCost = (annualEnergyKWh / compSpecs.efficiency) * financials.gasPrice;
+            const gasKWh = annualEnergyKWh / compSpecs.efficiency;
+            compAnnualCost = gasKWh * financials.gasPrice;
+            compAnnualCO2 = gasKWh * financials.co2Gas;
+            
+            // Add Standing Charge if they HAVE a meter (and we assume they pay it currently)
+            if (financials.gasStandingCharge > 0) {
+                compAnnualCost += financials.gasStandingCharge; 
+            }
         } else {
-            // Electric Price (Usually Peak/Standard for on-demand)
-            // Hybrids often run element during high demand, lowering effective COP
-            const effectiveCOP = compSpecs.efficiency;
-            compAnnualCost = (annualEnergyKWh / effectiveCOP) * financials.gridPeak;
+            const eleKWh = annualEnergyKWh / compSpecs.efficiency;
+            compAnnualCost = eleKWh * financials.gridPeak;
+            compAnnualCO2 = eleKWh * financials.co2Grid;
         }
 
-        // 3. Karnot AquaHERO Costs
-        // Karnot R290 High Temp COP Assumption (Conservative annual avg)
+        // 3. Karnot AquaHERO Costs & CO2
         const karnotCOP = 3.2; 
+        const karnotTotalKWh = annualEnergyKWh / karnotCOP;
         
-        // THE STRATEGY:
-        // If SmartStrategy is ON, we assume 90% of charging happens at Off-Peak rates (Storage logic)
-        // If OFF, we assume standard mix (mostly peak usage)
+        // --- SOLAR & STRATEGY LOGIC ---
+        // Base Assumption: 
+        // If Smart Strategy: 90% Off-Peak, 10% Peak.
+        // If Solar Assist: We assume 2 hours of free charging (approx 25% of daily need) during the day.
+        
+        let chargeableKWh = karnotTotalKWh;
+        let solarSavingsKWh = 0;
+
+        if (inputs.solarAssist) {
+            // "Two hours of solar... for free"
+            // Assume the heat pump runs ~6-8 hours a day. 2 hours is roughly 25-30% of load.
+            const solarFraction = 0.30; 
+            solarSavingsKWh = karnotTotalKWh * solarFraction;
+            chargeableKWh = karnotTotalKWh - solarSavingsKWh;
+        }
+
         const effectiveRate = inputs.smartStrategy 
             ? (financials.gridOffPeak * 0.9) + (financials.gridPeak * 0.1) 
             : financials.gridPeak;
 
-        const karnotAnnualCost = (annualEnergyKWh / karnotCOP) * effectiveRate;
+        let karnotAnnualCost = chargeableKWh * effectiveRate;
+        
+        // If they keep the gas meter (and competitor was gas), they might still pay standing charge?
+        // Logic: We assume Karnot is fully electric.
+        // If they checked "Remove Gas Meter", we already accounted for the saving by NOT adding it to Karnot cost 
+        // but including it in Competitor cost.
+        // If they keep the gas meter (inputs.removeGasMeter === false) and the competitor was gas, 
+        // strictly speaking, the standing charge is a wash (paid in both scenarios).
+        // HOWEVER, if competitor was Electric, standing charge is irrelevant.
+        
+        // Simplified Logic:
+        // Competitor Cost includes Standing Charge (if Gas).
+        // Karnot Cost is pure electricity.
+        // If !removeGasMeter && competitor==Gas, we must ADD standing charge to Karnot too (since they still pay it).
+        
+        if (compSpecs.type === 'gas' && !inputs.removeGasMeter && financials.gasStandingCharge > 0) {
+            karnotAnnualCost += financials.gasStandingCharge;
+        }
+
+        // CO2 for Karnot
+        // Solar energy has 0 operational CO2
+        const karnotAnnualCO2 = chargeableKWh * financials.co2Grid;
 
         // 4. ROI Logic
         const annualSavings = compAnnualCost - karnotAnnualCost;
-        
-        // Upgrade Costs (CAPEX)
         const electricalAdder = inputs.needsElectricalUpgrade ? financials.upgradeCost : 0;
         const totalKarnotCapex = parseFloat(inputs.karnotUnitCost) + electricalAdder;
         const netCapexDelta = totalKarnotCapex - parseFloat(inputs.competitorUnitCost);
-        
         const paybackYears = annualSavings > 0 ? netCapexDelta / annualSavings : 0;
         const fiveYearSavings = (annualSavings * 5) - netCapexDelta;
+        
+        // CO2 Stats
+        const co2SavedTons = (compAnnualCO2 - karnotAnnualCO2) / 1000;
 
         return {
-            dailyEnergyKWh,
-            annualEnergyKWh,
             compAnnualCost,
             karnotAnnualCost,
             annualSavings,
             paybackYears,
             netCapexDelta,
-            totalKarnotCapex,
-            fiveYearSavings
+            fiveYearSavings,
+            co2SavedTons,
+            solarSavingsKWh
         };
     }, [inputs, financials, region]);
 
@@ -173,7 +225,7 @@ const AquaHeroCalculator = ({ onBack }) => {
                             <Droplets className="text-blue-300" size={32} />
                             <h2 className="text-3xl font-black uppercase tracking-tighter">Karnot AquaHERO</h2>
                         </div>
-                        <p className="text-blue-200 font-medium">Global Water Heating ROI & Grid Arbitrage Calculator</p>
+                        <p className="text-blue-200 font-medium">Global Water Heating & Emissions Calculator</p>
                     </div>
                     <div className="flex gap-2">
                         {Object.keys(REGIONAL_DEFAULTS).map(r => (
@@ -191,37 +243,58 @@ const AquaHeroCalculator = ({ onBack }) => {
                         ))}
                     </div>
                 </div>
-                
-                {/* STRATEGY TOGGLE OVERLAY */}
-                <div className="absolute -bottom-8 right-8 bg-white p-2 rounded-2xl shadow-xl border border-blue-100 flex items-center gap-4 pr-6">
-                    <div className={`p-3 rounded-xl ${inputs.smartStrategy ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                        <BatteryCharging size={24} />
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-black uppercase text-gray-400">Karnot Strategy</p>
-                        <div className="flex items-center gap-2">
-                            <span className={`text-sm font-bold ${inputs.smartStrategy ? 'text-green-600' : 'text-gray-500'}`}>
-                                {inputs.smartStrategy ? 'Smart Storage Active' : 'Standard Demand'}
-                            </span>
-                            <div 
-                                className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors ${inputs.smartStrategy ? 'bg-green-500' : 'bg-gray-300'}`}
-                                onClick={() => handleInput('smartStrategy', !inputs.smartStrategy)}
-                            >
-                                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${inputs.smartStrategy ? 'left-6' : 'left-1'}`} />
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-8 mt-6">
                 
                 {/* COL 1: INPUTS */}
                 <div className="space-y-8">
-                    <Section title="1. Usage Profile">
+                    <Section title="1. Strategy & Setup">
+                        <div className="space-y-4">
+                            {/* SMART STRATEGY TOGGLE */}
+                            <div className={`p-4 rounded-xl border transition-all ${inputs.smartStrategy ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <BatteryCharging size={20} className={inputs.smartStrategy ? 'text-green-600' : 'text-gray-400'}/>
+                                        <span className={`text-xs font-black uppercase ${inputs.smartStrategy ? 'text-green-700' : 'text-gray-500'}`}>Smart Storage</span>
+                                    </div>
+                                    <input type="checkbox" checked={inputs.smartStrategy} onChange={(e) => handleInput('smartStrategy', e.target.checked)} className="w-5 h-5 accent-green-600"/>
+                                </div>
+                                <p className="text-[10px] text-gray-500">Prioritize off-peak grid charging (Thermal Battery logic).</p>
+                            </div>
+
+                            {/* SOLAR TOGGLE */}
+                            <div className={`p-4 rounded-xl border transition-all ${inputs.solarAssist ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'}`}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <Sun size={20} className={inputs.solarAssist ? 'text-yellow-600' : 'text-gray-400'}/>
+                                        <span className={`text-xs font-black uppercase ${inputs.solarAssist ? 'text-yellow-700' : 'text-gray-500'}`}>Solar Assist</span>
+                                    </div>
+                                    <input type="checkbox" checked={inputs.solarAssist} onChange={(e) => handleInput('solarAssist', e.target.checked)} className="w-5 h-5 accent-yellow-500"/>
+                                </div>
+                                <p className="text-[10px] text-gray-500">2 hours of free solar boost during daytime.</p>
+                            </div>
+
+                             {/* GAS REMOVAL TOGGLE */}
+                             {COMPETITORS[inputs.competitorType].type === 'gas' && financials.gasStandingCharge > 0 && (
+                                <div className={`p-4 rounded-xl border transition-all ${inputs.removeGasMeter ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <Trash2 size={20} className={inputs.removeGasMeter ? 'text-red-500' : 'text-gray-400'}/>
+                                            <span className={`text-xs font-black uppercase ${inputs.removeGasMeter ? 'text-red-600' : 'text-gray-500'}`}>Remove Gas Meter</span>
+                                        </div>
+                                        <input type="checkbox" checked={inputs.removeGasMeter} onChange={(e) => handleInput('removeGasMeter', e.target.checked)} className="w-5 h-5 accent-red-500"/>
+                                    </div>
+                                    <p className="text-[10px] text-gray-500">Save {financials.currency}{financials.gasStandingCharge} yearly standing charge.</p>
+                                </div>
+                            )}
+                        </div>
+                    </Section>
+
+                    <Section title="2. Usage Profile">
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase">Current System</label>
+                                <label className="text-xs font-bold text-gray-500 uppercase">Comparison</label>
                                 <select 
                                     className="w-full p-3 bg-gray-50 rounded-xl border-2 border-gray-100 font-bold text-gray-700 outline-none focus:border-blue-500"
                                     value={inputs.competitorType}
@@ -240,62 +313,12 @@ const AquaHeroCalculator = ({ onBack }) => {
                                 onChange={(e) => handleInput('dailyVolume', parseFloat(e.target.value))} 
                             />
 
-                            {(region === 'CA' || region === 'MX') && (
-                                <div className="p-4 bg-orange-50 rounded-2xl border border-orange-100">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <AlertTriangle size={16} className="text-orange-500"/>
-                                            <span className="text-xs font-black text-orange-700 uppercase">120V Infrastructure</span>
-                                        </div>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={inputs.needsElectricalUpgrade}
-                                            onChange={(e) => handleInput('needsElectricalUpgrade', e.target.checked)}
-                                            className="w-5 h-5 accent-orange-500"
-                                        />
-                                    </div>
-                                    <p className="text-[10px] text-orange-600 mb-2">Requires 240V panel/wiring upgrade?</p>
-                                    {inputs.needsElectricalUpgrade && (
-                                        <Input 
-                                            label={`Upgrade Cost (${financials.currencyCode})`}
-                                            type="number"
-                                            value={financials.upgradeCost}
-                                            onChange={(e) => handleFinancial('upgradeCost', e.target.value)}
-                                            className="bg-white"
-                                        />
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </Section>
-
-                    <Section title="2. Grid & Energy Rates">
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <Input 
-                                    label={`Peak Grid (${financials.currency})`} 
-                                    type="number" 
-                                    step="0.01"
-                                    value={financials.gridPeak} 
-                                    onChange={(e) => handleFinancial('gridPeak', e.target.value)} 
-                                />
-                                <Input 
-                                    label={`Off-Peak (${financials.currency})`} 
-                                    type="number" 
-                                    step="0.01"
-                                    value={financials.gridOffPeak} 
-                                    onChange={(e) => handleFinancial('gridOffPeak', e.target.value)} 
-                                />
-                            </div>
-                            <div className="p-3 bg-blue-50 rounded-xl text-xs text-blue-800">
-                                <strong>Strategy Note:</strong> With "Smart Storage" active, AquaHERO targets the {financials.currency}{financials.gridOffPeak} rate by overheating water during off-peak windows.
-                            </div>
-                            <Input 
-                                label={`Gas/LPG Price (${financials.currency}/kWh)`} 
+                             <Input 
+                                label={`Grid Price (${financials.currency}/kWh)`} 
                                 type="number" 
                                 step="0.01"
-                                value={financials.gasPrice} 
-                                onChange={(e) => handleFinancial('gasPrice', e.target.value)} 
+                                value={financials.gridPeak} 
+                                onChange={(e) => handleFinancial('gridPeak', e.target.value)} 
                             />
                         </div>
                     </Section>
@@ -315,20 +338,23 @@ const AquaHeroCalculator = ({ onBack }) => {
                             <p className="text-xs text-gray-400 mt-2">vs {COMPETITORS[inputs.competitorType].name}</p>
                         </div>
 
+                        <div className="bg-green-600 text-white p-6 rounded-3xl relative overflow-hidden">
+                             <div className="absolute top-0 right-0 p-4 opacity-10">
+                                <Leaf size={100} />
+                            </div>
+                            <p className="text-green-200 text-xs font-black uppercase tracking-widest mb-1">CO2 Reduction</p>
+                            <h3 className="text-4xl font-black text-white">
+                                {results.co2SavedTons.toFixed(2)} t
+                            </h3>
+                            <p className="text-xs text-green-100 mt-2">Tons per year</p>
+                        </div>
+
                         <div className="bg-white border-2 border-gray-100 p-6 rounded-3xl">
                             <p className="text-gray-400 text-xs font-black uppercase tracking-widest mb-1">Payback Period</p>
                             <h3 className={`text-4xl font-black ${results.paybackYears < 3 ? 'text-green-600' : 'text-orange-500'}`}>
                                 {results.paybackYears < 0 ? 'Immediate' : `${results.paybackYears.toFixed(1)} Yrs`}
                             </h3>
                             <p className="text-xs text-gray-400 mt-2">Based on {financials.currency}{results.netCapexDelta.toLocaleString()} net difference</p>
-                        </div>
-
-                        <div className="bg-white border-2 border-gray-100 p-6 rounded-3xl">
-                            <p className="text-gray-400 text-xs font-black uppercase tracking-widest mb-1">5-Year Value</p>
-                            <h3 className="text-4xl font-black text-blue-600">
-                                {financials.currency} {results.fiveYearSavings.toLocaleString(undefined, {maximumFractionDigits:0})}
-                            </h3>
-                            <p className="text-xs text-gray-400 mt-2">Net savings after hardware ROI</p>
                         </div>
                     </div>
 
@@ -344,7 +370,7 @@ const AquaHeroCalculator = ({ onBack }) => {
                             </div>
                             <div className="h-12 w-full bg-gray-100 rounded-xl overflow-hidden relative">
                                 <div className="h-full bg-gray-400 w-full flex items-center px-4 text-white font-bold opacity-80">
-                                    Base Baseline
+                                    Baseline Cost
                                 </div>
                             </div>
                         </div>
@@ -352,33 +378,22 @@ const AquaHeroCalculator = ({ onBack }) => {
                         {/* Karnot Bar */}
                         <div>
                             <div className="flex justify-between text-xs font-bold text-gray-500 mb-2">
-                                <span>Karnot AquaHERO (R290)</span>
+                                <div className="flex gap-2">
+                                    <span>Karnot AquaHERO</span>
+                                    {inputs.solarAssist && <span className="text-yellow-600 flex items-center gap-1 text-[10px]"><Sun size={10}/> Solar Boost</span>}
+                                    {inputs.removeGasMeter && <span className="text-red-600 flex items-center gap-1 text-[10px]"><Trash2 size={10}/> No Meter</span>}
+                                </div>
                                 <span className="text-blue-600">{financials.currency} {results.karnotAnnualCost.toFixed(0)} / yr</span>
                             </div>
                             <div className="h-12 w-full bg-gray-100 rounded-xl overflow-hidden relative">
                                 <div 
                                     className="h-full bg-gradient-to-r from-blue-500 to-green-400 flex items-center px-4 text-white font-bold transition-all duration-1000"
-                                    style={{ width: `${(results.karnotAnnualCost / results.compAnnualCost) * 100}%` }}
+                                    style={{ width: `${Math.min((results.karnotAnnualCost / results.compAnnualCost) * 100, 100)}%` }}
                                 >
-                                    {((results.karnotAnnualCost / results.compAnnualCost) * 100).toFixed(0)}% Cost
+                                    {((results.karnotAnnualCost / results.compAnnualCost) * 100).toFixed(0)}%
                                 </div>
                             </div>
                         </div>
-
-                        {/* Strategy Note */}
-                        {inputs.smartStrategy && (
-                            <div className="mt-6 p-4 bg-green-50 rounded-xl border border-green-100 flex items-start gap-3">
-                                <Activity className="text-green-600 mt-1" size={18} />
-                                <div>
-                                    <h5 className="text-xs font-black text-green-700 uppercase">Strategy Winner</h5>
-                                    <p className="text-xs text-green-800 mt-1">
-                                        By utilizing the R290 high-temp capability (75°C) to supercharge thermal storage during the 
-                                        {financials.gridOffPeak} {financials.currency} window, we avoid peak pricing entirely. 
-                                        Competitor hybrids often fallback to resistive heating during morning/evening peaks.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
                     </div>
                     
                     {/* CAPEX ADJUSTMENT */}
