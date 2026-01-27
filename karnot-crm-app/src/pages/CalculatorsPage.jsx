@@ -62,7 +62,14 @@ const CalculatorsPage = ({ setActiveView }) => {
             icon: <Zap className="text-purple-500" size={32} />,
             status: 'Coming Soon'
         }
-    ];
+    ];{
+            id: 'officeHvacCalc',
+            title: 'Office HVAC & Solar',
+            description: 'Precise heating/cooling loads for Summer/Winter climates (London, Manila, Toronto, etc) with Off-Grid Solar sizing.',
+            icon: <Thermometer className="text-red-500" size={32} />,
+            status: 'Ready',
+            badge: 'New'
+        },
 
     return (
         <div className="max-w-6xl mx-auto">
