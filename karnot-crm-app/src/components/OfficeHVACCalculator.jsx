@@ -2,11 +2,15 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
     Thermometer, Sun, Wind, Layout, Printer, 
     Save, Plus, Trash2, Globe, DollarSign, 
-    Activity, ArrowRight, Zap, Battery, CheckCircle
+    Activity, ArrowRight, Zap, Battery, CheckCircle, Database, AlertCircle
 } from 'lucide-react';
 import { Card, Button, Input, Section } from '../data/constants.jsx';
 
-// --- DATA CONSTANTS ---
+// --- FIREBASE IMPORTS ---
+import { db } from '../firebase';
+import { collection, onSnapshot } from 'firebase/firestore';
+
+// --- CONSTANTS ---
 const CLIMATE_DATA = {
     manila: { name: "Manila, Philippines", highC: 34, lowC: 21, country: 'PH' },
     baguio: { name: "Baguio, Philippines", highC: 24, lowC: 12, country: 'PH' },
@@ -25,33 +29,24 @@ const INSULATION_PRESETS = {
     newbuild: { wall: 0.18, roof: 0.12, glass: 1.1, label: "High Performance (New)" }
 };
 
-const HEAT_PUMP_MODELS = [
-    { name: 'Karnot iHEAT R32 - 6kW', thermal_kw: 6, cost_usd: 2546, type: 'r32' },
-    { name: 'Karnot iHEAT R32 - 9.5kW', thermal_kw: 9.5, cost_usd: 2678, type: 'r32' },
-    { name: 'Karnot iHEAT R32 - 12kW', thermal_kw: 12, cost_usd: 2884, type: 'r32' },
-    { name: 'Karnot iHEAT R32 - 16kW', thermal_kw: 16, cost_usd: 3154, type: 'r32' },
-    { name: 'Karnot iHEAT R32 - 22kW', thermal_kw: 22, cost_usd: 3728, type: 'r32' },
-    { name: 'Karnot iHEAT R290 - 9.5kW', thermal_kw: 9.5, cost_usd: 3944, type: 'r290' },
-    { name: 'Karnot iHEAT R290 - 15.5kW', thermal_kw: 15.5, cost_usd: 5582, type: 'r290' },
-    { name: 'Karnot iHEAT R290 - 18.5kW', thermal_kw: 18.5, cost_usd: 5800, type: 'r290' },
-    { name: 'Karnot iHEAT R32 - 30kW', thermal_kw: 30, cost_usd: 6856, type: 'r32' },
-    { name: 'Karnot iHEAT R32 - 50kW', thermal_kw: 50, cost_usd: 10300, type: 'r32' },
-];
-
 const CONFIG = {
     SAFETY_FACTOR: 1.15,
     INTERNAL_GAIN_W_M2: 35, // Office Equipment + People
     CEILING_HEIGHT: 3.0, // meters
     INSIDE_TEMP_C: 22,
-    HEATING_COP: 3.8,
-    COOLING_EER: 3.5,
     LITHIUM_EFFICIENCY: 0.90,
-    COST_LITHIUM_KWH: 115,
-    COST_SOLAR_WATT: 0.70
+    // Fallbacks if DB is empty
+    DEFAULT_HEATING_COP: 3.8,
+    DEFAULT_COOLING_EER: 3.5,
+    DEFAULT_COST_LITHIUM_KWH: 115,
+    DEFAULT_COST_SOLAR_WATT: 0.70
 };
 
-const OfficeHVACCalculator = () => {
+const OfficeHVACCalculator = ({ user }) => {
     // --- STATE ---
+    const [dbProducts, setDbProducts] = useState([]);
+    const [loadingProducts, setLoadingProducts] = useState(true);
+
     const [project, setProject] = useState({ name: 'New Office Project', location: 'manila' });
     const [units, setUnits] = useState('metric'); // 'metric' or 'imperial'
     const [building, setBuilding] = useState({
@@ -74,6 +69,25 @@ const OfficeHVACCalculator = () => {
         sunHours: 5.5
     });
 
+    // --- EFFECT: FETCH PRODUCTS FROM FIREBASE ---
+    useEffect(() => {
+        if (!user) {
+            setLoadingProducts(false);
+            return;
+        }
+
+        const unsub = onSnapshot(collection(db, "users", user.uid, "products"), (snapshot) => {
+            const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setDbProducts(list);
+            setLoadingProducts(false);
+        }, (error) => {
+            console.error("Error fetching products:", error);
+            setLoadingProducts(false);
+        });
+
+        return () => unsub();
+    }, [user]);
+
     // --- EFFECT: Update Temps on Location Change ---
     useEffect(() => {
         const climate = CLIMATE_DATA[project.location];
@@ -88,7 +102,6 @@ const OfficeHVACCalculator = () => {
 
     // --- HELPERS ---
     const toF = (c) => (c * 9/5) + 32;
-    const toC = (f) => (f - 32) * 5/9;
     const toSqFt = (m2) => m2 * 10.764;
     const toM2 = (sqft) => sqft / 10.764;
     const toBtu = (kw) => kw * 3412;
@@ -112,7 +125,7 @@ const OfficeHVACCalculator = () => {
             totalAreaM2 += area;
             
             // Geometry
-            const perimeter = Math.sqrt(area) * 4; // Assume square for estimation
+            const perimeter = Math.sqrt(area) * 4; 
             const wallAreaTotal = perimeter * CONFIG.CEILING_HEIGHT;
             const glassArea = wallAreaTotal * (glazingRatio / 100);
             const opaqueWallArea = wallAreaTotal - glassArea;
@@ -121,10 +134,10 @@ const OfficeHVACCalculator = () => {
 
             // Heating Load (Transmission + Vent)
             const qTransHeat = (opaqueWallArea * u.wall + roofArea * u.roof + glassArea * u.glass) * deltaHeat;
-            const qVentHeat = (volume * airChanges / 3600) * 1210 * deltaHeat; // 1210 J/m3K heat capacity air
+            const qVentHeat = (volume * airChanges / 3600) * 1210 * deltaHeat;
             const heatLoad = qTransHeat + qVentHeat;
 
-            // Cooling Load (Trans + Vent + Internal Gains)
+            // Cooling Load
             const qTransCool = (opaqueWallArea * u.wall + roofArea * u.roof + glassArea * u.glass) * deltaCool;
             const qVentCool = (volume * airChanges / 3600) * 1210 * deltaCool;
             const qInternal = area * CONFIG.INTERNAL_GAIN_W_M2;
@@ -149,56 +162,117 @@ const OfficeHVACCalculator = () => {
         const peakLoadKW = Math.max(totalHeatKW, totalCoolKW);
         const peakSeason = totalHeatKW > totalCoolKW ? 'Heating (Winter)' : 'Cooling (Summer)';
 
-        // 2. Equipment Selection
-        let candidateModels = HEAT_PUMP_MODELS;
+        // 2. DYNAMIC EQUIPMENT SELECTION (FROM DB)
+        
+        // A. Filter Heat Pumps
+        let candidateHPs = dbProducts.filter(p => {
+            const cat = (p.category || '').toLowerCase();
+            return cat.includes('iheat') || cat.includes('icool') || cat.includes('heat pump');
+        });
+
+        // Filter by Type (R32 / R290)
         if (financials.heatPumpType !== 'all') {
-            candidateModels = HEAT_PUMP_MODELS.filter(m => m.type === financials.heatPumpType);
+            candidateHPs = candidateHPs.filter(p => {
+                const ref = (p.Refrigerant || '').toLowerCase();
+                return ref.includes(financials.heatPumpType);
+            });
         }
 
-        // Logic: Find cheapest combo. 
-        // Simple logic: Find single unit > peak, or multiple of largest if peak is huge.
-        // For this calculator, we'll try to match closest single unit or multiples of the same unit.
-        
+        // B. Select Best Heat Pump Logic
         let selectedPlant = { units: 0, model: null, cost: Infinity, capacity: 0 };
 
-        candidateModels.forEach(model => {
-            const unitsNeeded = Math.ceil(peakLoadKW / model.thermal_kw);
-            const totalCost = unitsNeeded * model.cost_usd;
-            
-            if (totalCost < selectedPlant.cost) {
-                selectedPlant = {
-                    units: unitsNeeded,
-                    model: model,
-                    cost: totalCost,
-                    capacity: unitsNeeded * model.thermal_kw
-                };
-            }
-        });
+        if (candidateHPs.length > 0) {
+            candidateHPs.forEach(model => {
+                // Determine capacity based on SEASON
+                // If heating season, use Heating KW. If missing, fallback to Cooling or DHW.
+                let capacity = 0;
+                if (peakSeason.includes('Heating')) {
+                    capacity = parseFloat(model.kW_Heating_Nominal) || parseFloat(model.kW_DHW_Nominal) || 0;
+                } else {
+                    capacity = parseFloat(model.kW_Cooling_Nominal) || 0;
+                }
+
+                // If this model can't do the job (e.g. heating only unit in cooling season), skip
+                if (capacity <= 0) return;
+
+                const price = parseFloat(model.salesPriceUSD) || 99999;
+                const unitsNeeded = Math.ceil(peakLoadKW / capacity);
+                const totalCost = unitsNeeded * price;
+                
+                if (totalCost < selectedPlant.cost) {
+                    selectedPlant = {
+                        units: unitsNeeded,
+                        model: model,
+                        cost: totalCost,
+                        capacity: unitsNeeded * capacity
+                    };
+                }
+            });
+        } else {
+            // Fallback if no products
+            selectedPlant.model = { name: "No Matching Database Products" };
+            selectedPlant.cost = 0;
+        }
 
         // 3. Off-Grid / Financials
         let batteryCost = 0;
         let solarCost = 0;
         let storageSpecs = null;
 
+        // C. Calculate Solar/Battery Pricing from DB
+        let avgSolarPricePerWatt = CONFIG.DEFAULT_COST_SOLAR_WATT;
+        let avgBatteryPricePerKWh = CONFIG.DEFAULT_COST_LITHIUM_KWH;
+
+        const solarProducts = dbProducts.filter(p => (p.category || '').toLowerCase().includes('panel'));
+        const batteryProducts = dbProducts.filter(p => (p.category || '').toLowerCase().includes('battery'));
+
+        if (solarProducts.length > 0) {
+            // Calculate avg price per Watt from inventory
+            const validSolar = solarProducts.filter(p => p.salesPriceUSD > 0 && p.pv_Watt_Rated > 0);
+            if (validSolar.length > 0) {
+                const totalPerWatt = validSolar.reduce((acc, p) => acc + (p.salesPriceUSD / p.pv_Watt_Rated), 0);
+                avgSolarPricePerWatt = totalPerWatt / validSolar.length;
+            }
+        }
+
+        if (batteryProducts.length > 0) {
+            // Calculate avg price per kWh from inventory
+            const validBat = batteryProducts.filter(p => p.salesPriceUSD > 0 && p.bat_kWh_Nominal > 0);
+            if (validBat.length > 0) {
+                const totalPerKWh = validBat.reduce((acc, p) => acc + (p.salesPriceUSD / p.bat_kWh_Nominal), 0);
+                avgBatteryPricePerKWh = totalPerKWh / validBat.length;
+            }
+        }
+
         if (financials.systemType === 'off-grid') {
-            const peakElecLoad = peakLoadKW / (peakSeason.includes('Heating') ? CONFIG.HEATING_COP : CONFIG.COOLING_EER);
+            // Use selected Heat Pump specs if available, else defaults
+            const efficiency = peakSeason.includes('Heating') 
+                ? (parseFloat(selectedPlant.model?.COP_DHW) || CONFIG.DEFAULT_HEATING_COP)
+                : 3.0; // Cooling EER estimate if not in DB
+
+            const peakElecLoad = peakLoadKW / efficiency;
             const batteryKWh = (peakElecLoad * financials.batteryHours) / CONFIG.LITHIUM_EFFICIENCY;
             
             const directEnergy = peakElecLoad * Math.max(0, financials.operatingHours - financials.batteryHours);
-            const batteryChargeEnergy = batteryKWh; // approx
+            const batteryChargeEnergy = batteryKWh; 
             const totalEnergy = directEnergy + batteryChargeEnergy;
-            const solarKW = (totalEnergy / financials.sunHours) * 1.3; // 1.3 safety for losses
+            const solarKW = (totalEnergy / financials.sunHours) * 1.3; 
 
-            batteryCost = batteryKWh * CONFIG.COST_LITHIUM_KWH;
-            solarCost = solarKW * 1000 * CONFIG.COST_SOLAR_WATT;
+            batteryCost = batteryKWh * avgBatteryPricePerKWh;
+            solarCost = solarKW * 1000 * avgSolarPricePerWatt;
             
-            storageSpecs = { batteryKWh, solarKW };
+            storageSpecs = { 
+                batteryKWh, 
+                solarKW, 
+                solarRate: avgSolarPricePerWatt,
+                batRate: avgBatteryPricePerKWh 
+            };
         }
 
         const equipmentSubtotal = selectedPlant.cost + batteryCost + solarCost;
         const cif = equipmentSubtotal + financials.freight;
-        const duties = cif * 0.05; // 5% est
-        const vatBase = cif + duties + 450; // + Broker fee
+        const duties = cif * 0.05; 
+        const vatBase = cif + duties + 450; 
         const vat = vatBase * (financials.vat / 100);
         const landedCost = vatBase + vat;
 
@@ -211,12 +285,11 @@ const OfficeHVACCalculator = () => {
             financials: { equipmentSubtotal, landedCost, vat, duties }
         };
 
-    }, [building, zones, financials, project.location]);
+    }, [building, zones, financials, project.location, dbProducts]);
 
     // --- HANDLERS ---
     const handleZoneChange = (id, val) => {
         const area = parseFloat(val) || 0;
-        // input is display unit, convert to m2 for state
         const m2 = units === 'metric' ? area : toM2(area);
         setZones(prev => prev.map(z => z.id === id ? { ...z, area: m2 } : z));
     };
@@ -229,13 +302,12 @@ const OfficeHVACCalculator = () => {
         setZones(prev => prev.filter(z => z.id !== id));
     };
 
-    // --- PRINT ---
     const printRef = useRef();
     const handlePrint = () => {
         const content = printRef.current.innerHTML;
         const printWindow = window.open('', '', 'height=800,width=1000');
         printWindow.document.write('<html><head><title>Karnot Quote</title>');
-        printWindow.document.write('<script src="https://cdn.tailwindcss.com"></script>'); // Quick styling
+        printWindow.document.write('<script src="https://cdn.tailwindcss.com"></script>');
         printWindow.document.write('</head><body class="p-10">');
         printWindow.document.write(content);
         printWindow.document.write('</body></html>');
@@ -252,7 +324,13 @@ const OfficeHVACCalculator = () => {
                         <Thermometer className="text-blue-300" size={32} />
                         <h2 className="text-3xl font-black uppercase tracking-tighter">Office HVAC Estimator</h2>
                     </div>
-                    <p className="text-blue-200 font-medium">Heat Load & Cooling Calculation (Summer/Winter Analysis)</p>
+                    <div className="flex items-center gap-2 text-blue-200 text-sm font-medium">
+                        {loadingProducts ? (
+                            <><span className="animate-spin">⏳</span> Connecting to CRM Database...</>
+                        ) : (
+                            <><Database size={16} className="text-green-400" /> Connected to {dbProducts.length} Products</>
+                        )}
+                    </div>
                 </div>
                 <div className="flex gap-2 bg-blue-800/50 p-1 rounded-lg">
                     <button 
@@ -421,14 +499,14 @@ const OfficeHVACCalculator = () => {
                         </div>
 
                         <div className="bg-blue-900 text-white p-6 rounded-2xl">
-                            <p className="text-blue-300 text-[10px] font-bold uppercase tracking-widest mb-2">Recommended Plant</p>
+                            <p className="text-blue-300 text-[10px] font-bold uppercase tracking-widest mb-2">Recommended Plant (From Inventory)</p>
                             <h4 className="text-xl font-bold mb-1">
                                 {results.plant.units} x {results.plant.model?.name || "N/A"}
                             </h4>
                             <div className="flex justify-between items-end mt-4">
                                 <div className="text-xs text-blue-200">
                                     Sizing Basis: Peak {results.loads.season}<br/>
-                                    Total Cap: {results.plant.capacity} kW
+                                    Unit Cap: {results.plant.capacity / Math.max(1, results.plant.units)} kW
                                 </div>
                                 <Activity className="text-green-400" />
                             </div>
@@ -437,18 +515,27 @@ const OfficeHVACCalculator = () => {
                         {financials.systemType === 'off-grid' && (
                             <div className="mt-4 bg-yellow-50 p-4 rounded-2xl border border-yellow-200">
                                 <h5 className="text-xs font-black text-yellow-800 uppercase mb-2 flex items-center gap-2">
-                                    <Zap size={14}/> Off-Grid Specs
+                                    <Zap size={14}/> Off-Grid Specs (iVOLT)
                                 </h5>
                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                     <div>
                                         <span className="block text-[10px] text-yellow-600 uppercase">Solar Array</span>
                                         <span className="font-bold">{results.offgrid.specs.solarKW.toFixed(1)} kW</span>
+                                        <span className="block text-[9px] text-yellow-500">@ ${results.offgrid.specs.solarRate.toFixed(2)}/W</span>
                                     </div>
                                     <div>
                                         <span className="block text-[10px] text-yellow-600 uppercase">Battery Storage</span>
                                         <span className="font-bold">{results.offgrid.specs.batteryKWh.toFixed(1)} kWh</span>
+                                        <span className="block text-[9px] text-yellow-500">@ ${results.offgrid.specs.batRate.toFixed(0)}/kWh</span>
                                     </div>
                                 </div>
+                            </div>
+                        )}
+                        
+                        {/* Warning if falling back to defaults */}
+                        {financials.systemType === 'off-grid' && results.offgrid.specs.solarRate === CONFIG.DEFAULT_COST_SOLAR_WATT && (
+                            <div className="mt-2 flex items-center gap-2 text-[10px] text-orange-600">
+                                <AlertCircle size={10} /> Using default solar/battery pricing (No iVOLT products found).
                             </div>
                         )}
                     </div>
